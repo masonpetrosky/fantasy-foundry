@@ -498,9 +498,9 @@ function fmt(val, decimals = 1) {
   return Number(val).toFixed(decimals);
 }
 
-function fmtInt(val) {
+function fmtInt(val, useGrouping = true) {
   if (val == null || val === "" || isNaN(val)) return "—";
-  return Math.round(Number(val)).toLocaleString();
+  return Math.round(Number(val)).toLocaleString(undefined, { useGrouping });
 }
 
 // ---------------------------------------------------------------------------
@@ -691,7 +691,7 @@ function ProjectionsExplorer({ meta }) {
                       if (c === "Pos") return <td key={c} className="pos">{val}</td>;
                       if (c === "Team") return <td key={c} className="team">{val}</td>;
                       if (rateCols.has(c)) return <td key={c} className="num">{fmt(val, 3)}</td>;
-                      if (intCols.has(c)) return <td key={c} className="num">{fmtInt(val)}</td>;
+                      if (intCols.has(c)) return <td key={c} className="num">{fmtInt(val, c !== "Year")}</td>;
                       if (typeof val === "number") return <td key={c} className="num">{fmt(val)}</td>;
                       return <td key={c}>{val ?? "—"}</td>;
                     })}
