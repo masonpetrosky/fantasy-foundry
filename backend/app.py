@@ -40,9 +40,125 @@ def load_json(name: str):
     with open(p) as f:
         return json.load(f)
 
+
+PROJECTION_DATE_COLS = ["ProjectionDate", "Date", "Updated", "LastUpdated", "Timestamp", "Created", "AsOf"]
+DERIVED_HIT_RATE_COLS = {"AVG", "OPS"}
+DERIVED_PIT_RATE_COLS = {"ERA", "WHIP"}
+
+
+def _find_projection_date_col(df: pd.DataFrame) -> str | None:
+    for col in PROJECTION_DATE_COLS:
+        if col in df.columns:
+            return col
+    return None
+
+
+def _average_recent_projection_rows(
+    records: list[dict],
+    *,
+    max_entries: int = 3,
+    is_hitter: bool,
+) -> list[dict]:
+    """Collapse duplicate (Player, Year) rows by averaging the most recent projections."""
+    if not records:
+        return records
+    if max_entries < 1:
+        raise ValueError("max_entries must be >= 1")
+
+    df = pd.DataFrame.from_records(records)
+    group_cols = ["Player", "Year"]
+    if any(col not in df.columns for col in group_cols):
+        return records
+
+    df = df.copy()
+    df["_projection_order"] = range(len(df))
+
+    date_col = _find_projection_date_col(df)
+    if date_col:
+        df["_projection_date"] = pd.to_datetime(df[date_col], errors="coerce")
+        df["_sort_key"] = df["_projection_date"].fillna(pd.Timestamp.min)
+    else:
+        df["_projection_date"] = pd.NaT
+        df["_sort_key"] = df["_projection_order"]
+
+    excluded = {"Age"} | (DERIVED_HIT_RATE_COLS if is_hitter else DERIVED_PIT_RATE_COLS)
+    stat_cols = [
+        c
+        for c in df.columns
+        if c not in group_cols
+        and c not in excluded
+        and pd.api.types.is_numeric_dtype(df[c])
+    ]
+
+    recent = (
+        df.sort_values(["_sort_key", "_projection_order"], ascending=False)
+        .groupby(group_cols, as_index=False, sort=False)
+        .head(max_entries)
+    )
+
+    meta_cols = [
+        c
+        for c in recent.columns
+        if c not in stat_cols
+        and c not in group_cols
+        and c not in {"_projection_order", "_projection_date", "_sort_key"}
+    ]
+
+    agg = {c: "mean" for c in stat_cols}
+    for c in meta_cols:
+        agg[c] = "first"
+
+    out = (
+        recent.sort_values(["_sort_key", "_projection_order"], ascending=False)
+        .groupby(group_cols, as_index=False, sort=False)
+        .agg(agg)
+    )
+
+    if is_hitter:
+        if "H" in out.columns and "AB" in out.columns:
+            h = out["H"].astype(float)
+            ab = out["AB"].astype(float)
+            out["AVG"] = (h / ab).where(ab > 0, 0.0)
+
+        needed = {"H", "2B", "3B", "HR", "BB", "HBP", "AB", "SF"}
+        if needed.issubset(out.columns):
+            h = out["H"].astype(float)
+            b2 = out["2B"].astype(float)
+            b3 = out["3B"].astype(float)
+            hr = out["HR"].astype(float)
+            bb = out["BB"].astype(float)
+            hbp = out["HBP"].astype(float)
+            ab = out["AB"].astype(float)
+            sf = out["SF"].astype(float)
+
+            tb = h + b2 + 2.0 * b3 + 3.0 * hr
+            obp_den = ab + bb + hbp + sf
+            obp = ((h + bb + hbp) / obp_den).where(obp_den > 0, 0.0)
+            slg = (tb / ab).where(ab > 0, 0.0)
+            out["OPS"] = obp + slg
+    else:
+        if "ER" in out.columns and "IP" in out.columns:
+            er = out["ER"].astype(float)
+            ip = out["IP"].astype(float)
+            out["ERA"] = ((9.0 * er) / ip).where(ip > 0)
+        if "H" in out.columns and "BB" in out.columns and "IP" in out.columns:
+            h = out["H"].astype(float)
+            bb = out["BB"].astype(float)
+            ip = out["IP"].astype(float)
+            out["WHIP"] = ((h + bb) / ip).where(ip > 0)
+
+    for col in out.columns:
+        if pd.api.types.is_datetime64_any_dtype(out[col]):
+            out[col] = out[col].dt.strftime("%Y-%m-%d")
+
+    return out.to_dict(orient="records")
+
+
 META = load_json("meta.json")
-BAT_DATA = load_json("bat.json")
-PIT_DATA = load_json("pitch.json")
+BAT_DATA_RAW = load_json("bat.json")
+PIT_DATA_RAW = load_json("pitch.json")
+BAT_DATA = _average_recent_projection_rows(BAT_DATA_RAW, max_entries=3, is_hitter=True)
+PIT_DATA = _average_recent_projection_rows(PIT_DATA_RAW, max_entries=3, is_hitter=False)
 
 # ---------------------------------------------------------------------------
 # App
