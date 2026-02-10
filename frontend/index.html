@@ -215,6 +215,99 @@ nav a:hover, nav a.active { color: var(--text-primary); background: var(--bg-ter
 
 .filter-bar input[type="text"] { min-width: 240px; }
 
+.multi-select {
+  position: relative;
+  min-width: 180px;
+}
+
+.multi-select-trigger {
+  width: 100%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.2s;
+  text-align: left;
+  cursor: pointer;
+}
+
+.multi-select-trigger.open,
+.multi-select-trigger:focus {
+  border-color: var(--accent-dim);
+}
+
+.multi-select-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.multi-select-chevron {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.multi-select-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 220px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.35);
+  padding: 8px;
+  z-index: 30;
+}
+
+.multi-select-clear {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.multi-select-clear:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--accent-dim);
+}
+
+.multi-select-clear:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.multi-select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.multi-select-option:hover {
+  background: var(--bg-tertiary);
+}
+
+.multi-select-option input[type="checkbox"] {
+  accent-color: var(--accent-dim);
+}
+
 .result-count {
   margin-left: auto;
   font-family: 'IBM Plex Mono', monospace;
@@ -503,6 +596,14 @@ function fmtInt(val, useGrouping = true) {
   return Math.round(Number(val)).toLocaleString(undefined, { useGrouping });
 }
 
+function parsePosTokens(posValue) {
+  return String(posValue || "")
+    .toUpperCase()
+    .split("/")
+    .map(token => token.trim())
+    .filter(Boolean);
+}
+
 // ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
@@ -573,9 +674,10 @@ function ProjectionsExplorer({ meta }) {
   const [search, setSearch] = useState("");
   const [teamFilter, setTeamFilter] = useState("");
   const [yearFilter, setYearFilter] = useState("2026");
-  const [posFilter, setPosFilter] = useState("");
+  const [posFilters, setPosFilters] = useState([]);
+  const [showPosMenu, setShowPosMenu] = useState(false);
+  const posMenuRef = useRef(null);
   const [data, setData] = useState([]);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [offset, setOffset] = useState(0);
   const [sortCol, setSortCol] = useState(null);
@@ -588,7 +690,6 @@ function ProjectionsExplorer({ meta }) {
     if (search) params.set("player", search);
     if (teamFilter) params.set("team", teamFilter);
     if (yearFilter) params.set("year", yearFilter);
-    if (posFilter) params.set("pos", posFilter);
     params.set("limit", "5000");
     params.set("offset", "0");
 
@@ -596,21 +697,61 @@ function ProjectionsExplorer({ meta }) {
       .then(r => r.json())
       .then(res => {
         setData(res.data || []);
-        setTotal(res.total || 0);
         setOffset(0);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [tab, search, teamFilter, yearFilter, posFilter]);
+  }, [tab, search, teamFilter, yearFilter]);
 
   useEffect(() => {
     const timer = setTimeout(fetchData, 300);
     return () => clearTimeout(timer);
   }, [fetchData]);
 
+  useEffect(() => {
+    function handleOutsideClick(event) {
+      if (posMenuRef.current && !posMenuRef.current.contains(event.target)) {
+        setShowPosMenu(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  useEffect(() => {
+    setOffset(0);
+  }, [posFilters]);
+
+  const positionOptions = useMemo(() => {
+    const rawPositions = tab === "bat" ? meta.bat_positions : meta.pit_positions;
+    const uniq = new Set();
+    rawPositions.forEach(pos => {
+      parsePosTokens(pos).forEach(token => uniq.add(token));
+    });
+
+    const order = ["C", "1B", "2B", "3B", "SS", "OF", "DH", "UT", "SP", "RP"];
+    return Array.from(uniq).sort((a, b) => {
+      const ai = order.indexOf(a);
+      const bi = order.indexOf(b);
+      if (ai !== -1 || bi !== -1) {
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      }
+      return a.localeCompare(b);
+    });
+  }, [tab, meta.bat_positions, meta.pit_positions]);
+
+  const filteredData = useMemo(() => {
+    if (posFilters.length === 0) return data;
+    const selected = new Set(posFilters);
+    return data.filter(row => parsePosTokens(row.Pos).some(pos => selected.has(pos)));
+  }, [data, posFilters]);
+
   const sorted = useMemo(() => {
-    if (!sortCol) return data;
-    return [...data].sort((a, b) => {
+    if (!sortCol) return filteredData;
+    return [...filteredData].sort((a, b) => {
       let av = a[sortCol], bv = b[sortCol];
       if (typeof av === "string") {
         return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
@@ -618,7 +759,7 @@ function ProjectionsExplorer({ meta }) {
       av = av ?? -Infinity; bv = bv ?? -Infinity;
       return sortDir === "asc" ? av - bv : bv - av;
     });
-  }, [data, sortCol, sortDir]);
+  }, [filteredData, sortCol, sortDir]);
 
   const page = sorted.slice(offset, offset + limit);
 
@@ -636,13 +777,23 @@ function ProjectionsExplorer({ meta }) {
   const cols = tab === "bat" ? batCols : pitCols;
   const rateCols = new Set(["AVG","OPS","ERA","WHIP"]);
   const intCols = new Set(["Year","Age"]);
-  const positions = tab === "bat" ? meta.bat_positions : meta.pit_positions;
+  const posFilterLabel = posFilters.length === 0
+    ? "All Positions"
+    : posFilters.length <= 2
+      ? posFilters.join(", ")
+      : `${posFilters.length} Positions`;
+
+  function togglePosFilter(pos) {
+    setPosFilters(curr => (
+      curr.includes(pos) ? curr.filter(p => p !== pos) : [...curr, pos]
+    ));
+  }
 
   return (
     <div className="fade-up fade-up-1">
       <div className="section-tabs">
-        <button className={`section-tab ${tab==="bat"?"active":""}`} onClick={() => {setTab("bat"); setSortCol(null); setOffset(0);}}>Hitters</button>
-        <button className={`section-tab ${tab==="pitch"?"active":""}`} onClick={() => {setTab("pitch"); setSortCol(null); setOffset(0);}}>Pitchers</button>
+        <button className={`section-tab ${tab==="bat"?"active":""}`} onClick={() => {setTab("bat"); setSortCol(null); setOffset(0); setPosFilters([]); setShowPosMenu(false);}}>Hitters</button>
+        <button className={`section-tab ${tab==="pitch"?"active":""}`} onClick={() => {setTab("pitch"); setSortCol(null); setOffset(0); setPosFilters([]); setShowPosMenu(false);}}>Pitchers</button>
       </div>
 
       <div className="filter-bar">
@@ -655,11 +806,41 @@ function ProjectionsExplorer({ meta }) {
           <option value="">All Teams</option>
           {meta.teams.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        <select value={posFilter} onChange={e => setPosFilter(e.target.value)}>
-          <option value="">All Positions</option>
-          {positions.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <span className="result-count">{total.toLocaleString()} rows</span>
+        <div className="multi-select" ref={posMenuRef}>
+          <button
+            type="button"
+            className={`multi-select-trigger ${showPosMenu ? "open" : ""}`}
+            onClick={() => setShowPosMenu(open => !open)}
+          >
+            <span className="multi-select-label">
+              <span>{posFilterLabel}</span>
+              <span className="multi-select-chevron">{showPosMenu ? "▲" : "▼"}</span>
+            </span>
+          </button>
+          {showPosMenu && (
+            <div className="multi-select-menu">
+              <button
+                type="button"
+                className="multi-select-clear"
+                onClick={() => setPosFilters([])}
+                disabled={posFilters.length === 0}
+              >
+                Clear position filters
+              </button>
+              {positionOptions.map(pos => (
+                <label key={pos} className="multi-select-option">
+                  <input
+                    type="checkbox"
+                    checked={posFilters.includes(pos)}
+                    onChange={() => togglePosFilter(pos)}
+                  />
+                  <span>{pos}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+        <span className="result-count">{sorted.length.toLocaleString()} rows</span>
       </div>
 
       <div className="table-wrapper">
