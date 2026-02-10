@@ -1,1 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dynasty Baseball Projections — 2026–2045</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-primary: #0c1117;
+  --bg-secondary: #141b24;
+  --bg-tertiary: #1a2332;
+  --bg-card: #161e29;
+  --bg-hover: #1e2a38;
+  --border: #243040;
+  --border-subtle: #1d2735;
+  --text-primary: #e8edf3;
+  --text-secondary: #8899aa;
+  --text-muted: #556677;
+  --accent: #d4a853;
+  --accent-dim: #b8923f;
+  --accent-glow: rgba(212,168,83,0.15);
+  --green: #4ade80;
+  --red: #f87171;
+  --blue: #60a5fa;
+}
 
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'DM Sans', -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ====== HEADER / NAV ====== */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(12,17,23,0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.nav-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  height: 60px;
+}
+
+.logo {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.25rem;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+.logo span { color: var(--text-secondary); font-size: 0.85rem; margin-left: 8px; font-family: 'DM Sans', sans-serif; font-weight: 400; }
+
+nav a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+nav a:hover, nav a.active { color: var(--text-primary); background: var(--bg-tertiary); }
+
+/* ====== HERO ====== */
+.hero {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 80px 32px 60px;
+  text-align: center;
+  position: relative;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 400px;
+  background: radial-gradient(ellipse, rgba(212,168,83,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 3.5rem;
+  font-weight: 400;
+  line-height: 1.15;
+  margin-bottom: 16px;
+  letter-spacing: -0.01em;
+}
+
+.hero h1 em {
+  font-style: normal;
+  background: linear-gradient(135deg, var(--accent), #e8c878);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero p {
+  color: var(--text-secondary);
+  font-size: 1.15rem;
+  max-width: 650px;
+  margin: 0 auto 40px;
+  font-weight: 300;
+}
+
+.hero-stats {
+  display: flex;
+  justify-content: center;
+  gap: 48px;
+  flex-wrap: wrap;
+}
+
+.hero-stat {
+  text-align: center;
+}
+
+.hero-stat .number {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.hero-stat .label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-top: 2px;
+}
+
+/* ====== MAIN CONTENT ====== */
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 32px 80px;
+}
+
+/* ====== SECTION TABS ====== */
+.section-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 32px;
+  background: var(--bg-secondary);
+  padding: 4px;
+  border-radius: 10px;
+  width: fit-content;
+}
+
+.section-tab {
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.section-tab:hover { color: var(--text-primary); }
+.section-tab.active { background: var(--bg-tertiary); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+
+/* ====== FILTER BAR ====== */
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.filter-bar input,
+.filter-bar select {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.filter-bar input:focus,
+.filter-bar select:focus {
+  border-color: var(--accent-dim);
+}
+
+.filter-bar input::placeholder { color: var(--text-muted); }
+
+.filter-bar input[type="text"] { min-width: 240px; }
+
+.result-count {
+  margin-left: auto;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ====== DATA TABLE ====== */
+.table-wrapper {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.table-scroll {
+  overflow-x: auto;
+  max-height: 75vh;
+  overflow-y: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+thead th {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 12px 14px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+thead th:hover { color: var(--accent); }
+thead th.sorted { color: var(--accent); }
+thead th .sort-arrow { margin-left: 4px; font-size: 0.65rem; }
+
+tbody tr {
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.1s;
+}
+
+tbody tr:hover { background: var(--bg-hover); }
+
+tbody td {
+  padding: 10px 14px;
+  white-space: nowrap;
+}
+
+td.player-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  position: sticky;
+  left: 0;
+  background: var(--bg-card);
+  z-index: 5;
+  min-width: 160px;
+}
+
+tr:hover td.player-name { background: var(--bg-hover); }
+
+td.num {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+td.pos { color: var(--blue); font-weight: 500; }
+td.team { color: var(--text-secondary); }
+
+td.value-positive { color: var(--green); }
+td.value-negative { color: var(--red); }
+
+/* ====== CALCULATOR SECTION ====== */
+.calc-layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .calc-layout { grid-template-columns: 1fr; }
+}
+
+.calc-sidebar {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+  position: sticky;
+  top: 80px;
+}
+
+.calc-sidebar h3 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.1rem;
+  margin-bottom: 20px;
+  color: var(--accent);
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--accent-dim);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.calc-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+  color: var(--bg-primary);
+  border: none;
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.03em;
+}
+
+.calc-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.calc-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.calc-status {
+  margin-top: 12px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.calc-status.running { color: var(--accent); }
+.calc-status.error { color: var(--red); }
+
+/* ====== PAGINATION ====== */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-tertiary);
+}
+
+.pagination button {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pagination button:hover:not(:disabled) { color: var(--text-primary); border-color: var(--accent-dim); }
+.pagination button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.pagination .page-info {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ====== LOADING ====== */
+.loading-shimmer {
+  height: 16px;
+  background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+  margin: 8px 14px;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ====== FOOTER ====== */
+footer {
+  border-top: 1px solid var(--border-subtle);
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+footer a { color: var(--accent-dim); text-decoration: none; }
+
+/* ====== ANIMATIONS ====== */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-up { animation: fadeUp 0.5s ease-out both; }
+.fade-up-1 { animation-delay: 0.1s; }
+.fade-up-2 { animation-delay: 0.2s; }
+.fade-up-3 { animation-delay: 0.3s; }
+
+/* ====== RESPONSIVE ====== */
+@media (max-width: 768px) {
+  .hero h1 { font-size: 2.2rem; }
+  .hero-stats { gap: 24px; }
+  .nav-inner { padding: 0 16px; }
+  .container { padding: 0 16px 60px; }
+  .filter-bar input[type="text"] { min-width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<!-- App mounts here -->
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+// ---------------------------------------------------------------------------
+// Config: API base URL (empty string = same origin)
+// ---------------------------------------------------------------------------
+const API = "";
+
+// ---------------------------------------------------------------------------
+// Utility
+// ---------------------------------------------------------------------------
+function fmt(val, decimals = 1) {
+  if (val == null || val === "" || isNaN(val)) return "—";
+  return Number(val).toFixed(decimals);
+}
+
+function fmtInt(val) {
+  if (val == null || val === "" || isNaN(val)) return "—";
+  return Math.round(Number(val)).toLocaleString();
+}
+
+// ---------------------------------------------------------------------------
+// App
+// ---------------------------------------------------------------------------
+function App() {
+  const [section, setSection] = useState("projections"); // projections | calculator
+  const [meta, setMeta] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API}/api/meta`).then(r => r.json()).then(setMeta).catch(console.error);
+  }, []);
+
+  return (
+    <>
+      <header>
+        <div className="nav-inner">
+          <a className="logo" href="#">Dynasty Projections <span>2026–2045</span></a>
+          <nav>
+            <a className={section === "projections" ? "active" : ""} onClick={() => setSection("projections")}>Projections</a>
+            <a className={section === "calculator" ? "active" : ""} onClick={() => setSection("calculator")}>Dynasty Calculator</a>
+          </nav>
+        </div>
+      </header>
+
+      <div className="hero fade-up">
+        <h1>The Only <em>20-Year</em><br/>Dynasty Baseball Projections</h1>
+        <p>Comprehensive player projections from 2026 through 2045. Browse the data, configure your league settings, and generate personalized dynasty rankings.</p>
+        {meta && (
+          <div className="hero-stats fade-up fade-up-2">
+            <div className="hero-stat">
+              <div className="number">{meta.total_hitters}</div>
+              <div className="label">Hitters</div>
+            </div>
+            <div className="hero-stat">
+              <div className="number">{meta.total_pitchers}</div>
+              <div className="label">Pitchers</div>
+            </div>
+            <div className="hero-stat">
+              <div className="number">20</div>
+              <div className="label">Seasons</div>
+            </div>
+            <div className="hero-stat">
+              <div className="number">{meta.teams?.length || 30}</div>
+              <div className="label">MLB Teams</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="container">
+        {section === "projections" && meta && <ProjectionsExplorer meta={meta} />}
+        {section === "calculator" && meta && <DynastyCalculator meta={meta} />}
+      </div>
+
+      <footer>
+        Built for dynasty baseball enthusiasts &middot; Projections updated as-needed &middot;
+        <a href="#"> About the methodology</a>
+      </footer>
+    </>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// Projections Explorer
+// ---------------------------------------------------------------------------
+function ProjectionsExplorer({ meta }) {
+  const [tab, setTab] = useState("bat"); // bat | pitch
+  const [search, setSearch] = useState("");
+  const [teamFilter, setTeamFilter] = useState("");
+  const [yearFilter, setYearFilter] = useState("2026");
+  const [posFilter, setPosFilter] = useState("");
+  const [data, setData] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [sortCol, setSortCol] = useState(null);
+  const [sortDir, setSortDir] = useState("desc");
+  const limit = 100;
+
+  const fetchData = useCallback(() => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (search) params.set("player", search);
+    if (teamFilter) params.set("team", teamFilter);
+    if (yearFilter) params.set("year", yearFilter);
+    if (posFilter) params.set("pos", posFilter);
+    params.set("limit", "5000");
+    params.set("offset", "0");
+
+    fetch(`${API}/api/projections/${tab}?${params}`)
+      .then(r => r.json())
+      .then(res => {
+        setData(res.data || []);
+        setTotal(res.total || 0);
+        setOffset(0);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [tab, search, teamFilter, yearFilter, posFilter]);
+
+  useEffect(() => {
+    const timer = setTimeout(fetchData, 300);
+    return () => clearTimeout(timer);
+  }, [fetchData]);
+
+  const sorted = useMemo(() => {
+    if (!sortCol) return data;
+    return [...data].sort((a, b) => {
+      let av = a[sortCol], bv = b[sortCol];
+      if (typeof av === "string") {
+        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      }
+      av = av ?? -Infinity; bv = bv ?? -Infinity;
+      return sortDir === "asc" ? av - bv : bv - av;
+    });
+  }, [data, sortCol, sortDir]);
+
+  const page = sorted.slice(offset, offset + limit);
+
+  function handleSort(col) {
+    if (sortCol === col) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortCol(col);
+      setSortDir(col === "Player" || col === "Team" || col === "Pos" ? "asc" : "desc");
+    }
+  }
+
+  const batCols = ["Player","Team","Age","Year","Pos","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS"];
+  const pitCols = ["Player","Team","Age","Year","Pos","G","GS","IP","W","L","K","BB","SV","SVH","ERA","WHIP","H","HR","ER"];
+  const cols = tab === "bat" ? batCols : pitCols;
+  const rateCols = new Set(["AVG","OPS","ERA","WHIP"]);
+  const intCols = new Set(["Year","Age"]);
+  const positions = tab === "bat" ? meta.bat_positions : meta.pit_positions;
+
+  return (
+    <div className="fade-up fade-up-1">
+      <div className="section-tabs">
+        <button className={`section-tab ${tab==="bat"?"active":""}`} onClick={() => {setTab("bat"); setSortCol(null); setOffset(0);}}>Hitters</button>
+        <button className={`section-tab ${tab==="pitch"?"active":""}`} onClick={() => {setTab("pitch"); setSortCol(null); setOffset(0);}}>Pitchers</button>
+      </div>
+
+      <div className="filter-bar">
+        <input type="text" placeholder="Search player name…" value={search} onChange={e => setSearch(e.target.value)} />
+        <select value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
+          <option value="">All Years</option>
+          {meta.years.map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)}>
+          <option value="">All Teams</option>
+          {meta.teams.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={posFilter} onChange={e => setPosFilter(e.target.value)}>
+          <option value="">All Positions</option>
+          {positions.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <span className="result-count">{total.toLocaleString()} rows</span>
+      </div>
+
+      <div className="table-wrapper">
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                {cols.map(c => (
+                  <th key={c} className={sortCol === c ? "sorted" : ""} onClick={() => handleSort(c)}>
+                    {c}
+                    {sortCol === c && <span className="sort-arrow">{sortDir === "asc" ? "▲" : "▼"}</span>}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                Array.from({length: 15}).map((_,i) => (
+                  <tr key={i}>{cols.map((c,j) => <td key={j}><div className="loading-shimmer" style={{width: c==="Player"?120:50}}/></td>)}</tr>
+                ))
+              ) : page.length === 0 ? (
+                <tr><td colSpan={cols.length} style={{textAlign:"center",padding:"40px",color:"var(--text-muted)"}}>No results found</td></tr>
+              ) : (
+                page.map((row, i) => (
+                  <tr key={i}>
+                    {cols.map(c => {
+                      const val = row[c];
+                      if (c === "Player") return <td key={c} className="player-name">{val}</td>;
+                      if (c === "Pos") return <td key={c} className="pos">{val}</td>;
+                      if (c === "Team") return <td key={c} className="team">{val}</td>;
+                      if (rateCols.has(c)) return <td key={c} className="num">{fmt(val, 3)}</td>;
+                      if (intCols.has(c)) return <td key={c} className="num">{fmtInt(val)}</td>;
+                      if (typeof val === "number") return <td key={c} className="num">{fmt(val)}</td>;
+                      return <td key={c}>{val ?? "—"}</td>;
+                    })}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        {!loading && sorted.length > limit && (
+          <div className="pagination">
+            <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>← Previous</button>
+            <span className="page-info">
+              {offset + 1}–{Math.min(offset + limit, sorted.length)} of {sorted.length}
+            </span>
+            <button disabled={offset + limit >= sorted.length} onClick={() => setOffset(offset + limit)}>Next →</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// Dynasty Value Calculator
+// ---------------------------------------------------------------------------
+function DynastyCalculator({ meta }) {
+  const [settings, setSettings] = useState({
+    teams: 12, sims: 100, horizon: 10, discount: 0.85,
+    bench: 6, minors: 0, ip_min: 0, ip_max: "",
+    start_year: 2026, recent_projections: 3,
+  });
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
+  const [sortCol, setSortCol] = useState("DynastyValue");
+  const [sortDir, setSortDir] = useState("desc");
+  const [search, setSearch] = useState("");
+  const [posFilter, setPosFilter] = useState("");
+
+  function update(key, val) {
+    setSettings(s => ({ ...s, [key]: val }));
+  }
+
+  function run() {
+    setLoading(true);
+    setStatus("Running Monte Carlo simulations…");
+    const body = {
+      ...settings,
+      ip_max: settings.ip_max === "" || settings.ip_max === "none" ? null : Number(settings.ip_max),
+      teams: Number(settings.teams),
+      sims: Number(settings.sims),
+      horizon: Number(settings.horizon),
+      discount: Number(settings.discount),
+      bench: Number(settings.bench),
+      minors: Number(settings.minors),
+      ip_min: Number(settings.ip_min),
+      start_year: Number(settings.start_year),
+      recent_projections: Number(settings.recent_projections),
+    };
+
+    fetch(`${API}/api/calculate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(r => {
+        if (!r.ok) throw new Error(`Server error: ${r.status}`);
+        return r.json();
+      })
+      .then(res => {
+        setResults(res);
+        setLoading(false);
+        setStatus(`Done — ${res.total} players ranked`);
+      })
+      .catch(err => {
+        setLoading(false);
+        setStatus(`Error: ${err.message}`);
+      });
+  }
+
+  const filtered = useMemo(() => {
+    if (!results) return [];
+    let d = results.data;
+    if (search) {
+      const q = search.toLowerCase();
+      d = d.filter(r => r.Player?.toLowerCase().includes(q));
+    }
+    if (posFilter) {
+      d = d.filter(r => (r.Pos || "").toUpperCase().includes(posFilter.toUpperCase()));
+    }
+    return d;
+  }, [results, search, posFilter]);
+
+  const sorted = useMemo(() => {
+    if (!sortCol) return filtered;
+    return [...filtered].sort((a, b) => {
+      let av = a[sortCol], bv = b[sortCol];
+      if (typeof av === "string") return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      av = av ?? -Infinity; bv = bv ?? -Infinity;
+      return sortDir === "asc" ? av - bv : bv - av;
+    });
+  }, [filtered, sortCol, sortDir]);
+
+  function handleSort(col) {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir(col === "Player" || col === "Team" || col === "Pos" ? "asc" : "desc"); }
+  }
+
+  // Determine columns to show
+  const baseCols = ["Player", "Team", "Pos", "Age", "DynastyValue"];
+  const yearCols = results ? Object.keys(results.data[0] || {}).filter(c => c.startsWith("Value_")).sort() : [];
+  const displayCols = [...baseCols, ...yearCols];
+
+  return (
+    <div className="fade-up fade-up-1">
+      <div className="calc-layout">
+        <div className="calc-sidebar">
+          <h3>League Settings</h3>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Teams</label>
+              <input type="number" value={settings.teams} onChange={e => update("teams", e.target.value)} min="2" max="30" />
+            </div>
+            <div className="form-group">
+              <label>Start Year</label>
+              <select value={settings.start_year} onChange={e => update("start_year", e.target.value)}>
+                {meta.years.slice(0,5).map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Horizon (yrs)</label>
+              <input type="number" value={settings.horizon} onChange={e => update("horizon", e.target.value)} min="1" max="20" />
+            </div>
+            <div className="form-group">
+              <label>Discount</label>
+              <input type="number" value={settings.discount} onChange={e => update("discount", e.target.value)} min="0.5" max="1" step="0.01" />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Simulations</label>
+              <input type="number" value={settings.sims} onChange={e => update("sims", e.target.value)} min="50" max="1000" step="50" />
+            </div>
+            <div className="form-group">
+              <label>Recent Proj.</label>
+              <input type="number" value={settings.recent_projections} onChange={e => update("recent_projections", e.target.value)} min="1" max="10" />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Bench Slots</label>
+              <input type="number" value={settings.bench} onChange={e => update("bench", e.target.value)} min="0" max="30" />
+            </div>
+            <div className="form-group">
+              <label>Minor Slots</label>
+              <input type="number" value={settings.minors} onChange={e => update("minors", e.target.value)} min="0" max="30" />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>IP Min</label>
+              <input type="number" value={settings.ip_min} onChange={e => update("ip_min", e.target.value)} min="0" step="100" />
+            </div>
+            <div className="form-group">
+              <label>IP Max</label>
+              <input type="text" value={settings.ip_max} onChange={e => update("ip_max", e.target.value)} placeholder="none" />
+            </div>
+          </div>
+
+          <button className="calc-btn" onClick={run} disabled={loading}>
+            {loading ? "Computing…" : "Generate Rankings"}
+          </button>
+          <div className={`calc-status ${loading ? "running" : status.startsWith("Error") ? "error" : ""}`}>
+            {status}
+          </div>
+        </div>
+
+        <div>
+          {results ? (
+            <>
+              <div className="filter-bar" style={{marginBottom: 16}}>
+                <input type="text" placeholder="Search ranked players…" value={search} onChange={e => setSearch(e.target.value)} />
+                <select value={posFilter} onChange={e => setPosFilter(e.target.value)}>
+                  <option value="">All Positions</option>
+                  {["C","1B","2B","3B","SS","OF","SP","RP"].map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <span className="result-count">{sorted.length} players</span>
+              </div>
+              <div className="table-wrapper">
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style={{width:40}}>#</th>
+                        {displayCols.map(c => (
+                          <th key={c} className={sortCol === c ? "sorted" : ""} onClick={() => handleSort(c)}>
+                            {c.replace("Value_", "")}
+                            {sortCol === c && <span className="sort-arrow">{sortDir === "asc" ? "▲" : "▼"}</span>}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sorted.slice(0, 300).map((row, i) => (
+                        <tr key={i}>
+                          <td className="num" style={{color:"var(--text-muted)"}}>{i + 1}</td>
+                          {displayCols.map(c => {
+                            const val = row[c];
+                            if (c === "Player") return <td key={c} className="player-name">{val}</td>;
+                            if (c === "Pos") return <td key={c} className="pos">{val}</td>;
+                            if (c === "Team") return <td key={c} className="team">{val}</td>;
+                            if (c === "DynastyValue" || c.startsWith("Value_")) {
+                              const n = Number(val);
+                              const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
+                              return <td key={c} className={`num ${cls}`}>{fmt(val, 2)}</td>;
+                            }
+                            if (typeof val === "number") return <td key={c} className="num">{fmt(val, Number.isInteger(val) ? 0 : 1)}</td>;
+                            return <td key={c}>{val ?? "—"}</td>;
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              height: 400, color: "var(--text-muted)", flexDirection: "column", gap: 12,
+              background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)",
+            }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6v6l4 2"/>
+              </svg>
+              <p>Configure your league settings and click <strong style={{color:"var(--accent)"}}>Generate Rankings</strong></p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// Mount
+// ---------------------------------------------------------------------------
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
