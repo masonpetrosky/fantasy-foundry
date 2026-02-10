@@ -729,6 +729,7 @@ function ProjectionsExplorer({ meta }) {
     rawPositions.forEach(pos => {
       parsePosTokens(pos).forEach(token => uniq.add(token));
     });
+    if (tab === "bat") uniq.delete("SP");
 
     const order = ["C", "1B", "2B", "3B", "SS", "OF", "DH", "UT", "SP", "RP"];
     return Array.from(uniq).sort((a, b) => {
