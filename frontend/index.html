@@ -35,6 +35,7 @@ body {
   color: var(--text-primary);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 /* ====== HEADER / NAV ====== */
@@ -63,9 +64,21 @@ header {
   color: var(--accent);
   letter-spacing: 0.02em;
   text-decoration: none;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
 }
 
-.logo span { color: var(--text-secondary); font-size: 0.85rem; margin-left: 8px; font-family: 'DM Sans', sans-serif; font-weight: 400; }
+.logo span { color: var(--text-secondary); font-size: 0.85rem; font-family: 'DM Sans', sans-serif; font-weight: 400; white-space: nowrap; }
+
+nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 
 nav a {
   color: var(--text-secondary);
@@ -166,6 +179,7 @@ nav a:hover, nav a.active { color: var(--text-primary); background: var(--bg-ter
   padding: 4px;
   border-radius: 10px;
   width: fit-content;
+  align-items: stretch;
 }
 
 .section-tab {
@@ -213,7 +227,7 @@ nav a:hover, nav a.active { color: var(--text-primary); background: var(--bg-ter
 
 .filter-bar input::placeholder { color: var(--text-muted); }
 
-.filter-bar input[type="text"] { min-width: 240px; }
+.filter-bar input[type="text"] { min-width: 240px; flex: 1 1 260px; }
 
 .multi-select {
   position: relative;
@@ -327,10 +341,12 @@ nav a:hover, nav a.active { color: var(--text-primary); background: var(--bg-ter
   overflow-x: auto;
   max-height: 75vh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 0.85rem;
 }
@@ -403,10 +419,6 @@ td.value-negative { color: var(--red); }
   grid-template-columns: 340px 1fr;
   gap: 24px;
   align-items: start;
-}
-
-@media (max-width: 900px) {
-  .calc-layout { grid-template-columns: 1fr; }
 }
 
 .calc-sidebar {
@@ -493,6 +505,27 @@ td.value-negative { color: var(--red); }
 .calc-status.running { color: var(--accent); }
 .calc-status.error { color: var(--red); }
 
+.calc-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  color: var(--text-muted);
+  flex-direction: column;
+  gap: 12px;
+  background: var(--bg-card);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.calc-empty-state p {
+  margin: 0;
+  text-align: center;
+  padding: 0 20px;
+}
+
+.calc-empty-state strong { color: var(--accent); }
+
 /* ====== PAGINATION ====== */
 .pagination {
   display: flex;
@@ -557,12 +590,143 @@ footer a { color: var(--accent-dim); text-decoration: none; }
 .fade-up-3 { animation-delay: 0.3s; }
 
 /* ====== RESPONSIVE ====== */
+@media (max-width: 1024px) {
+  .nav-inner { padding: 0 24px; }
+  .hero { padding: 64px 24px 50px; }
+  .hero h1 { font-size: 3rem; }
+  .container { padding: 0 24px 72px; }
+}
+
+@media (max-width: 900px) {
+  .calc-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .calc-sidebar {
+    position: static;
+    top: auto;
+    padding: 20px;
+  }
+
+  td.player-name {
+    position: static;
+    background: transparent;
+    min-width: 140px;
+  }
+
+  tr:hover td.player-name { background: transparent; }
+}
+
 @media (max-width: 768px) {
-  .hero h1 { font-size: 2.2rem; }
-  .hero-stats { gap: 24px; }
-  .nav-inner { padding: 0 16px; }
-  .container { padding: 0 16px 60px; }
-  .filter-bar input[type="text"] { min-width: 100%; }
+  .nav-inner {
+    height: auto;
+    min-height: 60px;
+    padding: 12px 16px;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  nav {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  nav a {
+    font-size: 0.82rem;
+    padding: 8px 12px;
+  }
+
+  .hero {
+    padding: 48px 16px 40px;
+    text-align: left;
+  }
+
+  .hero::before {
+    width: 420px;
+    height: 280px;
+    top: -80px;
+  }
+
+  .hero h1 { font-size: 2.1rem; }
+
+  .hero p {
+    font-size: 1rem;
+    margin: 0 0 28px;
+    max-width: none;
+  }
+
+  .hero-stats {
+    gap: 16px 24px;
+    justify-content: flex-start;
+  }
+
+  .hero-stat .number { font-size: 1.45rem; }
+  .container { padding: 0 16px 56px; }
+
+  .section-tabs { width: 100%; }
+
+  .section-tab {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+  }
+
+  .filter-bar { gap: 10px; }
+
+  .filter-bar input[type="text"],
+  .filter-bar select,
+  .filter-bar .multi-select {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  .result-count {
+    margin-left: 0;
+    width: 100%;
+    text-align: left;
+  }
+
+  .multi-select-menu { min-width: 100%; }
+  .table-scroll { max-height: 68vh; }
+  thead th { padding: 10px 12px; }
+  tbody td { padding: 9px 12px; }
+
+  .pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .pagination .page-info {
+    width: 100%;
+    text-align: center;
+    order: 3;
+  }
+
+  .form-row { grid-template-columns: 1fr; gap: 10px; }
+
+  .calc-empty-state {
+    height: 260px;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 560px) {
+  .logo { font-size: 1.1rem; }
+  .logo span { display: none; }
+  .hero h1 { font-size: 1.7rem; }
+  .hero h1 br { display: none; }
+
+  .hero-stat {
+    min-width: calc(50% - 12px);
+    text-align: left;
+  }
+
+  .hero-stat .label { font-size: 0.72rem; }
+  .section-tab { font-size: 0.8rem; }
+  .calc-sidebar { padding: 16px; }
 }
 </style>
 </head>
@@ -1110,16 +1274,12 @@ function DynastyCalculator({ meta }) {
               </div>
             </>
           ) : (
-            <div style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              height: 400, color: "var(--text-muted)", flexDirection: "column", gap: 12,
-              background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)",
-            }}>
+            <div className="calc-empty-state">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10"/>
                 <path d="M12 6v6l4 2"/>
               </svg>
-              <p>Configure your league settings and click <strong style={{color:"var(--accent)"}}>Generate Rankings</strong></p>
+              <p>Configure your league settings and click <strong>Generate Rankings</strong></p>
             </div>
           )}
         </div>
