@@ -229,6 +229,33 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(payload["total"], 0)
         self.assertEqual(payload["data"], [])
 
+    def test_large_projection_response_is_gzip_compressed(self) -> None:
+        sample_rows = [
+            {
+                "Player": f"Player {idx}",
+                "Team": "NYY",
+                "Year": 2026,
+                "Pos": "OF",
+                "Notes": "x" * 80,
+            }
+            for idx in range(250)
+        ]
+
+        with patch.object(app_module, "BAT_DATA", sample_rows), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/bat",
+                params={"include_dynasty": "false"},
+                headers={"Accept-Encoding": "gzip"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("content-encoding"), "gzip")
+        self.assertEqual(response.headers.get("vary"), "Accept-Encoding")
+
 
 class CalculatorValidationTests(unittest.TestCase):
     @classmethod

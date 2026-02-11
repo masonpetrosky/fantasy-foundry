@@ -11,6 +11,7 @@ A web application for browsing 20-year MLB dynasty baseball projections (2026–
 
 - **Projections Explorer** — Browse, search, filter, and sort hitter/pitcher projections across 20 seasons
 - **Dynasty Value Calculator** — Configure your league settings (teams, roster, categories, IP caps) and generate Monte Carlo–based dynasty rankings
+- **Efficient large-result loading** — Projection responses are gzip-compressed by the API, and the UI cancels stale in-flight requests during rapid filter changes
 - **Free & ad-free** — No accounts, no paywalls
 
 ## Architecture

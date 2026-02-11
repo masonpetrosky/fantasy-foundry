@@ -849,24 +849,23 @@ function App() {
   const [metaError, setMetaError] = useState("");
 
   useEffect(() => {
-    let canceled = false;
+    const controller = new AbortController();
     setMetaError("");
-    fetch(`${API}/api/meta`)
+    fetch(`${API}/api/meta`, { signal: controller.signal })
       .then(r => {
         if (!r.ok) throw new Error(`Server returned ${r.status} while loading /api/meta`);
         return r.json();
       })
       .then(res => {
-        if (canceled) return;
         setMeta(res);
       })
       .catch(err => {
-        if (canceled) return;
+        if (err?.name === "AbortError") return;
         setMetaError(err.message || "Failed to load metadata");
         console.error(err);
       });
     return () => {
-      canceled = true;
+      controller.abort();
     };
   }, []);
 
@@ -963,6 +962,7 @@ function ProjectionsExplorer({ meta }) {
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("desc");
   const requestSeqRef = useRef(0);
+  const abortControllerRef = useRef(null);
   const limit = 100;
   const selectedDynastyYears = useMemo(() => {
     if (yearFilter) return [String(yearFilter)];
@@ -972,6 +972,11 @@ function ProjectionsExplorer({ meta }) {
   const fetchData = useCallback(async () => {
     const requestSeq = requestSeqRef.current + 1;
     requestSeqRef.current = requestSeq;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setLoading(true);
     setError("");
 
@@ -994,13 +999,15 @@ function ProjectionsExplorer({ meta }) {
         params.set("limit", String(pageSize));
         params.set("offset", String(nextOffset));
 
-        const response = await fetch(`${API}/api/projections/${tab}?${params}`);
+        const response = await fetch(`${API}/api/projections/${tab}?${params}`, {
+          signal: controller.signal,
+        });
         if (!response.ok) {
           throw new Error(`Server returned ${response.status} while loading projections`);
         }
 
         const payload = await response.json();
-        if (requestSeq !== requestSeqRef.current) return;
+        if (requestSeq !== requestSeqRef.current || controller.signal.aborted) return;
 
         const pageRows = Array.isArray(payload.data) ? payload.data : [];
         const parsedTotal = Number(payload.total);
@@ -1015,16 +1022,21 @@ function ProjectionsExplorer({ meta }) {
         nextOffset += pageRows.length;
       }
 
-      if (requestSeq !== requestSeqRef.current) return;
+      if (requestSeq !== requestSeqRef.current || controller.signal.aborted) return;
       setData(rows);
       setOffset(0);
       setLoading(false);
     } catch (err) {
       if (requestSeq !== requestSeqRef.current) return;
+      if (err?.name === "AbortError") return;
       setData([]);
       setOffset(0);
       setLoading(false);
       setError(err.message || "Failed to load projections");
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
     }
   }, [tab, search, teamFilter, yearFilter, posFilters, selectedDynastyYears]);
 
@@ -1038,6 +1050,10 @@ function ProjectionsExplorer({ meta }) {
   useEffect(() => {
     return () => {
       requestSeqRef.current += 1;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
     };
   }, []);
 
@@ -1068,7 +1084,7 @@ function ProjectionsExplorer({ meta }) {
   }, [meta.years, yearFilter]);
 
   const positionOptions = useMemo(() => {
-    const rawPositions = tab === "bat" ? meta.bat_positions : meta.pit_positions;
+    const rawPositions = tab === "bat" ? (meta.bat_positions || []) : (meta.pit_positions || []);
     const uniq = new Set();
     rawPositions.forEach(pos => {
       parsePosTokens(pos).forEach(token => uniq.add(token));
@@ -1282,6 +1298,8 @@ function DynastyCalculator({ meta }) {
   const [sortDir, setSortDir] = useState("desc");
   const [search, setSearch] = useState("");
   const [posFilter, setPosFilter] = useState("");
+  const calcRequestSeqRef = useRef(0);
+  const calcAbortControllerRef = useRef(null);
 
   useEffect(() => {
     const availableYears = (meta.years || []).map(Number).filter(Number.isFinite);
@@ -1292,11 +1310,28 @@ function DynastyCalculator({ meta }) {
     }
   }, [meta.years, settings.start_year]);
 
+  useEffect(() => {
+    return () => {
+      calcRequestSeqRef.current += 1;
+      if (calcAbortControllerRef.current) {
+        calcAbortControllerRef.current.abort();
+        calcAbortControllerRef.current = null;
+      }
+    };
+  }, []);
+
   function update(key, val) {
     setSettings(s => ({ ...s, [key]: val }));
   }
 
   function run() {
+    const requestSeq = calcRequestSeqRef.current + 1;
+    calcRequestSeqRef.current = requestSeq;
+    if (calcAbortControllerRef.current) {
+      calcAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    calcAbortControllerRef.current = controller;
     setLoading(true);
     setStatus("Running Monte Carlo simulations…");
     const body = {
@@ -1317,19 +1352,28 @@ function DynastyCalculator({ meta }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: controller.signal,
     })
       .then(r => {
         if (!r.ok) throw new Error(`Server error: ${r.status}`);
         return r.json();
       })
       .then(res => {
+        if (requestSeq !== calcRequestSeqRef.current || controller.signal.aborted) return;
         setResults(res);
         setLoading(false);
         setStatus(`Done — ${res.total} players ranked`);
       })
       .catch(err => {
+        if (requestSeq !== calcRequestSeqRef.current) return;
+        if (err?.name === "AbortError") return;
         setLoading(false);
         setStatus(`Error: ${err.message}`);
+      })
+      .finally(() => {
+        if (calcAbortControllerRef.current === controller) {
+          calcAbortControllerRef.current = null;
+        }
       });
   }
 
