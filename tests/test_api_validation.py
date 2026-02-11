@@ -16,6 +16,19 @@ class DynastyYearParsingTests(unittest.TestCase):
         self.assertEqual(parsed, [2026, 2028])
 
 
+class YearCoercionTests(unittest.TestCase):
+    def test_coerce_record_year_handles_numeric_types(self) -> None:
+        self.assertEqual(app_module._coerce_record_year(2026), 2026)
+        self.assertEqual(app_module._coerce_record_year(2026.0), 2026)
+        self.assertEqual(app_module._coerce_record_year("2026"), 2026)
+        self.assertEqual(app_module._coerce_record_year("2026.0"), 2026)
+
+    def test_coerce_record_year_rejects_invalid_values(self) -> None:
+        self.assertIsNone(app_module._coerce_record_year("2026.5"))
+        self.assertIsNone(app_module._coerce_record_year("not-a-year"))
+        self.assertIsNone(app_module._coerce_record_year(True))
+
+
 class ProjectionEndpointValidationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -50,6 +63,48 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(payload["total"], 1)
         self.assertEqual(payload["data"][0]["Player"], "Juan Soto")
         self.assertNotIn("DynastyValue", payload["data"][0])
+
+    def test_team_filter_trims_whitespace(self) -> None:
+        sample_rows = [{"Player": "Juan Soto", "Team": "NYY", "Year": 2026, "Pos": "OF"}]
+
+        with patch.object(app_module, "BAT_DATA", sample_rows), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/bat",
+                params={"team": "  nyy  ", "include_dynasty": "false"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["data"][0]["Player"], "Juan Soto")
+
+    def test_year_filter_handles_float_and_string_year_values(self) -> None:
+        sample_rows = [
+            {"Player": "Player A", "Team": "NYY", "Year": 2026, "Pos": "OF"},
+            {"Player": "Player B", "Team": "NYY", "Year": 2026.0, "Pos": "OF"},
+            {"Player": "Player C", "Team": "NYY", "Year": "2026", "Pos": "OF"},
+            {"Player": "Player D", "Team": "NYY", "Year": "2026.5", "Pos": "OF"},
+        ]
+
+        with patch.object(app_module, "BAT_DATA", sample_rows), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/bat",
+                params={"year": 2026, "include_dynasty": "false"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 3)
+        players = {row["Player"] for row in payload["data"]}
+        self.assertSetEqual(players, {"Player A", "Player B", "Player C"})
 
 
 class CalculatorValidationTests(unittest.TestCase):

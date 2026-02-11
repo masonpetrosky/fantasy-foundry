@@ -966,47 +966,83 @@ function ProjectionsExplorer({ meta }) {
   const [offset, setOffset] = useState(0);
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("desc");
+  const requestSeqRef = useRef(0);
   const limit = 100;
   const selectedDynastyYears = useMemo(() => {
     if (yearFilter) return [String(yearFilter)];
     return (meta.years || []).map(String);
   }, [meta.years, yearFilter]);
 
-  const fetchData = useCallback(() => {
+  const fetchData = useCallback(async () => {
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
     setLoading(true);
     setError("");
-    const params = new URLSearchParams();
-    if (search) params.set("player", search);
-    if (teamFilter) params.set("team", teamFilter);
-    if (yearFilter) params.set("year", yearFilter);
-    if (selectedDynastyYears.length > 0) params.set("dynasty_years", selectedDynastyYears.join(","));
-    params.set("include_dynasty", "true");
-    params.set("limit", "5000");
-    params.set("offset", "0");
 
-    fetch(`${API}/api/projections/${tab}?${params}`)
-      .then(r => {
-        if (!r.ok) throw new Error(`Server returned ${r.status} while loading projections`);
-        return r.json();
-      })
-      .then(res => {
-        const rows = Array.isArray(res.data) ? res.data : [];
-        setData(rows);
-        setOffset(0);
-        setLoading(false);
-      })
-      .catch(err => {
-        setData([]);
-        setOffset(0);
-        setLoading(false);
-        setError(err.message || "Failed to load projections");
-      });
+    const baseParams = new URLSearchParams();
+    if (search) baseParams.set("player", search);
+    if (teamFilter) baseParams.set("team", teamFilter);
+    if (yearFilter) baseParams.set("year", yearFilter);
+    if (selectedDynastyYears.length > 0) baseParams.set("dynasty_years", selectedDynastyYears.join(","));
+    baseParams.set("include_dynasty", "true");
+
+    const pageSize = 5000;
+    const rows = [];
+    let total = Infinity;
+    let nextOffset = 0;
+
+    try {
+      while (rows.length < total) {
+        const params = new URLSearchParams(baseParams);
+        params.set("limit", String(pageSize));
+        params.set("offset", String(nextOffset));
+
+        const response = await fetch(`${API}/api/projections/${tab}?${params}`);
+        if (!response.ok) {
+          throw new Error(`Server returned ${response.status} while loading projections`);
+        }
+
+        const payload = await response.json();
+        if (requestSeq !== requestSeqRef.current) return;
+
+        const pageRows = Array.isArray(payload.data) ? payload.data : [];
+        const parsedTotal = Number(payload.total);
+        if (Number.isFinite(parsedTotal) && parsedTotal >= 0) {
+          total = parsedTotal;
+        }
+
+        rows.push(...pageRows);
+        if (pageRows.length === 0 || pageRows.length < pageSize) {
+          break;
+        }
+        nextOffset += pageRows.length;
+      }
+
+      if (requestSeq !== requestSeqRef.current) return;
+      setData(rows);
+      setOffset(0);
+      setLoading(false);
+    } catch (err) {
+      if (requestSeq !== requestSeqRef.current) return;
+      setData([]);
+      setOffset(0);
+      setLoading(false);
+      setError(err.message || "Failed to load projections");
+    }
   }, [tab, search, teamFilter, yearFilter, selectedDynastyYears]);
 
   useEffect(() => {
     const timer = setTimeout(fetchData, 300);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [fetchData]);
+
+  useEffect(() => {
+    return () => {
+      requestSeqRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     function handleOutsideClick(event) {
@@ -1336,7 +1372,16 @@ function DynastyCalculator({ meta }) {
 
   // Determine columns to show
   const baseCols = ["Player", "Team", "Pos", "Age", "DynastyValue"];
-  const yearCols = results ? Object.keys(results.data[0] || {}).filter(c => c.startsWith("Value_")).sort() : [];
+  const yearCols = results
+    ? Object.keys(results.data[0] || {})
+      .filter(c => c.startsWith("Value_"))
+      .sort((a, b) => {
+        const av = Number(a.replace("Value_", ""));
+        const bv = Number(b.replace("Value_", ""));
+        if (Number.isFinite(av) && Number.isFinite(bv)) return av - bv;
+        return a.localeCompare(b);
+      })
+    : [];
   const displayCols = [...baseCols, ...yearCols];
 
   return (
@@ -1353,7 +1398,7 @@ function DynastyCalculator({ meta }) {
             <div className="form-group">
               <label>Start Year</label>
               <select value={settings.start_year} onChange={e => update("start_year", e.target.value)}>
-                {meta.years.slice(0,5).map(y => <option key={y} value={y}>{y}</option>)}
+                {meta.years.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
           </div>

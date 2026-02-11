@@ -53,6 +53,22 @@ Then open http://localhost:8000
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
+### Running Browser E2E Tests (Playwright)
+```bash
+# Install app + dev test dependencies
+pip install -r requirements-dev.txt
+
+# Install Playwright Chromium once
+python -m playwright install chromium
+
+# Run the pagination integration test
+python -m unittest tests/test_e2e_projections_pagination.py
+```
+
+This test launches the app locally, selects `All Years` in the projections view, and verifies:
+- the UI reports more than 5,000 hitter rows
+- the browser issued paginated API requests including `offset=5000`
+
 ### Updating Projections
 
 When you update the Excel file, re-run the preprocessing to regenerate the JSON data files:

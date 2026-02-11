@@ -409,22 +409,43 @@ def get_meta():
 # ---------------------------------------------------------------------------
 # API: Projections
 # ---------------------------------------------------------------------------
+def _coerce_record_year(value: object) -> int | None:
+    """Normalize JSON year values from int/float/string to int for robust filtering."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            parsed = float(text)
+        except ValueError:
+            return None
+        return int(parsed) if parsed.is_integer() else None
+    return None
+
+
 def filter_records(records, player: str | None, team: str | None, year: int | None, pos: str | None):
     out = records
     if player:
-        q = player.lower()
+        q = player.strip().lower()
         out = [r for r in out if q in str(r.get("Player", "")).lower()]
     if team:
-        team_normalized = team.lower()
+        team_normalized = team.strip().lower()
         out = [
             r for r in out
-            if str(r.get("Team", "")).lower() == team_normalized
-            or str(r.get("MLBTeam", "")).lower() == team_normalized
+            if str(r.get("Team", "")).strip().lower() == team_normalized
+            or str(r.get("MLBTeam", "")).strip().lower() == team_normalized
         ]
     if year is not None:
-        out = [r for r in out if r.get("Year") == year]
+        out = [r for r in out if _coerce_record_year(r.get("Year")) == year]
     if pos:
-        out = [r for r in out if pos.upper() in str(r.get("Pos", "")).upper()]
+        pos_normalized = pos.strip().upper()
+        out = [r for r in out if pos_normalized in str(r.get("Pos", "")).upper()]
     return out
 
 
