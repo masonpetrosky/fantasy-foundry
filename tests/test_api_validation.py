@@ -106,6 +106,52 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         players = {row["Player"] for row in payload["data"]}
         self.assertSetEqual(players, {"Player A", "Player B", "Player C"})
 
+    def test_position_filter_supports_multi_select_tokens(self) -> None:
+        sample_rows = [
+            {"Player": "Starter", "Team": "SEA", "Year": 2026, "Pos": "SP"},
+            {"Player": "Reliever", "Team": "SEA", "Year": 2026, "Pos": "RP"},
+            {"Player": "Swingman", "Team": "SEA", "Year": 2026, "Pos": "SP/RP"},
+            {"Player": "Catcher", "Team": "SEA", "Year": 2026, "Pos": "C"},
+        ]
+
+        with patch.object(app_module, "PIT_DATA", sample_rows), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/pitch",
+                params={"pos": " sp, rp ", "include_dynasty": "false"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 3)
+        players = {row["Player"] for row in payload["data"]}
+        self.assertSetEqual(players, {"Starter", "Reliever", "Swingman"})
+
+    def test_position_filter_matches_exact_tokens_not_substrings(self) -> None:
+        sample_rows = [
+            {"Player": "Starter", "Team": "SEA", "Year": 2026, "Pos": "SP"},
+            {"Player": "Reliever", "Team": "SEA", "Year": 2026, "Pos": "RP"},
+            {"Player": "Catcher", "Team": "SEA", "Year": 2026, "Pos": "C"},
+        ]
+
+        with patch.object(app_module, "PIT_DATA", sample_rows), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/pitch",
+                params={"pos": "P", "include_dynasty": "false"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 0)
+        self.assertEqual(payload["data"], [])
+
 
 class CalculatorValidationTests(unittest.TestCase):
     @classmethod

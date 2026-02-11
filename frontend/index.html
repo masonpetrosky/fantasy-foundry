@@ -983,6 +983,7 @@ function ProjectionsExplorer({ meta }) {
     if (search) baseParams.set("player", search);
     if (teamFilter) baseParams.set("team", teamFilter);
     if (yearFilter) baseParams.set("year", yearFilter);
+    if (posFilters.length > 0) baseParams.set("pos", posFilters.join(","));
     if (selectedDynastyYears.length > 0) baseParams.set("dynasty_years", selectedDynastyYears.join(","));
     baseParams.set("include_dynasty", "true");
 
@@ -1029,7 +1030,7 @@ function ProjectionsExplorer({ meta }) {
       setLoading(false);
       setError(err.message || "Failed to load projections");
     }
-  }, [tab, search, teamFilter, yearFilter, selectedDynastyYears]);
+  }, [tab, search, teamFilter, yearFilter, posFilters, selectedDynastyYears]);
 
   useEffect(() => {
     const timer = setTimeout(fetchData, 300);
@@ -1091,15 +1092,9 @@ function ProjectionsExplorer({ meta }) {
     });
   }, [tab, meta.bat_positions, meta.pit_positions]);
 
-  const filteredData = useMemo(() => {
-    if (posFilters.length === 0) return data;
-    const selected = new Set(posFilters);
-    return data.filter(row => parsePosTokens(row.Pos).some(pos => selected.has(pos)));
-  }, [data, posFilters]);
-
   const sorted = useMemo(() => {
-    if (!sortCol) return filteredData;
-    return [...filteredData].sort((a, b) => {
+    if (!sortCol) return data;
+    return [...data].sort((a, b) => {
       let av = a[sortCol], bv = b[sortCol];
       if (sortCol === "OldestProjectionDate") {
         const avTs = av ? Date.parse(av) : NaN;
@@ -1114,7 +1109,7 @@ function ProjectionsExplorer({ meta }) {
       av = av ?? -Infinity; bv = bv ?? -Infinity;
       return sortDir === "asc" ? av - bv : bv - av;
     });
-  }, [filteredData, sortCol, sortDir]);
+  }, [data, sortCol, sortDir]);
 
   const page = sorted.slice(offset, offset + limit);
 

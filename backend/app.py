@@ -47,6 +47,7 @@ PROJECTION_DATE_COLS = ["ProjectionDate", "Date", "Updated", "LastUpdated", "Tim
 DERIVED_HIT_RATE_COLS = {"AVG", "OPS"}
 DERIVED_PIT_RATE_COLS = {"ERA", "WHIP"}
 YEAR_RANGE_TOKEN_RE = re.compile(r"^(\d{4})\s*-\s*(\d{4})$")
+POSITION_TOKEN_SPLIT_RE = re.compile(r"[,\s/]+")
 
 
 def _find_projection_date_col(df: pd.DataFrame) -> str | None:
@@ -429,6 +430,13 @@ def _coerce_record_year(value: object) -> int | None:
     return None
 
 
+def _position_tokens(value: object) -> set[str]:
+    text = str(value or "").strip().upper()
+    if not text:
+        return set()
+    return {token for token in POSITION_TOKEN_SPLIT_RE.split(text) if token}
+
+
 def filter_records(records, player: str | None, team: str | None, year: int | None, pos: str | None):
     out = records
     if player:
@@ -444,8 +452,12 @@ def filter_records(records, player: str | None, team: str | None, year: int | No
     if year is not None:
         out = [r for r in out if _coerce_record_year(r.get("Year")) == year]
     if pos:
-        pos_normalized = pos.strip().upper()
-        out = [r for r in out if pos_normalized in str(r.get("Pos", "")).upper()]
+        requested_positions = _position_tokens(pos)
+        if requested_positions:
+            out = [
+                r for r in out
+                if requested_positions.intersection(_position_tokens(r.get("Pos", "")))
+            ]
     return out
 
 

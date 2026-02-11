@@ -107,6 +107,7 @@ All three support Dockerfiles out of the box:
 | POST | `/api/calculate` | Run dynasty value calculator (JSON body with league settings) |
 
 `dynasty_years` accepts comma-separated years and inclusive ranges, for example `2026,2028-2030`.
+`pos` accepts one or more exact position tokens (comma, slash, or space separated), for example `SP,RP` or `1B/OF`.
 
 ## Next Steps
 
