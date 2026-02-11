@@ -918,6 +918,13 @@ function ProjectionsExplorer({ meta }) {
     if (!sortCol) return filteredData;
     return [...filteredData].sort((a, b) => {
       let av = a[sortCol], bv = b[sortCol];
+      if (sortCol === "OldestProjectionDate") {
+        const avTs = av ? Date.parse(av) : NaN;
+        const bvTs = bv ? Date.parse(bv) : NaN;
+        av = Number.isFinite(avTs) ? avTs : -Infinity;
+        bv = Number.isFinite(bvTs) ? bvTs : -Infinity;
+        return sortDir === "asc" ? av - bv : bv - av;
+      }
       if (typeof av === "string") {
         return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
       }
@@ -937,11 +944,15 @@ function ProjectionsExplorer({ meta }) {
     }
   }
 
-  const batCols = ["Player","Team","Age","Year","Pos","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS"];
-  const pitCols = ["Player","Team","Age","Year","Pos","G","GS","IP","W","L","K","BB","SV","SVH","ERA","WHIP","H","HR","ER"];
+  const batCols = ["Player","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","Pos","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS"];
+  const pitCols = ["Player","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","Pos","G","GS","IP","W","L","K","BB","SV","SVH","ERA","WHIP","H","HR","ER"];
   const cols = tab === "bat" ? batCols : pitCols;
+  const colLabels = {
+    ProjectionsUsed: "Proj Count",
+    OldestProjectionDate: "Oldest Proj Date",
+  };
   const rateCols = new Set(["AVG","OPS","ERA","WHIP"]);
-  const intCols = new Set(["Year","Age"]);
+  const intCols = new Set(["Year","Age","ProjectionsUsed"]);
   const posFilterLabel = posFilters.length === 0
     ? "All Positions"
     : posFilters.length <= 2
@@ -1015,7 +1026,7 @@ function ProjectionsExplorer({ meta }) {
               <tr>
                 {cols.map(c => (
                   <th key={c} className={sortCol === c ? "sorted" : ""} onClick={() => handleSort(c)}>
-                    {c}
+                    {colLabels[c] || c}
                     {sortCol === c && <span className="sort-arrow">{sortDir === "asc" ? "▲" : "▼"}</span>}
                   </th>
                 ))}

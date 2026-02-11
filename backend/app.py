@@ -95,16 +95,27 @@ def _average_recent_projection_rows(
         .groupby(group_cols, as_index=False, sort=False)
         .head(max_entries)
     )
+    recent["ProjectionsUsed"] = 1
+    recent["OldestProjectionDate"] = recent["_projection_date"]
 
     meta_cols = [
         c
         for c in recent.columns
         if c not in stat_cols
         and c not in group_cols
-        and c not in {"_projection_order", "_projection_date", "_sort_key"}
+        and c
+        not in {
+            "_projection_order",
+            "_projection_date",
+            "_sort_key",
+            "ProjectionsUsed",
+            "OldestProjectionDate",
+        }
     ]
 
     agg = {c: "mean" for c in stat_cols}
+    agg["ProjectionsUsed"] = "sum"
+    agg["OldestProjectionDate"] = "min"
     for c in meta_cols:
         agg[c] = "first"
 
@@ -113,6 +124,8 @@ def _average_recent_projection_rows(
         .groupby(group_cols, as_index=False, sort=False)
         .agg(agg)
     )
+    front = ["Player", "Year", "ProjectionsUsed", "OldestProjectionDate"]
+    out = out[[c for c in front if c in out.columns] + [c for c in out.columns if c not in front]]
 
     if is_hitter:
         if "H" in out.columns and "AB" in out.columns:
