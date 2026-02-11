@@ -1078,7 +1078,8 @@ function ProjectionsExplorer({ meta }) {
       if (yearFilter !== "") setYearFilter("");
       return;
     }
-    if (!availableYears.includes(String(yearFilter))) {
+    // Keep "" as a valid "All Years" selection; only coerce stale explicit years.
+    if (yearFilter && !availableYears.includes(String(yearFilter))) {
       setYearFilter(availableYears[0]);
     }
   }, [meta.years, yearFilter]);
