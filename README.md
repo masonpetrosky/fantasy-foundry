@@ -102,10 +102,12 @@ All three support Dockerfiles out of the box:
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/meta` | Filter options (teams, years, positions) |
-| GET | `/api/projections/bat` | Hitter projections (query params: player, team, year, pos, dynasty_years, include_dynasty, limit, offset) |
+| GET | `/api/projections/bat` | Hitter projections (query params: player, team, year, years, pos, dynasty_years, include_dynasty, limit, offset) |
 | GET | `/api/projections/pitch` | Pitcher projections (same query params) |
 | POST | `/api/calculate` | Run dynasty value calculator (JSON body with league settings) |
 
+`years` accepts comma-separated years and inclusive ranges, for example `2026,2028-2030`.
+If both `year` and `years` are provided, results use the intersection.
 `dynasty_years` accepts comma-separated years and inclusive ranges, for example `2026,2028-2030`.
 `pos` accepts one or more exact position tokens (comma, slash, or space separated), for example `SP,RP` or `1B/OF`.
 

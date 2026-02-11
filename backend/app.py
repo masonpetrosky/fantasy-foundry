@@ -33,6 +33,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 FRONTEND_DIR = BASE_DIR / "frontend"
 EXCEL_PATH = DATA_DIR / "Dynasty Baseball Projections.xlsx"
+BACKEND_MODULE_DIR = BASE_DIR / "backend"
 
 # ---------------------------------------------------------------------------
 # Load pre-processed JSON data once at startup
@@ -248,11 +249,17 @@ def _value_col_sort_key(col: str) -> tuple[int, int | str]:
     return (0, int(suffix)) if suffix.isdigit() else (1, suffix)
 
 
+def _ensure_backend_module_path() -> None:
+    backend_path = str(BACKEND_MODULE_DIR)
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+
+
 @lru_cache(maxsize=1)
 def _get_default_dynasty_lookup() -> tuple[dict[str, dict], list[str]]:
     """Cached default dynasty values keyed by player name."""
     try:
-        sys.path.insert(0, str(BASE_DIR / "backend"))
+        _ensure_backend_module_path()
         from dynasty_roto_values import CommonDynastyRotoSettings, calculate_common_dynasty_values
 
         years = _coerce_meta_years(META)
@@ -337,6 +344,29 @@ def _parse_dynasty_years(raw: str | None, *, valid_years: list[int] | None = Non
         valid = set(valid_years)
         parsed = [year for year in parsed if year in valid]
     return parsed
+
+
+def _resolve_projection_year_filter(
+    year: int | None,
+    years: str | None,
+    *,
+    valid_years: list[int] | None = None,
+) -> set[int] | None:
+    years_specified = bool(years and years.strip())
+    parsed_years: set[int] | None = None
+    if years_specified:
+        parsed_years = set(_parse_dynasty_years(years, valid_years=valid_years))
+
+    if year is None and parsed_years is None:
+        return None
+
+    if parsed_years is None:
+        return {year} if year is not None else set()
+
+    if year is not None:
+        parsed_years.intersection_update({year})
+
+    return parsed_years
 
 
 def _attach_dynasty_values(rows: list[dict], dynasty_years: list[int] | None = None) -> list[dict]:
@@ -437,7 +467,13 @@ def _position_tokens(value: object) -> set[str]:
     return {token for token in POSITION_TOKEN_SPLIT_RE.split(text) if token}
 
 
-def filter_records(records, player: str | None, team: str | None, year: int | None, pos: str | None):
+def filter_records(
+    records,
+    player: str | None,
+    team: str | None,
+    years: set[int] | None,
+    pos: str | None,
+):
     out = records
     if player:
         q = player.strip().lower()
@@ -449,8 +485,8 @@ def filter_records(records, player: str | None, team: str | None, year: int | No
             if str(r.get("Team", "")).strip().lower() == team_normalized
             or str(r.get("MLBTeam", "")).strip().lower() == team_normalized
         ]
-    if year is not None:
-        out = [r for r in out if _coerce_record_year(r.get("Year")) == year]
+    if years is not None:
+        out = [r for r in out if _coerce_record_year(r.get("Year")) in years]
     if pos:
         requested_positions = _position_tokens(pos)
         if requested_positions:
@@ -466,6 +502,7 @@ def get_bat_projections(
     player: Optional[str] = None,
     team: Optional[str] = None,
     year: Optional[int] = None,
+    years: Optional[str] = None,
     pos: Optional[str] = None,
     dynasty_years: Optional[str] = None,
     include_dynasty: bool = True,
@@ -473,11 +510,13 @@ def get_bat_projections(
     offset: int = Query(default=0, ge=0),
 ):
     _refresh_data_if_needed()
-    filtered = filter_records(BAT_DATA, player, team, year, pos)
+    valid_years = _coerce_meta_years(META)
+    requested_years = _resolve_projection_year_filter(year, years, valid_years=valid_years)
+    filtered = filter_records(BAT_DATA, player, team, requested_years, pos)
     total = len(filtered)
     page = filtered[offset : offset + limit]
     if include_dynasty:
-        page = _attach_dynasty_values(page, _parse_dynasty_years(dynasty_years, valid_years=_coerce_meta_years(META)))
+        page = _attach_dynasty_values(page, _parse_dynasty_years(dynasty_years, valid_years=valid_years))
     return {"total": total, "offset": offset, "limit": limit, "data": page}
 
 
@@ -486,6 +525,7 @@ def get_pitch_projections(
     player: Optional[str] = None,
     team: Optional[str] = None,
     year: Optional[int] = None,
+    years: Optional[str] = None,
     pos: Optional[str] = None,
     dynasty_years: Optional[str] = None,
     include_dynasty: bool = True,
@@ -493,11 +533,13 @@ def get_pitch_projections(
     offset: int = Query(default=0, ge=0),
 ):
     _refresh_data_if_needed()
-    filtered = filter_records(PIT_DATA, player, team, year, pos)
+    valid_years = _coerce_meta_years(META)
+    requested_years = _resolve_projection_year_filter(year, years, valid_years=valid_years)
+    filtered = filter_records(PIT_DATA, player, team, requested_years, pos)
     total = len(filtered)
     page = filtered[offset : offset + limit]
     if include_dynasty:
-        page = _attach_dynasty_values(page, _parse_dynasty_years(dynasty_years, valid_years=_coerce_meta_years(META)))
+        page = _attach_dynasty_values(page, _parse_dynasty_years(dynasty_years, valid_years=valid_years))
     return {"total": total, "offset": offset, "limit": limit, "data": page}
 
 
@@ -537,7 +579,7 @@ def calculate_dynasty_values(req: CalculateRequest):
             )
 
         # Import the calculation module
-        sys.path.insert(0, str(BASE_DIR / "backend"))
+        _ensure_backend_module_path()
         from dynasty_roto_values import (
             CommonDynastyRotoSettings,
             calculate_common_dynasty_values,

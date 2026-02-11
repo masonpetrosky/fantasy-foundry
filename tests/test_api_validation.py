@@ -15,6 +15,30 @@ class DynastyYearParsingTests(unittest.TestCase):
         parsed = app_module._parse_dynasty_years("2025-2028,2030", valid_years=[2026, 2028, 2029])
         self.assertEqual(parsed, [2026, 2028])
 
+    def test_resolve_projection_year_filter_accepts_years_only(self) -> None:
+        resolved = app_module._resolve_projection_year_filter(
+            year=None,
+            years="2026,2028-2029",
+            valid_years=[2026, 2027, 2028, 2029],
+        )
+        self.assertSetEqual(resolved or set(), {2026, 2028, 2029})
+
+    def test_resolve_projection_year_filter_intersects_with_single_year(self) -> None:
+        resolved = app_module._resolve_projection_year_filter(
+            year=2028,
+            years="2026-2027,2028",
+            valid_years=[2026, 2027, 2028],
+        )
+        self.assertSetEqual(resolved or set(), {2028})
+
+    def test_resolve_projection_year_filter_returns_empty_set_for_invalid_years_token(self) -> None:
+        resolved = app_module._resolve_projection_year_filter(
+            year=None,
+            years="bad-token",
+            valid_years=[2026, 2027, 2028],
+        )
+        self.assertEqual(resolved, set())
+
 
 class YearCoercionTests(unittest.TestCase):
     def test_coerce_record_year_handles_numeric_types(self) -> None:
@@ -105,6 +129,59 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(payload["total"], 3)
         players = {row["Player"] for row in payload["data"]}
         self.assertSetEqual(players, {"Player A", "Player B", "Player C"})
+
+    def test_years_filter_supports_comma_and_range_syntax(self) -> None:
+        sample_rows = [
+            {"Player": "Player A", "Team": "NYY", "Year": 2026, "Pos": "OF"},
+            {"Player": "Player B", "Team": "NYY", "Year": 2027, "Pos": "OF"},
+            {"Player": "Player C", "Team": "NYY", "Year": 2028, "Pos": "OF"},
+            {"Player": "Player D", "Team": "NYY", "Year": 2029, "Pos": "OF"},
+        ]
+
+        with patch.object(app_module, "BAT_DATA", sample_rows), patch.object(
+            app_module,
+            "META",
+            {"years": [2026, 2027, 2028, 2029]},
+        ), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/bat",
+                params={"years": "2026,2028-2029", "include_dynasty": "false"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 3)
+        players = {row["Player"] for row in payload["data"]}
+        self.assertSetEqual(players, {"Player A", "Player C", "Player D"})
+
+    def test_year_and_years_filters_are_intersected(self) -> None:
+        sample_rows = [
+            {"Player": "Player A", "Team": "NYY", "Year": 2027, "Pos": "OF"},
+            {"Player": "Player B", "Team": "NYY", "Year": 2028, "Pos": "OF"},
+        ]
+
+        with patch.object(app_module, "BAT_DATA", sample_rows), patch.object(
+            app_module,
+            "META",
+            {"years": [2027, 2028]},
+        ), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/bat",
+                params={"year": 2028, "years": "2027", "include_dynasty": "false"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 0)
+        self.assertEqual(payload["data"], [])
 
     def test_position_filter_supports_multi_select_tokens(self) -> None:
         sample_rows = [
