@@ -572,6 +572,49 @@ td.value-negative { color: var(--red); }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 /* ====== FOOTER ====== */
+.methodology-section {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 32px 40px;
+  scroll-margin-top: 84px;
+}
+
+.methodology-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+}
+
+.methodology-card h2 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.6rem;
+  font-weight: 400;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+.methodology-card p {
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.methodology-card ol {
+  padding-left: 18px;
+  color: var(--text-primary);
+}
+
+.methodology-card li {
+  margin-bottom: 10px;
+}
+
+.methodology-note {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-top: 8px;
+}
+
 footer {
   border-top: 1px solid var(--border-subtle);
   padding: 32px;
@@ -599,6 +642,7 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   .hero { padding: 64px 24px 50px; }
   .hero h1 { font-size: 3rem; }
   .container { padding: 0 24px 72px; }
+  .methodology-section { padding: 0 24px 32px; }
 }
 
 @media (max-width: 900px) {
@@ -731,6 +775,8 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   .hero-stat .label { font-size: 0.72rem; }
   .section-tab { font-size: 0.8rem; }
   .calc-sidebar { padding: 16px; }
+  .methodology-card { padding: 18px; }
+  .methodology-card h2 { font-size: 1.35rem; }
 }
 </style>
 </head>
@@ -871,9 +917,32 @@ function App() {
         {section === "calculator" && meta && <DynastyCalculator meta={meta} />}
       </div>
 
+      <section id="methodology" className="methodology-section" aria-labelledby="methodology-heading">
+        <div className="methodology-card">
+          <h2 id="methodology-heading">Methodology</h2>
+          <p>Player values are generated from projection inputs and league settings in three stages:</p>
+          <ol>
+            <li>
+              For each player-year, duplicate rows are collapsed by averaging the most recent projections
+              (up to the configured <code>recent_projections</code> count).
+            </li>
+            <li>
+              Projections are translated into category-level impact using your scoring format, roster structure,
+              and innings constraints.
+            </li>
+            <li>
+              The backend runs simulation-based valuation to estimate multi-year dynasty value and produces ranked results.
+            </li>
+          </ol>
+          <p className="methodology-note">
+            Output is meant as directional guidance. Real outcomes depend on changing roles, health, and league context.
+          </p>
+        </div>
+      </section>
+
       <footer>
         Built for dynasty baseball enthusiasts &middot; Projections updated as-needed &middot;
-        <a href="#"> About the methodology</a>
+        <a href="#methodology"> About the methodology</a>
       </footer>
     </>
   );
