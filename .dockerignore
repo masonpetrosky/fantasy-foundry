@@ -1,0 +1,24 @@
+# VCS metadata
+.git
+.gitignore
+
+# Local environments and caches
+.venv
+venv
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local tooling/config artifacts
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Not needed in runtime image
+tests/
+README.md
+preprocess.py
