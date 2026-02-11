@@ -5,26 +5,26 @@ Endpoints:
   GET  /api/meta             → filter options (teams, years, positions)
   GET  /api/projections/bat  → hitter projections (filterable)
   GET  /api/projections/pitch → pitcher projections (filterable)
-  GET  /api/calculate        → run dynasty value calculator with custom settings
+  POST /api/calculate        → run dynasty value calculator with custom settings
 """
 
 from __future__ import annotations
 
 import json
-import os
+import re
 import sys
 import traceback
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
-from typing import Optional
+from typing import Literal, Optional
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -46,6 +46,7 @@ def load_json(name: str):
 PROJECTION_DATE_COLS = ["ProjectionDate", "Date", "Updated", "LastUpdated", "Timestamp", "Created", "AsOf"]
 DERIVED_HIT_RATE_COLS = {"AVG", "OPS"}
 DERIVED_PIT_RATE_COLS = {"ERA", "WHIP"}
+YEAR_RANGE_TOKEN_RE = re.compile(r"^(\d{4})\s*-\s*(\d{4})$")
 
 
 def _find_projection_date_col(df: pd.DataFrame) -> str | None:
@@ -308,7 +309,7 @@ def _get_default_dynasty_lookup() -> tuple[dict[str, dict], list[str]]:
         return {}, []
 
 
-def _parse_dynasty_years(raw: str | None) -> list[int]:
+def _parse_dynasty_years(raw: str | None, *, valid_years: list[int] | None = None) -> list[int]:
     if not raw:
         return []
 
@@ -317,12 +318,24 @@ def _parse_dynasty_years(raw: str | None) -> list[int]:
         token = token.strip()
         if not token:
             continue
+
+        range_match = YEAR_RANGE_TOKEN_RE.fullmatch(token)
+        if range_match:
+            start, end = (int(range_match.group(1)), int(range_match.group(2)))
+            low, high = sorted((start, end))
+            years.extend(range(low, high + 1))
+            continue
+
         try:
             years.append(int(token))
         except ValueError:
             continue
 
-    return sorted(set(years))
+    parsed = sorted(set(years))
+    if valid_years:
+        valid = set(valid_years)
+        parsed = [year for year in parsed if year in valid]
+    return parsed
 
 
 def _attach_dynasty_values(rows: list[dict], dynasty_years: list[int] | None = None) -> list[dict]:
@@ -362,7 +375,12 @@ def _refresh_data_if_needed() -> None:
         if current_signature == _DATA_SOURCE_SIGNATURE:
             return
 
-        _reload_projection_data()
+        try:
+            _reload_projection_data()
+        except Exception:
+            traceback.print_exc()
+            return
+
         _get_default_dynasty_lookup.cache_clear()
         _DATA_SOURCE_SIGNATURE = current_signature
 
@@ -395,10 +413,15 @@ def filter_records(records, player: str | None, team: str | None, year: int | No
     out = records
     if player:
         q = player.lower()
-        out = [r for r in out if q in r.get("Player", "").lower()]
+        out = [r for r in out if q in str(r.get("Player", "")).lower()]
     if team:
-        out = [r for r in out if r.get("Team", "") == team or r.get("MLBTeam", "") == team]
-    if year:
+        team_normalized = team.lower()
+        out = [
+            r for r in out
+            if str(r.get("Team", "")).lower() == team_normalized
+            or str(r.get("MLBTeam", "")).lower() == team_normalized
+        ]
+    if year is not None:
         out = [r for r in out if r.get("Year") == year]
     if pos:
         out = [r for r in out if pos.upper() in str(r.get("Pos", "")).upper()]
@@ -413,15 +436,15 @@ def get_bat_projections(
     pos: Optional[str] = None,
     dynasty_years: Optional[str] = None,
     include_dynasty: bool = True,
-    limit: int = Query(default=200, le=5000),
-    offset: int = 0,
+    limit: int = Query(default=200, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
 ):
     _refresh_data_if_needed()
     filtered = filter_records(BAT_DATA, player, team, year, pos)
     total = len(filtered)
     page = filtered[offset : offset + limit]
     if include_dynasty:
-        page = _attach_dynasty_values(page, _parse_dynasty_years(dynasty_years))
+        page = _attach_dynasty_values(page, _parse_dynasty_years(dynasty_years, valid_years=_coerce_meta_years(META)))
     return {"total": total, "offset": offset, "limit": limit, "data": page}
 
 
@@ -433,15 +456,15 @@ def get_pitch_projections(
     pos: Optional[str] = None,
     dynasty_years: Optional[str] = None,
     include_dynasty: bool = True,
-    limit: int = Query(default=200, le=5000),
-    offset: int = 0,
+    limit: int = Query(default=200, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
 ):
     _refresh_data_if_needed()
     filtered = filter_records(PIT_DATA, player, team, year, pos)
     total = len(filtered)
     page = filtered[offset : offset + limit]
     if include_dynasty:
-        page = _attach_dynasty_values(page, _parse_dynasty_years(dynasty_years))
+        page = _attach_dynasty_values(page, _parse_dynasty_years(dynasty_years, valid_years=_coerce_meta_years(META)))
     return {"total": total, "offset": offset, "limit": limit, "data": page}
 
 
@@ -449,32 +472,43 @@ def get_pitch_projections(
 # API: Dynasty Value Calculator
 # ---------------------------------------------------------------------------
 class CalculateRequest(BaseModel):
-    mode: str = "common"  # "common" or "league"
-    teams: int = 12
-    sims: int = 100
-    horizon: int = 10
-    discount: float = 0.85
-    bench: int = 6
-    minors: int = 0
-    ip_min: float = 0.0
-    ip_max: Optional[float] = None
-    start_year: int = 2026
-    recent_projections: int = 3
+    mode: Literal["common"] = "common"
+    teams: int = Field(default=12, ge=2, le=30)
+    sims: int = Field(default=100, ge=1, le=5000)
+    horizon: int = Field(default=10, ge=1, le=20)
+    discount: float = Field(default=0.85, gt=0.0, le=1.0)
+    bench: int = Field(default=6, ge=0, le=40)
+    minors: int = Field(default=0, ge=0, le=60)
+    ip_min: float = Field(default=0.0, ge=0.0)
+    ip_max: Optional[float] = Field(default=None, ge=0.0)
+    start_year: int = Field(default=2026, ge=1900)
+    recent_projections: int = Field(default=3, ge=1, le=10)
+
+    @model_validator(mode="after")
+    def validate_ip_bounds(self) -> "CalculateRequest":
+        if self.ip_max is not None and self.ip_max < self.ip_min:
+            raise ValueError("ip_max must be greater than or equal to ip_min")
+        return self
 
 
 @app.post("/api/calculate")
 def calculate_dynasty_values(req: CalculateRequest):
     """Run the dynasty value calculator and return results as JSON."""
     try:
+        _refresh_data_if_needed()
+        valid_years = _coerce_meta_years(META)
+        if valid_years and req.start_year not in set(valid_years):
+            raise HTTPException(
+                status_code=422,
+                detail=f"start_year must be one of the available projection years: {valid_years}",
+            )
+
         # Import the calculation module
         sys.path.insert(0, str(BASE_DIR / "backend"))
         from dynasty_roto_values import (
             CommonDynastyRotoSettings,
             calculate_common_dynasty_values,
-            validate_ip_bounds,
         )
-
-        validate_ip_bounds(req.ip_min, req.ip_max)
 
         lg = CommonDynastyRotoSettings(
             n_teams=req.teams,
@@ -487,7 +521,7 @@ def calculate_dynasty_values(req: CalculateRequest):
             ip_max=req.ip_max,
         )
 
-        out, bat_detail, pit_detail = calculate_common_dynasty_values(
+        out, _, _ = calculate_common_dynasty_values(
             str(EXCEL_PATH),
             lg,
             start_year=req.start_year,
@@ -520,6 +554,8 @@ def calculate_dynasty_values(req: CalculateRequest):
             "data": records,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

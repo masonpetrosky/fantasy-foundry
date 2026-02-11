@@ -48,6 +48,11 @@ uvicorn backend.app:app --reload --port 8000
 
 Then open http://localhost:8000
 
+### Running Tests
+```bash
+python -m unittest discover -s tests -p "test_*.py"
+```
+
 ### Updating Projections
 
 When you update the Excel file, re-run the preprocessing to regenerate the JSON data files:
@@ -81,9 +86,11 @@ All three support Dockerfiles out of the box:
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/meta` | Filter options (teams, years, positions) |
-| GET | `/api/projections/bat` | Hitter projections (query params: player, team, year, pos) |
+| GET | `/api/projections/bat` | Hitter projections (query params: player, team, year, pos, dynasty_years, include_dynasty, limit, offset) |
 | GET | `/api/projections/pitch` | Pitcher projections (same query params) |
 | POST | `/api/calculate` | Run dynasty value calculator (JSON body with league settings) |
+
+`dynasty_years` accepts comma-separated years and inclusive ranges, for example `2026,2028-2030`.
 
 ## Next Steps
 
