@@ -4,7 +4,7 @@ FastAPI backend for Dynasty Baseball Projections.
 Endpoints:
   GET  /api/meta             → filter options (teams, years, positions)
   GET  /api/projections/bat  → hitter projections (filterable)
-  GET  /api/projections/pit  → pitcher projections (filterable)
+  GET  /api/projections/pitch → pitcher projections (filterable)
   GET  /api/calculate        → run dynasty value calculator with custom settings
 """
 
@@ -53,6 +53,21 @@ def _find_projection_date_col(df: pd.DataFrame) -> str | None:
     return None
 
 
+def _parse_projection_dates(values: pd.Series) -> pd.Series:
+    """Parse mixed-format date strings safely."""
+    text = values.astype("string").str.strip()
+    try:
+        parsed = pd.to_datetime(text, errors="coerce", format="mixed")
+    except TypeError:
+        parsed = pd.to_datetime(text, errors="coerce")
+
+    missing = parsed.isna() & text.notna() & (text != "")
+    if missing.any():
+        reparsed = text[missing].map(lambda v: pd.to_datetime(v, errors="coerce"))
+        parsed.loc[missing] = reparsed
+    return parsed
+
+
 def _average_recent_projection_rows(
     records: list[dict],
     *,
@@ -75,7 +90,7 @@ def _average_recent_projection_rows(
 
     date_col = _find_projection_date_col(df)
     if date_col:
-        df["_projection_date"] = pd.to_datetime(df[date_col], errors="coerce")
+        df["_projection_date"] = _parse_projection_dates(df[date_col])
         df["_sort_key"] = df["_projection_date"].fillna(pd.Timestamp.min)
     else:
         df["_projection_date"] = pd.NaT
@@ -164,7 +179,16 @@ def _average_recent_projection_rows(
         if pd.api.types.is_datetime64_any_dtype(out[col]):
             out[col] = out[col].dt.strftime("%Y-%m-%d")
 
-    return out.to_dict(orient="records")
+    records_out = out.to_dict(orient="records")
+    for row in records_out:
+        for key, value in row.items():
+            try:
+                if pd.isna(value):
+                    row[key] = None
+            except TypeError:
+                continue
+
+    return records_out
 
 
 META = load_json("meta.json")

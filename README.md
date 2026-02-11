@@ -2,6 +2,11 @@
 
 A web application for browsing 20-year MLB dynasty baseball projections (2026–2045) and generating personalized dynasty rankings with custom league settings.
 
+## Production
+
+- Live site: https://fantasy-foundry.com
+- Hosting: Railway (Docker deploy from this repository)
+
 ## Features
 
 - **Projections Explorer** — Browse, search, filter, and sort hitter/pitcher projections across 20 seasons
@@ -69,6 +74,7 @@ All three support Dockerfiles out of the box:
 **Railway** (recommended for simplicity):
 - Free tier: 500 hours/month, 512 MB RAM — plenty for this app
 - Just connect your GitHub repo and deploy
+- Current production custom domain: https://fantasy-foundry.com
 
 ## API Endpoints
 
