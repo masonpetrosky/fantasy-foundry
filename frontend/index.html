@@ -810,7 +810,8 @@ function resolveApiBase() {
   if (protocol === "file:") return "http://localhost:8000";
 
   const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-  if (isLocalhost && port && port !== "8000") {
+  const localFrontendPorts = new Set(["3000", "4173", "5173"]);
+  if (isLocalhost && localFrontendPorts.has(String(port || ""))) {
     return `${protocol}//${hostname}:8000`;
   }
 
