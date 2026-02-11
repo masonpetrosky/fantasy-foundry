@@ -837,7 +837,7 @@ function ProjectionsExplorer({ meta }) {
   const [tab, setTab] = useState("bat"); // bat | pitch
   const [search, setSearch] = useState("");
   const [teamFilter, setTeamFilter] = useState("");
-  const [yearFilter, setYearFilter] = useState("2026");
+  const [yearFilter, setYearFilter] = useState(() => String(meta.years?.[0] ?? ""));
   const [posFilters, setPosFilters] = useState([]);
   const [showPosMenu, setShowPosMenu] = useState(false);
   const posMenuRef = useRef(null);
@@ -886,6 +886,17 @@ function ProjectionsExplorer({ meta }) {
   useEffect(() => {
     setOffset(0);
   }, [posFilters]);
+
+  useEffect(() => {
+    const availableYears = (meta.years || []).map(String);
+    if (availableYears.length === 0) {
+      if (yearFilter !== "") setYearFilter("");
+      return;
+    }
+    if (!availableYears.includes(String(yearFilter))) {
+      setYearFilter(availableYears[0]);
+    }
+  }, [meta.years, yearFilter]);
 
   const positionOptions = useMemo(() => {
     const rawPositions = tab === "bat" ? meta.bat_positions : meta.pit_positions;
@@ -1080,7 +1091,7 @@ function DynastyCalculator({ meta }) {
   const [settings, setSettings] = useState({
     teams: 12, sims: 100, horizon: 10, discount: 0.85,
     bench: 6, minors: 0, ip_min: 0, ip_max: "",
-    start_year: 2026, recent_projections: 3,
+    start_year: Number(meta.years?.[0] ?? 2026), recent_projections: 3,
   });
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1089,6 +1100,15 @@ function DynastyCalculator({ meta }) {
   const [sortDir, setSortDir] = useState("desc");
   const [search, setSearch] = useState("");
   const [posFilter, setPosFilter] = useState("");
+
+  useEffect(() => {
+    const availableYears = (meta.years || []).map(Number).filter(Number.isFinite);
+    if (availableYears.length === 0) return;
+    const currentYear = Number(settings.start_year);
+    if (!availableYears.includes(currentYear)) {
+      setSettings(prev => ({ ...prev, start_year: availableYears[0] }));
+    }
+  }, [meta.years, settings.start_year]);
 
   function update(key, val) {
     setSettings(s => ({ ...s, [key]: val }));
