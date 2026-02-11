@@ -967,6 +967,10 @@ function ProjectionsExplorer({ meta }) {
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("desc");
   const limit = 100;
+  const selectedDynastyYears = useMemo(() => {
+    if (yearFilter) return [String(yearFilter)];
+    return (meta.years || []).map(String);
+  }, [meta.years, yearFilter]);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -975,6 +979,8 @@ function ProjectionsExplorer({ meta }) {
     if (search) params.set("player", search);
     if (teamFilter) params.set("team", teamFilter);
     if (yearFilter) params.set("year", yearFilter);
+    if (selectedDynastyYears.length > 0) params.set("dynasty_years", selectedDynastyYears.join(","));
+    params.set("include_dynasty", "true");
     params.set("limit", "5000");
     params.set("offset", "0");
 
@@ -995,7 +1001,7 @@ function ProjectionsExplorer({ meta }) {
         setLoading(false);
         setError(err.message || "Failed to load projections");
       });
-  }, [tab, search, teamFilter, yearFilter]);
+  }, [tab, search, teamFilter, yearFilter, selectedDynastyYears]);
 
   useEffect(() => {
     const timer = setTimeout(fetchData, 300);
@@ -1085,13 +1091,21 @@ function ProjectionsExplorer({ meta }) {
     }
   }
 
-  const batCols = ["Player","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","Pos","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS"];
-  const pitCols = ["Player","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","Pos","G","GS","IP","W","L","K","BB","SV","SVH","ERA","WHIP","H","HR","ER"];
+  const dynastyYearCols = selectedDynastyYears.map(year => `Value_${year}`);
+  const batCols = ["Player","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","DynastyValue",...dynastyYearCols,"Pos","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS"];
+  const pitCols = ["Player","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","DynastyValue",...dynastyYearCols,"Pos","G","GS","IP","W","L","K","BB","SV","SVH","ERA","WHIP","H","HR","ER"];
   const cols = tab === "bat" ? batCols : pitCols;
-  const colLabels = {
-    ProjectionsUsed: "Proj Count",
-    OldestProjectionDate: "Oldest Proj Date",
-  };
+  const colLabels = useMemo(() => {
+    const labels = {
+      ProjectionsUsed: "Proj Count",
+      OldestProjectionDate: "Oldest Proj Date",
+      DynastyValue: "Dynasty Value",
+    };
+    dynastyYearCols.forEach(col => {
+      labels[col] = `${col.replace("Value_", "")} Dyn Value`;
+    });
+    return labels;
+  }, [dynastyYearCols]);
   const rateCols = new Set(["AVG","OPS","ERA","WHIP"]);
   const intCols = new Set(["Year","Age","ProjectionsUsed"]);
   const posFilterLabel = posFilters.length === 0
@@ -1194,6 +1208,11 @@ function ProjectionsExplorer({ meta }) {
                       if (c === "Player") return <td key={c} className="player-name">{val}</td>;
                       if (c === "Pos") return <td key={c} className="pos">{val}</td>;
                       if (c === "Team") return <td key={c} className="team">{val}</td>;
+                      if (c === "DynastyValue" || c.startsWith("Value_")) {
+                        const n = Number(val);
+                        const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
+                        return <td key={c} className={`num ${cls}`}>{fmt(val, 2)}</td>;
+                      }
                       if (rateCols.has(c)) return <td key={c} className="num">{fmt(val, 3)}</td>;
                       if (intCols.has(c)) return <td key={c} className="num">{fmtInt(val, c !== "Year")}</td>;
                       if (typeof val === "number") return <td key={c} className="num">{fmt(val)}</td>;

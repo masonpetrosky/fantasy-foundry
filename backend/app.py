@@ -14,7 +14,9 @@ import json
 import os
 import sys
 import traceback
+from functools import lru_cache
 from pathlib import Path
+from threading import Lock
 from typing import Optional
 
 import pandas as pd
@@ -196,6 +198,173 @@ BAT_DATA_RAW = load_json("bat.json")
 PIT_DATA_RAW = load_json("pitch.json")
 BAT_DATA = _average_recent_projection_rows(BAT_DATA_RAW, max_entries=3, is_hitter=True)
 PIT_DATA = _average_recent_projection_rows(PIT_DATA_RAW, max_entries=3, is_hitter=False)
+DATA_REFRESH_PATHS = (
+    DATA_DIR / "meta.json",
+    DATA_DIR / "bat.json",
+    DATA_DIR / "pitch.json",
+    EXCEL_PATH,
+)
+DATA_REFRESH_LOCK = Lock()
+
+
+def _path_signature(path: Path) -> tuple[str, int | None, int | None]:
+    try:
+        stat = path.stat()
+        return (str(path), stat.st_mtime_ns, stat.st_size)
+    except FileNotFoundError:
+        return (str(path), None, None)
+
+
+def _compute_data_signature() -> tuple[tuple[str, int | None, int | None], ...]:
+    return tuple(_path_signature(path) for path in DATA_REFRESH_PATHS)
+
+
+_DATA_SOURCE_SIGNATURE: tuple[tuple[str, int | None, int | None], ...] | None = _compute_data_signature()
+
+
+def _reload_projection_data() -> None:
+    global META, BAT_DATA_RAW, PIT_DATA_RAW, BAT_DATA, PIT_DATA
+    META = load_json("meta.json")
+    BAT_DATA_RAW = load_json("bat.json")
+    PIT_DATA_RAW = load_json("pitch.json")
+    BAT_DATA = _average_recent_projection_rows(BAT_DATA_RAW, max_entries=3, is_hitter=True)
+    PIT_DATA = _average_recent_projection_rows(PIT_DATA_RAW, max_entries=3, is_hitter=False)
+
+
+def _coerce_meta_years(meta: dict) -> list[int]:
+    years: list[int] = []
+    for value in meta.get("years", []):
+        try:
+            years.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    return sorted(set(years))
+
+
+def _value_col_sort_key(col: str) -> tuple[int, int | str]:
+    suffix = col.split("_", 1)[1] if "_" in col else col
+    return (0, int(suffix)) if suffix.isdigit() else (1, suffix)
+
+
+@lru_cache(maxsize=1)
+def _get_default_dynasty_lookup() -> tuple[dict[str, dict], list[str]]:
+    """Cached default dynasty values keyed by player name."""
+    try:
+        sys.path.insert(0, str(BASE_DIR / "backend"))
+        from dynasty_roto_values import CommonDynastyRotoSettings, calculate_common_dynasty_values
+
+        years = _coerce_meta_years(META)
+        start_year = years[0] if years else 2026
+        horizon = len(years) if years else 10
+
+        lg = CommonDynastyRotoSettings(
+            n_teams=12,
+            sims_for_sgp=100,
+            horizon_years=horizon,
+            discount=0.85,
+            bench_slots=6,
+            minor_slots=0,
+            ip_min=0.0,
+            ip_max=None,
+        )
+
+        out = calculate_common_dynasty_values(
+            str(EXCEL_PATH),
+            lg,
+            start_year=start_year,
+            verbose=False,
+            return_details=False,
+            seed=0,
+            recent_projections=3,
+        )
+
+        year_cols = sorted(
+            [c for c in out.columns if isinstance(c, str) and c.startswith("Value_")],
+            key=_value_col_sort_key,
+        )
+        keep_cols = [c for c in ["Player", "DynastyValue"] + year_cols if c in out.columns]
+        df = out[keep_cols].copy()
+
+        for col in df.select_dtypes(include="float").columns:
+            df[col] = df[col].round(2)
+
+        lookup: dict[str, dict] = {}
+        for row in df.to_dict(orient="records"):
+            player = row.pop("Player", None)
+            if not player:
+                continue
+
+            cleaned: dict = {}
+            for key, value in row.items():
+                if pd.isna(value):
+                    cleaned[key] = None
+                else:
+                    cleaned[key] = value
+            lookup[player] = cleaned
+
+        return lookup, year_cols
+    except Exception:
+        traceback.print_exc()
+        return {}, []
+
+
+def _parse_dynasty_years(raw: str | None) -> list[int]:
+    if not raw:
+        return []
+
+    years: list[int] = []
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            years.append(int(token))
+        except ValueError:
+            continue
+
+    return sorted(set(years))
+
+
+def _attach_dynasty_values(rows: list[dict], dynasty_years: list[int] | None = None) -> list[dict]:
+    if not rows:
+        return rows
+
+    lookup, available_year_cols = _get_default_dynasty_lookup()
+    if not lookup:
+        return rows
+
+    if dynasty_years:
+        requested_year_cols = [f"Value_{year}" for year in dynasty_years]
+        year_cols = [col for col in requested_year_cols if col in available_year_cols]
+    else:
+        year_cols = available_year_cols
+
+    cols = ["DynastyValue"] + year_cols
+    enriched_rows: list[dict] = []
+    for row in rows:
+        enriched = dict(row)
+        player_values = lookup.get(str(row.get("Player", "")), {})
+        for col in cols:
+            enriched[col] = player_values.get(col)
+        enriched_rows.append(enriched)
+
+    return enriched_rows
+
+
+def _refresh_data_if_needed() -> None:
+    global _DATA_SOURCE_SIGNATURE
+    current_signature = _compute_data_signature()
+    if current_signature == _DATA_SOURCE_SIGNATURE:
+        return
+
+    with DATA_REFRESH_LOCK:
+        current_signature = _compute_data_signature()
+        if current_signature == _DATA_SOURCE_SIGNATURE:
+            return
+
+        _reload_projection_data()
+        _get_default_dynasty_lookup.cache_clear()
+        _DATA_SOURCE_SIGNATURE = current_signature
 
 # ---------------------------------------------------------------------------
 # App
@@ -215,6 +384,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 @app.get("/api/meta")
 def get_meta():
+    _refresh_data_if_needed()
     return META
 
 
@@ -241,12 +411,17 @@ def get_bat_projections(
     team: Optional[str] = None,
     year: Optional[int] = None,
     pos: Optional[str] = None,
+    dynasty_years: Optional[str] = None,
+    include_dynasty: bool = True,
     limit: int = Query(default=200, le=5000),
     offset: int = 0,
 ):
+    _refresh_data_if_needed()
     filtered = filter_records(BAT_DATA, player, team, year, pos)
     total = len(filtered)
     page = filtered[offset : offset + limit]
+    if include_dynasty:
+        page = _attach_dynasty_values(page, _parse_dynasty_years(dynasty_years))
     return {"total": total, "offset": offset, "limit": limit, "data": page}
 
 
@@ -256,12 +431,17 @@ def get_pitch_projections(
     team: Optional[str] = None,
     year: Optional[int] = None,
     pos: Optional[str] = None,
+    dynasty_years: Optional[str] = None,
+    include_dynasty: bool = True,
     limit: int = Query(default=200, le=5000),
     offset: int = 0,
 ):
+    _refresh_data_if_needed()
     filtered = filter_records(PIT_DATA, player, team, year, pos)
     total = len(filtered)
     page = filtered[offset : offset + limit]
+    if include_dynasty:
+        page = _attach_dynasty_values(page, _parse_dynasty_years(dynasty_years))
     return {"total": total, "offset": offset, "limit": limit, "data": page}
 
 
