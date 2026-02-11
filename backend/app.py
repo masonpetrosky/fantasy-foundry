@@ -48,15 +48,20 @@ def load_json(name: str):
 PROJECTION_DATE_COLS = ["ProjectionDate", "Date", "Updated", "LastUpdated", "Timestamp", "Created", "AsOf"]
 DERIVED_HIT_RATE_COLS = {"AVG", "OPS"}
 DERIVED_PIT_RATE_COLS = {"ERA", "WHIP"}
+TEAM_COL_CANDIDATES = ("Team", "MLBTeam")
 YEAR_RANGE_TOKEN_RE = re.compile(r"^(\d{4})\s*-\s*(\d{4})$")
 POSITION_TOKEN_SPLIT_RE = re.compile(r"[,\s/]+")
 
 
-def _find_projection_date_col(df: pd.DataFrame) -> str | None:
-    for col in PROJECTION_DATE_COLS:
+def _pick_first_existing_col(df: pd.DataFrame, candidates: list[str] | tuple[str, ...]) -> str | None:
+    for col in candidates:
         if col in df.columns:
             return col
     return None
+
+
+def _find_projection_date_col(df: pd.DataFrame) -> str | None:
+    return _pick_first_existing_col(df, PROJECTION_DATE_COLS)
 
 
 def _parse_projection_dates(values: pd.Series) -> pd.Series:
@@ -80,18 +85,38 @@ def _average_recent_projection_rows(
     max_entries: int = 3,
     is_hitter: bool,
 ) -> list[dict]:
-    """Collapse duplicate (Player, Year) rows by averaging the most recent projections."""
+    """Collapse duplicate projection rows by averaging recent entries.
+
+    Rows are grouped by (Player, Year) and disambiguated by team only when a
+    given name/year has multiple non-empty teams. This avoids merging distinct
+    players who share the same name while preserving normal update averaging.
+    """
     if not records:
         return records
     if max_entries < 1:
         raise ValueError("max_entries must be >= 1")
 
     df = pd.DataFrame.from_records(records)
-    group_cols = ["Player", "Year"]
-    if any(col not in df.columns for col in group_cols):
+    group_cols_base = ["Player", "Year"]
+    if any(col not in df.columns for col in group_cols_base):
         return records
 
     df = df.copy()
+    group_cols = list(group_cols_base)
+    internal_group_cols: list[str] = []
+
+    team_col = _pick_first_existing_col(df, TEAM_COL_CANDIDATES)
+    if team_col:
+        team_values = df[team_col].astype("string").fillna("").str.strip()
+        team_nonempty = team_values.where(team_values != "", pd.NA)
+        team_counts = team_nonempty.groupby([df[c] for c in group_cols_base], dropna=False).transform("nunique")
+        if team_counts.gt(1).any():
+            # Split only ambiguous name/year groups so same-name different-team
+            # players are not merged into one averaged row.
+            df["_entity_team"] = team_values.where(team_counts > 1, "")
+            group_cols.append("_entity_team")
+            internal_group_cols.append("_entity_team")
+
     df["_projection_order"] = range(len(df))
 
     date_col = _find_projection_date_col(df)
@@ -145,6 +170,9 @@ def _average_recent_projection_rows(
         .groupby(group_cols, as_index=False, sort=False)
         .agg(agg)
     )
+    if internal_group_cols:
+        out = out.drop(columns=internal_group_cols, errors="ignore")
+
     front = ["Player", "Year", "ProjectionsUsed", "OldestProjectionDate"]
     out = out[[c for c in front if c in out.columns] + [c for c in out.columns if c not in front]]
 
