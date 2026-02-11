@@ -745,7 +745,29 @@ const { useState, useEffect, useMemo, useCallback, useRef } = React;
 // ---------------------------------------------------------------------------
 // Config: API base URL (empty string = same origin)
 // ---------------------------------------------------------------------------
-const API = "";
+function normalizeApiBase(value) {
+  return String(value || "").trim().replace(/\/+$/, "");
+}
+
+function resolveApiBase() {
+  const fromQuery = normalizeApiBase(new URLSearchParams(window.location.search).get("api"));
+  if (fromQuery) return fromQuery;
+
+  const fromGlobal = normalizeApiBase(window.API_BASE_URL || window.__API_BASE_URL__);
+  if (fromGlobal) return fromGlobal;
+
+  const { protocol, hostname, port } = window.location;
+  if (protocol === "file:") return "http://localhost:8000";
+
+  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+  if (isLocalhost && port && port !== "8000") {
+    return `${protocol}//${hostname}:8000`;
+  }
+
+  return "";
+}
+
+const API = resolveApiBase();
 
 // ---------------------------------------------------------------------------
 // Utility
@@ -774,9 +796,28 @@ function parsePosTokens(posValue) {
 function App() {
   const [section, setSection] = useState("projections"); // projections | calculator
   const [meta, setMeta] = useState(null);
+  const [metaError, setMetaError] = useState("");
 
   useEffect(() => {
-    fetch(`${API}/api/meta`).then(r => r.json()).then(setMeta).catch(console.error);
+    let canceled = false;
+    setMetaError("");
+    fetch(`${API}/api/meta`)
+      .then(r => {
+        if (!r.ok) throw new Error(`Server returned ${r.status} while loading /api/meta`);
+        return r.json();
+      })
+      .then(res => {
+        if (canceled) return;
+        setMeta(res);
+      })
+      .catch(err => {
+        if (canceled) return;
+        setMetaError(err.message || "Failed to load metadata");
+        console.error(err);
+      });
+    return () => {
+      canceled = true;
+    };
   }, []);
 
   return (
@@ -817,6 +858,11 @@ function App() {
       </div>
 
       <div className="container">
+        {metaError && (
+          <p style={{marginBottom: "16px", color: "var(--red)"}}>
+            Unable to load API data. Check that the backend is running and reachable. ({metaError})
+          </p>
+        )}
         {section === "projections" && meta && <ProjectionsExplorer meta={meta} />}
         {section === "calculator" && meta && <DynastyCalculator meta={meta} />}
       </div>
@@ -843,6 +889,7 @@ function ProjectionsExplorer({ meta }) {
   const posMenuRef = useRef(null);
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [offset, setOffset] = useState(0);
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("desc");
@@ -850,6 +897,7 @@ function ProjectionsExplorer({ meta }) {
 
   const fetchData = useCallback(() => {
     setLoading(true);
+    setError("");
     const params = new URLSearchParams();
     if (search) params.set("player", search);
     if (teamFilter) params.set("team", teamFilter);
@@ -858,13 +906,22 @@ function ProjectionsExplorer({ meta }) {
     params.set("offset", "0");
 
     fetch(`${API}/api/projections/${tab}?${params}`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Server returned ${r.status} while loading projections`);
+        return r.json();
+      })
       .then(res => {
-        setData(res.data || []);
+        const rows = Array.isArray(res.data) ? res.data : [];
+        setData(rows);
         setOffset(0);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(err => {
+        setData([]);
+        setOffset(0);
+        setLoading(false);
+        setError(err.message || "Failed to load projections");
+      });
   }, [tab, search, teamFilter, yearFilter]);
 
   useEffect(() => {
@@ -1048,6 +1105,12 @@ function ProjectionsExplorer({ meta }) {
                 Array.from({length: 15}).map((_,i) => (
                   <tr key={i}>{cols.map((c,j) => <td key={j}><div className="loading-shimmer" style={{width: c==="Player"?120:50}}/></td>)}</tr>
                 ))
+              ) : error ? (
+                <tr>
+                  <td colSpan={cols.length} style={{textAlign:"center",padding:"40px",color:"var(--red)"}}>
+                    Unable to load projections. {error}
+                  </td>
+                </tr>
               ) : page.length === 0 ? (
                 <tr><td colSpan={cols.length} style={{textAlign:"center",padding:"40px",color:"var(--text-muted)"}}>No results found</td></tr>
               ) : (
