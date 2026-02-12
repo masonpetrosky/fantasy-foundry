@@ -514,6 +514,8 @@ def _is_user_fixable_calculation_error(message: str) -> bool:
     return (
         "not enough players" in normalized
         or "no valuation years available" in normalized
+        or "cannot fill slot" in normalized
+        or "to fill required slots" in normalized
     )
 
 

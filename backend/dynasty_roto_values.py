@@ -792,6 +792,17 @@ def assign_players_to_slots(
                 if slot in elig_sets[j]:
                     cost[i, j] = -weights[j]  # maximize weight
         row_ind, col_ind = linear_sum_assignment(cost)  # type: ignore
+
+        chosen_cost = cost[row_ind, col_ind]
+        infeasible_rows = row_ind[chosen_cost >= (BIG / 2.0)]
+        if len(infeasible_rows) > 0:
+            missing: Dict[str, int] = {}
+            for row_idx in infeasible_rows:
+                slot = slots[int(row_idx)]
+                missing[slot] = missing.get(slot, 0) + 1
+            details = ", ".join([f"{slot}: short {short}" for slot, short in sorted(missing.items())])
+            raise ValueError(f"Common mode assignment cannot fill required slots ({details}).")
+
         assigned = df.loc[col_ind].copy()
         assigned["AssignedSlot"] = [slots[i] for i in row_ind]
         validate_assigned_slots(assigned, slot_counts, elig_sets, mode_label="Common mode")
@@ -820,6 +831,141 @@ def assign_players_to_slots(
     assigned["AssignedSlot"] = [slot for _, slot in chosen]
     validate_assigned_slots(assigned, slot_counts, elig_sets, mode_label="Common mode")
     return assigned.drop(columns=["_assign_idx"])
+
+
+SLOT_SHORTAGE_RE = re.compile(r"Cannot fill slot '([^']+)': need (\d+) eligible players but only found (\d+)\.")
+ASSIGN_SHORT_RE = re.compile(r"([A-Za-z0-9]+): short (\d+)")
+NOT_ENOUGH_PLAYERS_RE = re.compile(r"Not enough players \((\d+)\) to fill required slots \((\d+)\)\.")
+VACANCY_WEIGHT = -1e5
+
+
+def _infer_slot_shortages_from_assignment_error(message: str, slot_counts: Dict[str, int]) -> Dict[str, int]:
+    shortages: Dict[str, int] = {}
+
+    slot_match = SLOT_SHORTAGE_RE.search(message)
+    if slot_match:
+        slot = slot_match.group(1)
+        need = int(slot_match.group(2))
+        found = int(slot_match.group(3))
+        if slot in slot_counts and need > found:
+            shortages[slot] = need - found
+        return shortages
+
+    if "cannot fill required slots" in message.lower():
+        for slot, short_text in ASSIGN_SHORT_RE.findall(message):
+            short = int(short_text)
+            if slot in slot_counts and short > 0:
+                shortages[slot] = shortages.get(slot, 0) + short
+        if shortages:
+            return shortages
+
+    count_match = NOT_ENOUGH_PLAYERS_RE.search(message)
+    if count_match:
+        available = int(count_match.group(1))
+        required = int(count_match.group(2))
+        short = max(required - available, 0)
+        if short > 0:
+            if slot_counts.get("UT", 0) > 0:
+                shortages["UT"] = short
+            elif slot_counts.get("P", 0) > 0:
+                shortages["P"] = short
+            else:
+                fallback_slot = max(slot_counts.items(), key=lambda item: int(item[1]))[0]
+                shortages[fallback_slot] = short
+
+    return shortages
+
+
+def _build_vacancy_rows(
+    *,
+    year: int,
+    side_label: str,
+    shortages: Dict[str, int],
+    stat_cols: List[str],
+    weight_col: str,
+    existing_cols: List[str],
+    existing_count: int,
+    attempt: int,
+) -> pd.DataFrame:
+    rows: List[Dict[str, object]] = []
+    for slot, short in shortages.items():
+        for i in range(int(short)):
+            idx = existing_count + len(rows) + 1
+            row: Dict[str, object] = {
+                "Player": f"__VACANT_{side_label.upper()}_{year}_{slot}_{attempt}_{idx}",
+                "Year": year,
+                "Team": "VAC",
+                "Age": 0,
+                "Pos": slot,
+                weight_col: VACANCY_WEIGHT,
+            }
+            for stat_col in stat_cols:
+                row[stat_col] = 0.0
+            rows.append(row)
+
+    if not rows:
+        return pd.DataFrame(columns=existing_cols)
+
+    out = pd.DataFrame(rows)
+    for col in existing_cols:
+        if col not in out.columns:
+            out[col] = np.nan
+    return out[existing_cols]
+
+
+def assign_players_to_slots_with_vacancy_fill(
+    df: pd.DataFrame,
+    slot_counts: Dict[str, int],
+    eligible_func: Callable[[Set[str]], Set[str]],
+    *,
+    stat_cols: List[str],
+    year: int,
+    side_label: str,
+    weight_col: str = "weight",
+    max_attempts: int = 8,
+) -> pd.DataFrame:
+    """Assign players, auto-filling unfillable slots with zero-value vacancy rows.
+
+    This keeps common-mode calculations runnable in deep settings where late-horizon
+    years do not have enough eligible players at one or more specific positions.
+    """
+    working = df.copy()
+    if weight_col not in working.columns:
+        working[weight_col] = 0.0
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return assign_players_to_slots(
+                working,
+                slot_counts,
+                eligible_func,
+                weight_col=weight_col,
+            )
+        except ValueError as exc:
+            shortages = _infer_slot_shortages_from_assignment_error(str(exc), slot_counts)
+            if not shortages:
+                raise
+            vacancy_rows = _build_vacancy_rows(
+                year=year,
+                side_label=side_label,
+                shortages=shortages,
+                stat_cols=stat_cols,
+                weight_col=weight_col,
+                existing_cols=list(working.columns),
+                existing_count=len(working),
+                attempt=attempt,
+            )
+            if vacancy_rows.empty:
+                raise
+            vacancy_rows = vacancy_rows.dropna(axis=1, how="all")
+            working = pd.concat([working, vacancy_rows], ignore_index=True, sort=False)
+
+    return assign_players_to_slots(
+        working,
+        slot_counts,
+        eligible_func,
+        weight_col=weight_col,
+    )
 
 
 # ----------------------------
@@ -1041,8 +1187,24 @@ def compute_year_context(year: int, bat: pd.DataFrame, pit: pd.DataFrame, lg: Co
     league_hit_slots = expand_slot_counts(lg.hitter_slots, lg.n_teams)
     league_pit_slots = expand_slot_counts(lg.pitcher_slots, lg.n_teams)
 
-    assigned_hit = assign_players_to_slots(bat_play, league_hit_slots, eligible_hit_slots, weight_col="weight")
-    assigned_pit = assign_players_to_slots(pit_play, league_pit_slots, eligible_pit_slots, weight_col="weight")
+    assigned_hit = assign_players_to_slots_with_vacancy_fill(
+        bat_play,
+        league_hit_slots,
+        eligible_hit_slots,
+        stat_cols=HIT_COMPONENT_COLS,
+        year=year,
+        side_label="hitter",
+        weight_col="weight",
+    )
+    assigned_pit = assign_players_to_slots_with_vacancy_fill(
+        pit_play,
+        league_pit_slots,
+        eligible_pit_slots,
+        stat_cols=PIT_COMPONENT_COLS,
+        year=year,
+        side_label="pitcher",
+        weight_col="weight",
+    )
 
     baseline_hit = assigned_hit.groupby("AssignedSlot")[HIT_COMPONENT_COLS].mean()
     baseline_pit = assigned_pit.groupby("AssignedSlot")[PIT_COMPONENT_COLS].mean()

@@ -722,6 +722,39 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertIn("Not enough players", response.json()["detail"])
 
+    def test_returns_422_for_slot_eligibility_shortage(self) -> None:
+        class FakeSettings:
+            def __init__(self, **kwargs) -> None:
+                self.kwargs = kwargs
+
+        def fake_calculate(*args, **kwargs):
+            raise ValueError("Year 2045: Cannot fill slot 'RP': need 36 eligible pitchers (IP > 0) but only found 21.")
+
+        fake_module = types.SimpleNamespace(
+            CommonDynastyRotoSettings=FakeSettings,
+            calculate_common_dynasty_values=fake_calculate,
+        )
+
+        with patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ), patch.object(
+            app_module,
+            "META",
+            {"years": [2026]},
+        ), patch.dict(
+            sys.modules,
+            {"dynasty_roto_values": fake_module},
+        ):
+            response = self.client.post(
+                "/api/calculate",
+                json={"teams": 12, "pit_rp": 3, "start_year": 2026},
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Cannot fill slot 'RP'", response.json()["detail"])
+
     def test_calculate_passes_slot_overrides_and_ir_to_settings(self) -> None:
         fake_out = pd.DataFrame(
             [
