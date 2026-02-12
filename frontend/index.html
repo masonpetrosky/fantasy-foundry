@@ -949,7 +949,7 @@ function App() {
 // Projections Explorer
 // ---------------------------------------------------------------------------
 function ProjectionsExplorer({ meta }) {
-  const [tab, setTab] = useState("bat"); // bat | pitch
+  const [tab, setTab] = useState("all"); // all | bat | pitch
   const [search, setSearch] = useState("");
   const [teamFilter, setTeamFilter] = useState("");
   const [yearFilter, setYearFilter] = useState(() => String(meta.years?.[0] ?? ""));
@@ -960,7 +960,7 @@ function ProjectionsExplorer({ meta }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [offset, setOffset] = useState(0);
-  const [sortCol, setSortCol] = useState(null);
+  const [sortCol, setSortCol] = useState("DynastyValue");
   const [sortDir, setSortDir] = useState("desc");
   const requestSeqRef = useRef(0);
   const abortControllerRef = useRef(null);
@@ -990,17 +990,18 @@ function ProjectionsExplorer({ meta }) {
     baseParams.set("include_dynasty", "true");
 
     const pageSize = 5000;
-    const rows = [];
-    let total = Infinity;
-    let nextOffset = 0;
 
-    try {
+    const fetchRowsForTab = async (tabName) => {
+      const rows = [];
+      let total = Infinity;
+      let nextOffset = 0;
+
       while (rows.length < total) {
         const params = new URLSearchParams(baseParams);
         params.set("limit", String(pageSize));
         params.set("offset", String(nextOffset));
 
-        const response = await fetch(`${API}/api/projections/${tab}?${params}`, {
+        const response = await fetch(`${API}/api/projections/${tabName}?${params}`, {
           signal: controller.signal,
         });
         if (!response.ok) {
@@ -1008,7 +1009,7 @@ function ProjectionsExplorer({ meta }) {
         }
 
         const payload = await response.json();
-        if (requestSeq !== requestSeqRef.current || controller.signal.aborted) return;
+        if (requestSeq !== requestSeqRef.current || controller.signal.aborted) return null;
 
         const pageRows = Array.isArray(payload.data) ? payload.data : [];
         const parsedTotal = Number(payload.total);
@@ -1016,11 +1017,31 @@ function ProjectionsExplorer({ meta }) {
           total = parsedTotal;
         }
 
-        rows.push(...pageRows);
+        const typeTag = tabName === "bat" ? "H" : "P";
+        rows.push(...pageRows.map(row => ({ ...row, Type: typeTag })));
+
         if (pageRows.length === 0 || pageRows.length < pageSize) {
           break;
         }
         nextOffset += pageRows.length;
+      }
+
+      return rows;
+    };
+
+    try {
+      let rows = [];
+      if (tab === "all") {
+        const [batRows, pitRows] = await Promise.all([
+          fetchRowsForTab("bat"),
+          fetchRowsForTab("pitch"),
+        ]);
+        if (!batRows || !pitRows) return;
+        rows = [...batRows, ...pitRows];
+      } else {
+        const tabRows = await fetchRowsForTab(tab);
+        if (!tabRows) return;
+        rows = tabRows;
       }
 
       if (requestSeq !== requestSeqRef.current || controller.signal.aborted) return;
@@ -1086,7 +1107,11 @@ function ProjectionsExplorer({ meta }) {
   }, [meta.years, yearFilter]);
 
   const positionOptions = useMemo(() => {
-    const rawPositions = tab === "bat" ? (meta.bat_positions || []) : (meta.pit_positions || []);
+    const rawPositions = tab === "all"
+      ? [...(meta.bat_positions || []), ...(meta.pit_positions || [])]
+      : tab === "bat"
+        ? (meta.bat_positions || [])
+        : (meta.pit_positions || []);
     const uniq = new Set();
     rawPositions.forEach(pos => {
       parsePosTokens(pos).forEach(token => uniq.add(token));
@@ -1139,9 +1164,11 @@ function ProjectionsExplorer({ meta }) {
   const dynastyYearCols = selectedDynastyYears.map(year => `Value_${year}`);
   const batCols = ["Player","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","DynastyValue",...dynastyYearCols,"Pos","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS"];
   const pitCols = ["Player","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","DynastyValue",...dynastyYearCols,"Pos","G","GS","IP","W","L","K","BB","SV","SVH","ERA","WHIP","H","HR","ER"];
-  const cols = tab === "bat" ? batCols : pitCols;
+  const allCols = ["Player","Type","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","DynastyValue",...dynastyYearCols,"Pos","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS","GS","IP","W","L","K","SV","SVH","ERA","WHIP","ER"];
+  const cols = tab === "bat" ? batCols : tab === "pitch" ? pitCols : allCols;
   const colLabels = useMemo(() => {
     const labels = {
+      Type: "Side",
       ProjectionsUsed: "Proj Count",
       OldestProjectionDate: "Oldest Proj Date",
       DynastyValue: "Dynasty Value",
@@ -1168,8 +1195,9 @@ function ProjectionsExplorer({ meta }) {
   return (
     <div className="fade-up fade-up-1">
       <div className="section-tabs">
-        <button className={`section-tab ${tab==="bat"?"active":""}`} onClick={() => {setTab("bat"); setSortCol(null); setOffset(0); setPosFilters([]); setShowPosMenu(false);}}>Hitters</button>
-        <button className={`section-tab ${tab==="pitch"?"active":""}`} onClick={() => {setTab("pitch"); setSortCol(null); setOffset(0); setPosFilters([]); setShowPosMenu(false);}}>Pitchers</button>
+        <button className={`section-tab ${tab==="all"?"active":""}`} onClick={() => {setTab("all"); setSortCol("DynastyValue"); setSortDir("desc"); setOffset(0); setPosFilters([]); setShowPosMenu(false);}}>All</button>
+        <button className={`section-tab ${tab==="bat"?"active":""}`} onClick={() => {setTab("bat"); setSortCol("DynastyValue"); setSortDir("desc"); setOffset(0); setPosFilters([]); setShowPosMenu(false);}}>Hitters</button>
+        <button className={`section-tab ${tab==="pitch"?"active":""}`} onClick={() => {setTab("pitch"); setSortCol("DynastyValue"); setSortDir("desc"); setOffset(0); setPosFilters([]); setShowPosMenu(false);}}>Pitchers</button>
       </div>
 
       <div className="filter-bar">

@@ -304,6 +304,7 @@ def _get_default_dynasty_lookup() -> tuple[dict[str, dict], list[str]]:
             minor_slots=0,
             ip_min=0.0,
             ip_max=None,
+            two_way="sum",
         )
 
         out = calculate_common_dynasty_values(
@@ -627,6 +628,7 @@ def calculate_dynasty_values(req: CalculateRequest):
             minor_slots=req.minors,
             ip_min=req.ip_min,
             ip_max=req.ip_max,
+            two_way="sum",
         )
 
         out, _, _ = calculate_common_dynasty_values(
