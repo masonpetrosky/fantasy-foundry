@@ -9,7 +9,7 @@ A web application for browsing 20-year MLB dynasty baseball projections (2026–
 
 ## Features
 
-- **Projections Explorer** — Browse, search, filter, and sort hitter/pitcher projections across 20 seasons
+- **Projections Explorer** — Browse, search, filter, sort, and paginate hitter/pitcher/combined projections across 20 seasons
 - **Dynasty Value Calculator** — Configure your league settings (teams, roster, categories, IP caps) and generate Monte Carlo–based dynasty rankings
 - **Efficient large-result loading** — Projection responses are gzip-compressed by the API, and the UI cancels stale in-flight requests during rapid filter changes
 - **Free & ad-free** — No accounts, no paywalls
@@ -67,8 +67,8 @@ python -m unittest tests/test_e2e_projections_pagination.py
 ```
 
 This test launches the app locally, selects `All Years` in the projections view, and verifies:
-- the UI reports more than 5,000 hitter rows
-- the browser issued paginated API requests including `offset=5000`
+- the UI reports more than 5,000 projection rows
+- the browser issued paginated API requests against `/api/projections/all`
 
 ### Updating Projections
 
@@ -103,14 +103,26 @@ All three support Dockerfiles out of the box:
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/meta` | Filter options (teams, years, positions) |
-| GET | `/api/projections/bat` | Hitter projections (query params: player, team, year, years, pos, dynasty_years, include_dynasty, limit, offset) |
-| GET | `/api/projections/pitch` | Pitcher projections (same query params) |
+| GET | `/api/projections/all` | Combined hitter+pitcher rows (query params: player, team, year, years, pos, dynasty_years, include_dynasty, sort_col, sort_dir, limit, offset) |
+| GET | `/api/projections/bat` | Hitter projections (query params: player, team, year, years, pos, dynasty_years, include_dynasty, sort_col, sort_dir, limit, offset) |
+| GET | `/api/projections/pitch` | Pitcher projections (same query params as `/api/projections/bat`) |
 | POST | `/api/calculate` | Run dynasty value calculator (JSON body with league settings) |
 
 `years` accepts comma-separated years and inclusive ranges, for example `2026,2028-2030`.
 If both `year` and `years` are provided, results use the intersection.
 `dynasty_years` accepts comma-separated years and inclusive ranges, for example `2026,2028-2030`.
 `pos` accepts one or more exact position tokens (comma, slash, or space separated), for example `SP,RP` or `1B/OF`.
+`sort_dir` supports `asc` or `desc` and is applied server-side before pagination.
+`sort_col` is validated server-side and returns HTTP 422 when unsupported for that endpoint.
+
+For `/api/projections/all`, stat collisions are explicit:
+- `H`, `HR`, `BB` are hitter stats
+- `PitH`, `PitHR`, `PitBB` are pitcher stats
+
+Identity fields are included end-to-end:
+- `PlayerKey`: deterministic normalized player key
+- `PlayerEntityKey`: disambiguated key for same-name collisions
+- `DynastyMatchStatus`: `matched`, `no_unique_match`, or `missing` when dynasty values are attached
 
 ## Next Steps
 

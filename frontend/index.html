@@ -1157,6 +1157,7 @@ function ProjectionsExplorer({ meta }) {
   const [showPosMenu, setShowPosMenu] = useState(false);
   const posMenuRef = useRef(null);
   const [data, setData] = useState([]);
+  const [totalRows, setTotalRows] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [offset, setOffset] = useState(0);
@@ -1189,70 +1190,39 @@ function ProjectionsExplorer({ meta }) {
     if (selectedDynastyYears.length > 0) baseParams.set("dynasty_years", selectedDynastyYears.join(","));
     baseParams.set("include_dynasty", "true");
 
-    const pageSize = 5000;
-
-    const fetchRowsForTab = async (tabName) => {
-      const rows = [];
-      let total = Infinity;
-      let nextOffset = 0;
-
-      while (rows.length < total) {
-        const params = new URLSearchParams(baseParams);
-        params.set("limit", String(pageSize));
-        params.set("offset", String(nextOffset));
-
-        const response = await fetch(`${API}/api/projections/${tabName}?${params}`, {
-          signal: controller.signal,
-        });
-        if (!response.ok) {
-          throw new Error(`Server returned ${response.status} while loading projections`);
-        }
-
-        const payload = await response.json();
-        if (requestSeq !== requestSeqRef.current || controller.signal.aborted) return null;
-
-        const pageRows = Array.isArray(payload.data) ? payload.data : [];
-        const parsedTotal = Number(payload.total);
-        if (Number.isFinite(parsedTotal) && parsedTotal >= 0) {
-          total = parsedTotal;
-        }
-
-        const typeTag = tabName === "bat" ? "H" : "P";
-        rows.push(...pageRows.map(row => ({ ...row, Type: typeTag })));
-
-        if (pageRows.length === 0 || pageRows.length < pageSize) {
-          break;
-        }
-        nextOffset += pageRows.length;
-      }
-
-      return rows;
-    };
-
     try {
-      let rows = [];
-      if (tab === "all") {
-        const [batRows, pitRows] = await Promise.all([
-          fetchRowsForTab("bat"),
-          fetchRowsForTab("pitch"),
-        ]);
-        if (!batRows || !pitRows) return;
-        rows = [...batRows, ...pitRows];
-      } else {
-        const tabRows = await fetchRowsForTab(tab);
-        if (!tabRows) return;
-        rows = tabRows;
+      const endpointTab = tab === "all" ? "all" : tab;
+      const params = new URLSearchParams(baseParams);
+      params.set("limit", String(limit));
+      params.set("offset", String(offset));
+      params.set("sort_col", sortCol);
+      params.set("sort_dir", sortDir);
+
+      const response = await fetch(`${API}/api/projections/${endpointTab}?${params}`, {
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status} while loading projections`);
       }
+
+      const payload = await response.json();
+      if (requestSeq !== requestSeqRef.current || controller.signal.aborted) return;
+
+      const pageRows = Array.isArray(payload.data) ? payload.data : [];
+      const parsedTotal = Number(payload.total);
+      const resolvedTotal = Number.isFinite(parsedTotal) && parsedTotal >= 0 ? parsedTotal : pageRows.length;
+      const typeTag = endpointTab === "bat" ? "H" : endpointTab === "pitch" ? "P" : "";
+      const rows = typeTag ? pageRows.map(row => ({ ...row, Type: typeTag })) : pageRows;
 
       if (requestSeq !== requestSeqRef.current || controller.signal.aborted) return;
       setData(rows);
-      setOffset(0);
+      setTotalRows(resolvedTotal);
       setLoading(false);
     } catch (err) {
       if (requestSeq !== requestSeqRef.current) return;
       if (err?.name === "AbortError") return;
       setData([]);
-      setOffset(0);
+      setTotalRows(0);
       setLoading(false);
       setError(err.message || "Failed to load projections");
     } finally {
@@ -1260,7 +1230,7 @@ function ProjectionsExplorer({ meta }) {
         abortControllerRef.current = null;
       }
     }
-  }, [tab, search, teamFilter, yearFilter, posFilters, selectedDynastyYears]);
+  }, [tab, search, teamFilter, yearFilter, posFilters, selectedDynastyYears, offset, sortCol, sortDir, limit]);
 
   useEffect(() => {
     // Ensure first entry into this view always lands on the combined tab.
@@ -1302,7 +1272,7 @@ function ProjectionsExplorer({ meta }) {
 
   useEffect(() => {
     setOffset(0);
-  }, [posFilters]);
+  }, [tab, search, teamFilter, yearFilter, posFilters, sortCol, sortDir]);
 
   useEffect(() => {
     const availableYears = (meta.years || []).map(String);
@@ -1341,34 +1311,7 @@ function ProjectionsExplorer({ meta }) {
     });
   }, [tab, meta.bat_positions, meta.pit_positions]);
 
-  const sorted = useMemo(() => {
-    if (!sortCol) return data;
-    return [...data].sort((a, b) => {
-      let av = a[sortCol], bv = b[sortCol];
-      if (sortCol === "OldestProjectionDate") {
-        const avTs = av ? Date.parse(av) : NaN;
-        const bvTs = bv ? Date.parse(bv) : NaN;
-        av = Number.isFinite(avTs) ? avTs : -Infinity;
-        bv = Number.isFinite(bvTs) ? bvTs : -Infinity;
-        return sortDir === "asc" ? av - bv : bv - av;
-      }
-      if (["Player", "Team", "Pos", "Type"].includes(sortCol)) {
-        const avText = String(av ?? "").trim();
-        const bvText = String(bv ?? "").trim();
-        if (!avText && !bvText) return 0;
-        if (!avText) return 1;
-        if (!bvText) return -1;
-        return sortDir === "asc" ? avText.localeCompare(bvText) : bvText.localeCompare(avText);
-      }
-      const avNum = Number(av);
-      const bvNum = Number(bv);
-      const safeAv = Number.isFinite(avNum) ? avNum : -Infinity;
-      const safeBv = Number.isFinite(bvNum) ? bvNum : -Infinity;
-      return sortDir === "asc" ? safeAv - safeBv : safeBv - safeAv;
-    });
-  }, [data, sortCol, sortDir]);
-
-  const page = sorted.slice(offset, offset + limit);
+  const page = data;
 
   function handleSort(col) {
     if (sortCol === col) {
@@ -1382,7 +1325,7 @@ function ProjectionsExplorer({ meta }) {
   const dynastyYearCols = selectedDynastyYears.map(year => `Value_${year}`);
   const batCols = ["Player","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","DynastyValue",...dynastyYearCols,"Pos","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS"];
   const pitCols = ["Player","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","DynastyValue",...dynastyYearCols,"Pos","G","GS","IP","W","L","K","BB","SV","SVH","ERA","WHIP","H","HR","ER"];
-  const allCols = ["Player","Type","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","DynastyValue",...dynastyYearCols,"Pos","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS","GS","IP","W","L","K","SV","SVH","ERA","WHIP","ER"];
+  const allCols = ["Player","Type","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","DynastyValue",...dynastyYearCols,"Pos","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS","GS","IP","W","L","K","PitBB","SV","SVH","ERA","WHIP","PitH","PitHR","ER"];
   const cols = tab === "bat" ? batCols : tab === "pitch" ? pitCols : allCols;
   const colLabels = useMemo(() => {
     const labels = {
@@ -1390,6 +1333,9 @@ function ProjectionsExplorer({ meta }) {
       ProjectionsUsed: "Proj Count",
       OldestProjectionDate: "Oldest Proj Date",
       DynastyValue: "Dynasty Value",
+      PitH: "P H",
+      PitHR: "P HR",
+      PitBB: "P BB",
     };
     dynastyYearCols.forEach(col => {
       labels[col] = `${col.replace("Value_", "")} Dyn Value`;
@@ -1465,7 +1411,10 @@ function ProjectionsExplorer({ meta }) {
             </div>
           )}
         </div>
-        <span className="result-count">{sorted.length.toLocaleString()} rows</span>
+        <span className="result-count">{totalRows.toLocaleString()} rows</span>
+      </div>
+      <div style={{marginBottom: "12px", color: "var(--text-muted)", fontSize: "0.82rem"}}>
+        Dynasty Value already combines hitting and pitching contributions for two-way players.
       </div>
 
       <div className="table-wrapper">
@@ -1503,6 +1452,9 @@ function ProjectionsExplorer({ meta }) {
                       if (c === "Pos") return <td key={c} className="pos">{val}</td>;
                       if (c === "Team") return <td key={c} className="team">{val}</td>;
                       if (c === "DynastyValue" || c.startsWith("Value_")) {
+                        if ((val == null || val === "") && c === "DynastyValue" && row.DynastyMatchStatus === "no_unique_match") {
+                          return <td key={c} className="num" style={{color:"var(--text-muted)"}}>No unique match</td>;
+                        }
                         const n = Number(val);
                         const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
                         return <td key={c} className={`num ${cls}`}>{fmt(val, 2)}</td>;
@@ -1518,13 +1470,13 @@ function ProjectionsExplorer({ meta }) {
             </tbody>
           </table>
         </div>
-        {!loading && sorted.length > limit && (
+        {!loading && totalRows > limit && (
           <div className="pagination">
             <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>← Previous</button>
             <span className="page-info">
-              {offset + 1}–{Math.min(offset + limit, sorted.length)} of {sorted.length}
+              {totalRows === 0 ? 0 : offset + 1}–{Math.min(offset + limit, totalRows)} of {totalRows}
             </span>
-            <button disabled={offset + limit >= sorted.length} onClick={() => setOffset(offset + limit)}>Next →</button>
+            <button disabled={offset + limit >= totalRows} onClick={() => setOffset(offset + limit)}>Next →</button>
           </div>
         )}
       </div>
@@ -1538,7 +1490,7 @@ function ProjectionsExplorer({ meta }) {
 // ---------------------------------------------------------------------------
 function DynastyCalculator({ meta }) {
   const [settings, setSettings] = useState({
-    teams: 12, sims: 300, horizon: 10, discount: 0.85,
+    teams: 12, sims: 300, horizon: 20, discount: 0.85,
     bench: 6, minors: 0, ip_min: 0, ip_max: "",
     start_year: Number(meta.years?.[0] ?? 2026), recent_projections: 3,
   });

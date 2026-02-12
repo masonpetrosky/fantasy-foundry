@@ -51,6 +51,47 @@ class BuildMetaTests(unittest.TestCase):
         years = preprocess._extract_years(df)
         self.assertEqual(years, {2026, 2028})
 
+    def test_add_player_keys_adds_stable_identity_columns(self) -> None:
+        bat = pd.DataFrame(
+            {
+                "Player": ["Jane Roe"],
+                "Team": ["SEA"],
+                "Year": [2026],
+            }
+        )
+        pit = pd.DataFrame(columns=["Player", "Team", "Year"])
+
+        bat_out, pit_out = preprocess.add_player_keys(bat, pit)
+
+        self.assertIn("PlayerKey", bat_out.columns)
+        self.assertIn("PlayerEntityKey", bat_out.columns)
+        self.assertEqual(bat_out.iloc[0]["PlayerKey"], "jane-roe")
+        self.assertEqual(bat_out.iloc[0]["PlayerEntityKey"], "jane-roe")
+        self.assertIn("PlayerKey", pit_out.columns)
+        self.assertIn("PlayerEntityKey", pit_out.columns)
+
+    def test_add_player_keys_disambiguates_same_name_by_team(self) -> None:
+        bat = pd.DataFrame(
+            {
+                "Player": ["John Doe"],
+                "Team": ["NYY"],
+                "Year": [2026],
+            }
+        )
+        pit = pd.DataFrame(
+            {
+                "Player": ["John Doe"],
+                "Team": ["BOS"],
+                "Year": [2026],
+            }
+        )
+
+        bat_out, pit_out = preprocess.add_player_keys(bat, pit)
+        self.assertEqual(bat_out.iloc[0]["PlayerKey"], "john-doe")
+        self.assertEqual(pit_out.iloc[0]["PlayerKey"], "john-doe")
+        self.assertEqual(bat_out.iloc[0]["PlayerEntityKey"], "john-doe__nyy")
+        self.assertEqual(pit_out.iloc[0]["PlayerEntityKey"], "john-doe__bos")
+
 
 if __name__ == "__main__":
     unittest.main()

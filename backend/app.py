@@ -3,6 +3,7 @@ FastAPI backend for Dynasty Baseball Projections.
 
 Endpoints:
   GET  /api/meta             → filter options (teams, years, positions)
+  GET  /api/projections/all  → merged hitter+pitcher projections (filterable)
   GET  /api/projections/bat  → hitter projections (filterable)
   GET  /api/projections/pitch → pitcher projections (filterable)
   POST /api/calculate        → run dynasty value calculator with custom settings
@@ -16,7 +17,7 @@ import re
 import sys
 import traceback
 from datetime import datetime, timezone
-from functools import lru_cache
+from functools import cmp_to_key, lru_cache
 from pathlib import Path
 from threading import Lock
 from typing import Literal, Optional
@@ -78,6 +79,13 @@ TEAM_COL_CANDIDATES = ("Team", "MLBTeam")
 YEAR_RANGE_TOKEN_RE = re.compile(r"^(\d{4})\s*-\s*(\d{4})$")
 POSITION_TOKEN_SPLIT_RE = re.compile(r"[,\s/]+")
 PROJECTION_QUERY_CACHE_MAXSIZE = 256
+POSITION_DISPLAY_ORDER = ("C", "1B", "2B", "3B", "SS", "OF", "DH", "UT", "SP", "RP")
+ALL_TAB_HITTER_STAT_COLS = ("G", "AB", "R", "H", "2B", "3B", "HR", "RBI", "SB", "BB", "SO", "AVG", "OPS")
+ALL_TAB_PITCH_STAT_COLS = ("GS", "IP", "W", "L", "K", "SV", "SVH", "ERA", "WHIP", "ER")
+PROJECTION_TEXT_SORT_COLS = {"Player", "Team", "Pos", "Type"}
+PLAYER_KEY_COL = "PlayerKey"
+PLAYER_ENTITY_KEY_COL = "PlayerEntityKey"
+PLAYER_KEY_PATTERN = re.compile(r"[^a-z0-9]+")
 
 
 def _pick_first_existing_col(df: pd.DataFrame, candidates: list[str] | tuple[str, ...]) -> str | None:
@@ -104,6 +112,81 @@ def _parse_projection_dates(values: pd.Series) -> pd.Series:
         reparsed = text[missing].map(lambda v: pd.to_datetime(v, errors="coerce"))
         parsed.loc[missing] = reparsed
     return parsed
+
+
+def _normalize_player_key(value: object) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return "unknown-player"
+    key = PLAYER_KEY_PATTERN.sub("-", text).strip("-")
+    return key or "unknown-player"
+
+
+def _normalize_team_key(value: object) -> str:
+    return str(value or "").strip().upper()
+
+
+def _normalize_year_key(value: object) -> str:
+    if value is None or isinstance(value, bool):
+        return ""
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() else str(value).strip()
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return ""
+        try:
+            parsed = float(text)
+        except ValueError:
+            return text
+        return str(int(parsed)) if parsed.is_integer() else text
+    return str(value or "").strip()
+
+
+def _with_player_identity_keys(
+    bat_records: list[dict],
+    pit_records: list[dict],
+) -> tuple[list[dict], list[dict]]:
+    combined = list(bat_records) + list(pit_records)
+    if not combined:
+        return bat_records, pit_records
+
+    teams_by_player_year: dict[tuple[str, str], set[str]] = {}
+    for record in combined:
+        player_key = str(record.get(PLAYER_KEY_COL) or "").strip() or _normalize_player_key(record.get("Player"))
+        year_key = _normalize_year_key(record.get("Year"))
+        team_key = _normalize_team_key(record.get("Team") or record.get("MLBTeam"))
+        if not team_key:
+            continue
+        teams_by_player_year.setdefault((player_key, year_key), set()).add(team_key)
+
+    ambiguous_player_keys = {
+        player_key
+        for (player_key, _), teams in teams_by_player_year.items()
+        if len(teams) > 1
+    }
+
+    def _apply(records: list[dict]) -> list[dict]:
+        out: list[dict] = []
+        for record in records:
+            row = dict(record)
+            player_key = str(row.get(PLAYER_KEY_COL) or "").strip() or _normalize_player_key(row.get("Player"))
+            row[PLAYER_KEY_COL] = player_key
+
+            entity_key = str(row.get(PLAYER_ENTITY_KEY_COL) or "").strip()
+            if not entity_key:
+                if player_key in ambiguous_player_keys:
+                    team_key = _normalize_team_key(row.get("Team") or row.get("MLBTeam")).lower() or "unknown"
+                    entity_key = f"{player_key}__{team_key}"
+                else:
+                    entity_key = player_key
+            row[PLAYER_ENTITY_KEY_COL] = entity_key
+            out.append(row)
+        return out
+
+    return _apply(bat_records), _apply(pit_records)
 
 
 def _average_recent_projection_rows(
@@ -255,6 +338,7 @@ def _average_recent_projection_rows(
 META = load_json("meta.json")
 BAT_DATA_RAW = load_json("bat.json")
 PIT_DATA_RAW = load_json("pitch.json")
+BAT_DATA_RAW, PIT_DATA_RAW = _with_player_identity_keys(BAT_DATA_RAW, PIT_DATA_RAW)
 BAT_DATA = _average_recent_projection_rows(BAT_DATA_RAW, max_entries=3, is_hitter=True)
 PIT_DATA = _average_recent_projection_rows(PIT_DATA_RAW, max_entries=3, is_hitter=False)
 DATA_REFRESH_PATHS = (
@@ -286,6 +370,7 @@ def _reload_projection_data() -> None:
     META = load_json("meta.json")
     BAT_DATA_RAW = load_json("bat.json")
     PIT_DATA_RAW = load_json("pitch.json")
+    BAT_DATA_RAW, PIT_DATA_RAW = _with_player_identity_keys(BAT_DATA_RAW, PIT_DATA_RAW)
     BAT_DATA = _average_recent_projection_rows(BAT_DATA_RAW, max_entries=3, is_hitter=True)
     PIT_DATA = _average_recent_projection_rows(PIT_DATA_RAW, max_entries=3, is_hitter=False)
 
@@ -312,8 +397,8 @@ def _ensure_backend_module_path() -> None:
 
 
 @lru_cache(maxsize=1)
-def _get_default_dynasty_lookup() -> tuple[dict[str, dict], list[str]]:
-    """Cached default dynasty values keyed by player name."""
+def _get_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]]:
+    """Cached default dynasty values keyed by PlayerEntityKey first, then unique PlayerKey."""
     try:
         _ensure_backend_module_path()
         from dynasty_roto_values import CommonDynastyRotoSettings, calculate_common_dynasty_values
@@ -354,7 +439,7 @@ def _get_default_dynasty_lookup() -> tuple[dict[str, dict], list[str]]:
         for col in df.select_dtypes(include="float").columns:
             df[col] = df[col].round(2)
 
-        lookup: dict[str, dict] = {}
+        lookup_by_name: dict[str, dict] = {}
         for row in df.to_dict(orient="records"):
             player = row.pop("Player", None)
             if not player:
@@ -366,12 +451,45 @@ def _get_default_dynasty_lookup() -> tuple[dict[str, dict], list[str]]:
                     cleaned[key] = None
                 else:
                     cleaned[key] = value
-            lookup[player] = cleaned
+            lookup_by_name[str(player).strip()] = cleaned
 
-        return lookup, year_cols
+        combined_records = list(BAT_DATA) + list(PIT_DATA)
+        entities_by_player_key: dict[str, set[str]] = {}
+        name_by_player_key: dict[str, set[str]] = {}
+        for record in combined_records:
+            player_name = str(record.get("Player", "")).strip()
+            player_key = str(record.get(PLAYER_KEY_COL) or "").strip() or _normalize_player_key(player_name)
+            entity_key = str(record.get(PLAYER_ENTITY_KEY_COL) or "").strip() or player_key
+            if player_key:
+                name_by_player_key.setdefault(player_key, set()).add(player_name)
+                entities_by_player_key.setdefault(player_key, set()).add(entity_key)
+
+        ambiguous_player_keys = {
+            player_key
+            for player_key, entity_keys in entities_by_player_key.items()
+            if len(entity_keys) > 1
+        }
+
+        lookup_by_entity: dict[str, dict] = {}
+        lookup_by_player_key: dict[str, dict] = {}
+        for record in combined_records:
+            player_name = str(record.get("Player", "")).strip()
+            if not player_name:
+                continue
+            player_values = lookup_by_name.get(player_name)
+            if player_values is None:
+                continue
+
+            player_key = str(record.get(PLAYER_KEY_COL) or "").strip() or _normalize_player_key(player_name)
+            entity_key = str(record.get(PLAYER_ENTITY_KEY_COL) or "").strip() or player_key
+            if player_key not in ambiguous_player_keys:
+                lookup_by_player_key.setdefault(player_key, player_values)
+                lookup_by_entity.setdefault(entity_key, player_values)
+
+        return lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, year_cols
     except Exception:
         traceback.print_exc()
-        return {}, []
+        return {}, {}, set(), []
 
 
 def _parse_dynasty_years(raw: str | None, *, valid_years: list[int] | None = None) -> list[int]:
@@ -430,8 +548,8 @@ def _attach_dynasty_values(rows: list[dict], dynasty_years: list[int] | None = N
     if not rows:
         return rows
 
-    lookup, available_year_cols = _get_default_dynasty_lookup()
-    if not lookup:
+    lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, available_year_cols = _get_default_dynasty_lookup()
+    if not lookup_by_entity and not lookup_by_player_key:
         return rows
 
     if dynasty_years:
@@ -444,12 +562,51 @@ def _attach_dynasty_values(rows: list[dict], dynasty_years: list[int] | None = N
     enriched_rows: list[dict] = []
     for row in rows:
         enriched = dict(row)
-        player_values = lookup.get(str(row.get("Player", "")), {})
+        player_name = str(row.get("Player", "")).strip()
+        player_key = str(enriched.get(PLAYER_KEY_COL) or "").strip() or _normalize_player_key(player_name)
+        entity_key = str(enriched.get(PLAYER_ENTITY_KEY_COL) or "").strip() or player_key
+        enriched[PLAYER_KEY_COL] = player_key
+        enriched[PLAYER_ENTITY_KEY_COL] = entity_key
+
+        player_values = lookup_by_entity.get(entity_key)
+        if player_values is None and player_key not in ambiguous_player_keys:
+            player_values = lookup_by_player_key.get(player_key)
+
+        if player_values is None:
+            match_status = "no_unique_match" if player_key in ambiguous_player_keys else "missing"
+            player_values = {}
+        else:
+            match_status = "matched"
+
         for col in cols:
             enriched[col] = player_values.get(col)
+        enriched["DynastyMatchStatus"] = match_status
         enriched_rows.append(enriched)
 
     return enriched_rows
+
+
+@lru_cache(maxsize=1)
+def _player_identity_by_name() -> dict[str, tuple[str, str | None]]:
+    identities: dict[str, dict[str, set[str]]] = {}
+    for record in list(BAT_DATA) + list(PIT_DATA):
+        player_name = str(record.get("Player", "")).strip()
+        if not player_name:
+            continue
+        player_key = str(record.get(PLAYER_KEY_COL) or "").strip() or _normalize_player_key(player_name)
+        entity_key = str(record.get(PLAYER_ENTITY_KEY_COL) or "").strip() or player_key
+        bucket = identities.setdefault(player_name, {"player_keys": set(), "entity_keys": set()})
+        bucket["player_keys"].add(player_key)
+        bucket["entity_keys"].add(entity_key)
+
+    out: dict[str, tuple[str, str | None]] = {}
+    for player_name, bucket in identities.items():
+        player_keys = bucket["player_keys"]
+        entity_keys = bucket["entity_keys"]
+        resolved_player_key = next(iter(player_keys)) if len(player_keys) == 1 else _normalize_player_key(player_name)
+        resolved_entity_key = next(iter(entity_keys)) if len(entity_keys) == 1 else None
+        out[player_name] = (resolved_player_key, resolved_entity_key)
+    return out
 
 
 def _refresh_data_if_needed() -> None:
@@ -470,7 +627,10 @@ def _refresh_data_if_needed() -> None:
             return
 
         _cached_projection_rows.cache_clear()
+        _cached_all_projection_rows.cache_clear()
+        _projection_sortable_columns_for_dataset.cache_clear()
         _get_default_dynasty_lookup.cache_clear()
+        _player_identity_by_name.cache_clear()
         _DATA_SOURCE_SIGNATURE = current_signature
 
 # ---------------------------------------------------------------------------
@@ -540,6 +700,250 @@ def _normalize_filter_value(value: str | None) -> str:
     return (value or "").strip()
 
 
+def _position_sort_key(token: str) -> tuple[int, str]:
+    order_map = {pos: idx for idx, pos in enumerate(POSITION_DISPLAY_ORDER)}
+    return (order_map.get(token, len(order_map)), token)
+
+
+def _row_team_value(row: dict) -> str:
+    return str(row.get("Team") or row.get("MLBTeam") or "").strip()
+
+
+def _projection_merge_key(row: dict) -> tuple[str, object, str]:
+    player = str(row.get(PLAYER_ENTITY_KEY_COL) or row.get(PLAYER_KEY_COL) or row.get("Player", "")).strip()
+    parsed_year = _coerce_record_year(row.get("Year"))
+    merge_year: object = parsed_year if parsed_year is not None else str(row.get("Year", "")).strip()
+    team = _row_team_value(row).upper()
+    return player, merge_year, team
+
+
+def _merge_position_value(hit_pos: object, pit_pos: object) -> str | None:
+    tokens = _position_tokens(hit_pos) | _position_tokens(pit_pos)
+    if tokens:
+        return "/".join(sorted(tokens, key=_position_sort_key))
+    hit_text = str(hit_pos or "").strip()
+    if hit_text:
+        return hit_text
+    pit_text = str(pit_pos or "").strip()
+    return pit_text or None
+
+
+def _max_projection_count(*values: object) -> int | None:
+    counts: list[int] = []
+    for value in values:
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            continue
+        if pd.isna(parsed):
+            continue
+        counts.append(int(round(parsed)))
+    return max(counts) if counts else None
+
+
+def _oldest_projection_date(*values: object) -> str | None:
+    oldest_ts: pd.Timestamp | None = None
+    oldest_text: str | None = None
+
+    for value in values:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        parsed = pd.to_datetime(text, errors="coerce")
+        if pd.isna(parsed):
+            continue
+        if oldest_ts is None or parsed < oldest_ts:
+            oldest_ts = parsed
+            oldest_text = text
+
+    if oldest_text is not None:
+        return oldest_text
+
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            return text
+    return None
+
+
+def _normalize_sort_dir(value: str | None) -> Literal["asc", "desc"]:
+    return "asc" if str(value or "").strip().lower() == "asc" else "desc"
+
+
+@lru_cache(maxsize=4)
+def _projection_sortable_columns_for_dataset(dataset: Literal["all", "bat", "pitch"]) -> frozenset[str]:
+    if dataset == "bat":
+        base_records = BAT_DATA
+    elif dataset == "pitch":
+        base_records = PIT_DATA
+    else:
+        base_records = list(BAT_DATA) + list(PIT_DATA)
+
+    cols: set[str] = {
+        "Player",
+        "Team",
+        "Pos",
+        "Year",
+        "Age",
+        "ProjectionsUsed",
+        "OldestProjectionDate",
+        "DynastyValue",
+        "DynastyMatchStatus",
+        PLAYER_KEY_COL,
+        PLAYER_ENTITY_KEY_COL,
+    }
+    if dataset == "all":
+        cols.update({"Type", "PitH", "PitHR", "PitBB"})
+
+    for record in base_records:
+        cols.update(record.keys())
+
+    for year in _coerce_meta_years(META):
+        cols.add(f"Value_{year}")
+
+    return frozenset(cols)
+
+
+def _validate_sort_col(sort_col: str | None, *, dataset: Literal["all", "bat", "pitch"]) -> str | None:
+    normalized = _normalize_filter_value(sort_col)
+    if not normalized:
+        return None
+    allowed = _projection_sortable_columns_for_dataset(dataset)
+    if normalized not in allowed:
+        sample = ", ".join(sorted(list(allowed))[:20])
+        raise HTTPException(
+            status_code=422,
+            detail=f"sort_col '{normalized}' is not supported for {dataset}. Example valid columns: {sample}",
+        )
+    return normalized
+
+
+def _sort_projection_rows(rows: list[dict], sort_col: str | None, sort_dir: str | None) -> list[dict]:
+    col = str(sort_col or "").strip()
+    if not col:
+        return rows
+
+    direction = _normalize_sort_dir(sort_dir)
+
+    text_cols = PROJECTION_TEXT_SORT_COLS | {PLAYER_KEY_COL, PLAYER_ENTITY_KEY_COL, "DynastyMatchStatus"}
+
+    def _cmp_for_col(a: dict, b: dict, compare_col: str, compare_dir: Literal["asc", "desc"]) -> int:
+        av = a.get(compare_col)
+        bv = b.get(compare_col)
+
+        if compare_col == "OldestProjectionDate":
+            av_ts = pd.to_datetime(av, errors="coerce")
+            bv_ts = pd.to_datetime(bv, errors="coerce")
+            av_num = float(av_ts.value) if not pd.isna(av_ts) else float("-inf")
+            bv_num = float(bv_ts.value) if not pd.isna(bv_ts) else float("-inf")
+            if av_num == bv_num:
+                return 0
+            cmp = -1 if av_num < bv_num else 1
+            return cmp if compare_dir == "asc" else -cmp
+
+        if compare_col in text_cols:
+            av_text = str(av or "").strip()
+            bv_text = str(bv or "").strip()
+            if not av_text and not bv_text:
+                return 0
+            if not av_text:
+                return 1
+            if not bv_text:
+                return -1
+            av_norm = av_text.casefold()
+            bv_norm = bv_text.casefold()
+            if av_norm == bv_norm:
+                return 0
+            cmp = -1 if av_norm < bv_norm else 1
+            return cmp if compare_dir == "asc" else -cmp
+
+        try:
+            av_num = float(av)
+        except (TypeError, ValueError):
+            av_num = float("-inf")
+        try:
+            bv_num = float(bv)
+        except (TypeError, ValueError):
+            bv_num = float("-inf")
+        if pd.isna(av_num):
+            av_num = float("-inf")
+        if pd.isna(bv_num):
+            bv_num = float("-inf")
+        if av_num == bv_num:
+            return 0
+        cmp = -1 if av_num < bv_num else 1
+        return cmp if compare_dir == "asc" else -cmp
+
+    def _cmp(a: dict, b: dict) -> int:
+        primary = _cmp_for_col(a, b, col, direction)
+        if primary != 0:
+            return primary
+
+        # Deterministic tie-breakers keep page boundaries stable across requests.
+        for tie_col in (PLAYER_ENTITY_KEY_COL, "Player", "Year", "Team"):
+            tie_result = _cmp_for_col(a, b, tie_col, "asc")
+            if tie_result != 0:
+                return tie_result
+        return 0
+
+    return sorted(rows, key=cmp_to_key(_cmp))
+
+
+def _merge_all_projection_rows(hit_rows: list[dict], pit_rows: list[dict]) -> list[dict]:
+    grouped: dict[tuple[str, object, str], dict[str, dict | None]] = {}
+    ordered_keys: list[tuple[str, object, str]] = []
+
+    for side, rows in (("H", hit_rows), ("P", pit_rows)):
+        for row in rows:
+            key = _projection_merge_key(row)
+            if key not in grouped:
+                grouped[key] = {"hit": None, "pit": None}
+                ordered_keys.append(key)
+            if side == "H":
+                grouped[key]["hit"] = row
+            else:
+                grouped[key]["pit"] = row
+
+    merged_rows: list[dict] = []
+    for key in ordered_keys:
+        bucket = grouped[key]
+        hit = bucket.get("hit")
+        pit = bucket.get("pit")
+
+        source = hit or pit or {}
+        merged = dict(source)
+
+        merged["Type"] = "H/P" if hit and pit else ("H" if hit else "P")
+        merged["Team"] = _row_team_value(hit or {}) or _row_team_value(pit or {})
+        merged["Pos"] = _merge_position_value((hit or {}).get("Pos"), (pit or {}).get("Pos"))
+        merged["Age"] = (hit or {}).get("Age")
+        if merged["Age"] is None:
+            merged["Age"] = (pit or {}).get("Age")
+
+        max_used = _max_projection_count((hit or {}).get("ProjectionsUsed"), (pit or {}).get("ProjectionsUsed"))
+        if max_used is not None:
+            merged["ProjectionsUsed"] = max_used
+        merged["OldestProjectionDate"] = _oldest_projection_date(
+            (hit or {}).get("OldestProjectionDate"),
+            (pit or {}).get("OldestProjectionDate"),
+        )
+
+        # In the all-rows view, unprefixed hitting fields always represent hitter stats.
+        for col in ALL_TAB_HITTER_STAT_COLS:
+            merged[col] = (hit or {}).get(col)
+
+        # Pitching fields are kept separately, including prefixed collision stats.
+        for col in ALL_TAB_PITCH_STAT_COLS:
+            merged[col] = (pit or {}).get(col)
+        merged["PitH"] = (pit or {}).get("H")
+        merged["PitHR"] = (pit or {}).get("HR")
+        merged["PitBB"] = (pit or {}).get("BB")
+
+        merged_rows.append(merged)
+
+    return merged_rows
+
+
 def filter_records(
     records,
     player: str | None,
@@ -580,6 +984,8 @@ def _cached_projection_rows(
     pos: str,
     include_dynasty: bool,
     dynasty_years: str,
+    sort_col: str,
+    sort_dir: str,
 ) -> tuple[dict, ...]:
     valid_years = _coerce_meta_years(META)
     requested_years = _resolve_projection_year_filter(year, years or None, valid_years=valid_years)
@@ -596,7 +1002,54 @@ def _cached_projection_rows(
             filtered,
             _parse_dynasty_years(dynasty_years or None, valid_years=valid_years),
         )
+    filtered = _sort_projection_rows(filtered, sort_col or None, sort_dir or None)
     return tuple(filtered)
+
+
+@lru_cache(maxsize=PROJECTION_QUERY_CACHE_MAXSIZE)
+def _cached_all_projection_rows(
+    player: str,
+    team: str,
+    year: int | None,
+    years: str,
+    pos: str,
+    include_dynasty: bool,
+    dynasty_years: str,
+    sort_col: str,
+    sort_dir: str,
+) -> tuple[dict, ...]:
+    valid_years = _coerce_meta_years(META)
+    requested_years = _resolve_projection_year_filter(year, years or None, valid_years=valid_years)
+    hit_filtered = filter_records(
+        BAT_DATA,
+        player or None,
+        team or None,
+        requested_years,
+        None,
+    )
+    pit_filtered = filter_records(
+        PIT_DATA,
+        player or None,
+        team or None,
+        requested_years,
+        None,
+    )
+    merged = _merge_all_projection_rows(hit_filtered, pit_filtered)
+    if pos:
+        requested_positions = _position_tokens(pos)
+        if requested_positions:
+            merged = [
+                row
+                for row in merged
+                if requested_positions.intersection(_position_tokens(row.get("Pos", "")))
+            ]
+    if include_dynasty:
+        merged = _attach_dynasty_values(
+            merged,
+            _parse_dynasty_years(dynasty_years or None, valid_years=valid_years),
+        )
+    merged = _sort_projection_rows(merged, sort_col or None, sort_dir or None)
+    return tuple(merged)
 
 
 def _get_projection_rows(
@@ -609,6 +1062,8 @@ def _get_projection_rows(
     pos: str | None,
     include_dynasty: bool,
     dynasty_years: str | None,
+    sort_col: str | None,
+    sort_dir: str | None,
 ) -> tuple[dict, ...]:
     return _cached_projection_rows(
         dataset,
@@ -619,6 +1074,33 @@ def _get_projection_rows(
         _normalize_filter_value(pos),
         include_dynasty,
         _normalize_filter_value(dynasty_years),
+        _normalize_filter_value(sort_col),
+        _normalize_sort_dir(sort_dir),
+    )
+
+
+def _get_all_projection_rows(
+    *,
+    player: str | None,
+    team: str | None,
+    year: int | None,
+    years: str | None,
+    pos: str | None,
+    include_dynasty: bool,
+    dynasty_years: str | None,
+    sort_col: str | None,
+    sort_dir: str | None,
+) -> tuple[dict, ...]:
+    return _cached_all_projection_rows(
+        _normalize_filter_value(player),
+        _normalize_filter_value(team),
+        year,
+        _normalize_filter_value(years),
+        _normalize_filter_value(pos),
+        include_dynasty,
+        _normalize_filter_value(dynasty_years),
+        _normalize_filter_value(sort_col),
+        _normalize_sort_dir(sort_dir),
     )
 
 
@@ -638,6 +1120,38 @@ def get_version():
     )
 
 
+@app.get("/api/projections/all")
+def get_all_projections(
+    player: Optional[str] = None,
+    team: Optional[str] = None,
+    year: Optional[int] = None,
+    years: Optional[str] = None,
+    pos: Optional[str] = None,
+    dynasty_years: Optional[str] = None,
+    include_dynasty: bool = True,
+    sort_col: Optional[str] = None,
+    sort_dir: Literal["asc", "desc"] = "desc",
+    limit: int = Query(default=200, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
+):
+    _refresh_data_if_needed()
+    validated_sort_col = _validate_sort_col(sort_col, dataset="all")
+    filtered = _get_all_projection_rows(
+        player=player,
+        team=team,
+        year=year,
+        years=years,
+        pos=pos,
+        include_dynasty=include_dynasty,
+        dynasty_years=dynasty_years,
+        sort_col=validated_sort_col,
+        sort_dir=sort_dir,
+    )
+    total = len(filtered)
+    page = list(filtered[offset : offset + limit])
+    return {"total": total, "offset": offset, "limit": limit, "data": page}
+
+
 @app.get("/api/projections/bat")
 def get_bat_projections(
     player: Optional[str] = None,
@@ -647,10 +1161,13 @@ def get_bat_projections(
     pos: Optional[str] = None,
     dynasty_years: Optional[str] = None,
     include_dynasty: bool = True,
+    sort_col: Optional[str] = None,
+    sort_dir: Literal["asc", "desc"] = "desc",
     limit: int = Query(default=200, ge=1, le=5000),
     offset: int = Query(default=0, ge=0),
 ):
     _refresh_data_if_needed()
+    validated_sort_col = _validate_sort_col(sort_col, dataset="bat")
     filtered = _get_projection_rows(
         "bat",
         player=player,
@@ -660,6 +1177,8 @@ def get_bat_projections(
         pos=pos,
         include_dynasty=include_dynasty,
         dynasty_years=dynasty_years,
+        sort_col=validated_sort_col,
+        sort_dir=sort_dir,
     )
     total = len(filtered)
     page = list(filtered[offset : offset + limit])
@@ -675,10 +1194,13 @@ def get_pitch_projections(
     pos: Optional[str] = None,
     dynasty_years: Optional[str] = None,
     include_dynasty: bool = True,
+    sort_col: Optional[str] = None,
+    sort_dir: Literal["asc", "desc"] = "desc",
     limit: int = Query(default=200, ge=1, le=5000),
     offset: int = Query(default=0, ge=0),
 ):
     _refresh_data_if_needed()
+    validated_sort_col = _validate_sort_col(sort_col, dataset="pitch")
     filtered = _get_projection_rows(
         "pitch",
         player=player,
@@ -688,6 +1210,8 @@ def get_pitch_projections(
         pos=pos,
         include_dynasty=include_dynasty,
         dynasty_years=dynasty_years,
+        sort_col=validated_sort_col,
+        sort_dir=sort_dir,
     )
     total = len(filtered)
     page = list(filtered[offset : offset + limit])
@@ -701,7 +1225,7 @@ class CalculateRequest(BaseModel):
     mode: Literal["common"] = "common"
     teams: int = Field(default=12, ge=2, le=30)
     sims: int = Field(default=300, ge=1, le=5000)
-    horizon: int = Field(default=10, ge=1, le=20)
+    horizon: int = Field(default=20, ge=1, le=20)
     discount: float = Field(default=0.85, gt=0.0, le=1.0)
     bench: int = Field(default=6, ge=0, le=40)
     minors: int = Field(default=0, ge=0, le=60)
@@ -758,10 +1282,22 @@ def calculate_dynasty_values(req: CalculateRequest):
             recent_projections=req.recent_projections,
         )
 
+        identity_by_name = _player_identity_by_name()
+        out = out.copy()
+        out[PLAYER_KEY_COL] = out["Player"].map(
+            lambda player: identity_by_name.get(str(player or "").strip(), (_normalize_player_key(player), None))[0]
+        )
+        out[PLAYER_ENTITY_KEY_COL] = out["Player"].map(
+            lambda player: identity_by_name.get(str(player or "").strip(), (_normalize_player_key(player), None))[1]
+        )
+        out["DynastyMatchStatus"] = out[PLAYER_ENTITY_KEY_COL].map(
+            lambda value: "matched" if value else "no_unique_match"
+        )
+
         # Select output columns
         year_cols = [c for c in out.columns if c.startswith("Value_")]
         cols = [
-            "Player", "Team", "Pos", "Age",
+            "Player", PLAYER_KEY_COL, PLAYER_ENTITY_KEY_COL, "DynastyMatchStatus", "Team", "Pos", "Age",
             "DynastyValue", "RawDynastyValue",
             "minor_eligible",
         ] + year_cols

@@ -1,6 +1,9 @@
 import unittest
+import types
+import sys
 from unittest.mock import patch
 
+import pandas as pd
 from fastapi.testclient import TestClient
 
 import backend.app as app_module
@@ -60,6 +63,8 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
 
     def setUp(self) -> None:
         app_module._cached_projection_rows.cache_clear()
+        app_module._cached_all_projection_rows.cache_clear()
+        app_module._projection_sortable_columns_for_dataset.cache_clear()
 
     def test_bat_limit_must_be_positive(self) -> None:
         response = self.client.get("/api/projections/bat", params={"limit": 0})
@@ -232,6 +237,284 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(payload["total"], 0)
         self.assertEqual(payload["data"], [])
 
+    def test_all_endpoint_merges_two_way_rows_with_prefixed_pitching_collisions(self) -> None:
+        bat_rows = [
+            {
+                "Player": "Shohei Ohtani",
+                "Team": "LAD",
+                "Year": 2026,
+                "Pos": "DH",
+                "Age": 31,
+                "ProjectionsUsed": 3,
+                "OldestProjectionDate": "2026-01-05",
+                "G": 150,
+                "AB": 560,
+                "R": 100,
+                "H": 162,
+                "2B": 28,
+                "3B": 2,
+                "HR": 45,
+                "RBI": 108,
+                "SB": 20,
+                "BB": 88,
+                "SO": 142,
+                "AVG": 0.289,
+                "OPS": 0.94,
+            }
+        ]
+        pit_rows = [
+            {
+                "Player": "Shohei Ohtani",
+                "Team": "LAD",
+                "Year": 2026,
+                "Pos": "SP",
+                "Age": 31,
+                "ProjectionsUsed": 2,
+                "OldestProjectionDate": "2025-12-20",
+                "GS": 24,
+                "IP": 130.0,
+                "W": 10,
+                "L": 4,
+                "K": 160,
+                "SV": 0,
+                "SVH": 0,
+                "ERA": 3.18,
+                "WHIP": 1.11,
+                "H": 101,
+                "HR": 15,
+                "BB": 41,
+                "ER": 46,
+            }
+        ]
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(
+            app_module, "PIT_DATA", pit_rows
+        ), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/all",
+                params={"include_dynasty": "false"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 1)
+        row = payload["data"][0]
+        self.assertEqual(row["Type"], "H/P")
+        self.assertEqual(row["Pos"], "DH/SP")
+        self.assertEqual(row["ProjectionsUsed"], 3)
+        self.assertEqual(row["OldestProjectionDate"], "2025-12-20")
+        self.assertEqual(row["H"], 162)
+        self.assertEqual(row["HR"], 45)
+        self.assertEqual(row["BB"], 88)
+        self.assertEqual(row["PitH"], 101)
+        self.assertEqual(row["PitHR"], 15)
+        self.assertEqual(row["PitBB"], 41)
+        self.assertEqual(row["GS"], 24)
+        self.assertEqual(row["IP"], 130.0)
+
+    def test_all_endpoint_keeps_same_name_different_teams_separate(self) -> None:
+        bat_rows = [
+            {"Player": "John Doe", "Team": "NYY", "Year": 2026, "Pos": "OF", "AB": 500, "H": 140},
+            {"Player": "John Doe", "Team": "BOS", "Year": 2026, "Pos": "1B", "AB": 480, "H": 135},
+        ]
+        pit_rows = [
+            {"Player": "John Doe", "Team": "NYY", "Year": 2026, "Pos": "SP", "IP": 120, "H": 100, "HR": 14, "BB": 35}
+        ]
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(
+            app_module, "PIT_DATA", pit_rows
+        ), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/all",
+                params={"include_dynasty": "false"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 2)
+        rows_by_team = {row["Team"]: row for row in payload["data"]}
+        self.assertEqual(rows_by_team["NYY"]["Type"], "H/P")
+        self.assertEqual(rows_by_team["BOS"]["Type"], "H")
+        self.assertEqual(rows_by_team["NYY"]["PitH"], 100)
+        self.assertIsNone(rows_by_team["BOS"].get("PitH"))
+
+    def test_all_endpoint_supports_combined_team_pos_and_year_filters(self) -> None:
+        bat_rows = [
+            {"Player": "Dual Threat", "Team": "SEA", "Year": 2026, "Pos": "DH", "AB": 500, "H": 150},
+            {"Player": "Dual Threat", "Team": "SEA", "Year": 2027, "Pos": "DH", "AB": 510, "H": 151},
+            {"Player": "SEA Bat", "Team": "SEA", "Year": 2026, "Pos": "OF", "AB": 420, "H": 122},
+            {"Player": "LAD Bat", "Team": "LAD", "Year": 2026, "Pos": "OF", "AB": 410, "H": 118},
+        ]
+        pit_rows = [
+            {"Player": "Dual Threat", "Team": "SEA", "Year": 2026, "Pos": "SP", "IP": 125, "H": 95, "HR": 11, "BB": 33},
+            {"Player": "Dual Threat", "Team": "SEA", "Year": 2027, "Pos": "SP", "IP": 130, "H": 99, "HR": 12, "BB": 35},
+            {"Player": "LAD Pitch", "Team": "LAD", "Year": 2026, "Pos": "SP", "IP": 120, "H": 100, "HR": 14, "BB": 31},
+        ]
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(
+            app_module, "PIT_DATA", pit_rows
+        ), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/all",
+                params={
+                    "team": "SEA",
+                    "pos": "SP",
+                    "year": 2026,
+                    "years": "2025-2026",
+                    "include_dynasty": "false",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 1)
+        row = payload["data"][0]
+        self.assertEqual(row["Player"], "Dual Threat")
+        self.assertEqual(row["Team"], "SEA")
+        self.assertEqual(row["Year"], 2026)
+        self.assertEqual(row["Type"], "H/P")
+
+    def test_all_endpoint_sorts_and_paginates_server_side(self) -> None:
+        bat_rows = [
+            {"Player": "Charlie", "Team": "NYM", "Year": 2026, "Pos": "OF", "AB": 400, "H": 110},
+            {"Player": "Alpha", "Team": "NYY", "Year": 2026, "Pos": "OF", "AB": 420, "H": 130},
+            {"Player": "Bravo", "Team": "BOS", "Year": 2026, "Pos": "OF", "AB": 410, "H": 120},
+        ]
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(
+            app_module, "PIT_DATA", []
+        ), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/all",
+                params={
+                    "include_dynasty": "false",
+                    "sort_col": "Player",
+                    "sort_dir": "asc",
+                    "limit": 1,
+                    "offset": 1,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 3)
+        self.assertEqual(payload["limit"], 1)
+        self.assertEqual(payload["offset"], 1)
+        self.assertEqual(len(payload["data"]), 1)
+        self.assertEqual(payload["data"][0]["Player"], "Bravo")
+
+    def test_invalid_sort_col_returns_422(self) -> None:
+        with patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/all",
+                params={
+                    "include_dynasty": "false",
+                    "sort_col": "NotARealColumn",
+                },
+            )
+
+        self.assertEqual(response.status_code, 422)
+        detail = response.json().get("detail", "")
+        self.assertIn("sort_col", detail)
+
+    def test_paginated_pages_match_full_sorted_order(self) -> None:
+        bat_rows = [
+            {"Player": "Bravo", "Team": "NYM", "Year": 2026, "Pos": "OF", "AB": 420, "H": 130},
+            {"Player": "Echo", "Team": "NYY", "Year": 2026, "Pos": "OF", "AB": 430, "H": 131},
+            {"Player": "Alpha", "Team": "BOS", "Year": 2026, "Pos": "OF", "AB": 440, "H": 132},
+            {"Player": "Delta", "Team": "LAD", "Year": 2026, "Pos": "OF", "AB": 450, "H": 133},
+            {"Player": "Charlie", "Team": "SEA", "Year": 2026, "Pos": "OF", "AB": 460, "H": 134},
+        ]
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(
+            app_module, "PIT_DATA", []
+        ), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            full = self.client.get(
+                "/api/projections/all",
+                params={
+                    "include_dynasty": "false",
+                    "sort_col": "Player",
+                    "sort_dir": "asc",
+                    "limit": 50,
+                    "offset": 0,
+                },
+            ).json()
+
+            page1 = self.client.get(
+                "/api/projections/all",
+                params={
+                    "include_dynasty": "false",
+                    "sort_col": "Player",
+                    "sort_dir": "asc",
+                    "limit": 2,
+                    "offset": 0,
+                },
+            ).json()
+            page2 = self.client.get(
+                "/api/projections/all",
+                params={
+                    "include_dynasty": "false",
+                    "sort_col": "Player",
+                    "sort_dir": "asc",
+                    "limit": 2,
+                    "offset": 2,
+                },
+            ).json()
+
+        expected = [row["Player"] for row in full["data"][:4]]
+        actual = [row["Player"] for row in page1["data"] + page2["data"]]
+        self.assertEqual(actual, expected)
+
+    def test_attach_dynasty_values_uses_entity_key_for_ambiguous_name(self) -> None:
+        rows = [
+            {"Player": "John Doe", "Team": "BOS", "Year": 2026, "PlayerKey": "john-doe", "PlayerEntityKey": "john-doe__bos"},
+            {"Player": "John Doe", "Team": "NYY", "Year": 2026, "PlayerKey": "john-doe", "PlayerEntityKey": "john-doe__nyy"},
+            {"Player": "Jane Roe", "Team": "SEA", "Year": 2026, "PlayerKey": "jane-roe", "PlayerEntityKey": "jane-roe"},
+        ]
+
+        with patch.object(
+            app_module,
+            "_get_default_dynasty_lookup",
+            return_value=(
+                {"john-doe__nyy": {"DynastyValue": 11.0}},
+                {"jane-roe": {"DynastyValue": 7.5}},
+                {"john-doe"},
+                [],
+            ),
+        ):
+            enriched = app_module._attach_dynasty_values(rows)
+
+        by_team = {row["Team"]: row for row in enriched}
+        self.assertIsNone(by_team["BOS"]["DynastyValue"])
+        self.assertEqual(by_team["NYY"]["DynastyValue"], 11.0)
+        self.assertEqual(by_team["SEA"]["DynastyValue"], 7.5)
+        self.assertEqual(by_team["BOS"]["DynastyMatchStatus"], "no_unique_match")
+        self.assertEqual(by_team["NYY"]["DynastyMatchStatus"], "matched")
+
     def test_large_projection_response_is_gzip_compressed(self) -> None:
         sample_rows = [
             {
@@ -293,6 +576,10 @@ class CalculatorValidationTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.client = TestClient(app_module.app)
 
+    def test_calculate_request_default_horizon_is_twenty(self) -> None:
+        req = app_module.CalculateRequest()
+        self.assertEqual(req.horizon, 20)
+
     def test_mode_must_be_common(self) -> None:
         response = self.client.post("/api/calculate", json={"mode": "league"})
         self.assertEqual(response.status_code, 422)
@@ -300,6 +587,60 @@ class CalculatorValidationTests(unittest.TestCase):
     def test_rejects_invalid_ip_bounds(self) -> None:
         response = self.client.post("/api/calculate", json={"ip_min": 1200, "ip_max": 1000})
         self.assertEqual(response.status_code, 422)
+
+    def test_calculate_response_includes_identity_fields(self) -> None:
+        fake_out = pd.DataFrame(
+            [
+                {
+                    "Player": "Jane Roe",
+                    "Team": "SEA",
+                    "Pos": "OF",
+                    "Age": 26,
+                    "DynastyValue": 5.0,
+                    "RawDynastyValue": 6.0,
+                    "minor_eligible": False,
+                    "Value_2026": 5.0,
+                }
+            ]
+        )
+
+        class FakeSettings:
+            def __init__(self, **kwargs) -> None:
+                self.kwargs = kwargs
+
+        def fake_calculate(*args, **kwargs):
+            return fake_out, None, None
+
+        fake_module = types.SimpleNamespace(
+            CommonDynastyRotoSettings=FakeSettings,
+            calculate_common_dynasty_values=fake_calculate,
+        )
+
+        with patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ), patch.object(
+            app_module,
+            "META",
+            {"years": [2026]},
+        ), patch.object(
+            app_module,
+            "_player_identity_by_name",
+            return_value={"Jane Roe": ("jane-roe", "jane-roe")},
+        ), patch.dict(
+            sys.modules,
+            {"dynasty_roto_values": fake_module},
+        ):
+            response = self.client.post("/api/calculate", json={})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 1)
+        row = payload["data"][0]
+        self.assertEqual(row["PlayerKey"], "jane-roe")
+        self.assertEqual(row["PlayerEntityKey"], "jane-roe")
+        self.assertEqual(row["DynastyMatchStatus"], "matched")
 
     def test_rejects_unknown_start_year(self) -> None:
         with patch.object(
