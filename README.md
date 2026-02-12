@@ -11,6 +11,10 @@ A web application for browsing 20-year MLB dynasty baseball projections (2026–
 
 - **Projections Explorer** — Browse, search, filter, sort, and paginate hitter/pitcher/combined projections across 20 seasons
 - **Dynasty Value Calculator** — Configure your league settings (teams, roster, categories, IP caps) and generate Monte Carlo–based dynasty rankings
+- **Dual scoring workflows** — Switch between roto-focused and points-focused setups, including editable custom points scoring rules
+- **Explainability panel** — Inspect per-year value contributions and detailed stat-to-points breakdowns in points mode
+- **Preset + sharing workflow** — Save named calculator presets locally and share full settings through URL links
+- **Data export** — Export projections and calculator rankings to CSV/XLSX
 - **Efficient large-result loading** — Projection responses are gzip-compressed by the API, and the UI cancels stale in-flight requests during rapid filter changes
 - **Free & ad-free** — No accounts, no paywalls
 
@@ -62,13 +66,20 @@ pip install -r requirements-dev.txt
 # Install Playwright Chromium once
 python -m playwright install chromium
 
-# Run the pagination integration test
+# Run browser integration tests
 python -m unittest tests/test_e2e_projections_pagination.py
+python -m unittest tests/test_e2e_calculator_smoke.py
 ```
 
-This test launches the app locally, selects `All Years` in the projections view, and verifies:
+`test_e2e_projections_pagination.py` launches the app locally, selects `All Years` in the projections view, and verifies:
 - the UI reports more than 5,000 projection rows
 - the browser issued paginated API requests against `/api/projections/all`
+
+`test_e2e_calculator_smoke.py` launches the app locally and validates a lightweight calculator UX smoke flow on desktop and mobile:
+- switch to points-focused setup
+- run rankings and verify result-count format
+- exercise reset filters and column chooser controls
+- verify row selection surfaces the explainability panel
 
 ### Updating Projections
 
@@ -106,7 +117,9 @@ All three support Dockerfiles out of the box:
 | GET | `/api/projections/all` | Combined hitter+pitcher rows (query params: player, team, year, years, pos, dynasty_years, include_dynasty, sort_col, sort_dir, limit, offset) |
 | GET | `/api/projections/bat` | Hitter projections (query params: player, team, year, years, pos, dynasty_years, include_dynasty, sort_col, sort_dir, limit, offset) |
 | GET | `/api/projections/pitch` | Pitcher projections (same query params as `/api/projections/bat`) |
+| GET | `/api/projections/export/{dataset}` | Export filtered projections as CSV/XLSX (`dataset`: `all`, `bat`, `pitch`; query param: `format`) |
 | POST | `/api/calculate` | Run dynasty value calculator (JSON body with league settings) |
+| POST | `/api/calculate/export` | Export calculator output as CSV/XLSX (`format`, optional `include_explanations`) |
 
 `years` accepts comma-separated years and inclusive ranges, for example `2026,2028-2030`.
 If both `year` and `years` are provided, results use the intersection.

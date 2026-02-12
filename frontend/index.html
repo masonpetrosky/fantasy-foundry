@@ -276,6 +276,40 @@ nav button.active {
   font-size: 0.75rem;
 }
 
+.inline-btn {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-secondary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.inline-btn:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.inline-btn.open {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.inline-btn:focus-visible {
+  outline: 2px solid rgba(212, 168, 83, 0.55);
+  outline-offset: 2px;
+}
+
+.inline-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .multi-select-menu {
   position: absolute;
   top: calc(100% + 6px);
@@ -383,7 +417,7 @@ thead th {
   transition: color 0.15s;
 }
 
-thead th.player-col {
+.projections-table thead th.player-col {
   position: sticky;
   left: 0;
   z-index: 15;
@@ -409,14 +443,59 @@ tbody td {
 td.player-name {
   font-weight: 600;
   color: var(--text-primary);
+  min-width: 160px;
+}
+
+.projections-table td.player-name {
   position: sticky;
   left: 0;
   background: var(--bg-card);
   z-index: 5;
-  min-width: 160px;
 }
 
 tr:hover td.player-name { background: var(--bg-hover); }
+
+.rankings-table td.player-name {
+  min-width: 190px;
+}
+
+.rankings-table thead th.rank-pin-rank,
+.rankings-table td.rank-pin-rank {
+  position: sticky;
+  left: 0;
+}
+
+.rankings-table thead th.rank-pin-player,
+.rankings-table td.rank-pin-player {
+  position: sticky;
+  left: 40px;
+}
+
+.rankings-table thead th.rank-pin-value,
+.rankings-table td.rank-pin-value {
+  position: sticky;
+  left: 230px;
+}
+
+.rankings-table td.rank-pin-rank,
+.rankings-table td.rank-pin-player,
+.rankings-table td.rank-pin-value {
+  background: var(--bg-card);
+  z-index: 8;
+}
+
+.rankings-table thead th.rank-pin-rank,
+.rankings-table thead th.rank-pin-player,
+.rankings-table thead th.rank-pin-value {
+  background: var(--bg-tertiary);
+  z-index: 21;
+}
+
+.rankings-table tbody tr:hover td.rank-pin-rank,
+.rankings-table tbody tr:hover td.rank-pin-player,
+.rankings-table tbody tr:hover td.rank-pin-value {
+  background: var(--bg-hover);
+}
 
 td.num {
   font-family: 'IBM Plex Mono', monospace;
@@ -449,13 +528,76 @@ td.value-negative { color: var(--red); }
   padding: 24px;
   position: sticky;
   top: 80px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+
+.calc-sidebar-header {
+  margin-bottom: 18px;
 }
 
 .calc-sidebar h3 {
   font-family: 'DM Serif Display', serif;
   font-size: 1.1rem;
-  margin-bottom: 20px;
+  margin-bottom: 6px;
   color: var(--accent);
+}
+
+.calc-sidebar-intro {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.calc-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.calc-summary-chip {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  padding: 8px 10px;
+}
+
+.calc-summary-chip span {
+  display: block;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.calc-summary-chip strong {
+  display: block;
+  margin-top: 2px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--text-primary);
+}
+
+.calc-section {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 14px;
+  margin-top: 14px;
+}
+
+.calc-section:first-of-type {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+.calc-section-title {
+  margin: 2px 0 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .calc-subheading {
@@ -505,6 +647,12 @@ td.value-negative { color: var(--red); }
   gap: 12px;
 }
 
+.calc-inline-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 .calc-btn {
   width: 100%;
   margin-top: 8px;
@@ -535,6 +683,37 @@ td.value-negative { color: var(--red); }
 .calc-status.running { color: var(--accent); }
 .calc-status.error { color: var(--red); }
 
+.calc-note {
+  margin: -4px 0 12px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.calc-secondary-btn {
+  width: 100%;
+  margin-top: 4px;
+  padding: 9px 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.calc-secondary-btn:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.calc-secondary-btn.danger:hover {
+  border-color: rgba(245, 108, 108, 0.6);
+  color: var(--red);
+}
+
 .calc-empty-state {
   display: flex;
   align-items: center;
@@ -555,6 +734,124 @@ td.value-negative { color: var(--red); }
 }
 
 .calc-empty-state strong { color: var(--accent); }
+
+.calc-results-toolbar {
+  margin-bottom: 12px;
+}
+
+.calc-results-toolbar .result-count {
+  margin-left: 0;
+}
+
+.calc-results-hint {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.explain-card {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+
+.explain-card h4 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+
+.explain-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.explain-meta span {
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.explain-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.explain-table th,
+.explain-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.explain-table td.num,
+.explain-mini-table td.num {
+  text-align: right;
+}
+
+.explain-points-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.explain-points-card {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+}
+
+.explain-points-card h5 {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.explain-mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+}
+
+.explain-mini-table td {
+  padding: 4px 2px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.rankings-table tbody tr.clickable-row {
+  cursor: pointer;
+}
+
+.rankings-table tbody tr.clickable-row:focus-visible {
+  outline: 2px solid rgba(212, 168, 83, 0.55);
+  outline-offset: -2px;
+}
+
+.rankings-table tbody tr.rank-row-selected {
+  background: rgba(78, 205, 196, 0.1);
+}
+
+.rankings-table tbody tr.rank-row-selected td.rank-pin-rank,
+.rankings-table tbody tr.rank-row-selected td.rank-pin-player,
+.rankings-table tbody tr.rank-row-selected td.rank-pin-value {
+  background: rgba(78, 205, 196, 0.14);
+}
+
+.rankings-table tbody tr.rank-row-selected:hover td.rank-pin-rank,
+.rankings-table tbody tr.rank-row-selected:hover td.rank-pin-player,
+.rankings-table tbody tr.rank-row-selected:hover td.rank-pin-value {
+  background: rgba(78, 205, 196, 0.16);
+}
 
 /* ====== PAGINATION ====== */
 .pagination {
@@ -688,6 +985,8 @@ footer a { color: var(--accent-dim); text-decoration: none; }
     position: static;
     top: auto;
     padding: 20px;
+    max-height: none;
+    overflow: visible;
   }
 
   td.player-name {
@@ -783,6 +1082,9 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   }
 
   .form-row { grid-template-columns: 1fr; gap: 10px; }
+  .calc-summary-grid { grid-template-columns: 1fr; }
+  .calc-inline-actions { grid-template-columns: 1fr; }
+  .explain-points-grid { grid-template-columns: 1fr; }
 
   .calc-empty-state {
     height: 260px;
@@ -818,8 +1120,10 @@ footer a { color: var(--accent-dim); text-decoration: none; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 
+<script type="text/babel" src="/static/ui_components.jsx"></script>
 <script type="text/babel">
 const { useState, useEffect, useMemo, useCallback, useRef } = React;
+const { ColumnChooserControl, ExplainabilityCard } = window.FFComponents || {};
 
 // ---------------------------------------------------------------------------
 // Config: API base URL (empty string = same origin)
@@ -850,6 +1154,8 @@ function resolveApiBase() {
 const API = resolveApiBase();
 const BUILD_STORAGE_KEY = "ff:lastBuildId";
 const BUILD_QUERY_PARAM = "build";
+const CALC_PRESETS_STORAGE_KEY = "ff:calc-presets:v1";
+const CALC_LINK_QUERY_PARAM = "calc";
 const INDEX_BUILD_ID_TOKEN = "__APP_BUILD_ID__";
 const INDEX_BUILD_ID = INDEX_BUILD_ID_TOKEN.startsWith("__APP_BUILD_") ? "" : INDEX_BUILD_ID_TOKEN;
 
@@ -890,6 +1196,83 @@ function safeWriteStorage(key, value) {
   }
 }
 
+function normalizePlayerKey(value) {
+  const text = String(value || "").trim().toLowerCase();
+  const normalized = text.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return normalized || "unknown-player";
+}
+
+function calculationRowExplainKey(row) {
+  return String(row?.PlayerEntityKey || row?.PlayerKey || normalizePlayerKey(row?.Player)).trim();
+}
+
+function downloadBlob(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  triggerBlobDownload(filename, blob);
+}
+
+function triggerBlobDownload(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function filenameFromDisposition(disposition, fallbackName) {
+  const text = String(disposition || "");
+  const match = text.match(/filename=\"?([^\";]+)\"?/i);
+  return match && match[1] ? match[1] : fallbackName;
+}
+
+function readCalculatorPresets() {
+  const raw = safeReadStorage(CALC_PRESETS_STORAGE_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeCalculatorPresets(presets) {
+  safeWriteStorage(CALC_PRESETS_STORAGE_KEY, JSON.stringify(presets || {}));
+}
+
+function mergeKnownCalculatorSettings(baseSettings, incomingSettings) {
+  const merged = { ...baseSettings };
+  if (!incomingSettings || typeof incomingSettings !== "object") return merged;
+  Object.keys(baseSettings).forEach(key => {
+    if (Object.prototype.hasOwnProperty.call(incomingSettings, key)) {
+      merged[key] = incomingSettings[key];
+    }
+  });
+  return merged;
+}
+
+function encodeCalculatorSettings(settings) {
+  try {
+    return window.btoa(encodeURIComponent(JSON.stringify(settings)));
+  } catch {
+    return "";
+  }
+}
+
+function decodeCalculatorSettings(encoded) {
+  if (!encoded) return null;
+  try {
+    const raw = window.atob(encoded);
+    const parsed = JSON.parse(decodeURIComponent(raw));
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 const DEFAULT_PROJECTIONS_TAB = "all";
 const DEFAULT_PROJECTIONS_SORT_COL = "DynastyValue";
 const DEFAULT_PROJECTIONS_SORT_DIR = "desc";
@@ -911,6 +1294,130 @@ const PITCHER_SLOT_FIELDS = [
   { key: "pit_sp", label: "SP", defaultValue: 0 },
   { key: "pit_rp", label: "RP", defaultValue: 0 },
 ];
+const POINTS_SETUP_SLOT_DEFAULTS = {
+  hit_c: 1,
+  hit_1b: 1,
+  hit_2b: 1,
+  hit_3b: 1,
+  hit_ss: 1,
+  hit_ci: 0,
+  hit_mi: 0,
+  hit_of: 3,
+  hit_ut: 1,
+  pit_p: 2,
+  pit_sp: 5,
+  pit_rp: 2,
+};
+const POINTS_SCORING_FIELDS = [
+  { key: "pts_hit_1b", label: "1B", group: "bat", defaultValue: 1 },
+  { key: "pts_hit_2b", label: "2B", group: "bat", defaultValue: 2 },
+  { key: "pts_hit_3b", label: "3B", group: "bat", defaultValue: 3 },
+  { key: "pts_hit_hr", label: "HR", group: "bat", defaultValue: 4 },
+  { key: "pts_hit_r", label: "R", group: "bat", defaultValue: 1 },
+  { key: "pts_hit_rbi", label: "RBI", group: "bat", defaultValue: 1 },
+  { key: "pts_hit_sb", label: "SB", group: "bat", defaultValue: 1 },
+  { key: "pts_hit_bb", label: "BB", group: "bat", defaultValue: 1 },
+  { key: "pts_hit_so", label: "SO", group: "bat", defaultValue: -1 },
+  { key: "pts_pit_ip", label: "IP", group: "pit", defaultValue: 3 },
+  { key: "pts_pit_w", label: "W", group: "pit", defaultValue: 5 },
+  { key: "pts_pit_l", label: "L", group: "pit", defaultValue: -5 },
+  { key: "pts_pit_k", label: "K", group: "pit", defaultValue: 1 },
+  { key: "pts_pit_sv", label: "SV", group: "pit", defaultValue: 5 },
+  { key: "pts_pit_svh", label: "SVH", group: "pit", defaultValue: 0 },
+  { key: "pts_pit_h", label: "H Allowed", group: "pit", defaultValue: -1 },
+  { key: "pts_pit_er", label: "ER", group: "pit", defaultValue: -2 },
+  { key: "pts_pit_bb", label: "BB Allowed", group: "pit", defaultValue: -1 },
+];
+const POINTS_BATTING_FIELDS = POINTS_SCORING_FIELDS.filter(field => field.group === "bat");
+const POINTS_PITCHING_FIELDS = POINTS_SCORING_FIELDS.filter(field => field.group === "pit");
+
+function resolveRotoSlotDefaults(meta) {
+  const guardrails = meta?.calculator_guardrails || {};
+  const defaultHitSlots = guardrails?.default_hitter_slots || {};
+  const defaultPitchSlots = guardrails?.default_pitcher_slots || {};
+  const resolvedHitSlots = Object.fromEntries(
+    HITTER_SLOT_FIELDS.map(slot => {
+      const value = Number(defaultHitSlots[slot.label]);
+      return [slot.key, Number.isInteger(value) && value >= SLOT_INPUT_MIN ? value : slot.defaultValue];
+    })
+  );
+  const resolvedPitchSlots = Object.fromEntries(
+    PITCHER_SLOT_FIELDS.map(slot => {
+      const value = Number(defaultPitchSlots[slot.label]);
+      return [slot.key, Number.isInteger(value) && value >= SLOT_INPUT_MIN ? value : slot.defaultValue];
+    })
+  );
+  return { ...resolvedHitSlots, ...resolvedPitchSlots };
+}
+
+function resolvePointsSlotDefaults(meta) {
+  const guardrails = meta?.calculator_guardrails || {};
+  const pointsHitDefaults = guardrails?.default_points_hitter_slots || {};
+  const pointsPitchDefaults = guardrails?.default_points_pitcher_slots || {};
+  const fallback = POINTS_SETUP_SLOT_DEFAULTS;
+  const resolvedHitSlots = Object.fromEntries(
+    HITTER_SLOT_FIELDS.map(slot => {
+      const guardrailValue = Number(pointsHitDefaults[slot.label]);
+      const fallbackValue = Number(fallback[slot.key]);
+      return [
+        slot.key,
+        Number.isInteger(guardrailValue) && guardrailValue >= SLOT_INPUT_MIN
+          ? guardrailValue
+          : Number.isInteger(fallbackValue) && fallbackValue >= SLOT_INPUT_MIN
+            ? fallbackValue
+            : slot.defaultValue,
+      ];
+    })
+  );
+  const resolvedPitchSlots = Object.fromEntries(
+    PITCHER_SLOT_FIELDS.map(slot => {
+      const guardrailValue = Number(pointsPitchDefaults[slot.label]);
+      const fallbackValue = Number(fallback[slot.key]);
+      return [
+        slot.key,
+        Number.isInteger(guardrailValue) && guardrailValue >= SLOT_INPUT_MIN
+          ? guardrailValue
+          : Number.isInteger(fallbackValue) && fallbackValue >= SLOT_INPUT_MIN
+            ? fallbackValue
+            : slot.defaultValue,
+      ];
+    })
+  );
+  return { ...resolvedHitSlots, ...resolvedPitchSlots };
+}
+
+function resolvePointsScoringDefaults(meta) {
+  const guardrails = meta?.calculator_guardrails || {};
+  const provided = guardrails?.default_points_scoring || {};
+  return Object.fromEntries(
+    POINTS_SCORING_FIELDS.map(field => {
+      const value = Number(provided[field.key]);
+      return [field.key, Number.isFinite(value) ? value : field.defaultValue];
+    })
+  );
+}
+
+function buildDefaultCalculatorSettings(meta) {
+  const guardrails = meta?.calculator_guardrails || {};
+  const defaultIr = Number(guardrails?.default_ir_slots);
+  return {
+    scoring_mode: "roto",
+    teams: 12,
+    sims: 300,
+    horizon: 20,
+    discount: 0.85,
+    ...resolveRotoSlotDefaults(meta),
+    bench: 6,
+    minors: 0,
+    ir: Number.isInteger(defaultIr) && defaultIr >= 0 ? defaultIr : 0,
+    ip_min: 0,
+    ip_max: "",
+    two_way: "sum",
+    start_year: Number(meta?.years?.[0] ?? 2026),
+    recent_projections: 3,
+    ...resolvePointsScoringDefaults(meta),
+  };
+}
 
 function formatApiError(status, payload, rawText = "") {
   const detail = payload && payload.detail;
@@ -966,6 +1473,11 @@ function sleepWithAbort(ms, signal) {
 }
 
 function buildCalculatorPayload(settings, availableYears, meta) {
+  const scoringMode = String(settings.scoring_mode ?? "").trim().toLowerCase() || "roto";
+  if (scoringMode !== "roto" && scoringMode !== "points") {
+    return { error: "Scoring Mode must be either 'roto' or 'points'." };
+  }
+
   const parsedSlots = {};
   for (const slot of [...HITTER_SLOT_FIELDS, ...PITCHER_SLOT_FIELDS]) {
     const value = Number(settings[slot.key]);
@@ -1057,6 +1569,21 @@ function buildCalculatorPayload(settings, availableYears, meta) {
     return { error: "Two-Way mode must be either 'sum' or 'max'." };
   }
 
+  const parsedPointsScoring = {};
+  for (const field of POINTS_SCORING_FIELDS) {
+    const value = Number(settings[field.key]);
+    if (!Number.isFinite(value) || value < -50 || value > 50) {
+      return { error: `${field.label} points must be a number between -50 and 50.` };
+    }
+    parsedPointsScoring[field.key] = value;
+  }
+  if (scoringMode === "points") {
+    const hasNonZeroRule = Object.values(parsedPointsScoring).some(value => Math.abs(value) > 1e-9);
+    if (!hasNonZeroRule) {
+      return { error: "Points scoring must include at least one non-zero scoring rule." };
+    }
+  }
+
   const guardrails = meta?.calculator_guardrails || {};
   const playableByYear = guardrails?.playable_by_year;
   if (playableByYear && typeof playableByYear === "object") {
@@ -1091,11 +1618,13 @@ function buildCalculatorPayload(settings, availableYears, meta) {
       bench,
       minors,
       ir,
+      scoring_mode: scoringMode,
       ip_min: ipMin,
       ip_max: ipMax,
       two_way: twoWay,
       start_year: startYear,
       recent_projections: recentProjections,
+      ...parsedPointsScoring,
     },
   };
 }
@@ -1446,10 +1975,27 @@ function ProjectionsExplorer({ meta }) {
     }
   }
 
+  function exportCurrentProjections(format) {
+    const endpointTab = tab === "all" ? "all" : tab;
+    const params = new URLSearchParams();
+    if (search) params.set("player", search);
+    if (teamFilter) params.set("team", teamFilter);
+    if (yearFilter) params.set("year", yearFilter);
+    if (posFilters.length > 0) params.set("pos", posFilters.join(","));
+    if (selectedDynastyYears.length > 0) params.set("dynasty_years", selectedDynastyYears.join(","));
+    params.set("include_dynasty", "true");
+    params.set("sort_col", sortCol);
+    params.set("sort_dir", sortDir);
+    params.set("format", format);
+    const href = `${API}/api/projections/export/${endpointTab}?${params.toString()}`;
+    window.open(href, "_blank", "noopener,noreferrer");
+  }
+
   const dynastyYearCols = selectedDynastyYears.map(year => `Value_${year}`);
-  const batCols = ["Player","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","DynastyValue",...dynastyYearCols,"Pos","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS"];
-  const pitCols = ["Player","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","DynastyValue",...dynastyYearCols,"Pos","G","GS","IP","W","L","K","BB","SV","SVH","ERA","WHIP","H","HR","ER"];
-  const allCols = ["Player","Type","Team","Age","Year","ProjectionsUsed","OldestProjectionDate","DynastyValue",...dynastyYearCols,"Pos","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS","GS","IP","W","L","K","PitBB","SV","SVH","ERA","WHIP","PitH","PitHR","ER"];
+  // Lead with player identity + dynasty value context, then projection freshness and box-score detail.
+  const batCols = ["Player","Team","Pos","Age","Year","DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS"];
+  const pitCols = ["Player","Team","Pos","Age","Year","DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","G","GS","IP","W","L","K","BB","SV","SVH","ERA","WHIP","H","HR","ER"];
+  const allCols = ["Player","Team","Pos","Type","Age","Year","DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS","GS","IP","W","L","K","PitBB","SV","SVH","ERA","WHIP","PitH","PitHR","ER"];
   const cols = tab === "bat" ? batCols : tab === "pitch" ? pitCols : allCols;
   const colLabels = useMemo(() => {
     const labels = {
@@ -1536,6 +2082,8 @@ function ProjectionsExplorer({ meta }) {
           )}
         </div>
         <span className="result-count">{totalRows.toLocaleString()} rows</span>
+        <button type="button" className="inline-btn" onClick={() => exportCurrentProjections("csv")}>Export CSV</button>
+        <button type="button" className="inline-btn" onClick={() => exportCurrentProjections("xlsx")}>Export XLSX</button>
       </div>
       <div style={{marginBottom: "12px", color: "var(--text-muted)", fontSize: "0.82rem"}}>
         Dynasty Value already combines hitting and pitching contributions for two-way players.
@@ -1543,7 +2091,7 @@ function ProjectionsExplorer({ meta }) {
 
       <div className="table-wrapper">
         <div className="table-scroll">
-          <table>
+          <table className="projections-table">
             <thead>
               <tr>
                 <th style={{width:40}}>#</th>
@@ -1622,41 +2170,7 @@ function ProjectionsExplorer({ meta }) {
 // Dynasty Value Calculator
 // ---------------------------------------------------------------------------
 function DynastyCalculator({ meta }) {
-  const [settings, setSettings] = useState(() => {
-    const guardrails = meta?.calculator_guardrails || {};
-    const defaultHitSlots = guardrails?.default_hitter_slots || {};
-    const defaultPitchSlots = guardrails?.default_pitcher_slots || {};
-    const defaultIr = Number(guardrails?.default_ir_slots);
-    const resolvedHitSlots = Object.fromEntries(
-      HITTER_SLOT_FIELDS.map(slot => {
-        const value = Number(defaultHitSlots[slot.label]);
-        return [slot.key, Number.isInteger(value) && value >= SLOT_INPUT_MIN ? value : slot.defaultValue];
-      })
-    );
-    const resolvedPitchSlots = Object.fromEntries(
-      PITCHER_SLOT_FIELDS.map(slot => {
-        const value = Number(defaultPitchSlots[slot.label]);
-        return [slot.key, Number.isInteger(value) && value >= SLOT_INPUT_MIN ? value : slot.defaultValue];
-      })
-    );
-
-    return {
-      teams: 12,
-      sims: 300,
-      horizon: 20,
-      discount: 0.85,
-      ...resolvedHitSlots,
-      ...resolvedPitchSlots,
-      bench: 6,
-      minors: 0,
-      ir: Number.isInteger(defaultIr) && defaultIr >= 0 ? defaultIr : 0,
-      ip_min: 0,
-      ip_max: "",
-      two_way: "sum",
-      start_year: Number(meta.years?.[0] ?? 2026),
-      recent_projections: 3,
-    };
-  });
+  const [settings, setSettings] = useState(() => buildDefaultCalculatorSettings(meta));
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
@@ -1664,12 +2178,25 @@ function DynastyCalculator({ meta }) {
   const [sortDir, setSortDir] = useState("desc");
   const [search, setSearch] = useState("");
   const [posFilter, setPosFilter] = useState("");
+  const [presetName, setPresetName] = useState("");
+  const [selectedPresetName, setSelectedPresetName] = useState("");
+  const [presets, setPresets] = useState(() => readCalculatorPresets());
+  const [selectedExplainKey, setSelectedExplainKey] = useState("");
+  const [selectedExplainYear, setSelectedExplainYear] = useState("");
+  const [hiddenRankCols, setHiddenRankCols] = useState({});
+  const [pinRankKeyColumns, setPinRankKeyColumns] = useState(true);
   const calcRequestSeqRef = useRef(0);
   const calcAbortControllerRef = useRef(null);
+  const rankTableScrollRef = useRef(null);
+  const [rankScrollTop, setRankScrollTop] = useState(0);
+  const [rankViewportHeight, setRankViewportHeight] = useState(480);
   const availableYears = useMemo(
     () => (meta.years || []).map(Number).filter(Number.isFinite),
     [meta.years]
   );
+  const rotoSlotDefaults = useMemo(() => resolveRotoSlotDefaults(meta), [meta]);
+  const pointsSlotDefaults = useMemo(() => resolvePointsSlotDefaults(meta), [meta]);
+  const pointsScoringDefaults = useMemo(() => resolvePointsScoringDefaults(meta), [meta]);
   const validationError = useMemo(
     () => buildCalculatorPayload(settings, availableYears, meta).error || "",
     [settings, availableYears, meta]
@@ -1684,6 +2211,20 @@ function DynastyCalculator({ meta }) {
   }, [availableYears, settings.start_year]);
 
   useEffect(() => {
+    writeCalculatorPresets(presets);
+  }, [presets]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const encoded = String(params.get(CALC_LINK_QUERY_PARAM) || "").trim();
+    if (!encoded) return;
+    const parsed = decodeCalculatorSettings(encoded);
+    if (!parsed) return;
+    setSettings(current => mergeKnownCalculatorSettings(current, parsed));
+    setStatus("Loaded calculator settings from share link.");
+  }, []);
+
+  useEffect(() => {
     return () => {
       calcRequestSeqRef.current += 1;
       if (calcAbortControllerRef.current) {
@@ -1695,6 +2236,115 @@ function DynastyCalculator({ meta }) {
 
   function update(key, val) {
     setSettings(s => ({ ...s, [key]: val }));
+  }
+
+  function applyScoringSetup(nextMode) {
+    setSettings(curr => {
+      const slotDefaults = nextMode === "points" ? pointsSlotDefaults : rotoSlotDefaults;
+      return {
+        ...curr,
+        scoring_mode: nextMode,
+        ...slotDefaults,
+      };
+    });
+  }
+
+  function resetPointsScoringDefaults() {
+    setSettings(curr => ({ ...curr, ...pointsScoringDefaults }));
+  }
+
+  function reapplySetupDefaults() {
+    setSettings(curr => (
+      curr.scoring_mode === "points"
+        ? { ...curr, ...pointsSlotDefaults, ...pointsScoringDefaults }
+        : { ...curr, ...rotoSlotDefaults }
+    ));
+  }
+
+  function savePreset() {
+    const name = String(presetName || "").trim();
+    if (!name) {
+      setStatus("Error: Enter a preset name before saving.");
+      return;
+    }
+    setPresets(current => ({ ...current, [name]: settings }));
+    setStatus(`Saved preset '${name}'.`);
+  }
+
+  function loadPreset(name) {
+    const preset = presets[name];
+    if (!preset || typeof preset !== "object") {
+      setStatus(`Error: Preset '${name}' was not found.`);
+      return;
+    }
+    setSettings(current => mergeKnownCalculatorSettings(current, preset));
+    setPresetName(name);
+    setSelectedPresetName(name);
+    setStatus(`Loaded preset '${name}'.`);
+  }
+
+  function deletePreset(name) {
+    setPresets(current => {
+      const next = { ...current };
+      delete next[name];
+      return next;
+    });
+    setSelectedPresetName(current => (current === name ? "" : current));
+    setStatus(`Deleted preset '${name}'.`);
+  }
+
+  async function copyShareLink() {
+    const encoded = encodeCalculatorSettings(settings);
+    if (!encoded) {
+      setStatus("Error: Unable to encode settings for sharing.");
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set(CALC_LINK_QUERY_PARAM, encoded);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url.toString());
+      } else {
+        throw new Error("Clipboard API unavailable");
+      }
+      setStatus("Copied share link to clipboard.");
+      window.history.replaceState({}, "", url.toString());
+    } catch {
+      window.prompt("Copy calculator link:", url.toString());
+      setStatus("Share link is ready.");
+    }
+  }
+
+  async function exportRankings(format) {
+    const payload = buildCalculatorPayload(settings, availableYears, meta);
+    if (payload.error || !payload.payload) {
+      setStatus(`Error: ${payload.error || "Invalid settings"}`);
+      return;
+    }
+
+    try {
+      setStatus("Preparing export...");
+      const response = await fetch(`${API}/api/calculate/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...payload.payload,
+          format,
+          include_explanations: format === "xlsx",
+        }),
+      });
+      if (!response.ok) {
+        const parsed = await readResponsePayload(response);
+        throw new Error(formatApiError(response.status, parsed.payload, parsed.rawText));
+      }
+      const blob = await response.blob();
+      const fallback = `dynasty-rankings.${format}`;
+      const filename = filenameFromDisposition(response.headers.get("content-disposition"), fallback);
+      triggerBlobDownload(filename, blob);
+      setStatus(`Exported ${filename}`);
+    } catch (err) {
+      setStatus(`Error: ${err.message || "Failed to export rankings"}`);
+    }
   }
 
   function run() {
@@ -1714,6 +2364,9 @@ function DynastyCalculator({ meta }) {
     setLoading(true);
     setStatus("Submitting simulation job...");
     const body = payload.payload;
+    const runningStatusLabel = body.scoring_mode === "points"
+      ? "Running points valuation..."
+      : "Running Monte Carlo simulations...";
 
     (async () => {
       try {
@@ -1755,12 +2408,12 @@ function DynastyCalculator({ meta }) {
 
           const jobStatus = String(statusParsed.payload?.status || "").toLowerCase();
           if (jobStatus === "queued") {
-            setStatus("Running Monte Carlo simulations... (queued)");
+            setStatus(`${runningStatusLabel} (queued)`);
             await sleepWithAbort(1200, controller.signal);
             continue;
           }
           if (jobStatus === "running") {
-            setStatus("Running Monte Carlo simulations...");
+            setStatus(runningStatusLabel);
             await sleepWithAbort(1200, controller.signal);
             continue;
           }
@@ -1842,8 +2495,27 @@ function DynastyCalculator({ meta }) {
     else { setSortCol(col); setSortDir(col === "Player" || col === "Team" || col === "Pos" ? "asc" : "desc"); }
   }
 
+  function toggleRankColumn(col) {
+    if (requiredRankCols.has(col)) return;
+    setHiddenRankCols(current => {
+      const next = { ...current };
+      if (next[col]) delete next[col];
+      else next[col] = true;
+      return next;
+    });
+  }
+
+  function showAllRankColumns() {
+    setHiddenRankCols({});
+  }
+
+  function clearRankFilters() {
+    setSearch("");
+    setPosFilter("");
+  }
+
   // Determine columns to show
-  const baseCols = ["Player", "Team", "Pos", "Age", "DynastyValue"];
+  const baseCols = ["Player", "DynastyValue", "Age", "Team", "Pos"];
   const yearCols = results
     ? Object.keys(results.data[0] || {})
       .filter(c => c.startsWith("Value_"))
@@ -1855,181 +2527,459 @@ function DynastyCalculator({ meta }) {
       })
     : [];
   const displayCols = [...baseCols, ...yearCols];
+  const isPointsMode = settings.scoring_mode === "points";
+  const requiredRankCols = useMemo(() => new Set(["Player", "DynastyValue"]), []);
+  const visibleRankCols = useMemo(
+    () => displayCols.filter(col => !hiddenRankCols[col]),
+    [displayCols, hiddenRankCols]
+  );
+  const virtualRowHeight = 38;
+  const virtualOverscan = 8;
+  const totalRankRows = rankedFiltered.length;
+  const virtualStartIndex = Math.max(0, Math.floor(rankScrollTop / virtualRowHeight) - virtualOverscan);
+  const virtualVisibleCount = Math.ceil(rankViewportHeight / virtualRowHeight) + virtualOverscan * 2;
+  const virtualEndIndex = Math.min(totalRankRows, virtualStartIndex + virtualVisibleCount);
+  const virtualRows = rankedFiltered.slice(virtualStartIndex, virtualEndIndex);
+  const virtualTopPad = virtualStartIndex * virtualRowHeight;
+  const virtualBottomPad = Math.max(0, (totalRankRows - virtualEndIndex) * virtualRowHeight);
+  const explanationMap = useMemo(() => (
+    results && results.explanations && typeof results.explanations === "object"
+      ? results.explanations
+      : {}
+  ), [results]);
+  const activeExplanation = useMemo(() => {
+    if (!selectedExplainKey) return null;
+    return explanationMap[selectedExplainKey] || null;
+  }, [explanationMap, selectedExplainKey]);
+  const hittersPerTeam = useMemo(() => HITTER_SLOT_FIELDS.reduce((sum, slot) => {
+    const value = Number(settings[slot.key]);
+    return sum + (Number.isFinite(value) ? value : 0);
+  }, 0), [settings]);
+  const pitchersPerTeam = useMemo(() => PITCHER_SLOT_FIELDS.reduce((sum, slot) => {
+    const value = Number(settings[slot.key]);
+    return sum + (Number.isFinite(value) ? value : 0);
+  }, 0), [settings]);
+  const benchPerTeam = Number.isFinite(Number(settings.bench)) ? Number(settings.bench) : 0;
+  const minorsPerTeam = Number.isFinite(Number(settings.minors)) ? Number(settings.minors) : 0;
+  const reservePerTeam = benchPerTeam + minorsPerTeam;
+  const totalPlayersPerTeam = hittersPerTeam + pitchersPerTeam + reservePerTeam;
+  const pointRulesCount = POINTS_SCORING_FIELDS.length;
+  const hasRankFilters = Boolean(search.trim() || posFilter.trim());
+  const statusIsError = Boolean(validationError) || String(status || "").startsWith("Error");
+
+  useEffect(() => {
+    if (!results || !Array.isArray(results.data) || results.data.length === 0) {
+      setSelectedExplainKey("");
+      setSelectedExplainYear("");
+      return;
+    }
+    const firstKey = calculationRowExplainKey(results.data[0]);
+    setSelectedExplainKey(current => (current && explanationMap[current] ? current : firstKey));
+  }, [results, explanationMap]);
+
+  useEffect(() => {
+    setSelectedExplainYear("");
+  }, [selectedExplainKey]);
+
+  useEffect(() => {
+    setHiddenRankCols(current => {
+      const next = {};
+      displayCols.forEach(col => {
+        if (current[col] && !requiredRankCols.has(col)) next[col] = true;
+      });
+      return next;
+    });
+  }, [displayCols, requiredRankCols]);
+
+  useEffect(() => {
+    const tableEl = rankTableScrollRef.current;
+    if (!tableEl) return;
+    const measure = () => setRankViewportHeight(Math.max(240, tableEl.clientHeight || 480));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [results]);
+
+  useEffect(() => {
+    const tableEl = rankTableScrollRef.current;
+    if (tableEl) tableEl.scrollTop = 0;
+    setRankScrollTop(0);
+  }, [search, posFilter, sortCol, sortDir, results, visibleRankCols.length]);
 
   return (
     <div className="fade-up fade-up-1">
       <div className="calc-layout">
         <div className="calc-sidebar">
-          <h3>League Settings</h3>
+          <div className="calc-sidebar-header">
+            <h3>League Settings</h3>
+            <p className="calc-sidebar-intro">Configure format, roster depth, and scoring. Then generate rankings.</p>
+          </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label>Teams</label>
-              <input type="number" value={settings.teams} onChange={e => update("teams", e.target.value)} min="2" max="30" />
+          <div className="calc-summary-grid">
+            <div className="calc-summary-chip">
+              <span>Setup</span>
+              <strong>{isPointsMode ? "Points Focused" : "Roto Focused"}</strong>
             </div>
-            <div className="form-group">
-              <label>Start Year</label>
-              <select value={settings.start_year} onChange={e => update("start_year", e.target.value)}>
-                {meta.years.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
+            <div className="calc-summary-chip">
+              <span>Teams</span>
+              <strong>{settings.teams}</strong>
+            </div>
+            <div className="calc-summary-chip">
+              <span>Per-Team Starters</span>
+              <strong>{hittersPerTeam} H / {pitchersPerTeam} P</strong>
+            </div>
+            <div className="calc-summary-chip">
+              <span>Total Keeper Depth</span>
+              <strong>{totalPlayersPerTeam} slots</strong>
             </div>
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label>Horizon (yrs)</label>
-              <input type="number" value={settings.horizon} onChange={e => update("horizon", e.target.value)} min="1" max="20" />
+          <div className="calc-section">
+            <p className="calc-section-title">Format</p>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>Teams</label>
+                <input type="number" value={settings.teams} onChange={e => update("teams", e.target.value)} min="2" max="30" />
+              </div>
+              <div className="form-group">
+                <label>Start Year</label>
+                <select value={settings.start_year} onChange={e => update("start_year", e.target.value)}>
+                  {meta.years.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
             </div>
-            <div className="form-group">
-              <label>Discount</label>
-              <input type="number" value={settings.discount} onChange={e => update("discount", e.target.value)} min="0.5" max="1" step="0.01" />
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>Horizon (yrs)</label>
+                <input type="number" value={settings.horizon} onChange={e => update("horizon", e.target.value)} min="1" max="20" />
+              </div>
+              <div className="form-group">
+                <label>Discount</label>
+                <input type="number" value={settings.discount} onChange={e => update("discount", e.target.value)} min="0.5" max="1" step="0.01" />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>Setup</label>
+                <select
+                  value={settings.scoring_mode}
+                  onChange={e => applyScoringSetup(e.target.value)}
+                >
+                  <option value="roto">Roto Focused</option>
+                  <option value="points">Points Focused</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Two-Way Value</label>
+                <select value={settings.two_way} onChange={e => update("two_way", e.target.value)}>
+                  <option value="sum">Sum H + P</option>
+                  <option value="max">Best of H/P</option>
+                </select>
+              </div>
+            </div>
+            <p className="calc-note">Switching setup applies the recommended slot defaults for that format.</p>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>Simulations</label>
+                <input
+                  type="number"
+                  value={settings.sims}
+                  onChange={e => update("sims", e.target.value)}
+                  min="50"
+                  max="1000"
+                  step="50"
+                  disabled={isPointsMode}
+                />
+              </div>
+              <div className="form-group">
+                <label>Recent Proj.</label>
+                <input type="number" value={settings.recent_projections} onChange={e => update("recent_projections", e.target.value)} min="1" max="10" />
+              </div>
+            </div>
+            {isPointsMode && <p className="calc-note">Points mode ignores the simulations setting and scores directly from projected totals.</p>}
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>IP Min</label>
+                <input
+                  type="number"
+                  value={settings.ip_min}
+                  onChange={e => update("ip_min", e.target.value)}
+                  min="0"
+                  step="100"
+                  disabled={isPointsMode}
+                />
+              </div>
+              <div className="form-group">
+                <label>IP Max</label>
+                <input
+                  type="text"
+                  value={settings.ip_max}
+                  onChange={e => update("ip_max", e.target.value)}
+                  placeholder="none"
+                  disabled={isPointsMode}
+                />
+              </div>
+            </div>
+            {isPointsMode && <p className="calc-note">IP min/max constraints only apply in roto mode.</p>}
+          </div>
+
+          <div className="calc-section">
+            <p className="calc-section-title">Presets And Sharing</p>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Preset Name</label>
+                <input
+                  type="text"
+                  value={presetName}
+                  placeholder="e.g. 12-team H2H Points"
+                  onChange={e => setPresetName(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Preset Actions</label>
+                <button type="button" className="calc-secondary-btn" onClick={savePreset}>
+                  Save / Update Preset
+                </button>
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Saved Presets</label>
+                <select
+                  value={selectedPresetName}
+                  onChange={e => setSelectedPresetName(e.target.value)}
+                >
+                  <option value="">Select Preset</option>
+                  {Object.keys(presets).sort((a, b) => a.localeCompare(b)).map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Share</label>
+                <button type="button" className="calc-secondary-btn" onClick={copyShareLink}>
+                  Copy Share Link
+                </button>
+              </div>
+            </div>
+            {selectedPresetName && (
+              <div className="calc-inline-actions">
+                <button type="button" className="calc-secondary-btn" onClick={() => loadPreset(selectedPresetName)}>
+                  Load Selected Preset
+                </button>
+                <button type="button" className="calc-secondary-btn danger" onClick={() => deletePreset(selectedPresetName)}>
+                  Delete Selected Preset
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="calc-section">
+            <p className="calc-section-title">Starter Slots Per Team</p>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>C</label>
+                <input type="number" value={settings.hit_c} onChange={e => update("hit_c", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+              <div className="form-group">
+                <label>1B</label>
+                <input type="number" value={settings.hit_1b} onChange={e => update("hit_1b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>2B</label>
+                <input type="number" value={settings.hit_2b} onChange={e => update("hit_2b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+              <div className="form-group">
+                <label>3B</label>
+                <input type="number" value={settings.hit_3b} onChange={e => update("hit_3b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>SS</label>
+                <input type="number" value={settings.hit_ss} onChange={e => update("hit_ss", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+              <div className="form-group">
+                <label>CI</label>
+                <input type="number" value={settings.hit_ci} onChange={e => update("hit_ci", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>MI</label>
+                <input type="number" value={settings.hit_mi} onChange={e => update("hit_mi", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+              <div className="form-group">
+                <label>OF</label>
+                <input type="number" value={settings.hit_of} onChange={e => update("hit_of", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>UT</label>
+                <input type="number" value={settings.hit_ut} onChange={e => update("hit_ut", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+              <div className="form-group">
+                <label>P</label>
+                <input type="number" value={settings.pit_p} onChange={e => update("pit_p", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>SP</label>
+                <input type="number" value={settings.pit_sp} onChange={e => update("pit_sp", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+              <div className="form-group">
+                <label>RP</label>
+                <input type="number" value={settings.pit_rp} onChange={e => update("pit_rp", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
             </div>
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label>Simulations</label>
-              <input type="number" value={settings.sims} onChange={e => update("sims", e.target.value)} min="50" max="1000" step="50" />
+          {isPointsMode && (
+            <div className="calc-section">
+              <p className="calc-section-title">Points Scoring Rules</p>
+              <p className="calc-note">Edit category points below. Defaults align with a common H2H points format ({pointRulesCount} categories).</p>
+              <p className="calc-subheading">Batting</p>
+              <div className="form-row">
+                {POINTS_BATTING_FIELDS.map(field => (
+                  <div className="form-group" key={field.key}>
+                    <label>{field.label}</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={settings[field.key]}
+                      onChange={e => update(field.key, e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <p className="calc-subheading">Pitching</p>
+              <div className="form-row">
+                {POINTS_PITCHING_FIELDS.map(field => (
+                  <div className="form-group" key={field.key}>
+                    <label>{field.label}</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={settings[field.key]}
+                      onChange={e => update(field.key, e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="calc-secondary-btn" onClick={resetPointsScoringDefaults}>
+                Reset Recommended Points Scoring
+              </button>
             </div>
-            <div className="form-group">
-              <label>Recent Proj.</label>
-              <input type="number" value={settings.recent_projections} onChange={e => update("recent_projections", e.target.value)} min="1" max="10" />
+          )}
+
+          <div className="calc-section">
+            <p className="calc-section-title">Depth And Reset</p>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Bench Slots</label>
+                <input type="number" value={settings.bench} onChange={e => update("bench", e.target.value)} min="0" max="40" />
+              </div>
+              <div className="form-group">
+                <label>Minor Slots</label>
+                <input type="number" value={settings.minors} onChange={e => update("minors", e.target.value)} min="0" max="60" />
+              </div>
             </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>IR Slots</label>
+                <input type="number" value={settings.ir} onChange={e => update("ir", e.target.value)} min="0" max="40" />
+              </div>
+              <div className="form-group">
+                <label>Setup Actions</label>
+                <button type="button" className="calc-secondary-btn" onClick={reapplySetupDefaults}>
+                  {isPointsMode ? "Reset Points + Slot Defaults" : "Reapply Roto Slot Defaults"}
+                </button>
+              </div>
+            </div>
+            <p className="calc-note">Reserve depth per team: {reservePerTeam} (bench + minors).</p>
           </div>
 
-          <p className="calc-subheading">Starter Slots Per Team</p>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>C</label>
-              <input type="number" value={settings.hit_c} onChange={e => update("hit_c", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+          <div className="calc-section">
+            <button className="calc-btn" onClick={run} disabled={loading || Boolean(validationError)}>
+              {loading ? "Computing..." : "Generate Rankings"}
+            </button>
+            <div
+              className={`calc-status ${loading ? "running" : statusIsError ? "error" : ""}`}
+              role={statusIsError ? "alert" : "status"}
+              aria-live="polite"
+            >
+              {loading ? status : validationError ? `Fix settings: ${validationError}` : status}
             </div>
-            <div className="form-group">
-              <label>1B</label>
-              <input type="number" value={settings.hit_1b} onChange={e => update("hit_1b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>2B</label>
-              <input type="number" value={settings.hit_2b} onChange={e => update("hit_2b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-            </div>
-            <div className="form-group">
-              <label>3B</label>
-              <input type="number" value={settings.hit_3b} onChange={e => update("hit_3b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>SS</label>
-              <input type="number" value={settings.hit_ss} onChange={e => update("hit_ss", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-            </div>
-            <div className="form-group">
-              <label>CI</label>
-              <input type="number" value={settings.hit_ci} onChange={e => update("hit_ci", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>MI</label>
-              <input type="number" value={settings.hit_mi} onChange={e => update("hit_mi", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-            </div>
-            <div className="form-group">
-              <label>OF</label>
-              <input type="number" value={settings.hit_of} onChange={e => update("hit_of", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>UT</label>
-              <input type="number" value={settings.hit_ut} onChange={e => update("hit_ut", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-            </div>
-            <div className="form-group">
-              <label>P</label>
-              <input type="number" value={settings.pit_p} onChange={e => update("pit_p", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>SP</label>
-              <input type="number" value={settings.pit_sp} onChange={e => update("pit_sp", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-            </div>
-            <div className="form-group">
-              <label>RP</label>
-              <input type="number" value={settings.pit_rp} onChange={e => update("pit_rp", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>Bench Slots</label>
-              <input type="number" value={settings.bench} onChange={e => update("bench", e.target.value)} min="0" max="40" />
-            </div>
-            <div className="form-group">
-              <label>Minor Slots</label>
-              <input type="number" value={settings.minors} onChange={e => update("minors", e.target.value)} min="0" max="60" />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>IR Slots</label>
-              <input type="number" value={settings.ir} onChange={e => update("ir", e.target.value)} min="0" max="40" />
-            </div>
-            <div className="form-group">
-              <label>Two-Way Value</label>
-              <select value={settings.two_way} onChange={e => update("two_way", e.target.value)}>
-                <option value="sum">Sum H + P</option>
-                <option value="max">Best of H/P</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>IP Min</label>
-              <input type="number" value={settings.ip_min} onChange={e => update("ip_min", e.target.value)} min="0" step="100" />
-            </div>
-            <div className="form-group">
-              <label>IP Max</label>
-              <input type="text" value={settings.ip_max} onChange={e => update("ip_max", e.target.value)} placeholder="none" />
-            </div>
-          </div>
-
-          <button className="calc-btn" onClick={run} disabled={loading || Boolean(validationError)}>
-            {loading ? "Computing…" : "Generate Rankings"}
-          </button>
-          <div className={`calc-status ${loading ? "running" : validationError || status.startsWith("Error") ? "error" : ""}`}>
-            {loading ? status : validationError ? `Fix settings: ${validationError}` : status}
           </div>
         </div>
 
         <div>
           {results ? (
             <>
-              <div className="filter-bar" style={{marginBottom: 16}}>
+              <div className="filter-bar calc-results-toolbar">
                 <input type="text" placeholder="Search ranked players…" value={search} onChange={e => setSearch(e.target.value)} />
                 <select value={posFilter} onChange={e => setPosFilter(e.target.value)}>
                   <option value="">All Positions</option>
                   {["C","1B","2B","3B","SS","OF","SP","RP"].map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
-                <span className="result-count">{rankedFiltered.length} players</span>
+                <span className="result-count">
+                  {rankedFiltered.length.toLocaleString()} / {sortedAll.length.toLocaleString()} players
+                </span>
+                <button type="button" className="inline-btn" onClick={clearRankFilters} disabled={!hasRankFilters}>
+                  Reset Filters
+                </button>
+                {ColumnChooserControl && (
+                  <ColumnChooserControl
+                    columns={displayCols}
+                    hiddenCols={hiddenRankCols}
+                    requiredCols={requiredRankCols}
+                    onToggleColumn={toggleRankColumn}
+                    onShowAllColumns={showAllRankColumns}
+                  />
+                )}
+                <button type="button" className="inline-btn" onClick={() => setPinRankKeyColumns(v => !v)}>
+                  {pinRankKeyColumns ? "Unpin Key Columns" : "Pin Key Columns"}
+                </button>
+                <button type="button" className="inline-btn" onClick={() => exportRankings("csv")}>Export CSV</button>
+                <button type="button" className="inline-btn" onClick={() => exportRankings("xlsx")}>Export XLSX</button>
               </div>
+              <p className="calc-results-hint">Click or press Enter on a row to inspect its value breakdown.</p>
               <div className="table-wrapper">
-                <div className="table-scroll">
-                  <table>
+                <div
+                  className="table-scroll"
+                  ref={rankTableScrollRef}
+                  onScroll={e => setRankScrollTop(e.currentTarget.scrollTop)}
+                >
+                  <table className="rankings-table">
                     <thead>
                       <tr>
-                        <th style={{width:40}}>#</th>
-                        {displayCols.map(c => (
+                        <th style={{width:40}} className={pinRankKeyColumns ? "rank-pin-rank" : ""}>#</th>
+                        {visibleRankCols.map(c => (
                           <th
                             key={c}
-                            className={`${sortCol === c ? "sorted" : ""}${c === "Player" ? " player-col" : ""}`.trim()}
+                            className={[
+                              sortCol === c ? "sorted" : "",
+                              c === "Player" ? "player-col" : "",
+                              pinRankKeyColumns && c === "Player" ? "rank-pin-player" : "",
+                              pinRankKeyColumns && c === "DynastyValue" ? "rank-pin-value" : "",
+                            ].join(" ").trim()}
                             onClick={() => handleSort(c)}
                           >
                             {c.replace("Value_", "")}
@@ -2039,28 +2989,66 @@ function DynastyCalculator({ meta }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {rankedFiltered.slice(0, 300).map(({ row, rank }, i) => (
-                        <tr key={i}>
-                          <td className="num" style={{color:"var(--text-muted)"}}>{rank}</td>
-                          {displayCols.map(c => {
-                            const val = row[c];
-                            if (c === "Player") return <td key={c} className="player-name">{val}</td>;
-                            if (c === "Pos") return <td key={c} className="pos">{val}</td>;
-                            if (c === "Team") return <td key={c} className="team">{val}</td>;
-                            if (c === "DynastyValue" || c.startsWith("Value_")) {
-                              const n = Number(val);
-                              const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
-                              return <td key={c} className={`num ${cls}`}>{fmt(val, 2)}</td>;
-                            }
-                            if (typeof val === "number") return <td key={c} className="num">{fmt(val, Number.isInteger(val) ? 0 : 1)}</td>;
-                            return <td key={c}>{val ?? "—"}</td>;
-                          })}
+                      {virtualTopPad > 0 && (
+                        <tr aria-hidden="true">
+                          <td colSpan={visibleRankCols.length + 1} style={{height: virtualTopPad, padding: 0, border: "none"}} />
                         </tr>
-                      ))}
+                      )}
+                      {virtualRows.map(({ row, rank }, i) => {
+                        const explainKey = calculationRowExplainKey(row);
+                        const isSelected = selectedExplainKey === explainKey;
+                        return (
+                          <tr
+                            key={virtualStartIndex + i}
+                            className={`clickable-row ${isSelected ? "rank-row-selected" : ""}`.trim()}
+                            onClick={() => setSelectedExplainKey(explainKey)}
+                            onKeyDown={event => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setSelectedExplainKey(explainKey);
+                              }
+                            }}
+                            tabIndex={0}
+                          >
+                            <td className={`num ${pinRankKeyColumns ? "rank-pin-rank" : ""}`.trim()} style={{color:"var(--text-muted)"}}>{rank}</td>
+                            {visibleRankCols.map(c => {
+                              const val = row[c];
+                              const pinClass = pinRankKeyColumns && c === "Player"
+                                ? "rank-pin-player"
+                                : pinRankKeyColumns && c === "DynastyValue"
+                                  ? "rank-pin-value"
+                                  : "";
+                              if (c === "Player") return <td key={c} className={`player-name ${pinClass}`.trim()}>{val}</td>;
+                              if (c === "Pos") return <td key={c} className={`pos ${pinClass}`.trim()}>{val}</td>;
+                              if (c === "Team") return <td key={c} className={`team ${pinClass}`.trim()}>{val}</td>;
+                              if (c === "DynastyValue" || c.startsWith("Value_")) {
+                                const n = Number(val);
+                                const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
+                                return <td key={c} className={`num ${cls} ${pinClass}`.trim()}>{fmt(val, 2)}</td>;
+                              }
+                              if (typeof val === "number") return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, Number.isInteger(val) ? 0 : 1)}</td>;
+                              return <td key={c} className={pinClass}>{val ?? "—"}</td>;
+                            })}
+                          </tr>
+                        );
+                      })}
+                      {virtualBottomPad > 0 && (
+                        <tr aria-hidden="true">
+                          <td colSpan={visibleRankCols.length + 1} style={{height: virtualBottomPad, padding: 0, border: "none"}} />
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
               </div>
+              {ExplainabilityCard && (
+                <ExplainabilityCard
+                  explanation={activeExplanation}
+                  selectedYear={selectedExplainYear}
+                  onSelectedYearChange={setSelectedExplainYear}
+                  fmt={fmt}
+                />
+              )}
             </>
           ) : (
             <div className="calc-empty-state">

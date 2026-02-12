@@ -19,22 +19,30 @@ import re
 import sys
 import time
 import traceback
+import hashlib
+import io
+from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from functools import cmp_to_key, lru_cache
 from pathlib import Path
 from threading import Lock, Thread
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from uuid import uuid4
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
+
+try:  # pragma: no cover - optional dependency
+    import redis as redis_lib  # type: ignore
+except Exception:  # pragma: no cover - exercised only when redis is unavailable
+    redis_lib = None  # type: ignore[assignment]
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -108,6 +116,42 @@ COMMON_PITCHER_SLOT_DEFAULTS = {
     "SP": 0,
     "RP": 0,
 }
+POINTS_HITTER_SLOT_DEFAULTS = {
+    "C": 1,
+    "1B": 1,
+    "2B": 1,
+    "3B": 1,
+    "SS": 1,
+    "CI": 0,
+    "MI": 0,
+    "OF": 3,
+    "UT": 1,
+}
+POINTS_PITCHER_SLOT_DEFAULTS = {
+    "P": 2,
+    "SP": 5,
+    "RP": 2,
+}
+DEFAULT_POINTS_SCORING = {
+    "pts_hit_1b": 1.0,
+    "pts_hit_2b": 2.0,
+    "pts_hit_3b": 3.0,
+    "pts_hit_hr": 4.0,
+    "pts_hit_r": 1.0,
+    "pts_hit_rbi": 1.0,
+    "pts_hit_sb": 1.0,
+    "pts_hit_bb": 1.0,
+    "pts_hit_so": -1.0,
+    "pts_pit_ip": 3.0,
+    "pts_pit_w": 5.0,
+    "pts_pit_l": -5.0,
+    "pts_pit_k": 1.0,
+    "pts_pit_sv": 5.0,
+    "pts_pit_svh": 0.0,
+    "pts_pit_h": -1.0,
+    "pts_pit_er": -2.0,
+    "pts_pit_bb": -1.0,
+}
 COMMON_DEFAULT_IR_SLOTS = 0
 COMMON_HITTER_STARTER_SLOTS_PER_TEAM = sum(COMMON_HITTER_SLOT_DEFAULTS.values())
 COMMON_PITCHER_STARTER_SLOTS_PER_TEAM = sum(COMMON_PITCHER_SLOT_DEFAULTS.values())
@@ -116,6 +160,15 @@ CALCULATOR_JOB_MAX_ENTRIES = max(10, int(os.getenv("FF_CALC_JOB_MAX_ENTRIES", "2
 CALCULATOR_JOB_WORKERS = max(1, int(os.getenv("FF_CALC_JOB_WORKERS", "2")))
 ENABLE_STARTUP_CALC_PREWARM = os.getenv("FF_PREWARM_DEFAULT_CALC", "1").strip().lower() not in {"0", "false", "no"}
 CALCULATOR_REQUEST_TIMEOUT_SECONDS = max(60, int(os.getenv("FF_CALC_REQUEST_TIMEOUT_SECONDS", "600")))
+CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE = max(1, int(os.getenv("FF_CALC_SYNC_RATE_LIMIT_PER_MINUTE", "30")))
+CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE = max(1, int(os.getenv("FF_CALC_JOB_CREATE_RATE_LIMIT_PER_MINUTE", "15")))
+CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE = max(1, int(os.getenv("FF_CALC_JOB_STATUS_RATE_LIMIT_PER_MINUTE", "240")))
+CALCULATOR_MAX_ACTIVE_JOBS_PER_IP = max(1, int(os.getenv("FF_CALC_MAX_ACTIVE_JOBS_PER_IP", "2")))
+CALC_RESULT_CACHE_TTL_SECONDS = max(30, int(os.getenv("FF_CALC_RESULT_CACHE_TTL_SECONDS", "1800")))
+CALC_RESULT_CACHE_MAX_ENTRIES = max(10, int(os.getenv("FF_CALC_RESULT_CACHE_MAX_ENTRIES", "256")))
+REDIS_URL = os.getenv("FF_REDIS_URL", "").strip()
+REDIS_RESULT_PREFIX = "ff:calc:result:"
+REDIS_JOB_PREFIX = "ff:calc:job:"
 CALC_LOGGER = logging.getLogger("fantasy_foundry.calculate")
 
 
@@ -405,6 +458,14 @@ CALCULATOR_PREWARM_STATE = {
     "duration_ms": None,
     "error": None,
 }
+REQUEST_RATE_LIMIT_LOCK = Lock()
+REQUEST_RATE_LIMIT_BUCKETS: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+CALC_RESULT_CACHE_LOCK = Lock()
+CALC_RESULT_CACHE: dict[str, tuple[float, dict]] = {}
+CALC_RESULT_CACHE_ORDER: deque[str] = deque()
+REDIS_CLIENT_LOCK = Lock()
+REDIS_CLIENT: Any | None = None
+REDIS_CLIENT_INIT_ATTEMPTED = False
 
 
 def _reload_projection_data() -> None:
@@ -430,6 +491,162 @@ def _coerce_meta_years(meta: dict) -> list[int]:
 def _value_col_sort_key(col: str) -> tuple[int, int | str]:
     suffix = col.split("_", 1)[1] if "_" in col else col
     return (0, int(suffix)) if suffix.isdigit() else (1, suffix)
+
+
+def _client_ip(request: Request | None) -> str:
+    if request is None:
+        return "unknown"
+    forwarded_for = str(request.headers.get("x-forwarded-for") or "").strip()
+    if forwarded_for:
+        first_hop = forwarded_for.split(",")[0].strip()
+        if first_hop:
+            return first_hop
+    if request.client and request.client.host:
+        return str(request.client.host)
+    return "unknown"
+
+
+def _enforce_rate_limit(request: Request, *, action: str, limit_per_minute: int) -> None:
+    if limit_per_minute <= 0:
+        return
+    now = time.time()
+    window_start = now - 60.0
+    ip = _client_ip(request)
+    bucket_key = (action, ip)
+    with REQUEST_RATE_LIMIT_LOCK:
+        bucket = REQUEST_RATE_LIMIT_BUCKETS[bucket_key]
+        while bucket and bucket[0] < window_start:
+            bucket.popleft()
+        if len(bucket) >= limit_per_minute:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded for {action}. Try again in a minute.",
+            )
+        bucket.append(now)
+
+
+def _active_jobs_for_ip(client_ip: str) -> int:
+    count = 0
+    for job in CALCULATOR_JOBS.values():
+        if str(job.get("client_ip") or "") != client_ip:
+            continue
+        status = str(job.get("status") or "").lower()
+        if status in {"queued", "running"}:
+            count += 1
+    return count
+
+
+def _calc_result_cache_key(settings: dict[str, Any]) -> str:
+    canonical = json.dumps(settings, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return f"v1:{digest}"
+
+
+def _redis_client() -> Any | None:
+    global REDIS_CLIENT, REDIS_CLIENT_INIT_ATTEMPTED
+    if not REDIS_URL or redis_lib is None:
+        return None
+    if REDIS_CLIENT_INIT_ATTEMPTED:
+        return REDIS_CLIENT
+    with REDIS_CLIENT_LOCK:
+        if REDIS_CLIENT_INIT_ATTEMPTED:
+            return REDIS_CLIENT
+        REDIS_CLIENT_INIT_ATTEMPTED = True
+        try:
+            client = redis_lib.Redis.from_url(REDIS_URL, decode_responses=True)
+            client.ping()
+            REDIS_CLIENT = client
+            CALC_LOGGER.info("redis cache enabled for calculator results/jobs")
+        except Exception:
+            REDIS_CLIENT = None
+            CALC_LOGGER.warning("redis cache unavailable; falling back to in-memory calculator cache")
+        return REDIS_CLIENT
+
+
+def _cleanup_local_result_cache(now_ts: float | None = None) -> None:
+    now = time.time() if now_ts is None else now_ts
+    expired = [key for key, (expires_at, _payload) in CALC_RESULT_CACHE.items() if expires_at <= now]
+    for key in expired:
+        CALC_RESULT_CACHE.pop(key, None)
+    while len(CALC_RESULT_CACHE) > CALC_RESULT_CACHE_MAX_ENTRIES and CALC_RESULT_CACHE_ORDER:
+        oldest = CALC_RESULT_CACHE_ORDER.popleft()
+        CALC_RESULT_CACHE.pop(oldest, None)
+
+
+def _result_cache_get(cache_key: str) -> dict | None:
+    redis_client = _redis_client()
+    if redis_client is not None:
+        try:
+            raw = redis_client.get(f"{REDIS_RESULT_PREFIX}{cache_key}")
+            if raw:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    return parsed
+        except Exception:
+            CALC_LOGGER.warning("failed to read calculator result cache from redis", exc_info=True)
+
+    now = time.time()
+    with CALC_RESULT_CACHE_LOCK:
+        _cleanup_local_result_cache(now)
+        cached = CALC_RESULT_CACHE.get(cache_key)
+        if not cached:
+            return None
+        expires_at, payload = cached
+        if expires_at <= now:
+            CALC_RESULT_CACHE.pop(cache_key, None)
+            return None
+        return dict(payload)
+
+
+def _result_cache_set(cache_key: str, payload: dict) -> None:
+    redis_client = _redis_client()
+    if redis_client is not None:
+        try:
+            redis_client.setex(
+                f"{REDIS_RESULT_PREFIX}{cache_key}",
+                CALC_RESULT_CACHE_TTL_SECONDS,
+                json.dumps(payload, separators=(",", ":"), sort_keys=True),
+            )
+        except Exception:
+            CALC_LOGGER.warning("failed to write calculator result cache to redis", exc_info=True)
+
+    expires_at = time.time() + CALC_RESULT_CACHE_TTL_SECONDS
+    with CALC_RESULT_CACHE_LOCK:
+        CALC_RESULT_CACHE[cache_key] = (expires_at, dict(payload))
+        CALC_RESULT_CACHE_ORDER.append(cache_key)
+        _cleanup_local_result_cache()
+
+
+def _cache_calculation_job_snapshot(job: dict) -> None:
+    redis_client = _redis_client()
+    if redis_client is None:
+        return
+    try:
+        redis_client.setex(
+            f"{REDIS_JOB_PREFIX}{job['job_id']}",
+            CALCULATOR_JOB_TTL_SECONDS,
+            json.dumps(_calculation_job_public_payload(job), separators=(",", ":"), sort_keys=True),
+        )
+    except Exception:
+        CALC_LOGGER.warning("failed to cache calculator job payload in redis", exc_info=True)
+
+
+def _cached_calculation_job_snapshot(job_id: str) -> dict | None:
+    redis_client = _redis_client()
+    if redis_client is None:
+        return None
+    try:
+        raw = redis_client.get(f"{REDIS_JOB_PREFIX}{job_id}")
+    except Exception:
+        CALC_LOGGER.warning("failed to read calculator job payload from redis", exc_info=True)
+        return None
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def _ensure_backend_module_path() -> None:
@@ -509,6 +726,314 @@ def _calculate_common_dynasty_frame_cached(
     return out
 
 
+def _stat_or_zero(row: dict | None, key: str) -> float:
+    if not row:
+        return 0.0
+    value = _as_float(row.get(key))
+    return value if value is not None else 0.0
+
+
+def _coerce_minor_eligible(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value > 0
+    text = str(value or "").strip().lower()
+    return text in {"1", "true", "yes", "y"}
+
+
+def _valuation_years(start_year: int, horizon: int, valid_years: list[int]) -> list[int]:
+    max_year = int(start_year) + max(int(horizon), 1) - 1
+    years = [year for year in valid_years if start_year <= year <= max_year]
+    if years:
+        return years
+    return [start_year + offset for offset in range(max(int(horizon), 1))]
+
+
+def _calculate_hitter_points_breakdown(row: dict | None, scoring: dict[str, float]) -> dict:
+    hits = _stat_or_zero(row, "H")
+    doubles = _stat_or_zero(row, "2B")
+    triples = _stat_or_zero(row, "3B")
+    hr = _stat_or_zero(row, "HR")
+    singles = max(0.0, hits - doubles - triples - hr)
+    inputs = {
+        "1B": singles,
+        "2B": doubles,
+        "3B": triples,
+        "HR": hr,
+        "R": _stat_or_zero(row, "R"),
+        "RBI": _stat_or_zero(row, "RBI"),
+        "SB": _stat_or_zero(row, "SB"),
+        "BB": _stat_or_zero(row, "BB"),
+        "SO": _stat_or_zero(row, "SO"),
+    }
+    rule_points = {
+        "1B": inputs["1B"] * scoring["pts_hit_1b"],
+        "2B": inputs["2B"] * scoring["pts_hit_2b"],
+        "3B": inputs["3B"] * scoring["pts_hit_3b"],
+        "HR": inputs["HR"] * scoring["pts_hit_hr"],
+        "R": inputs["R"] * scoring["pts_hit_r"],
+        "RBI": inputs["RBI"] * scoring["pts_hit_rbi"],
+        "SB": inputs["SB"] * scoring["pts_hit_sb"],
+        "BB": inputs["BB"] * scoring["pts_hit_bb"],
+        "SO": inputs["SO"] * scoring["pts_hit_so"],
+    }
+    total_points = float(sum(rule_points.values()))
+    return {
+        "stats": {key: round(float(value), 4) for key, value in inputs.items()},
+        "rule_points": {key: round(float(value), 4) for key, value in rule_points.items()},
+        "total_points": round(total_points, 4),
+    }
+
+
+def _calculate_pitcher_points_breakdown(row: dict | None, scoring: dict[str, float]) -> dict:
+    inputs = {
+        "IP": _stat_or_zero(row, "IP"),
+        "W": _stat_or_zero(row, "W"),
+        "L": _stat_or_zero(row, "L"),
+        "K": _stat_or_zero(row, "K"),
+        "SV": _stat_or_zero(row, "SV"),
+        "SVH": _stat_or_zero(row, "SVH"),
+        "H": _stat_or_zero(row, "H"),
+        "ER": _stat_or_zero(row, "ER"),
+        "BB": _stat_or_zero(row, "BB"),
+    }
+    rule_points = {
+        "IP": inputs["IP"] * scoring["pts_pit_ip"],
+        "W": inputs["W"] * scoring["pts_pit_w"],
+        "L": inputs["L"] * scoring["pts_pit_l"],
+        "K": inputs["K"] * scoring["pts_pit_k"],
+        "SV": inputs["SV"] * scoring["pts_pit_sv"],
+        "SVH": inputs["SVH"] * scoring["pts_pit_svh"],
+        "H": inputs["H"] * scoring["pts_pit_h"],
+        "ER": inputs["ER"] * scoring["pts_pit_er"],
+        "BB": inputs["BB"] * scoring["pts_pit_bb"],
+    }
+    total_points = float(sum(rule_points.values()))
+    return {
+        "stats": {key: round(float(value), 4) for key, value in inputs.items()},
+        "rule_points": {key: round(float(value), 4) for key, value in rule_points.items()},
+        "total_points": round(total_points, 4),
+    }
+
+
+def _points_player_identity(row: dict) -> str:
+    entity_key = str(row.get(PLAYER_ENTITY_KEY_COL) or "").strip()
+    if entity_key:
+        return entity_key
+    player_key = str(row.get(PLAYER_KEY_COL) or "").strip()
+    if player_key:
+        return player_key
+    return _normalize_player_key(row.get("Player"))
+
+
+@lru_cache(maxsize=16)
+def _calculate_points_dynasty_frame_cached(
+    teams: int,
+    horizon: int,
+    discount: float,
+    hit_c: int,
+    hit_1b: int,
+    hit_2b: int,
+    hit_3b: int,
+    hit_ss: int,
+    hit_ci: int,
+    hit_mi: int,
+    hit_of: int,
+    hit_ut: int,
+    pit_p: int,
+    pit_sp: int,
+    pit_rp: int,
+    bench: int,
+    minors: int,
+    ir: int,
+    two_way: str,
+    start_year: int,
+    recent_projections: int,
+    pts_hit_1b: float,
+    pts_hit_2b: float,
+    pts_hit_3b: float,
+    pts_hit_hr: float,
+    pts_hit_r: float,
+    pts_hit_rbi: float,
+    pts_hit_sb: float,
+    pts_hit_bb: float,
+    pts_hit_so: float,
+    pts_pit_ip: float,
+    pts_pit_w: float,
+    pts_pit_l: float,
+    pts_pit_k: float,
+    pts_pit_sv: float,
+    pts_pit_svh: float,
+    pts_pit_h: float,
+    pts_pit_er: float,
+    pts_pit_bb: float,
+) -> pd.DataFrame:
+    scoring = {
+        "pts_hit_1b": float(pts_hit_1b),
+        "pts_hit_2b": float(pts_hit_2b),
+        "pts_hit_3b": float(pts_hit_3b),
+        "pts_hit_hr": float(pts_hit_hr),
+        "pts_hit_r": float(pts_hit_r),
+        "pts_hit_rbi": float(pts_hit_rbi),
+        "pts_hit_sb": float(pts_hit_sb),
+        "pts_hit_bb": float(pts_hit_bb),
+        "pts_hit_so": float(pts_hit_so),
+        "pts_pit_ip": float(pts_pit_ip),
+        "pts_pit_w": float(pts_pit_w),
+        "pts_pit_l": float(pts_pit_l),
+        "pts_pit_k": float(pts_pit_k),
+        "pts_pit_sv": float(pts_pit_sv),
+        "pts_pit_svh": float(pts_pit_svh),
+        "pts_pit_h": float(pts_pit_h),
+        "pts_pit_er": float(pts_pit_er),
+        "pts_pit_bb": float(pts_pit_bb),
+    }
+
+    if recent_projections == 3:
+        bat_rows = BAT_DATA
+        pit_rows = PIT_DATA
+    else:
+        bat_rows = _average_recent_projection_rows(BAT_DATA_RAW, max_entries=recent_projections, is_hitter=True)
+        pit_rows = _average_recent_projection_rows(PIT_DATA_RAW, max_entries=recent_projections, is_hitter=False)
+
+    valid_years = _coerce_meta_years(META)
+    valuation_years = _valuation_years(start_year, horizon, valid_years)
+    year_set = set(valuation_years)
+
+    if not valuation_years:
+        raise ValueError("No valuation years available for selected start_year and horizon.")
+
+    rows_by_player: dict[str, dict[int, dict[str, dict | None]]] = {}
+
+    for row in bat_rows:
+        year = _coerce_record_year(row.get("Year"))
+        if year is None or year not in year_set:
+            continue
+        player_id = _points_player_identity(row)
+        bucket = rows_by_player.setdefault(player_id, {})
+        pair = bucket.setdefault(year, {"hit": None, "pit": None})
+        pair["hit"] = row
+
+    for row in pit_rows:
+        year = _coerce_record_year(row.get("Year"))
+        if year is None or year not in year_set:
+            continue
+        player_id = _points_player_identity(row)
+        bucket = rows_by_player.setdefault(player_id, {})
+        pair = bucket.setdefault(year, {"hit": None, "pit": None})
+        pair["pit"] = row
+
+    result_rows: list[dict] = []
+    for player_id, per_year in rows_by_player.items():
+        if not per_year:
+            continue
+
+        start_pair = per_year.get(start_year)
+        if start_pair and (start_pair.get("hit") or start_pair.get("pit")):
+            meta_hit = start_pair.get("hit")
+            meta_pit = start_pair.get("pit")
+        else:
+            first_year = min(per_year.keys())
+            fallback_pair = per_year[first_year]
+            meta_hit = fallback_pair.get("hit")
+            meta_pit = fallback_pair.get("pit")
+
+        meta_row = meta_hit or meta_pit or {}
+        player_name = str(meta_row.get("Player") or "").strip()
+        player_key = str(meta_row.get(PLAYER_KEY_COL) or "").strip() or _normalize_player_key(player_name)
+        entity_key = str(meta_row.get(PLAYER_ENTITY_KEY_COL) or "").strip() or player_key
+
+        row_out: dict[str, object] = {
+            "Player": player_name,
+            "Team": _row_team_value(meta_hit or {}) or _row_team_value(meta_pit or {}),
+            "Pos": _merge_position_value((meta_hit or {}).get("Pos"), (meta_pit or {}).get("Pos")),
+            "Age": (meta_hit or {}).get("Age") if (meta_hit or {}).get("Age") is not None else (meta_pit or {}).get("Age"),
+            "minor_eligible": _coerce_minor_eligible((meta_hit or {}).get("minor_eligible"))
+            or _coerce_minor_eligible((meta_pit or {}).get("minor_eligible")),
+            PLAYER_KEY_COL: player_key,
+            PLAYER_ENTITY_KEY_COL: entity_key,
+            "_ExplainPointsByYear": {},
+        }
+
+        raw_total = 0.0
+        for year_offset, year in enumerate(valuation_years):
+            pair = per_year.get(year) or {"hit": None, "pit": None}
+            hit_breakdown = _calculate_hitter_points_breakdown(pair.get("hit"), scoring)
+            pit_breakdown = _calculate_pitcher_points_breakdown(pair.get("pit"), scoring)
+            hit_points = float(hit_breakdown["total_points"])
+            pit_points = float(pit_breakdown["total_points"])
+
+            if pair.get("hit") and pair.get("pit"):
+                year_points = hit_points + pit_points if two_way == "sum" else max(hit_points, pit_points)
+            elif pair.get("hit"):
+                year_points = hit_points
+            elif pair.get("pit"):
+                year_points = pit_points
+            else:
+                year_points = 0.0
+
+            row_out[f"Value_{year}"] = year_points
+            discount_factor = float(discount) ** year_offset
+            discounted_value = year_points * discount_factor
+            raw_total += discounted_value
+            row_out["_ExplainPointsByYear"][str(year)] = {
+                "hitting_points": round(hit_points, 4),
+                "pitching_points": round(pit_points, 4),
+                "selected_points": round(float(year_points), 4),
+                "discount_factor": round(float(discount_factor), 6),
+                "discounted_contribution": round(float(discounted_value), 4),
+                "hitting": hit_breakdown,
+                "pitching": pit_breakdown,
+            }
+
+        row_out["RawDynastyValue"] = raw_total
+        result_rows.append(row_out)
+
+    if not result_rows:
+        empty_columns = [
+            "Player",
+            "Team",
+            "Pos",
+            "Age",
+            "DynastyValue",
+            "RawDynastyValue",
+            "minor_eligible",
+            PLAYER_KEY_COL,
+            PLAYER_ENTITY_KEY_COL,
+        ] + [f"Value_{year}" for year in valuation_years]
+        return pd.DataFrame(columns=empty_columns)
+
+    roster_slots_per_team = (
+        hit_c
+        + hit_1b
+        + hit_2b
+        + hit_3b
+        + hit_ss
+        + hit_ci
+        + hit_mi
+        + hit_of
+        + hit_ut
+        + pit_p
+        + pit_sp
+        + pit_rp
+        + bench
+        + minors
+        + ir
+    )
+    replacement_rank = max(1, teams * max(1, roster_slots_per_team))
+    sorted_raw_values = sorted((float(row["RawDynastyValue"]) for row in result_rows), reverse=True)
+    cutoff_idx = min(replacement_rank - 1, len(sorted_raw_values) - 1)
+    replacement_raw = sorted_raw_values[cutoff_idx]
+
+    for row in result_rows:
+        row["DynastyValue"] = float(row["RawDynastyValue"]) - replacement_raw
+
+    df = pd.DataFrame.from_records(result_rows)
+    df = df.sort_values(["DynastyValue", "Player"], ascending=[False, True], na_position="last")
+    return df
+
+
 def _is_user_fixable_calculation_error(message: str) -> bool:
     normalized = message.lower()
     return (
@@ -517,6 +1042,62 @@ def _is_user_fixable_calculation_error(message: str) -> bool:
         or "cannot fill slot" in normalized
         or "to fill required slots" in normalized
     )
+
+
+def _numeric_or_zero(value: object) -> float:
+    parsed = _as_float(value)
+    return float(parsed) if parsed is not None else 0.0
+
+
+def _build_calculation_explanations(out: pd.DataFrame, *, settings: dict[str, Any]) -> dict[str, dict]:
+    scoring_mode = str(settings.get("scoring_mode") or "roto").strip().lower() or "roto"
+    discount = _numeric_or_zero(settings.get("discount")) or 1.0
+    year_cols = sorted(
+        [col for col in out.columns if isinstance(col, str) and col.startswith("Value_")],
+        key=_value_col_sort_key,
+    )
+    explanations: dict[str, dict] = {}
+
+    for _, row in out.iterrows():
+        row_data = row.to_dict()
+        player = str(row_data.get("Player") or "").strip()
+        player_key = str(row_data.get(PLAYER_KEY_COL) or "").strip() or _normalize_player_key(player)
+        entity_key = str(row_data.get(PLAYER_ENTITY_KEY_COL) or "").strip() or player_key
+        explain_key = entity_key or player_key
+        points_by_year = row_data.get("_ExplainPointsByYear")
+        points_by_year = points_by_year if isinstance(points_by_year, dict) else {}
+
+        per_year: list[dict] = []
+        for idx, year_col in enumerate(year_cols):
+            suffix = year_col.split("_", 1)[1] if "_" in year_col else year_col
+            year_token: int | str = int(suffix) if str(suffix).isdigit() else suffix
+            year_value = _numeric_or_zero(row_data.get(year_col))
+            discount_factor = float(discount) ** idx
+            discounted = year_value * discount_factor
+
+            year_entry: dict[str, Any] = {
+                "year": year_token,
+                "year_value": round(year_value, 4),
+                "discount_factor": round(discount_factor, 6),
+                "discounted_contribution": round(discounted, 4),
+            }
+            if scoring_mode == "points":
+                points_detail = points_by_year.get(str(year_token))
+                if isinstance(points_detail, dict):
+                    year_entry["points"] = points_detail
+            per_year.append(year_entry)
+
+        explanations[explain_key] = {
+            "player": player,
+            "team": str(row_data.get("Team") or "").strip() or None,
+            "pos": str(row_data.get("Pos") or "").strip() or None,
+            "mode": scoring_mode,
+            "dynasty_value": round(_numeric_or_zero(row_data.get("DynastyValue")), 4),
+            "raw_dynasty_value": round(_numeric_or_zero(row_data.get("RawDynastyValue")), 4),
+            "per_year": per_year,
+        }
+
+    return explanations
 
 
 def _clean_records_for_json(records: list[dict]) -> list[dict]:
@@ -546,6 +1127,71 @@ def _as_float(value: object) -> float | None:
     if math.isfinite(parsed):
         return parsed
     return None
+
+
+def _flatten_explanations_for_export(explanations: dict[str, dict]) -> list[dict]:
+    rows: list[dict] = []
+    for player_id, detail in explanations.items():
+        if not isinstance(detail, dict):
+            continue
+        per_year = detail.get("per_year")
+        if not isinstance(per_year, list):
+            continue
+        for entry in per_year:
+            if not isinstance(entry, dict):
+                continue
+            points = entry.get("points")
+            points = points if isinstance(points, dict) else {}
+            rows.append(
+                {
+                    "PlayerEntityKey": player_id,
+                    "Player": detail.get("player"),
+                    "Team": detail.get("team"),
+                    "Pos": detail.get("pos"),
+                    "Mode": detail.get("mode"),
+                    "Year": entry.get("year"),
+                    "YearValue": entry.get("year_value"),
+                    "DiscountFactor": entry.get("discount_factor"),
+                    "DiscountedContribution": entry.get("discounted_contribution"),
+                    "HittingPoints": points.get("hitting_points"),
+                    "PitchingPoints": points.get("pitching_points"),
+                    "SelectedPoints": points.get("selected_points"),
+                    "HittingRulePoints": json.dumps((points.get("hitting") or {}).get("rule_points", {}), sort_keys=True),
+                    "PitchingRulePoints": json.dumps((points.get("pitching") or {}).get("rule_points", {}), sort_keys=True),
+                }
+            )
+    return rows
+
+
+def _tabular_export_response(
+    rows: list[dict],
+    *,
+    filename_base: str,
+    file_format: Literal["csv", "xlsx"],
+    explain_rows: list[dict] | None = None,
+) -> StreamingResponse:
+    if file_format == "csv":
+        df = pd.DataFrame.from_records(rows)
+        payload = df.to_csv(index=False).encode("utf-8")
+        content_type = "text/csv; charset=utf-8"
+        extension = "csv"
+    else:
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            pd.DataFrame.from_records(rows).to_excel(writer, index=False, sheet_name="Data")
+            if explain_rows:
+                pd.DataFrame.from_records(explain_rows).to_excel(
+                    writer,
+                    index=False,
+                    sheet_name="Explainability",
+                )
+        payload = output.getvalue()
+        content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        extension = "xlsx"
+
+    response = StreamingResponse(io.BytesIO(payload), media_type=content_type)
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename_base}.{extension}"'
+    return response
 
 
 @lru_cache(maxsize=1)
@@ -613,6 +1259,9 @@ def _calculator_guardrails_payload() -> dict:
         "pitchers_per_team": COMMON_PITCHER_STARTER_SLOTS_PER_TEAM,
         "default_hitter_slots": COMMON_HITTER_SLOT_DEFAULTS.copy(),
         "default_pitcher_slots": COMMON_PITCHER_SLOT_DEFAULTS.copy(),
+        "default_points_hitter_slots": POINTS_HITTER_SLOT_DEFAULTS.copy(),
+        "default_points_pitcher_slots": POINTS_PITCHER_SLOT_DEFAULTS.copy(),
+        "default_points_scoring": DEFAULT_POINTS_SCORING.copy(),
         "default_ir_slots": COMMON_DEFAULT_IR_SLOTS,
         "playable_by_year": _playable_pool_counts_by_year(),
         "job_timeout_seconds": CALCULATOR_REQUEST_TIMEOUT_SECONDS,
@@ -971,9 +1620,13 @@ def _refresh_data_if_needed() -> None:
         _cached_all_projection_rows.cache_clear()
         _projection_sortable_columns_for_dataset.cache_clear()
         _calculate_common_dynasty_frame_cached.cache_clear()
+        _calculate_points_dynasty_frame_cached.cache_clear()
         _playable_pool_counts_by_year.cache_clear()
         _get_default_dynasty_lookup.cache_clear()
         _player_identity_by_name.cache_clear()
+        with CALC_RESULT_CACHE_LOCK:
+            CALC_RESULT_CACHE.clear()
+            CALC_RESULT_CACHE_ORDER.clear()
         _DATA_SOURCE_SIGNATURE = current_signature
 
 # ---------------------------------------------------------------------------
@@ -1574,11 +2227,65 @@ def get_pitch_projections(
     return {"total": total, "offset": offset, "limit": limit, "data": page}
 
 
+@app.get("/api/projections/export/{dataset}")
+def export_projections(
+    dataset: Literal["all", "bat", "pitch"],
+    file_format: Literal["csv", "xlsx"] = Query(default="csv", alias="format"),
+    player: Optional[str] = None,
+    team: Optional[str] = None,
+    year: Optional[int] = None,
+    years: Optional[str] = None,
+    pos: Optional[str] = None,
+    dynasty_years: Optional[str] = None,
+    include_dynasty: bool = True,
+    sort_col: Optional[str] = None,
+    sort_dir: Literal["asc", "desc"] = "desc",
+):
+    _refresh_data_if_needed()
+    validated_sort_col = _validate_sort_col(sort_col, dataset=dataset)
+    if dataset == "all":
+        rows = list(
+            _get_all_projection_rows(
+                player=player,
+                team=team,
+                year=year,
+                years=years,
+                pos=pos,
+                include_dynasty=include_dynasty,
+                dynasty_years=dynasty_years,
+                sort_col=validated_sort_col,
+                sort_dir=sort_dir,
+            )
+        )
+    else:
+        rows = list(
+            _get_projection_rows(
+                dataset,
+                player=player,
+                team=team,
+                year=year,
+                years=years,
+                pos=pos,
+                include_dynasty=include_dynasty,
+                dynasty_years=dynasty_years,
+                sort_col=validated_sort_col,
+                sort_dir=sort_dir,
+            )
+        )
+
+    return _tabular_export_response(
+        rows,
+        filename_base=f"projections-{dataset}",
+        file_format=file_format,
+    )
+
+
 # ---------------------------------------------------------------------------
 # API: Dynasty Value Calculator
 # ---------------------------------------------------------------------------
 class CalculateRequest(BaseModel):
     mode: Literal["common"] = "common"
+    scoring_mode: Literal["roto", "points"] = "roto"
     two_way: Literal["sum", "max"] = "sum"
     teams: int = Field(default=12, ge=2, le=30)
     sims: int = Field(default=300, ge=1, le=5000)
@@ -1603,6 +2310,24 @@ class CalculateRequest(BaseModel):
     ip_max: Optional[float] = Field(default=None, ge=0.0)
     start_year: int = Field(default=2026, ge=1900)
     recent_projections: int = Field(default=3, ge=1, le=10)
+    pts_hit_1b: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_1b"], ge=-50.0, le=50.0)
+    pts_hit_2b: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_2b"], ge=-50.0, le=50.0)
+    pts_hit_3b: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_3b"], ge=-50.0, le=50.0)
+    pts_hit_hr: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_hr"], ge=-50.0, le=50.0)
+    pts_hit_r: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_r"], ge=-50.0, le=50.0)
+    pts_hit_rbi: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_rbi"], ge=-50.0, le=50.0)
+    pts_hit_sb: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_sb"], ge=-50.0, le=50.0)
+    pts_hit_bb: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_bb"], ge=-50.0, le=50.0)
+    pts_hit_so: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_so"], ge=-50.0, le=50.0)
+    pts_pit_ip: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_ip"], ge=-50.0, le=50.0)
+    pts_pit_w: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_w"], ge=-50.0, le=50.0)
+    pts_pit_l: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_l"], ge=-50.0, le=50.0)
+    pts_pit_k: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_k"], ge=-50.0, le=50.0)
+    pts_pit_sv: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_sv"], ge=-50.0, le=50.0)
+    pts_pit_svh: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_svh"], ge=-50.0, le=50.0)
+    pts_pit_h: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_h"], ge=-50.0, le=50.0)
+    pts_pit_er: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_er"], ge=-50.0, le=50.0)
+    pts_pit_bb: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_bb"], ge=-50.0, le=50.0)
 
     @model_validator(mode="after")
     def validate_ip_bounds(self) -> "CalculateRequest":
@@ -1624,13 +2349,47 @@ class CalculateRequest(BaseModel):
             raise ValueError("At least one hitter slot must be greater than 0.")
         if total_pitcher_slots <= 0:
             raise ValueError("At least one pitcher slot must be greater than 0.")
+        if self.scoring_mode == "points":
+            has_non_zero_rule = any(
+                abs(value) > 1e-9
+                for value in (
+                    self.pts_hit_1b,
+                    self.pts_hit_2b,
+                    self.pts_hit_3b,
+                    self.pts_hit_hr,
+                    self.pts_hit_r,
+                    self.pts_hit_rbi,
+                    self.pts_hit_sb,
+                    self.pts_hit_bb,
+                    self.pts_hit_so,
+                    self.pts_pit_ip,
+                    self.pts_pit_w,
+                    self.pts_pit_l,
+                    self.pts_pit_k,
+                    self.pts_pit_sv,
+                    self.pts_pit_svh,
+                    self.pts_pit_h,
+                    self.pts_pit_er,
+                    self.pts_pit_bb,
+                )
+            )
+            if not has_non_zero_rule:
+                raise ValueError("Points scoring must include at least one non-zero scoring rule.")
         return self
+
+
+class CalculateExportRequest(CalculateRequest):
+    format: Literal["csv", "xlsx"] = "csv"
+    include_explanations: bool = False
 
 
 def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
     started = time.perf_counter()
     settings = req.model_dump()
-    cache_before = _calculate_common_dynasty_frame_cached.cache_info()
+    active_cache = _calculate_points_dynasty_frame_cached if req.scoring_mode == "points" else _calculate_common_dynasty_frame_cached
+    cache_before = active_cache.cache_info()
+    result_cache_key = _calc_result_cache_key(settings)
+    result_cache_hit = False
     status_code = 200
 
     try:
@@ -1642,33 +2401,81 @@ def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
                 detail=f"start_year must be one of the available projection years: {valid_years}",
             )
 
+        cached_payload = _result_cache_get(result_cache_key)
+        if cached_payload is not None:
+            result_cache_hit = True
+            return cached_payload
+
         try:
-            out = _calculate_common_dynasty_frame_cached(
-                teams=req.teams,
-                sims=req.sims,
-                horizon=req.horizon,
-                discount=req.discount,
-                hit_c=req.hit_c,
-                hit_1b=req.hit_1b,
-                hit_2b=req.hit_2b,
-                hit_3b=req.hit_3b,
-                hit_ss=req.hit_ss,
-                hit_ci=req.hit_ci,
-                hit_mi=req.hit_mi,
-                hit_of=req.hit_of,
-                hit_ut=req.hit_ut,
-                pit_p=req.pit_p,
-                pit_sp=req.pit_sp,
-                pit_rp=req.pit_rp,
-                bench=req.bench,
-                minors=req.minors,
-                ir=req.ir,
-                ip_min=req.ip_min,
-                ip_max=req.ip_max,
-                two_way=req.two_way,
-                start_year=req.start_year,
-                recent_projections=req.recent_projections,
-            ).copy(deep=True)
+            if req.scoring_mode == "points":
+                out = _calculate_points_dynasty_frame_cached(
+                    teams=req.teams,
+                    horizon=req.horizon,
+                    discount=req.discount,
+                    hit_c=req.hit_c,
+                    hit_1b=req.hit_1b,
+                    hit_2b=req.hit_2b,
+                    hit_3b=req.hit_3b,
+                    hit_ss=req.hit_ss,
+                    hit_ci=req.hit_ci,
+                    hit_mi=req.hit_mi,
+                    hit_of=req.hit_of,
+                    hit_ut=req.hit_ut,
+                    pit_p=req.pit_p,
+                    pit_sp=req.pit_sp,
+                    pit_rp=req.pit_rp,
+                    bench=req.bench,
+                    minors=req.minors,
+                    ir=req.ir,
+                    two_way=req.two_way,
+                    start_year=req.start_year,
+                    recent_projections=req.recent_projections,
+                    pts_hit_1b=req.pts_hit_1b,
+                    pts_hit_2b=req.pts_hit_2b,
+                    pts_hit_3b=req.pts_hit_3b,
+                    pts_hit_hr=req.pts_hit_hr,
+                    pts_hit_r=req.pts_hit_r,
+                    pts_hit_rbi=req.pts_hit_rbi,
+                    pts_hit_sb=req.pts_hit_sb,
+                    pts_hit_bb=req.pts_hit_bb,
+                    pts_hit_so=req.pts_hit_so,
+                    pts_pit_ip=req.pts_pit_ip,
+                    pts_pit_w=req.pts_pit_w,
+                    pts_pit_l=req.pts_pit_l,
+                    pts_pit_k=req.pts_pit_k,
+                    pts_pit_sv=req.pts_pit_sv,
+                    pts_pit_svh=req.pts_pit_svh,
+                    pts_pit_h=req.pts_pit_h,
+                    pts_pit_er=req.pts_pit_er,
+                    pts_pit_bb=req.pts_pit_bb,
+                ).copy(deep=True)
+            else:
+                out = _calculate_common_dynasty_frame_cached(
+                    teams=req.teams,
+                    sims=req.sims,
+                    horizon=req.horizon,
+                    discount=req.discount,
+                    hit_c=req.hit_c,
+                    hit_1b=req.hit_1b,
+                    hit_2b=req.hit_2b,
+                    hit_3b=req.hit_3b,
+                    hit_ss=req.hit_ss,
+                    hit_ci=req.hit_ci,
+                    hit_mi=req.hit_mi,
+                    hit_of=req.hit_of,
+                    hit_ut=req.hit_ut,
+                    pit_p=req.pit_p,
+                    pit_sp=req.pit_sp,
+                    pit_rp=req.pit_rp,
+                    bench=req.bench,
+                    minors=req.minors,
+                    ir=req.ir,
+                    ip_min=req.ip_min,
+                    ip_max=req.ip_max,
+                    two_way=req.two_way,
+                    start_year=req.start_year,
+                    recent_projections=req.recent_projections,
+                ).copy(deep=True)
         except ValueError as calc_error:
             message = str(calc_error)
             if _is_user_fixable_calculation_error(message):
@@ -1676,15 +2483,33 @@ def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
             raise
 
         identity_by_name = _player_identity_by_name()
-        out[PLAYER_KEY_COL] = out["Player"].map(
-            lambda player: identity_by_name.get(str(player or "").strip(), (_normalize_player_key(player), None))[0]
-        )
-        out[PLAYER_ENTITY_KEY_COL] = out["Player"].map(
-            lambda player: identity_by_name.get(str(player or "").strip(), (_normalize_player_key(player), None))[1]
-        )
+        if PLAYER_KEY_COL not in out.columns:
+            out[PLAYER_KEY_COL] = None
+        if PLAYER_ENTITY_KEY_COL not in out.columns:
+            out[PLAYER_ENTITY_KEY_COL] = None
+
+        def _resolve_player_key(row: pd.Series) -> str:
+            player_name = str(row.get("Player") or "").strip()
+            existing_key = str(row.get(PLAYER_KEY_COL) or "").strip()
+            if existing_key:
+                return existing_key
+            mapped_key, _mapped_entity = identity_by_name.get(player_name, (_normalize_player_key(player_name), None))
+            return mapped_key
+
+        def _resolve_entity_key(row: pd.Series) -> str | None:
+            player_name = str(row.get("Player") or "").strip()
+            existing_entity = str(row.get(PLAYER_ENTITY_KEY_COL) or "").strip()
+            if existing_entity:
+                return existing_entity
+            _mapped_key, mapped_entity = identity_by_name.get(player_name, (_normalize_player_key(player_name), None))
+            return mapped_entity
+
+        out[PLAYER_KEY_COL] = out.apply(_resolve_player_key, axis=1)
+        out[PLAYER_ENTITY_KEY_COL] = out.apply(_resolve_entity_key, axis=1)
         out["DynastyMatchStatus"] = out[PLAYER_ENTITY_KEY_COL].map(
             lambda value: "matched" if value else "no_unique_match"
         )
+        explanations = _build_calculation_explanations(out, settings=settings)
 
         # Select output columns
         year_cols = [c for c in out.columns if c.startswith("Value_")]
@@ -1704,11 +2529,14 @@ def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
         records = df.to_dict(orient="records")
         records = _clean_records_for_json(records)
 
-        return {
+        payload = {
             "total": len(records),
             "settings": settings,
             "data": records,
+            "explanations": explanations,
         }
+        _result_cache_set(result_cache_key, payload)
+        return payload
 
     except HTTPException as exc:
         status_code = exc.status_code
@@ -1719,9 +2547,11 @@ def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         duration_ms = round((time.perf_counter() - started) * 1000.0, 1)
-        cache_after = _calculate_common_dynasty_frame_cached.cache_info()
+        cache_after = active_cache.cache_info()
         cache_event = "none"
-        if cache_after.hits > cache_before.hits:
+        if result_cache_hit:
+            cache_event = "result-cache-hit"
+        elif cache_after.hits > cache_before.hits:
             cache_event = "hit"
         elif cache_after.misses > cache_before.misses:
             cache_event = "miss"
@@ -1758,6 +2588,7 @@ def _run_calculation_job(job_id: str, req_payload: dict) -> None:
             job["completed_at"] = now
             job["updated_at"] = now
             job["error"] = None
+            _cache_calculation_job_snapshot(job)
     except HTTPException as exc:
         with CALCULATOR_JOB_LOCK:
             job = CALCULATOR_JOBS.get(job_id)
@@ -1769,6 +2600,7 @@ def _run_calculation_job(job_id: str, req_payload: dict) -> None:
             job["completed_at"] = now
             job["updated_at"] = now
             job["result"] = None
+            _cache_calculation_job_snapshot(job)
     except Exception as exc:
         CALC_LOGGER.exception("calculator job crashed job_id=%s", job_id)
         with CALCULATOR_JOB_LOCK:
@@ -1781,56 +2613,99 @@ def _run_calculation_job(job_id: str, req_payload: dict) -> None:
             job["completed_at"] = now
             job["updated_at"] = now
             job["result"] = None
+            _cache_calculation_job_snapshot(job)
     finally:
         with CALCULATOR_JOB_LOCK:
             _cleanup_calculation_jobs()
 
 
 @app.post("/api/calculate")
-def calculate_dynasty_values(req: CalculateRequest):
+def calculate_dynasty_values(req: CalculateRequest, request: Request):
     """Run the dynasty value calculator and return results as JSON."""
+    _enforce_rate_limit(request, action="calc-sync", limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE)
     return _run_calculate_request(req, source="sync")
 
 
+@app.post("/api/calculate/export")
+def export_calculate_dynasty_values(req: CalculateExportRequest, request: Request):
+    _enforce_rate_limit(request, action="calc-sync", limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE)
+    payload = req.model_dump()
+    export_format = str(payload.pop("format", "csv")).strip().lower()
+    include_explanations = bool(payload.pop("include_explanations", False))
+    calc_req = CalculateRequest(**payload)
+    result = _run_calculate_request(calc_req, source="sync-export")
+    explain_rows = _flatten_explanations_for_export(result.get("explanations", {})) if include_explanations else None
+    return _tabular_export_response(
+        result.get("data", []),
+        filename_base=f"dynasty-rankings-{calc_req.scoring_mode}",
+        file_format="xlsx" if export_format == "xlsx" else "csv",
+        explain_rows=explain_rows,
+    )
+
+
 @app.post("/api/calculate/jobs", status_code=202)
-def create_calculate_dynasty_job(req: CalculateRequest):
+def create_calculate_dynasty_job(req: CalculateRequest, request: Request):
+    _enforce_rate_limit(request, action="calc-job-create", limit_per_minute=CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE)
+    client_ip = _client_ip(request)
     created_at = _iso_now()
     payload = req.model_dump()
+    cache_key = _calc_result_cache_key(payload)
+    cached_result = _result_cache_get(cache_key)
     job_id = uuid4().hex
     job = {
         "job_id": job_id,
-        "status": "queued",
+        "status": "completed" if cached_result is not None else "queued",
         "created_at": created_at,
-        "started_at": None,
-        "completed_at": None,
+        "started_at": created_at if cached_result is not None else None,
+        "completed_at": created_at if cached_result is not None else None,
         "updated_at": created_at,
         "created_ts": time.time(),
+        "client_ip": client_ip,
         "settings": payload,
-        "result": None,
+        "result": cached_result,
         "error": None,
     }
 
     with CALCULATOR_JOB_LOCK:
         _cleanup_calculation_jobs(job["created_ts"])
+        if cached_result is None:
+            active_for_ip = _active_jobs_for_ip(client_ip)
+            if active_for_ip >= CALCULATOR_MAX_ACTIVE_JOBS_PER_IP:
+                raise HTTPException(
+                    status_code=429,
+                    detail=(
+                        "Too many active calculation jobs for this client IP. "
+                        "Wait for an existing job to finish and retry."
+                    ),
+                )
         CALCULATOR_JOBS[job_id] = job
+        if cached_result is not None:
+            _cache_calculation_job_snapshot(job)
 
-    try:
-        CALCULATOR_JOB_EXECUTOR.submit(_run_calculation_job, job_id, payload)
-    except RuntimeError as exc:
-        with CALCULATOR_JOB_LOCK:
-            CALCULATOR_JOBS.pop(job_id, None)
-        raise HTTPException(status_code=503, detail="Calculation worker is unavailable.") from exc
-    CALC_LOGGER.info("calculator job queued job_id=%s settings=%s", job_id, json.dumps(payload, sort_keys=True))
+    if cached_result is None:
+        try:
+            CALCULATOR_JOB_EXECUTOR.submit(_run_calculation_job, job_id, payload)
+        except RuntimeError as exc:
+            with CALCULATOR_JOB_LOCK:
+                CALCULATOR_JOBS.pop(job_id, None)
+            raise HTTPException(status_code=503, detail="Calculation worker is unavailable.") from exc
+        CALC_LOGGER.info("calculator job queued job_id=%s settings=%s", job_id, json.dumps(payload, sort_keys=True))
+    else:
+        CALC_LOGGER.info("calculator job cache-hit job_id=%s settings=%s", job_id, json.dumps(payload, sort_keys=True))
 
     return _calculation_job_public_payload(job)
 
 
 @app.get("/api/calculate/jobs/{job_id}")
-def get_calculate_dynasty_job(job_id: str):
+def get_calculate_dynasty_job(job_id: str, request: Request):
+    _enforce_rate_limit(request, action="calc-job-status", limit_per_minute=CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE)
     with CALCULATOR_JOB_LOCK:
         _cleanup_calculation_jobs()
         job = CALCULATOR_JOBS.get(job_id)
         if job is None:
+            cached_job = _cached_calculation_job_snapshot(job_id)
+            if cached_job is not None:
+                return cached_job
             raise HTTPException(status_code=404, detail="Calculation job not found or expired.")
         return _calculation_job_public_payload(job)
 

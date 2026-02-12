@@ -580,9 +580,15 @@ class CalculatorValidationTests(unittest.TestCase):
 
     def setUp(self) -> None:
         app_module._calculate_common_dynasty_frame_cached.cache_clear()
+        app_module._calculate_points_dynasty_frame_cached.cache_clear()
         app_module._playable_pool_counts_by_year.cache_clear()
         with app_module.CALCULATOR_JOB_LOCK:
             app_module.CALCULATOR_JOBS.clear()
+        with app_module.CALC_RESULT_CACHE_LOCK:
+            app_module.CALC_RESULT_CACHE.clear()
+            app_module.CALC_RESULT_CACHE_ORDER.clear()
+        with app_module.REQUEST_RATE_LIMIT_LOCK:
+            app_module.REQUEST_RATE_LIMIT_BUCKETS.clear()
 
     def test_calculate_request_default_horizon_is_twenty(self) -> None:
         req = app_module.CalculateRequest()
@@ -620,6 +626,33 @@ class CalculatorValidationTests(unittest.TestCase):
                 "pit_p": 0,
                 "pit_sp": 0,
                 "pit_rp": 0,
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_points_mode_requires_non_zero_scoring_rule(self) -> None:
+        response = self.client.post(
+            "/api/calculate",
+            json={
+                "scoring_mode": "points",
+                "pts_hit_1b": 0,
+                "pts_hit_2b": 0,
+                "pts_hit_3b": 0,
+                "pts_hit_hr": 0,
+                "pts_hit_r": 0,
+                "pts_hit_rbi": 0,
+                "pts_hit_sb": 0,
+                "pts_hit_bb": 0,
+                "pts_hit_so": 0,
+                "pts_pit_ip": 0,
+                "pts_pit_w": 0,
+                "pts_pit_l": 0,
+                "pts_pit_k": 0,
+                "pts_pit_sv": 0,
+                "pts_pit_svh": 0,
+                "pts_pit_h": 0,
+                "pts_pit_er": 0,
+                "pts_pit_bb": 0,
             },
         )
         self.assertEqual(response.status_code, 422)
@@ -820,6 +853,123 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(captured_kwargs.get("pitcher_slots", {}).get("RP"), 1)
         self.assertEqual(captured_kwargs.get("ir_slots"), 4)
 
+    def test_points_mode_respects_custom_scoring_weights(self) -> None:
+        bat_rows = [
+            {
+                "Player": "Dual Threat",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "Age": 28,
+                "H": 30,
+                "2B": 5,
+                "3B": 0,
+                "HR": 10,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "PlayerKey": "dual-threat",
+                "PlayerEntityKey": "dual-threat",
+            }
+        ]
+        pit_rows = [
+            {
+                "Player": "Dual Threat",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "SP",
+                "Age": 28,
+                "IP": 100,
+                "W": 10,
+                "L": 5,
+                "K": 120,
+                "SV": 0,
+                "SVH": 0,
+                "H": 80,
+                "ER": 30,
+                "BB": 25,
+                "PlayerKey": "dual-threat",
+                "PlayerEntityKey": "dual-threat",
+            }
+        ]
+
+        base_payload = {
+            "scoring_mode": "points",
+            "start_year": 2026,
+            "horizon": 1,
+            "teams": 2,
+            "hit_c": 1,
+            "hit_1b": 0,
+            "hit_2b": 0,
+            "hit_3b": 0,
+            "hit_ss": 0,
+            "hit_ci": 0,
+            "hit_mi": 0,
+            "hit_of": 0,
+            "hit_ut": 0,
+            "pit_p": 1,
+            "pit_sp": 0,
+            "pit_rp": 0,
+            "bench": 0,
+            "minors": 0,
+            "ir": 0,
+            "pts_hit_1b": 0,
+            "pts_hit_2b": 0,
+            "pts_hit_3b": 0,
+            "pts_hit_r": 0,
+            "pts_hit_rbi": 0,
+            "pts_hit_sb": 0,
+            "pts_hit_bb": 0,
+            "pts_hit_so": 0,
+            "pts_pit_ip": 0,
+            "pts_pit_w": 0,
+            "pts_pit_l": 0,
+            "pts_pit_k": 0,
+            "pts_pit_sv": 0,
+            "pts_pit_svh": 0,
+            "pts_pit_h": 0,
+            "pts_pit_er": 0,
+            "pts_pit_bb": 0,
+        }
+
+        with patch.object(app_module, "_refresh_data_if_needed", return_value=None), patch.object(
+            app_module,
+            "META",
+            {"years": [2026]},
+        ), patch.object(
+            app_module,
+            "BAT_DATA",
+            bat_rows,
+        ), patch.object(
+            app_module,
+            "PIT_DATA",
+            pit_rows,
+        ), patch.object(
+            app_module,
+            "BAT_DATA_RAW",
+            bat_rows,
+        ), patch.object(
+            app_module,
+            "PIT_DATA_RAW",
+            pit_rows,
+        ), patch.object(
+            app_module,
+            "_player_identity_by_name",
+            return_value={"Dual Threat": ("dual-threat", "dual-threat")},
+        ):
+            low_hr = self.client.post("/api/calculate", json={**base_payload, "pts_hit_hr": 2})
+            high_hr = self.client.post("/api/calculate", json={**base_payload, "pts_hit_hr": 4})
+
+        self.assertEqual(low_hr.status_code, 200)
+        self.assertEqual(high_hr.status_code, 200)
+        low_raw = low_hr.json()["data"][0]["RawDynastyValue"]
+        high_raw = high_hr.json()["data"][0]["RawDynastyValue"]
+        self.assertEqual(low_raw, 20.0)
+        self.assertEqual(high_raw, 40.0)
+        self.assertGreater(high_raw, low_raw)
+
     def test_meta_includes_calculator_guardrails_payload(self) -> None:
         with patch.object(
             app_module,
@@ -833,7 +983,147 @@ class CalculatorValidationTests(unittest.TestCase):
         guardrails = payload.get("calculator_guardrails", {})
         self.assertEqual(guardrails.get("hitters_per_team"), 13)
         self.assertEqual(guardrails.get("pitchers_per_team"), 9)
+        self.assertIn("default_points_scoring", guardrails)
         self.assertIn("playable_by_year", guardrails)
+
+    def test_calculate_response_includes_explanations_payload(self) -> None:
+        fake_out = pd.DataFrame(
+            [
+                {
+                    "Player": "Jane Roe",
+                    "Team": "SEA",
+                    "Pos": "OF",
+                    "Age": 26,
+                    "DynastyValue": 5.0,
+                    "RawDynastyValue": 6.0,
+                    "minor_eligible": False,
+                    "Value_2026": 5.0,
+                }
+            ]
+        )
+
+        class FakeSettings:
+            def __init__(self, **kwargs) -> None:
+                self.kwargs = kwargs
+
+        def fake_calculate(*args, **kwargs):
+            return fake_out
+
+        fake_module = types.SimpleNamespace(
+            CommonDynastyRotoSettings=FakeSettings,
+            calculate_common_dynasty_values=fake_calculate,
+        )
+
+        with patch.object(app_module, "_refresh_data_if_needed", return_value=None), patch.object(
+            app_module,
+            "META",
+            {"years": [2026]},
+        ), patch.object(
+            app_module,
+            "_player_identity_by_name",
+            return_value={"Jane Roe": ("jane-roe", "jane-roe")},
+        ), patch.dict(
+            sys.modules,
+            {"dynasty_roto_values": fake_module},
+        ):
+            response = self.client.post("/api/calculate", json={})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("explanations", payload)
+        explanation = payload["explanations"]["jane-roe"]
+        self.assertEqual(explanation["player"], "Jane Roe")
+        self.assertEqual(explanation["mode"], "roto")
+        self.assertEqual(explanation["per_year"][0]["year"], 2026)
+
+    def test_projection_export_csv_endpoint(self) -> None:
+        sample_rows = [{"Player": "Jane Roe", "Team": "SEA", "Year": 2026, "Pos": "OF"}]
+        with patch.object(app_module, "BAT_DATA", sample_rows), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get("/api/projections/export/bat?format=csv&include_dynasty=false")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/csv", response.headers.get("content-type", ""))
+        self.assertIn("Player", response.text)
+
+    def test_calculate_export_xlsx_endpoint(self) -> None:
+        fake_out = pd.DataFrame(
+            [
+                {
+                    "Player": "Jane Roe",
+                    "Team": "SEA",
+                    "Pos": "OF",
+                    "Age": 26,
+                    "DynastyValue": 5.0,
+                    "RawDynastyValue": 6.0,
+                    "minor_eligible": False,
+                    "Value_2026": 5.0,
+                }
+            ]
+        )
+
+        class FakeSettings:
+            def __init__(self, **kwargs) -> None:
+                self.kwargs = kwargs
+
+        def fake_calculate(*args, **kwargs):
+            return fake_out
+
+        fake_module = types.SimpleNamespace(
+            CommonDynastyRotoSettings=FakeSettings,
+            calculate_common_dynasty_values=fake_calculate,
+        )
+
+        with patch.object(app_module, "_refresh_data_if_needed", return_value=None), patch.object(
+            app_module,
+            "META",
+            {"years": [2026]},
+        ), patch.object(
+            app_module,
+            "_player_identity_by_name",
+            return_value={"Jane Roe": ("jane-roe", "jane-roe")},
+        ), patch.dict(
+            sys.modules,
+            {"dynasty_roto_values": fake_module},
+        ):
+            response = self.client.post("/api/calculate/export", json={"format": "xlsx", "include_explanations": True})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            response.headers.get("content-type", ""),
+        )
+        self.assertTrue(response.content.startswith(b"PK"))
+
+    def test_rate_limit_enforced_for_sync_calculate(self) -> None:
+        with patch.object(app_module, "CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE", 1), patch.object(
+            app_module,
+            "_run_calculate_request",
+            return_value={"total": 0, "settings": {}, "data": [], "explanations": {}},
+        ):
+            first = self.client.post("/api/calculate", json={})
+            second = self.client.post("/api/calculate", json={})
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 429)
+
+    def test_active_job_cap_enforced_per_ip(self) -> None:
+        queued_payload = {"total": 0, "settings": {}, "data": [], "explanations": {}}
+
+        def never_finishes(*args, **kwargs):
+            return queued_payload
+
+        with patch.object(app_module, "CALCULATOR_MAX_ACTIVE_JOBS_PER_IP", 1), patch.object(
+            app_module.CALCULATOR_JOB_EXECUTOR,
+            "submit",
+            return_value=None,
+        ):
+            first = self.client.post("/api/calculate/jobs", json={})
+            second = self.client.post("/api/calculate/jobs", json={})
+
+        self.assertEqual(first.status_code, 202)
+        self.assertEqual(second.status_code, 429)
 
     def test_calculation_job_lifecycle_success(self) -> None:
         fake_result = {"total": 1, "settings": {}, "data": [{"Player": "Jane Roe"}]}
