@@ -1239,6 +1239,8 @@ def compute_year_context(year: int, bat: pd.DataFrame, pit: pd.DataFrame, lg: Co
         "year": year,
         "bat_y": bat_y,
         "pit_y": pit_y,
+        "assigned_hit": assigned_hit,
+        "assigned_pit": assigned_pit,
         "baseline_hit": baseline_hit,
         "baseline_pit": baseline_pit,
         "base_hit_tot": base_hit_tot,
@@ -1693,6 +1695,40 @@ def infer_minor_eligible(bat: pd.DataFrame, pit: pd.DataFrame, lg: CommonDynasty
     return m[["Player", "minor_eligible"]]
 
 
+def _non_vacant_player_names(df: Optional[pd.DataFrame]) -> Set[str]:
+    """Collect non-placeholder player names from an assignment table."""
+    if df is None or df.empty or "Player" not in df.columns:
+        return set()
+    names = df["Player"].dropna().astype(str)
+    return {name for name in names if name and not name.startswith("__VACANT_")}
+
+
+def _select_mlb_roster_with_active_floor(
+    stash_sorted: pd.DataFrame,
+    *,
+    excluded_players: Set[str],
+    total_mlb_slots: int,
+    active_floor_names: Set[str],
+) -> pd.DataFrame:
+    """Pick MLB rostered players while guaranteeing active-floor names when possible."""
+    remaining = stash_sorted[~stash_sorted["Player"].isin(excluded_players)].copy()
+    if total_mlb_slots <= 0 or remaining.empty:
+        return remaining.iloc[0:0].copy()
+
+    floor = remaining[remaining["Player"].isin(active_floor_names)].copy()
+    floor = floor.sort_values("StashScore", ascending=False)
+    if len(floor) > total_mlb_slots:
+        floor = floor.head(total_mlb_slots).copy()
+
+    floor_names = set(floor["Player"]) if not floor.empty else set()
+    fill_needed = max(total_mlb_slots - len(floor), 0)
+    if fill_needed == 0:
+        return floor.reset_index(drop=True)
+
+    fill = remaining[~remaining["Player"].isin(floor_names)].head(fill_needed).copy()
+    return pd.concat([floor, fill], ignore_index=True)
+
+
 
 def _fillna_bool(series: pd.Series, default: bool = False) -> pd.Series:
     """
@@ -1863,6 +1899,12 @@ def calculate_common_dynasty_values(
         combined = combine_two_way(hit_vals, pit_vals, two_way=lg.two_way)
         year_tables_avg.append(combined)
 
+    start_ctx = year_contexts.get(start_year, {})
+    active_floor_names = (
+        _non_vacant_player_names(start_ctx.get("assigned_hit"))
+        | _non_vacant_player_names(start_ctx.get("assigned_pit"))
+    )
+
     all_year_avg = pd.concat(year_tables_avg, ignore_index=True)
     wide_avg = all_year_avg.pivot_table(index="Player", columns="Year", values="YearValue", aggfunc="max").reset_index()
     for y in years:
@@ -1900,8 +1942,12 @@ def calculate_common_dynasty_values(
     extra_minors = remaining.head(extra_minor_needed)
     extra_minor_names = set(extra_minors["Player"])
 
-    remaining = remaining[~remaining["Player"].isin(extra_minor_names)]
-    mlb_sel = remaining.head(total_mlb_slots)
+    mlb_sel = _select_mlb_roster_with_active_floor(
+        stash_sorted,
+        excluded_players=minor_names | extra_minor_names,
+        total_mlb_slots=total_mlb_slots,
+        active_floor_names=active_floor_names,
+    )
     rostered_names: Set[str] = set(mlb_sel["Player"]) | minor_names | extra_minor_names
 
     # PASS 2: replacement-level per-year values from the unrostered pool.

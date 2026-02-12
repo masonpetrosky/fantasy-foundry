@@ -1546,6 +1546,7 @@ function ProjectionsExplorer({ meta }) {
           <table>
             <thead>
               <tr>
+                <th style={{width:40}}>#</th>
                 {cols.map(c => (
                   <th
                     key={c}
@@ -1561,19 +1562,23 @@ function ProjectionsExplorer({ meta }) {
             <tbody>
               {loading ? (
                 Array.from({length: 15}).map((_,i) => (
-                  <tr key={i}>{cols.map((c,j) => <td key={j}><div className="loading-shimmer" style={{width: c==="Player"?120:50}}/></td>)}</tr>
+                  <tr key={i}>
+                    <td><div className="loading-shimmer" style={{width: 24}}/></td>
+                    {cols.map((c,j) => <td key={j}><div className="loading-shimmer" style={{width: c==="Player"?120:50}}/></td>)}
+                  </tr>
                 ))
               ) : error ? (
                 <tr>
-                  <td colSpan={cols.length} style={{textAlign:"center",padding:"40px",color:"var(--red)"}}>
+                  <td colSpan={cols.length + 1} style={{textAlign:"center",padding:"40px",color:"var(--red)"}}>
                     Unable to load projections. {error}
                   </td>
                 </tr>
               ) : page.length === 0 ? (
-                <tr><td colSpan={cols.length} style={{textAlign:"center",padding:"40px",color:"var(--text-muted)"}}>No results found</td></tr>
+                <tr><td colSpan={cols.length + 1} style={{textAlign:"center",padding:"40px",color:"var(--text-muted)"}}>No results found</td></tr>
               ) : (
                 page.map((row, i) => (
                   <tr key={i}>
+                    <td className="num" style={{color:"var(--text-muted)"}}>{offset + i + 1}</td>
                     {cols.map(c => {
                       const val = row[c];
                       if (c === "Player") return <td key={c} className="player-name">{val}</td>;
@@ -1798,22 +1803,11 @@ function DynastyCalculator({ meta }) {
     })();
   }
 
-  const filtered = useMemo(() => {
+  const sortedAll = useMemo(() => {
     if (!results) return [];
-    let d = results.data;
-    if (search) {
-      const q = search.toLowerCase();
-      d = d.filter(r => r.Player?.toLowerCase().includes(q));
-    }
-    if (posFilter) {
-      d = d.filter(r => (r.Pos || "").toUpperCase().includes(posFilter.toUpperCase()));
-    }
-    return d;
-  }, [results, search, posFilter]);
-
-  const sorted = useMemo(() => {
-    if (!sortCol) return filtered;
-    return [...filtered].sort((a, b) => {
+    const source = Array.isArray(results.data) ? results.data : [];
+    if (!sortCol) return source;
+    return [...source].sort((a, b) => {
       let av = a[sortCol], bv = b[sortCol];
       if (sortCol === "Player" || sortCol === "Team" || sortCol === "Pos") {
         const avText = String(av ?? "").trim();
@@ -1829,7 +1823,19 @@ function DynastyCalculator({ meta }) {
       const safeBv = Number.isFinite(bvNum) ? bvNum : -Infinity;
       return sortDir === "asc" ? safeAv - safeBv : safeBv - safeAv;
     });
-  }, [filtered, sortCol, sortDir]);
+  }, [results, sortCol, sortDir]);
+
+  const rankedFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const posNeedle = posFilter.trim().toUpperCase();
+    return sortedAll
+      .map((row, idx) => ({ row, rank: idx + 1 }))
+      .filter(({ row }) => {
+        if (q && !(row.Player || "").toLowerCase().includes(q)) return false;
+        if (posNeedle && !(row.Pos || "").toUpperCase().includes(posNeedle)) return false;
+        return true;
+      });
+  }, [sortedAll, search, posFilter]);
 
   function handleSort(col) {
     if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -2012,7 +2018,7 @@ function DynastyCalculator({ meta }) {
                   <option value="">All Positions</option>
                   {["C","1B","2B","3B","SS","OF","SP","RP"].map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
-                <span className="result-count">{sorted.length} players</span>
+                <span className="result-count">{rankedFiltered.length} players</span>
               </div>
               <div className="table-wrapper">
                 <div className="table-scroll">
@@ -2033,9 +2039,9 @@ function DynastyCalculator({ meta }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {sorted.slice(0, 300).map((row, i) => (
+                      {rankedFiltered.slice(0, 300).map(({ row, rank }, i) => (
                         <tr key={i}>
-                          <td className="num" style={{color:"var(--text-muted)"}}>{i + 1}</td>
+                          <td className="num" style={{color:"var(--text-muted)"}}>{rank}</td>
                           {displayCols.map(c => {
                             const val = row[c];
                             if (c === "Player") return <td key={c} className="player-name">{val}</td>;
