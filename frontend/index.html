@@ -383,6 +383,13 @@ thead th {
   transition: color 0.15s;
 }
 
+thead th.player-col {
+  position: sticky;
+  left: 0;
+  z-index: 15;
+  background: var(--bg-tertiary);
+}
+
 thead th:hover { color: var(--accent); }
 thead th.sorted { color: var(--accent); }
 thead th .sort-arrow { margin-left: 4px; font-size: 0.65rem; }
@@ -675,12 +682,8 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   }
 
   td.player-name {
-    position: static;
-    background: transparent;
     min-width: 140px;
   }
-
-  tr:hover td.player-name { background: transparent; }
 }
 
 @media (max-width: 768px) {
@@ -1492,7 +1495,11 @@ function ProjectionsExplorer({ meta }) {
             <thead>
               <tr>
                 {cols.map(c => (
-                  <th key={c} className={sortCol === c ? "sorted" : ""} onClick={() => handleSort(c)}>
+                  <th
+                    key={c}
+                    className={`${sortCol === c ? "sorted" : ""}${c === "Player" ? " player-col" : ""}`.trim()}
+                    onClick={() => handleSort(c)}
+                  >
                     {colLabels[c] || c}
                     {sortCol === c && <span className="sort-arrow">{sortDir === "asc" ? "▲" : "▼"}</span>}
                   </th>
@@ -1850,7 +1857,11 @@ function DynastyCalculator({ meta }) {
                       <tr>
                         <th style={{width:40}}>#</th>
                         {displayCols.map(c => (
-                          <th key={c} className={sortCol === c ? "sorted" : ""} onClick={() => handleSort(c)}>
+                          <th
+                            key={c}
+                            className={`${sortCol === c ? "sorted" : ""}${c === "Player" ? " player-col" : ""}`.trim()}
+                            onClick={() => handleSort(c)}
+                          >
                             {c.replace("Value_", "")}
                             {sortCol === c && <span className="sort-arrow">{sortDir === "asc" ? "▲" : "▼"}</span>}
                           </th>
