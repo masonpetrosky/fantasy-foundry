@@ -58,6 +58,9 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.client = TestClient(app_module.app)
 
+    def setUp(self) -> None:
+        app_module._cached_projection_rows.cache_clear()
+
     def test_bat_limit_must_be_positive(self) -> None:
         response = self.client.get("/api/projections/bat", params={"limit": 0})
         self.assertEqual(response.status_code, 422)
@@ -255,6 +258,34 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers.get("content-encoding"), "gzip")
         self.assertEqual(response.headers.get("vary"), "Accept-Encoding")
+
+    def test_projection_filters_are_cached_across_paginated_requests(self) -> None:
+        sample_rows = [
+            {"Player": f"Player {idx}", "Team": "NYY", "Year": 2026, "Pos": "OF"}
+            for idx in range(10)
+        ]
+
+        with patch.object(app_module, "BAT_DATA", sample_rows), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ), patch.object(
+            app_module,
+            "filter_records",
+            wraps=app_module.filter_records,
+        ) as filter_spy:
+            first = self.client.get(
+                "/api/projections/bat",
+                params={"team": "NYY", "include_dynasty": "false", "limit": 3, "offset": 0},
+            )
+            second = self.client.get(
+                "/api/projections/bat",
+                params={"team": "NYY", "include_dynasty": "false", "limit": 3, "offset": 3},
+            )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(filter_spy.call_count, 1)
 
 
 class CalculatorValidationTests(unittest.TestCase):

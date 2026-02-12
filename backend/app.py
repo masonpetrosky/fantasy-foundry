@@ -51,6 +51,7 @@ DERIVED_PIT_RATE_COLS = {"ERA", "WHIP"}
 TEAM_COL_CANDIDATES = ("Team", "MLBTeam")
 YEAR_RANGE_TOKEN_RE = re.compile(r"^(\d{4})\s*-\s*(\d{4})$")
 POSITION_TOKEN_SPLIT_RE = re.compile(r"[,\s/]+")
+PROJECTION_QUERY_CACHE_MAXSIZE = 256
 
 
 def _pick_first_existing_col(df: pd.DataFrame, candidates: list[str] | tuple[str, ...]) -> str | None:
@@ -297,7 +298,7 @@ def _get_default_dynasty_lookup() -> tuple[dict[str, dict], list[str]]:
 
         lg = CommonDynastyRotoSettings(
             n_teams=12,
-            sims_for_sgp=100,
+            sims_for_sgp=300,
             horizon_years=horizon,
             discount=0.85,
             bench_slots=6,
@@ -442,6 +443,7 @@ def _refresh_data_if_needed() -> None:
             traceback.print_exc()
             return
 
+        _cached_projection_rows.cache_clear()
         _get_default_dynasty_lookup.cache_clear()
         _DATA_SOURCE_SIGNATURE = current_signature
 
@@ -501,6 +503,10 @@ def _position_tokens(value: object) -> set[str]:
     return {token for token in POSITION_TOKEN_SPLIT_RE.split(text) if token}
 
 
+def _normalize_filter_value(value: str | None) -> str:
+    return (value or "").strip()
+
+
 def filter_records(
     records,
     player: str | None,
@@ -531,6 +537,58 @@ def filter_records(
     return out
 
 
+@lru_cache(maxsize=PROJECTION_QUERY_CACHE_MAXSIZE)
+def _cached_projection_rows(
+    dataset: Literal["bat", "pitch"],
+    player: str,
+    team: str,
+    year: int | None,
+    years: str,
+    pos: str,
+    include_dynasty: bool,
+    dynasty_years: str,
+) -> tuple[dict, ...]:
+    valid_years = _coerce_meta_years(META)
+    requested_years = _resolve_projection_year_filter(year, years or None, valid_years=valid_years)
+    records = BAT_DATA if dataset == "bat" else PIT_DATA
+    filtered = filter_records(
+        records,
+        player or None,
+        team or None,
+        requested_years,
+        pos or None,
+    )
+    if include_dynasty:
+        filtered = _attach_dynasty_values(
+            filtered,
+            _parse_dynasty_years(dynasty_years or None, valid_years=valid_years),
+        )
+    return tuple(filtered)
+
+
+def _get_projection_rows(
+    dataset: Literal["bat", "pitch"],
+    *,
+    player: str | None,
+    team: str | None,
+    year: int | None,
+    years: str | None,
+    pos: str | None,
+    include_dynasty: bool,
+    dynasty_years: str | None,
+) -> tuple[dict, ...]:
+    return _cached_projection_rows(
+        dataset,
+        _normalize_filter_value(player),
+        _normalize_filter_value(team),
+        year,
+        _normalize_filter_value(years),
+        _normalize_filter_value(pos),
+        include_dynasty,
+        _normalize_filter_value(dynasty_years),
+    )
+
+
 @app.get("/api/projections/bat")
 def get_bat_projections(
     player: Optional[str] = None,
@@ -544,13 +602,18 @@ def get_bat_projections(
     offset: int = Query(default=0, ge=0),
 ):
     _refresh_data_if_needed()
-    valid_years = _coerce_meta_years(META)
-    requested_years = _resolve_projection_year_filter(year, years, valid_years=valid_years)
-    filtered = filter_records(BAT_DATA, player, team, requested_years, pos)
+    filtered = _get_projection_rows(
+        "bat",
+        player=player,
+        team=team,
+        year=year,
+        years=years,
+        pos=pos,
+        include_dynasty=include_dynasty,
+        dynasty_years=dynasty_years,
+    )
     total = len(filtered)
-    page = filtered[offset : offset + limit]
-    if include_dynasty:
-        page = _attach_dynasty_values(page, _parse_dynasty_years(dynasty_years, valid_years=valid_years))
+    page = list(filtered[offset : offset + limit])
     return {"total": total, "offset": offset, "limit": limit, "data": page}
 
 
@@ -567,13 +630,18 @@ def get_pitch_projections(
     offset: int = Query(default=0, ge=0),
 ):
     _refresh_data_if_needed()
-    valid_years = _coerce_meta_years(META)
-    requested_years = _resolve_projection_year_filter(year, years, valid_years=valid_years)
-    filtered = filter_records(PIT_DATA, player, team, requested_years, pos)
+    filtered = _get_projection_rows(
+        "pitch",
+        player=player,
+        team=team,
+        year=year,
+        years=years,
+        pos=pos,
+        include_dynasty=include_dynasty,
+        dynasty_years=dynasty_years,
+    )
     total = len(filtered)
-    page = filtered[offset : offset + limit]
-    if include_dynasty:
-        page = _attach_dynasty_values(page, _parse_dynasty_years(dynasty_years, valid_years=valid_years))
+    page = list(filtered[offset : offset + limit])
     return {"total": total, "offset": offset, "limit": limit, "data": page}
 
 
@@ -583,7 +651,7 @@ def get_pitch_projections(
 class CalculateRequest(BaseModel):
     mode: Literal["common"] = "common"
     teams: int = Field(default=12, ge=2, le=30)
-    sims: int = Field(default=100, ge=1, le=5000)
+    sims: int = Field(default=300, ge=1, le=5000)
     horizon: int = Field(default=10, ge=1, le=20)
     discount: float = Field(default=0.85, gt=0.0, le=1.0)
     bench: int = Field(default=6, ge=0, le=40)

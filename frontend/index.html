@@ -80,7 +80,8 @@ nav {
   justify-content: flex-end;
 }
 
-nav a {
+nav a,
+nav button {
   color: var(--text-secondary);
   text-decoration: none;
   font-size: 0.875rem;
@@ -89,8 +90,17 @@ nav a {
   border-radius: 6px;
   transition: all 0.2s;
   cursor: pointer;
+  border: none;
+  background: transparent;
+  font-family: inherit;
 }
-nav a:hover, nav a.active { color: var(--text-primary); background: var(--bg-tertiary); }
+nav a:hover,
+nav button:hover,
+nav a.active,
+nav button.active {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
 
 /* ====== HERO ====== */
 .hero {
@@ -841,6 +851,102 @@ function parsePosTokens(posValue) {
     .filter(Boolean);
 }
 
+const DEFAULT_PROJECTIONS_TAB = "all";
+
+function formatApiError(status, payload) {
+  const detail = payload && payload.detail;
+  if (typeof detail === "string" && detail.trim()) {
+    return `Server error ${status}: ${detail}`;
+  }
+  if (Array.isArray(detail) && detail.length > 0) {
+    const first = detail[0];
+    if (first && typeof first.msg === "string") {
+      return `Validation error (${status}): ${first.msg}`;
+    }
+  }
+  return `Server error: ${status}`;
+}
+
+function buildCalculatorPayload(settings, availableYears) {
+  const teams = Number(settings.teams);
+  if (!Number.isInteger(teams) || teams < 2 || teams > 30) {
+    return { error: "Teams must be an integer between 2 and 30." };
+  }
+
+  const sims = Number(settings.sims);
+  if (!Number.isInteger(sims) || sims < 1 || sims > 5000) {
+    return { error: "Simulations must be an integer between 1 and 5000." };
+  }
+
+  const horizon = Number(settings.horizon);
+  if (!Number.isInteger(horizon) || horizon < 1 || horizon > 20) {
+    return { error: "Horizon must be an integer between 1 and 20." };
+  }
+
+  const discount = Number(settings.discount);
+  if (!Number.isFinite(discount) || discount <= 0 || discount > 1) {
+    return { error: "Discount must be a number greater than 0 and up to 1." };
+  }
+
+  const bench = Number(settings.bench);
+  if (!Number.isInteger(bench) || bench < 0 || bench > 40) {
+    return { error: "Bench slots must be an integer between 0 and 40." };
+  }
+
+  const minors = Number(settings.minors);
+  if (!Number.isInteger(minors) || minors < 0 || minors > 60) {
+    return { error: "Minor slots must be an integer between 0 and 60." };
+  }
+
+  const ipMin = Number(settings.ip_min);
+  if (!Number.isFinite(ipMin) || ipMin < 0) {
+    return { error: "IP Min must be a non-negative number." };
+  }
+
+  const ipMaxText = String(settings.ip_max ?? "").trim();
+  let ipMax = null;
+  if (ipMaxText && ipMaxText.toLowerCase() !== "none") {
+    const parsedIpMax = Number(ipMaxText);
+    if (!Number.isFinite(parsedIpMax) || parsedIpMax < 0) {
+      return { error: "IP Max must be a non-negative number or 'none'." };
+    }
+    ipMax = parsedIpMax;
+  }
+
+  if (ipMax != null && ipMax < ipMin) {
+    return { error: "IP Max must be greater than or equal to IP Min." };
+  }
+
+  const startYear = Number(settings.start_year);
+  if (!Number.isInteger(startYear)) {
+    return { error: "Start Year must be an integer." };
+  }
+  if (Array.isArray(availableYears) && availableYears.length > 0 && !availableYears.includes(startYear)) {
+    return { error: "Start Year must match an available projection year." };
+  }
+
+  const recentProjections = Number(settings.recent_projections);
+  if (!Number.isInteger(recentProjections) || recentProjections < 1 || recentProjections > 10) {
+    return { error: "Recent Proj. must be an integer between 1 and 10." };
+  }
+
+  return {
+    payload: {
+      ...settings,
+      teams,
+      sims,
+      horizon,
+      discount,
+      bench,
+      minors,
+      ip_min: ipMin,
+      ip_max: ipMax,
+      start_year: startYear,
+      recent_projections: recentProjections,
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
@@ -876,8 +982,22 @@ function App() {
         <div className="nav-inner">
           <a className="logo" href="#">Dynasty Projections <span>2026–2045</span></a>
           <nav>
-            <a className={section === "projections" ? "active" : ""} onClick={() => setSection("projections")}>Projections</a>
-            <a className={section === "calculator" ? "active" : ""} onClick={() => setSection("calculator")}>Dynasty Calculator</a>
+            <button
+              type="button"
+              className={section === "projections" ? "active" : ""}
+              onClick={() => setSection("projections")}
+              aria-pressed={section === "projections"}
+            >
+              Projections
+            </button>
+            <button
+              type="button"
+              className={section === "calculator" ? "active" : ""}
+              onClick={() => setSection("calculator")}
+              aria-pressed={section === "calculator"}
+            >
+              Dynasty Calculator
+            </button>
           </nav>
         </div>
       </header>
@@ -949,7 +1069,7 @@ function App() {
 // Projections Explorer
 // ---------------------------------------------------------------------------
 function ProjectionsExplorer({ meta }) {
-  const [tab, setTab] = useState("all"); // all | bat | pitch
+  const [tab, setTab] = useState(DEFAULT_PROJECTIONS_TAB); // all | bat | pitch
   const [search, setSearch] = useState("");
   const [teamFilter, setTeamFilter] = useState("");
   const [yearFilter, setYearFilter] = useState(() => String(meta.years?.[0] ?? ""));
@@ -1063,6 +1183,16 @@ function ProjectionsExplorer({ meta }) {
   }, [tab, search, teamFilter, yearFilter, posFilters, selectedDynastyYears]);
 
   useEffect(() => {
+    // Ensure first entry into this view always lands on the combined tab.
+    setTab(DEFAULT_PROJECTIONS_TAB);
+    setSortCol("DynastyValue");
+    setSortDir("desc");
+    setOffset(0);
+    setPosFilters([]);
+    setShowPosMenu(false);
+  }, []);
+
+  useEffect(() => {
     const timer = setTimeout(fetchData, 300);
     return () => {
       clearTimeout(timer);
@@ -1142,11 +1272,19 @@ function ProjectionsExplorer({ meta }) {
         bv = Number.isFinite(bvTs) ? bvTs : -Infinity;
         return sortDir === "asc" ? av - bv : bv - av;
       }
-      if (typeof av === "string") {
-        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      if (["Player", "Team", "Pos", "Type"].includes(sortCol)) {
+        const avText = String(av ?? "").trim();
+        const bvText = String(bv ?? "").trim();
+        if (!avText && !bvText) return 0;
+        if (!avText) return 1;
+        if (!bvText) return -1;
+        return sortDir === "asc" ? avText.localeCompare(bvText) : bvText.localeCompare(avText);
       }
-      av = av ?? -Infinity; bv = bv ?? -Infinity;
-      return sortDir === "asc" ? av - bv : bv - av;
+      const avNum = Number(av);
+      const bvNum = Number(bv);
+      const safeAv = Number.isFinite(avNum) ? avNum : -Infinity;
+      const safeBv = Number.isFinite(bvNum) ? bvNum : -Infinity;
+      return sortDir === "asc" ? safeAv - safeBv : safeBv - safeAv;
     });
   }, [data, sortCol, sortDir]);
 
@@ -1157,7 +1295,7 @@ function ProjectionsExplorer({ meta }) {
       setSortDir(d => d === "asc" ? "desc" : "asc");
     } else {
       setSortCol(col);
-      setSortDir(col === "Player" || col === "Team" || col === "Pos" ? "asc" : "desc");
+      setSortDir(col === "Player" || col === "Team" || col === "Pos" || col === "Type" ? "asc" : "desc");
     }
   }
 
@@ -1195,9 +1333,9 @@ function ProjectionsExplorer({ meta }) {
   return (
     <div className="fade-up fade-up-1">
       <div className="section-tabs">
-        <button className={`section-tab ${tab==="all"?"active":""}`} onClick={() => {setTab("all"); setSortCol("DynastyValue"); setSortDir("desc"); setOffset(0); setPosFilters([]); setShowPosMenu(false);}}>All</button>
-        <button className={`section-tab ${tab==="bat"?"active":""}`} onClick={() => {setTab("bat"); setSortCol("DynastyValue"); setSortDir("desc"); setOffset(0); setPosFilters([]); setShowPosMenu(false);}}>Hitters</button>
-        <button className={`section-tab ${tab==="pitch"?"active":""}`} onClick={() => {setTab("pitch"); setSortCol("DynastyValue"); setSortDir("desc"); setOffset(0); setPosFilters([]); setShowPosMenu(false);}}>Pitchers</button>
+        <button className={`section-tab ${tab==="all"?"active":""}`} onClick={() => {setTab("all"); setSortCol("DynastyValue"); setSortDir("desc"); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="all"}>All</button>
+        <button className={`section-tab ${tab==="bat"?"active":""}`} onClick={() => {setTab("bat"); setSortCol("DynastyValue"); setSortDir("desc"); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="bat"}>Hitters</button>
+        <button className={`section-tab ${tab==="pitch"?"active":""}`} onClick={() => {setTab("pitch"); setSortCol("DynastyValue"); setSortDir("desc"); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="pitch"}>Pitchers</button>
       </div>
 
       <div className="filter-bar">
@@ -1215,6 +1353,9 @@ function ProjectionsExplorer({ meta }) {
             type="button"
             className={`multi-select-trigger ${showPosMenu ? "open" : ""}`}
             onClick={() => setShowPosMenu(open => !open)}
+            aria-haspopup="listbox"
+            aria-expanded={showPosMenu}
+            aria-label="Filter positions"
           >
             <span className="multi-select-label">
               <span>{posFilterLabel}</span>
@@ -1222,7 +1363,7 @@ function ProjectionsExplorer({ meta }) {
             </span>
           </button>
           {showPosMenu && (
-            <div className="multi-select-menu">
+            <div className="multi-select-menu" role="listbox" aria-multiselectable="true">
               <button
                 type="button"
                 className="multi-select-clear"
@@ -1317,7 +1458,7 @@ function ProjectionsExplorer({ meta }) {
 // ---------------------------------------------------------------------------
 function DynastyCalculator({ meta }) {
   const [settings, setSettings] = useState({
-    teams: 12, sims: 100, horizon: 10, discount: 0.85,
+    teams: 12, sims: 300, horizon: 10, discount: 0.85,
     bench: 6, minors: 0, ip_min: 0, ip_max: "",
     start_year: Number(meta.years?.[0] ?? 2026), recent_projections: 3,
   });
@@ -1330,15 +1471,22 @@ function DynastyCalculator({ meta }) {
   const [posFilter, setPosFilter] = useState("");
   const calcRequestSeqRef = useRef(0);
   const calcAbortControllerRef = useRef(null);
+  const availableYears = useMemo(
+    () => (meta.years || []).map(Number).filter(Number.isFinite),
+    [meta.years]
+  );
+  const validationError = useMemo(
+    () => buildCalculatorPayload(settings, availableYears).error || "",
+    [settings, availableYears]
+  );
 
   useEffect(() => {
-    const availableYears = (meta.years || []).map(Number).filter(Number.isFinite);
     if (availableYears.length === 0) return;
     const currentYear = Number(settings.start_year);
     if (!availableYears.includes(currentYear)) {
       setSettings(prev => ({ ...prev, start_year: availableYears[0] }));
     }
-  }, [meta.years, settings.start_year]);
+  }, [availableYears, settings.start_year]);
 
   useEffect(() => {
     return () => {
@@ -1355,6 +1503,12 @@ function DynastyCalculator({ meta }) {
   }
 
   function run() {
+    const payload = buildCalculatorPayload(settings, availableYears);
+    if (payload.error || !payload.payload) {
+      setStatus(`Error: ${payload.error || "Invalid settings"}`);
+      return;
+    }
+
     const requestSeq = calcRequestSeqRef.current + 1;
     calcRequestSeqRef.current = requestSeq;
     if (calcAbortControllerRef.current) {
@@ -1363,20 +1517,8 @@ function DynastyCalculator({ meta }) {
     const controller = new AbortController();
     calcAbortControllerRef.current = controller;
     setLoading(true);
-    setStatus("Running Monte Carlo simulations…");
-    const body = {
-      ...settings,
-      ip_max: settings.ip_max === "" || settings.ip_max === "none" ? null : Number(settings.ip_max),
-      teams: Number(settings.teams),
-      sims: Number(settings.sims),
-      horizon: Number(settings.horizon),
-      discount: Number(settings.discount),
-      bench: Number(settings.bench),
-      minors: Number(settings.minors),
-      ip_min: Number(settings.ip_min),
-      start_year: Number(settings.start_year),
-      recent_projections: Number(settings.recent_projections),
-    };
+    setStatus("Running Monte Carlo simulations...");
+    const body = payload.payload;
 
     fetch(`${API}/api/calculate`, {
       method: "POST",
@@ -1384,15 +1526,23 @@ function DynastyCalculator({ meta }) {
       body: JSON.stringify(body),
       signal: controller.signal,
     })
-      .then(r => {
-        if (!r.ok) throw new Error(`Server error: ${r.status}`);
+      .then(async r => {
+        if (!r.ok) {
+          let errorPayload = null;
+          try {
+            errorPayload = await r.json();
+          } catch (_err) {
+            errorPayload = null;
+          }
+          throw new Error(formatApiError(r.status, errorPayload));
+        }
         return r.json();
       })
       .then(res => {
         if (requestSeq !== calcRequestSeqRef.current || controller.signal.aborted) return;
         setResults(res);
         setLoading(false);
-        setStatus(`Done — ${res.total} players ranked`);
+        setStatus(`Done - ${res.total} players ranked`);
       })
       .catch(err => {
         if (requestSeq !== calcRequestSeqRef.current) return;
@@ -1424,9 +1574,19 @@ function DynastyCalculator({ meta }) {
     if (!sortCol) return filtered;
     return [...filtered].sort((a, b) => {
       let av = a[sortCol], bv = b[sortCol];
-      if (typeof av === "string") return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
-      av = av ?? -Infinity; bv = bv ?? -Infinity;
-      return sortDir === "asc" ? av - bv : bv - av;
+      if (sortCol === "Player" || sortCol === "Team" || sortCol === "Pos") {
+        const avText = String(av ?? "").trim();
+        const bvText = String(bv ?? "").trim();
+        if (!avText && !bvText) return 0;
+        if (!avText) return 1;
+        if (!bvText) return -1;
+        return sortDir === "asc" ? avText.localeCompare(bvText) : bvText.localeCompare(avText);
+      }
+      const avNum = Number(av);
+      const bvNum = Number(bv);
+      const safeAv = Number.isFinite(avNum) ? avNum : -Infinity;
+      const safeBv = Number.isFinite(bvNum) ? bvNum : -Infinity;
+      return sortDir === "asc" ? safeAv - safeBv : safeBv - safeAv;
     });
   }, [filtered, sortCol, sortDir]);
 
@@ -1512,11 +1672,11 @@ function DynastyCalculator({ meta }) {
             </div>
           </div>
 
-          <button className="calc-btn" onClick={run} disabled={loading}>
+          <button className="calc-btn" onClick={run} disabled={loading || Boolean(validationError)}>
             {loading ? "Computing…" : "Generate Rankings"}
           </button>
-          <div className={`calc-status ${loading ? "running" : status.startsWith("Error") ? "error" : ""}`}>
-            {status}
+          <div className={`calc-status ${loading ? "running" : validationError || status.startsWith("Error") ? "error" : ""}`}>
+            {loading ? status : validationError ? `Fix settings: ${validationError}` : status}
           </div>
         </div>
 
