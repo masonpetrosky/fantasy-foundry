@@ -1,9 +1,11 @@
 import unittest
 import types
 import sys
+import time
 from unittest.mock import patch
 
 import pandas as pd
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 import backend.app as app_module
@@ -576,6 +578,12 @@ class CalculatorValidationTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.client = TestClient(app_module.app)
 
+    def setUp(self) -> None:
+        app_module._calculate_common_dynasty_frame_cached.cache_clear()
+        app_module._playable_pool_counts_by_year.cache_clear()
+        with app_module.CALCULATOR_JOB_LOCK:
+            app_module.CALCULATOR_JOBS.clear()
+
     def test_calculate_request_default_horizon_is_twenty(self) -> None:
         req = app_module.CalculateRequest()
         self.assertEqual(req.horizon, 20)
@@ -609,7 +617,7 @@ class CalculatorValidationTests(unittest.TestCase):
                 self.kwargs = kwargs
 
         def fake_calculate(*args, **kwargs):
-            return fake_out, None, None
+            return fake_out
 
         fake_module = types.SimpleNamespace(
             CommonDynastyRotoSettings=FakeSettings,
@@ -652,6 +660,110 @@ class CalculatorValidationTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assertIn("start_year", response.json()["detail"])
+
+    def test_returns_422_for_unfillable_roster_settings(self) -> None:
+        class FakeSettings:
+            def __init__(self, **kwargs) -> None:
+                self.kwargs = kwargs
+
+        def fake_calculate(*args, **kwargs):
+            raise ValueError("Not enough players (10) to fill required slots (15).")
+
+        fake_module = types.SimpleNamespace(
+            CommonDynastyRotoSettings=FakeSettings,
+            calculate_common_dynasty_values=fake_calculate,
+        )
+
+        with patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ), patch.object(
+            app_module,
+            "META",
+            {"years": [2026]},
+        ), patch.dict(
+            sys.modules,
+            {"dynasty_roto_values": fake_module},
+        ):
+            response = self.client.post(
+                "/api/calculate",
+                json={"teams": 20, "bench": 40, "minors": 60, "start_year": 2026},
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Not enough players", response.json()["detail"])
+
+    def test_meta_includes_calculator_guardrails_payload(self) -> None:
+        with patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get("/api/meta")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        guardrails = payload.get("calculator_guardrails", {})
+        self.assertEqual(guardrails.get("hitters_per_team"), 13)
+        self.assertEqual(guardrails.get("pitchers_per_team"), 9)
+        self.assertIn("playable_by_year", guardrails)
+
+    def test_calculation_job_lifecycle_success(self) -> None:
+        fake_result = {"total": 1, "settings": {}, "data": [{"Player": "Jane Roe"}]}
+
+        with patch.object(
+            app_module,
+            "_run_calculate_request",
+            return_value=fake_result,
+        ):
+            create = self.client.post("/api/calculate/jobs", json={})
+            self.assertEqual(create.status_code, 202)
+            job_id = create.json()["job_id"]
+
+            deadline = time.time() + 2.0
+            while True:
+                status = self.client.get(f"/api/calculate/jobs/{job_id}")
+                self.assertEqual(status.status_code, 200)
+                payload = status.json()
+                if payload["status"] == "completed":
+                    break
+                if payload["status"] == "failed":
+                    self.fail(f"Expected completed job, got failed payload: {payload}")
+                if time.time() > deadline:
+                    self.fail(f"Timed out waiting for job completion: {payload}")
+                time.sleep(0.01)
+
+            self.assertEqual(payload["result"]["total"], 1)
+
+    def test_calculation_job_lifecycle_failure(self) -> None:
+        def fake_failure(*args, **kwargs):
+            raise HTTPException(status_code=422, detail="Not enough players for selected settings.")
+
+        with patch.object(
+            app_module,
+            "_run_calculate_request",
+            side_effect=fake_failure,
+        ):
+            create = self.client.post("/api/calculate/jobs", json={})
+            self.assertEqual(create.status_code, 202)
+            job_id = create.json()["job_id"]
+
+            deadline = time.time() + 2.0
+            while True:
+                status = self.client.get(f"/api/calculate/jobs/{job_id}")
+                self.assertEqual(status.status_code, 200)
+                payload = status.json()
+                if payload["status"] == "failed":
+                    break
+                if payload["status"] == "completed":
+                    self.fail(f"Expected failed job, got completed payload: {payload}")
+                if time.time() > deadline:
+                    self.fail(f"Timed out waiting for failed status: {payload}")
+                time.sleep(0.01)
+
+            self.assertEqual(payload["error"]["status_code"], 422)
+            self.assertIn("Not enough players", payload["error"]["detail"])
 
 
 if __name__ == "__main__":

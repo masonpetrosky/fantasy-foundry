@@ -882,7 +882,7 @@ const DEFAULT_PROJECTIONS_TAB = "all";
 const DEFAULT_PROJECTIONS_SORT_COL = "DynastyValue";
 const DEFAULT_PROJECTIONS_SORT_DIR = "desc";
 
-function formatApiError(status, payload) {
+function formatApiError(status, payload, rawText = "") {
   const detail = payload && payload.detail;
   if (typeof detail === "string" && detail.trim()) {
     return `Server error ${status}: ${detail}`;
@@ -893,10 +893,49 @@ function formatApiError(status, payload) {
       return `Validation error (${status}): ${first.msg}`;
     }
   }
+  const compactText = String(rawText || "").replace(/\s+/g, " ").trim();
+  if (compactText && !compactText.startsWith("<")) {
+    return `Server error ${status}: ${compactText.slice(0, 180)}`;
+  }
   return `Server error: ${status}`;
 }
 
-function buildCalculatorPayload(settings, availableYears) {
+async function readResponsePayload(response) {
+  const rawText = await response.text();
+  if (!rawText) return { payload: null, rawText: "" };
+  try {
+    return { payload: JSON.parse(rawText), rawText };
+  } catch (_err) {
+    return { payload: null, rawText };
+  }
+}
+
+function sleepWithAbort(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (!signal) {
+      window.setTimeout(resolve, ms);
+      return;
+    }
+    if (signal.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort);
+  });
+}
+
+function buildCalculatorPayload(settings, availableYears, meta) {
   const teams = Number(settings.teams);
   if (!Number.isInteger(teams) || teams < 2 || teams > 30) {
     return { error: "Teams must be an integer between 2 and 30." };
@@ -957,6 +996,36 @@ function buildCalculatorPayload(settings, availableYears) {
   const recentProjections = Number(settings.recent_projections);
   if (!Number.isInteger(recentProjections) || recentProjections < 1 || recentProjections > 10) {
     return { error: "Recent Proj. must be an integer between 1 and 10." };
+  }
+
+  const guardrails = meta?.calculator_guardrails || {};
+  const playableByYear = guardrails?.playable_by_year;
+  const hittersPerTeam = Number(guardrails?.hitters_per_team);
+  const pitchersPerTeam = Number(guardrails?.pitchers_per_team);
+  if (
+    playableByYear &&
+    typeof playableByYear === "object" &&
+    Number.isFinite(hittersPerTeam) &&
+    Number.isFinite(pitchersPerTeam)
+  ) {
+    const pool = playableByYear[String(startYear)] || playableByYear[startYear];
+    if (pool && typeof pool === "object") {
+      const availableHitters = Number(pool.hitters);
+      const availablePitchers = Number(pool.pitchers);
+      const requiredHitters = teams * hittersPerTeam;
+      const requiredPitchers = teams * pitchersPerTeam;
+
+      if (Number.isFinite(availableHitters) && requiredHitters > availableHitters) {
+        return {
+          error: `Roster likely unfillable for ${startYear}: requires ${requiredHitters} hitters but only ${availableHitters} have projected AB > 0.`,
+        };
+      }
+      if (Number.isFinite(availablePitchers) && requiredPitchers > availablePitchers) {
+        return {
+          error: `Roster likely unfillable for ${startYear}: requires ${requiredPitchers} pitchers but only ${availablePitchers} have projected IP > 0.`,
+        };
+      }
+    }
   }
 
   return {
@@ -1508,8 +1577,8 @@ function DynastyCalculator({ meta }) {
     [meta.years]
   );
   const validationError = useMemo(
-    () => buildCalculatorPayload(settings, availableYears).error || "",
-    [settings, availableYears]
+    () => buildCalculatorPayload(settings, availableYears, meta).error || "",
+    [settings, availableYears, meta]
   );
 
   useEffect(() => {
@@ -1535,7 +1604,7 @@ function DynastyCalculator({ meta }) {
   }
 
   function run() {
-    const payload = buildCalculatorPayload(settings, availableYears);
+    const payload = buildCalculatorPayload(settings, availableYears, meta);
     if (payload.error || !payload.payload) {
       setStatus(`Error: ${payload.error || "Invalid settings"}`);
       return;
@@ -1549,44 +1618,95 @@ function DynastyCalculator({ meta }) {
     const controller = new AbortController();
     calcAbortControllerRef.current = controller;
     setLoading(true);
-    setStatus("Running Monte Carlo simulations...");
+    setStatus("Submitting simulation job...");
     const body = payload.payload;
 
-    fetch(`${API}/api/calculate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    })
-      .then(async r => {
-        if (!r.ok) {
-          let errorPayload = null;
-          try {
-            errorPayload = await r.json();
-          } catch (_err) {
-            errorPayload = null;
-          }
-          throw new Error(formatApiError(r.status, errorPayload));
+    (async () => {
+      try {
+        const createResp = await fetch(`${API}/api/calculate/jobs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        const createParsed = await readResponsePayload(createResp);
+        if (!createResp.ok) {
+          throw new Error(formatApiError(createResp.status, createParsed.payload, createParsed.rawText));
         }
-        return r.json();
-      })
-      .then(res => {
-        if (requestSeq !== calcRequestSeqRef.current || controller.signal.aborted) return;
-        setResults(res);
-        setLoading(false);
-        setStatus(`Done - ${res.total} players ranked`);
-      })
-      .catch(err => {
+
+        const jobId = String(createParsed.payload?.job_id || "").trim();
+        if (!jobId) {
+          throw new Error("Server did not return a calculation job id.");
+        }
+
+        const timeoutSeconds = Number(meta?.calculator_guardrails?.job_timeout_seconds);
+        const maxWaitMs = Number.isFinite(timeoutSeconds) && timeoutSeconds > 0
+          ? timeoutSeconds * 1000
+          : 10 * 60 * 1000;
+        const deadline = Date.now() + maxWaitMs;
+
+        while (true) {
+          if (requestSeq !== calcRequestSeqRef.current || controller.signal.aborted) return;
+          if (Date.now() > deadline) {
+            throw new Error("Calculation timed out before completion.");
+          }
+
+          const statusResp = await fetch(`${API}/api/calculate/jobs/${encodeURIComponent(jobId)}`, {
+            signal: controller.signal,
+          });
+          const statusParsed = await readResponsePayload(statusResp);
+          if (!statusResp.ok) {
+            throw new Error(formatApiError(statusResp.status, statusParsed.payload, statusParsed.rawText));
+          }
+
+          const jobStatus = String(statusParsed.payload?.status || "").toLowerCase();
+          if (jobStatus === "queued") {
+            setStatus("Running Monte Carlo simulations... (queued)");
+            await sleepWithAbort(1200, controller.signal);
+            continue;
+          }
+          if (jobStatus === "running") {
+            setStatus("Running Monte Carlo simulations...");
+            await sleepWithAbort(1200, controller.signal);
+            continue;
+          }
+          if (jobStatus === "completed") {
+            const result = statusParsed.payload?.result;
+            if (!result || !Array.isArray(result.data)) {
+              throw new Error("Calculation completed without a usable result payload.");
+            }
+            if (requestSeq !== calcRequestSeqRef.current || controller.signal.aborted) return;
+            setResults(result);
+            setLoading(false);
+            setStatus(`Done - ${result.total} players ranked`);
+            return;
+          }
+          if (jobStatus === "failed") {
+            const error = statusParsed.payload?.error;
+            const detail = typeof error?.detail === "string" ? error.detail : "";
+            const errorStatus = Number(error?.status_code);
+            if (detail && Number.isFinite(errorStatus)) {
+              throw new Error(formatApiError(errorStatus, { detail }));
+            }
+            if (detail) {
+              throw new Error(detail);
+            }
+            throw new Error("Calculation job failed.");
+          }
+
+          throw new Error("Unexpected calculation job status.");
+        }
+      } catch (err) {
         if (requestSeq !== calcRequestSeqRef.current) return;
         if (err?.name === "AbortError") return;
         setLoading(false);
         setStatus(`Error: ${err.message}`);
-      })
-      .finally(() => {
+      } finally {
         if (calcAbortControllerRef.current === controller) {
           calcAbortControllerRef.current = null;
         }
-      });
+      }
+    })();
   }
 
   const filtered = useMemo(() => {

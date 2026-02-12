@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import subprocess
@@ -162,6 +163,69 @@ class ProjectionsPaginationE2ETests(unittest.TestCase):
 
             self.assertIn("0", offsets_seen)
             self.assertTrue(offsets_seen, "Expected at least one projections request with an offset query param")
+        finally:
+            page.close()
+
+    def test_calculator_shows_backend_422_detail_message(self) -> None:
+        page = self.browser.new_page()
+        try:
+            page.goto(self.base_url, wait_until="domcontentloaded", timeout=60000)
+            page.get_by_role("button", name="Dynasty Calculator").click()
+
+            page.route(
+                "**/api/calculate/jobs",
+                lambda route: route.fulfill(
+                    status=422,
+                    content_type="application/json",
+                    body=json.dumps({"detail": "Not enough players for selected settings."}),
+                ),
+            )
+
+            page.locator(".calc-btn").first.click()
+            page.wait_for_function(
+                """
+                () => {
+                  const el = document.querySelector('.calc-status');
+                  return !!el && (el.textContent || '').includes('Not enough players for selected settings.');
+                }
+                """,
+                timeout=10000,
+            )
+
+            status_text = page.locator(".calc-status").first.inner_text()
+            self.assertIn("Not enough players for selected settings.", status_text)
+        finally:
+            page.close()
+
+    def test_calculator_shows_non_json_error_body_text(self) -> None:
+        page = self.browser.new_page()
+        try:
+            page.goto(self.base_url, wait_until="domcontentloaded", timeout=60000)
+            page.get_by_role("button", name="Dynasty Calculator").click()
+
+            page.route(
+                "**/api/calculate/jobs",
+                lambda route: route.fulfill(
+                    status=500,
+                    content_type="text/plain",
+                    body="Gateway timeout while waiting for calculation worker.",
+                ),
+            )
+
+            page.locator(".calc-btn").first.click()
+            page.wait_for_function(
+                """
+                () => {
+                  const el = document.querySelector('.calc-status');
+                  return !!el && (el.textContent || '').includes('Gateway timeout while waiting for calculation worker.');
+                }
+                """,
+                timeout=10000,
+            )
+
+            status_text = page.locator(".calc-status").first.inner_text()
+            self.assertIn("Gateway timeout while waiting for calculation worker.", status_text)
+            self.assertNotIn("[object Object]", status_text)
         finally:
             page.close()
 

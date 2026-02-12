@@ -11,16 +11,22 @@ Endpoints:
 
 from __future__ import annotations
 
+import logging
 import json
+import math
 import os
 import re
 import sys
+import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from functools import cmp_to_key, lru_cache
 from pathlib import Path
-from threading import Lock
+from threading import Lock, Thread
 from typing import Literal, Optional
+from uuid import uuid4
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
@@ -86,6 +92,14 @@ PROJECTION_TEXT_SORT_COLS = {"Player", "Team", "Pos", "Type"}
 PLAYER_KEY_COL = "PlayerKey"
 PLAYER_ENTITY_KEY_COL = "PlayerEntityKey"
 PLAYER_KEY_PATTERN = re.compile(r"[^a-z0-9]+")
+COMMON_HITTER_STARTER_SLOTS_PER_TEAM = 13
+COMMON_PITCHER_STARTER_SLOTS_PER_TEAM = 9
+CALCULATOR_JOB_TTL_SECONDS = max(60, int(os.getenv("FF_CALC_JOB_TTL_SECONDS", "1800")))
+CALCULATOR_JOB_MAX_ENTRIES = max(10, int(os.getenv("FF_CALC_JOB_MAX_ENTRIES", "256")))
+CALCULATOR_JOB_WORKERS = max(1, int(os.getenv("FF_CALC_JOB_WORKERS", "2")))
+ENABLE_STARTUP_CALC_PREWARM = os.getenv("FF_PREWARM_DEFAULT_CALC", "1").strip().lower() not in {"0", "false", "no"}
+CALCULATOR_REQUEST_TIMEOUT_SECONDS = max(60, int(os.getenv("FF_CALC_REQUEST_TIMEOUT_SECONDS", "600")))
+CALC_LOGGER = logging.getLogger("fantasy_foundry.calculate")
 
 
 def _pick_first_existing_col(df: pd.DataFrame, candidates: list[str] | tuple[str, ...]) -> str | None:
@@ -363,6 +377,17 @@ def _compute_data_signature() -> tuple[tuple[str, int | None, int | None], ...]:
 
 
 _DATA_SOURCE_SIGNATURE: tuple[tuple[str, int | None, int | None], ...] | None = _compute_data_signature()
+CALCULATOR_JOB_EXECUTOR = ThreadPoolExecutor(max_workers=CALCULATOR_JOB_WORKERS)
+CALCULATOR_JOB_LOCK = Lock()
+CALCULATOR_JOBS: dict[str, dict] = {}
+CALCULATOR_PREWARM_LOCK = Lock()
+CALCULATOR_PREWARM_STATE = {
+    "status": "idle",
+    "started_at": None,
+    "completed_at": None,
+    "duration_ms": None,
+    "error": None,
+}
 
 
 def _reload_projection_data() -> None:
@@ -396,38 +421,259 @@ def _ensure_backend_module_path() -> None:
         sys.path.insert(0, backend_path)
 
 
+@lru_cache(maxsize=16)
+def _calculate_common_dynasty_frame_cached(
+    teams: int,
+    sims: int,
+    horizon: int,
+    discount: float,
+    bench: int,
+    minors: int,
+    ip_min: float,
+    ip_max: float | None,
+    start_year: int,
+    recent_projections: int,
+) -> pd.DataFrame:
+    _ensure_backend_module_path()
+    from dynasty_roto_values import CommonDynastyRotoSettings, calculate_common_dynasty_values
+
+    lg = CommonDynastyRotoSettings(
+        n_teams=teams,
+        sims_for_sgp=sims,
+        horizon_years=horizon,
+        discount=discount,
+        bench_slots=bench,
+        minor_slots=minors,
+        ip_min=ip_min,
+        ip_max=ip_max,
+        two_way="sum",
+    )
+
+    out = calculate_common_dynasty_values(
+        str(EXCEL_PATH),
+        lg,
+        start_year=start_year,
+        verbose=False,
+        return_details=False,
+        seed=0,
+        recent_projections=recent_projections,
+    )
+    return out
+
+
+def _is_user_fixable_calculation_error(message: str) -> bool:
+    normalized = message.lower()
+    return (
+        "not enough players" in normalized
+        or "no valuation years available" in normalized
+    )
+
+
+def _clean_records_for_json(records: list[dict]) -> list[dict]:
+    for row in records:
+        for key, value in row.items():
+            if value is None:
+                continue
+
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                if not math.isfinite(float(value)):
+                    row[key] = None
+                continue
+
+            try:
+                if pd.isna(value):
+                    row[key] = None
+            except (TypeError, ValueError):
+                continue
+    return records
+
+
+def _as_float(value: object) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if math.isfinite(parsed):
+        return parsed
+    return None
+
+
+@lru_cache(maxsize=1)
+def _playable_pool_counts_by_year() -> dict[str, dict[str, int]]:
+    by_year: dict[int, dict[str, int]] = {}
+
+    for row in BAT_DATA:
+        year = _coerce_record_year(row.get("Year"))
+        if year is None:
+            continue
+        ab = _as_float(row.get("AB"))
+        if ab is None or ab <= 0:
+            continue
+        bucket = by_year.setdefault(year, {"hitters": 0, "pitchers": 0})
+        bucket["hitters"] += 1
+
+    for row in PIT_DATA:
+        year = _coerce_record_year(row.get("Year"))
+        if year is None:
+            continue
+        ip = _as_float(row.get("IP"))
+        if ip is None or ip <= 0:
+            continue
+        bucket = by_year.setdefault(year, {"hitters": 0, "pitchers": 0})
+        bucket["pitchers"] += 1
+
+    return {str(year): counts for year, counts in sorted(by_year.items())}
+
+
+def _default_calculation_cache_params() -> dict[str, int | float | None]:
+    years = _coerce_meta_years(META)
+    start_year = years[0] if years else 2026
+    horizon = len(years) if years else 10
+    return {
+        "teams": 12,
+        "sims": 300,
+        "horizon": horizon,
+        "discount": 0.85,
+        "bench": 6,
+        "minors": 0,
+        "ip_min": 0.0,
+        "ip_max": None,
+        "start_year": start_year,
+        "recent_projections": 3,
+    }
+
+
+def _calculator_guardrails_payload() -> dict:
+    return {
+        "hitters_per_team": COMMON_HITTER_STARTER_SLOTS_PER_TEAM,
+        "pitchers_per_team": COMMON_PITCHER_STARTER_SLOTS_PER_TEAM,
+        "playable_by_year": _playable_pool_counts_by_year(),
+        "job_timeout_seconds": CALCULATOR_REQUEST_TIMEOUT_SECONDS,
+    }
+
+
+def _iso_now() -> str:
+    return datetime.now(tz=timezone.utc).isoformat()
+
+
+def _cleanup_calculation_jobs(now_ts: float | None = None) -> None:
+    current = time.time() if now_ts is None else now_ts
+    expired_ids: list[str] = []
+    completed: list[tuple[str, float]] = []
+
+    for job_id, job in CALCULATOR_JOBS.items():
+        status = str(job.get("status") or "").lower()
+        created_ts = float(job.get("created_ts") or current)
+        age = current - created_ts
+        if status in {"completed", "failed"} and age > CALCULATOR_JOB_TTL_SECONDS:
+            expired_ids.append(job_id)
+        elif status in {"completed", "failed"}:
+            completed.append((job_id, created_ts))
+
+    for job_id in expired_ids:
+        CALCULATOR_JOBS.pop(job_id, None)
+
+    if len(CALCULATOR_JOBS) <= CALCULATOR_JOB_MAX_ENTRIES:
+        return
+
+    completed.sort(key=lambda item: item[1])
+    while len(CALCULATOR_JOBS) > CALCULATOR_JOB_MAX_ENTRIES and completed:
+        job_id, _ = completed.pop(0)
+        CALCULATOR_JOBS.pop(job_id, None)
+
+
+def _calculation_job_public_payload(job: dict) -> dict:
+    payload = {
+        "job_id": job["job_id"],
+        "status": job["status"],
+        "created_at": job["created_at"],
+        "started_at": job.get("started_at"),
+        "completed_at": job.get("completed_at"),
+        "settings": job.get("settings"),
+    }
+    if job["status"] == "completed":
+        payload["result"] = job.get("result")
+    elif job["status"] == "failed":
+        payload["error"] = job.get("error")
+    return payload
+
+
+def _prewarm_default_calculation_caches() -> None:
+    with CALCULATOR_PREWARM_LOCK:
+        CALCULATOR_PREWARM_STATE.update(
+            {
+                "status": "running",
+                "started_at": _iso_now(),
+                "completed_at": None,
+                "duration_ms": None,
+                "error": None,
+            }
+        )
+
+    started = time.perf_counter()
+    try:
+        _refresh_data_if_needed()
+        params = _default_calculation_cache_params()
+        ip_max = params["ip_max"]
+        _calculate_common_dynasty_frame_cached(
+            teams=int(params["teams"]),
+            sims=int(params["sims"]),
+            horizon=int(params["horizon"]),
+            discount=float(params["discount"]),
+            bench=int(params["bench"]),
+            minors=int(params["minors"]),
+            ip_min=float(params["ip_min"]),
+            ip_max=float(ip_max) if ip_max is not None else None,
+            start_year=int(params["start_year"]),
+            recent_projections=int(params["recent_projections"]),
+        )
+        _get_default_dynasty_lookup()
+
+        duration_ms = round((time.perf_counter() - started) * 1000.0, 1)
+        with CALCULATOR_PREWARM_LOCK:
+            CALCULATOR_PREWARM_STATE.update(
+                {
+                    "status": "ready",
+                    "completed_at": _iso_now(),
+                    "duration_ms": duration_ms,
+                    "error": None,
+                }
+            )
+        CALC_LOGGER.info("calculator prewarm completed duration_ms=%s", duration_ms)
+    except Exception as exc:
+        duration_ms = round((time.perf_counter() - started) * 1000.0, 1)
+        with CALCULATOR_PREWARM_LOCK:
+            CALCULATOR_PREWARM_STATE.update(
+                {
+                    "status": "failed",
+                    "completed_at": _iso_now(),
+                    "duration_ms": duration_ms,
+                    "error": str(exc),
+                }
+            )
+        CALC_LOGGER.exception("calculator prewarm failed")
+
+
 @lru_cache(maxsize=1)
 def _get_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]]:
     """Cached default dynasty values keyed by PlayerEntityKey first, then unique PlayerKey."""
     try:
-        _ensure_backend_module_path()
-        from dynasty_roto_values import CommonDynastyRotoSettings, calculate_common_dynasty_values
-
         years = _coerce_meta_years(META)
         start_year = years[0] if years else 2026
         horizon = len(years) if years else 10
 
-        lg = CommonDynastyRotoSettings(
-            n_teams=12,
-            sims_for_sgp=300,
-            horizon_years=horizon,
+        out = _calculate_common_dynasty_frame_cached(
+            teams=12,
+            sims=300,
+            horizon=horizon,
             discount=0.85,
-            bench_slots=6,
-            minor_slots=0,
+            bench=6,
+            minors=0,
             ip_min=0.0,
             ip_max=None,
-            two_way="sum",
-        )
-
-        out = calculate_common_dynasty_values(
-            str(EXCEL_PATH),
-            lg,
             start_year=start_year,
-            verbose=False,
-            return_details=False,
-            seed=0,
             recent_projections=3,
-        )
+        ).copy(deep=True)
 
         year_cols = sorted(
             [c for c in out.columns if isinstance(c, str) and c.startswith("Value_")],
@@ -629,6 +875,8 @@ def _refresh_data_if_needed() -> None:
         _cached_projection_rows.cache_clear()
         _cached_all_projection_rows.cache_clear()
         _projection_sortable_columns_for_dataset.cache_clear()
+        _calculate_common_dynasty_frame_cached.cache_clear()
+        _playable_pool_counts_by_year.cache_clear()
         _get_default_dynasty_lookup.cache_clear()
         _player_identity_by_name.cache_clear()
         _DATA_SOURCE_SIGNATURE = current_signature
@@ -636,7 +884,17 @@ def _refresh_data_if_needed() -> None:
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
-app = FastAPI(title="Dynasty Baseball Projections", version="1.0.0")
+@asynccontextmanager
+async def app_lifespan(_: FastAPI):
+    if not os.getenv("PYTEST_CURRENT_TEST") and ENABLE_STARTUP_CALC_PREWARM:
+        Thread(target=_prewarm_default_calculation_caches, name="ff-calc-prewarm", daemon=True).start()
+    try:
+        yield
+    finally:
+        CALCULATOR_JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
+
+
+app = FastAPI(title="Dynasty Baseball Projections", version="1.0.0", lifespan=app_lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -656,14 +914,17 @@ async def attach_build_header(request, call_next):
     response.headers.setdefault("X-App-Build", APP_BUILD_ID)
     return response
 
-
 # ---------------------------------------------------------------------------
 # API: Metadata
 # ---------------------------------------------------------------------------
 @app.get("/api/meta")
 def get_meta():
     _refresh_data_if_needed()
-    return META
+    payload = dict(META)
+    payload["calculator_guardrails"] = _calculator_guardrails_payload()
+    with CALCULATOR_PREWARM_LOCK:
+        payload["calculator_prewarm"] = dict(CALCULATOR_PREWARM_STATE)
+    return payload
 
 
 # ---------------------------------------------------------------------------
@@ -1241,9 +1502,12 @@ class CalculateRequest(BaseModel):
         return self
 
 
-@app.post("/api/calculate")
-def calculate_dynasty_values(req: CalculateRequest):
-    """Run the dynasty value calculator and return results as JSON."""
+def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
+    started = time.perf_counter()
+    settings = req.model_dump()
+    cache_before = _calculate_common_dynasty_frame_cached.cache_info()
+    status_code = 200
+
     try:
         _refresh_data_if_needed()
         valid_years = _coerce_meta_years(META)
@@ -1253,37 +1517,26 @@ def calculate_dynasty_values(req: CalculateRequest):
                 detail=f"start_year must be one of the available projection years: {valid_years}",
             )
 
-        # Import the calculation module
-        _ensure_backend_module_path()
-        from dynasty_roto_values import (
-            CommonDynastyRotoSettings,
-            calculate_common_dynasty_values,
-        )
-
-        lg = CommonDynastyRotoSettings(
-            n_teams=req.teams,
-            sims_for_sgp=req.sims,
-            horizon_years=req.horizon,
-            discount=req.discount,
-            bench_slots=req.bench,
-            minor_slots=req.minors,
-            ip_min=req.ip_min,
-            ip_max=req.ip_max,
-            two_way="sum",
-        )
-
-        out, _, _ = calculate_common_dynasty_values(
-            str(EXCEL_PATH),
-            lg,
-            start_year=req.start_year,
-            verbose=False,
-            return_details=True,
-            seed=0,
-            recent_projections=req.recent_projections,
-        )
+        try:
+            out = _calculate_common_dynasty_frame_cached(
+                teams=req.teams,
+                sims=req.sims,
+                horizon=req.horizon,
+                discount=req.discount,
+                bench=req.bench,
+                minors=req.minors,
+                ip_min=req.ip_min,
+                ip_max=req.ip_max,
+                start_year=req.start_year,
+                recent_projections=req.recent_projections,
+            ).copy(deep=True)
+        except ValueError as calc_error:
+            message = str(calc_error)
+            if _is_user_fixable_calculation_error(message):
+                raise HTTPException(status_code=422, detail=message) from calc_error
+            raise
 
         identity_by_name = _player_identity_by_name()
-        out = out.copy()
         out[PLAYER_KEY_COL] = out["Player"].map(
             lambda player: identity_by_name.get(str(player or "").strip(), (_normalize_player_key(player), None))[0]
         )
@@ -1310,18 +1563,137 @@ def calculate_dynasty_values(req: CalculateRequest):
             df[c] = df[c].round(2)
 
         records = df.to_dict(orient="records")
+        records = _clean_records_for_json(records)
 
         return {
             "total": len(records),
-            "settings": req.model_dump(),
+            "settings": settings,
             "data": records,
         }
 
-    except HTTPException:
+    except HTTPException as exc:
+        status_code = exc.status_code
         raise
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        status_code = 500
+        CALC_LOGGER.exception("calculator request failed source=%s", source)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        duration_ms = round((time.perf_counter() - started) * 1000.0, 1)
+        cache_after = _calculate_common_dynasty_frame_cached.cache_info()
+        cache_event = "none"
+        if cache_after.hits > cache_before.hits:
+            cache_event = "hit"
+        elif cache_after.misses > cache_before.misses:
+            cache_event = "miss"
+
+        CALC_LOGGER.info(
+            "calculator source=%s status=%s duration_ms=%s cache=%s settings=%s",
+            source,
+            status_code,
+            duration_ms,
+            cache_event,
+            json.dumps(settings, sort_keys=True),
+        )
+
+
+def _run_calculation_job(job_id: str, req_payload: dict) -> None:
+    with CALCULATOR_JOB_LOCK:
+        job = CALCULATOR_JOBS.get(job_id)
+        if job is None:
+            return
+        job["status"] = "running"
+        job["started_at"] = _iso_now()
+        job["updated_at"] = job["started_at"]
+
+    try:
+        req = CalculateRequest(**req_payload)
+        result = _run_calculate_request(req, source="job")
+        with CALCULATOR_JOB_LOCK:
+            job = CALCULATOR_JOBS.get(job_id)
+            if job is None:
+                return
+            now = _iso_now()
+            job["status"] = "completed"
+            job["result"] = result
+            job["completed_at"] = now
+            job["updated_at"] = now
+            job["error"] = None
+    except HTTPException as exc:
+        with CALCULATOR_JOB_LOCK:
+            job = CALCULATOR_JOBS.get(job_id)
+            if job is None:
+                return
+            now = _iso_now()
+            job["status"] = "failed"
+            job["error"] = {"status_code": exc.status_code, "detail": exc.detail}
+            job["completed_at"] = now
+            job["updated_at"] = now
+            job["result"] = None
+    except Exception as exc:
+        CALC_LOGGER.exception("calculator job crashed job_id=%s", job_id)
+        with CALCULATOR_JOB_LOCK:
+            job = CALCULATOR_JOBS.get(job_id)
+            if job is None:
+                return
+            now = _iso_now()
+            job["status"] = "failed"
+            job["error"] = {"status_code": 500, "detail": str(exc)}
+            job["completed_at"] = now
+            job["updated_at"] = now
+            job["result"] = None
+    finally:
+        with CALCULATOR_JOB_LOCK:
+            _cleanup_calculation_jobs()
+
+
+@app.post("/api/calculate")
+def calculate_dynasty_values(req: CalculateRequest):
+    """Run the dynasty value calculator and return results as JSON."""
+    return _run_calculate_request(req, source="sync")
+
+
+@app.post("/api/calculate/jobs", status_code=202)
+def create_calculate_dynasty_job(req: CalculateRequest):
+    created_at = _iso_now()
+    payload = req.model_dump()
+    job_id = uuid4().hex
+    job = {
+        "job_id": job_id,
+        "status": "queued",
+        "created_at": created_at,
+        "started_at": None,
+        "completed_at": None,
+        "updated_at": created_at,
+        "created_ts": time.time(),
+        "settings": payload,
+        "result": None,
+        "error": None,
+    }
+
+    with CALCULATOR_JOB_LOCK:
+        _cleanup_calculation_jobs(job["created_ts"])
+        CALCULATOR_JOBS[job_id] = job
+
+    try:
+        CALCULATOR_JOB_EXECUTOR.submit(_run_calculation_job, job_id, payload)
+    except RuntimeError as exc:
+        with CALCULATOR_JOB_LOCK:
+            CALCULATOR_JOBS.pop(job_id, None)
+        raise HTTPException(status_code=503, detail="Calculation worker is unavailable.") from exc
+    CALC_LOGGER.info("calculator job queued job_id=%s settings=%s", job_id, json.dumps(payload, sort_keys=True))
+
+    return _calculation_job_public_payload(job)
+
+
+@app.get("/api/calculate/jobs/{job_id}")
+def get_calculate_dynasty_job(job_id: str):
+    with CALCULATOR_JOB_LOCK:
+        _cleanup_calculation_jobs()
+        job = CALCULATOR_JOBS.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Calculation job not found or expired.")
+        return _calculation_job_public_payload(job)
 
 
 # ---------------------------------------------------------------------------
