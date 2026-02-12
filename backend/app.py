@@ -96,7 +96,7 @@ PROJECTION_QUERY_CACHE_MAXSIZE = 256
 POSITION_DISPLAY_ORDER = ("C", "1B", "2B", "3B", "SS", "OF", "DH", "UT", "SP", "RP")
 ALL_TAB_HITTER_STAT_COLS = ("G", "AB", "R", "H", "2B", "3B", "HR", "RBI", "SB", "BB", "SO", "AVG", "OPS")
 ALL_TAB_PITCH_STAT_COLS = ("GS", "IP", "W", "L", "K", "SV", "SVH", "ERA", "WHIP", "ER")
-PROJECTION_TEXT_SORT_COLS = {"Player", "Team", "Pos", "Type"}
+PROJECTION_TEXT_SORT_COLS = {"Player", "Team", "Pos", "Type", "Years"}
 PLAYER_KEY_COL = "PlayerKey"
 PLAYER_ENTITY_KEY_COL = "PlayerEntityKey"
 PLAYER_KEY_PATTERN = re.compile(r"[^a-z0-9]+")
@@ -1795,6 +1795,301 @@ def _oldest_projection_date(*values: object) -> str | None:
     return None
 
 
+def _coerce_numeric(value: object) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if pd.isna(parsed):
+        return None
+    return parsed
+
+
+def _career_group_key(row: dict) -> str:
+    player_name = str(row.get("Player", "")).strip()
+    player_key = str(row.get(PLAYER_KEY_COL) or "").strip() or _normalize_player_key(player_name)
+    return str(row.get(PLAYER_ENTITY_KEY_COL) or "").strip() or player_key
+
+
+def _rows_year_bounds(rows: list[dict]) -> tuple[int | None, int | None]:
+    years: list[int] = []
+    for row in rows:
+        parsed = _coerce_record_year(row.get("Year"))
+        if parsed is not None:
+            years.append(parsed)
+    if not years:
+        return None, None
+    return min(years), max(years)
+
+
+def _format_year_span(start_year: int | None, end_year: int | None) -> str | None:
+    if start_year is None or end_year is None:
+        return None
+    return str(start_year) if start_year == end_year else f"{start_year}-{end_year}"
+
+
+def _sum_projection_counts(values: list[object]) -> int | None:
+    total = 0
+    found = False
+    for value in values:
+        parsed = _coerce_numeric(value)
+        if parsed is None:
+            continue
+        total += int(round(parsed))
+        found = True
+    return total if found else None
+
+
+def _weighted_rate(rows: list[dict], rate_col: str, weight_col: str) -> float | None:
+    weighted_total = 0.0
+    weight_total = 0.0
+    for row in rows:
+        rate = _coerce_numeric(row.get(rate_col))
+        weight = _coerce_numeric(row.get(weight_col))
+        if rate is None or weight is None or weight <= 0:
+            continue
+        weighted_total += rate * weight
+        weight_total += weight
+    if weight_total <= 0:
+        return None
+    return weighted_total / weight_total
+
+
+def _aggregate_projection_career_rows(rows: list[dict], *, is_hitter: bool) -> list[dict]:
+    if not rows:
+        return []
+
+    grouped: dict[str, list[dict]] = {}
+    for row in rows:
+        grouped.setdefault(_career_group_key(row), []).append(row)
+
+    excluded_from_sum = {
+        "Player",
+        "Team",
+        "MLBTeam",
+        "Pos",
+        "Type",
+        "Year",
+        "Age",
+        "ProjectionsUsed",
+        "OldestProjectionDate",
+        "DynastyValue",
+        "DynastyMatchStatus",
+        "Years",
+        "YearStart",
+        "YearEnd",
+        PLAYER_KEY_COL,
+        PLAYER_ENTITY_KEY_COL,
+    }
+
+    aggregated_rows: list[dict] = []
+    for entity_key, player_rows in grouped.items():
+        latest_row = player_rows[0]
+        latest_year = _coerce_record_year(latest_row.get("Year"))
+        for row in player_rows[1:]:
+            row_year = _coerce_record_year(row.get("Year"))
+            if row_year is None and latest_year is None:
+                latest_row = row
+                continue
+            if row_year is None:
+                continue
+            if latest_year is None or row_year >= latest_year:
+                latest_row = row
+                latest_year = row_year
+
+        aggregated = dict(latest_row)
+        player_name = str(latest_row.get("Player", "")).strip()
+        player_key = str(latest_row.get(PLAYER_KEY_COL) or "").strip() or _normalize_player_key(player_name)
+        aggregated[PLAYER_KEY_COL] = player_key
+        aggregated[PLAYER_ENTITY_KEY_COL] = entity_key or player_key
+
+        team_value = _row_team_value(latest_row)
+        if not team_value:
+            for row in player_rows:
+                team_value = _row_team_value(row)
+                if team_value:
+                    break
+        if team_value:
+            aggregated["Team"] = team_value
+
+        position_tokens: set[str] = set()
+        for row in player_rows:
+            position_tokens.update(_position_tokens(row.get("Pos")))
+        if position_tokens:
+            aggregated["Pos"] = "/".join(sorted(position_tokens, key=_position_sort_key))
+
+        ages = [age for age in (_coerce_numeric(row.get("Age")) for row in player_rows) if age is not None]
+        if ages:
+            aggregated["Age"] = int(round(min(ages)))
+
+        year_start, year_end = _rows_year_bounds(player_rows)
+        aggregated["Year"] = None
+        aggregated["YearStart"] = year_start
+        aggregated["YearEnd"] = year_end
+        aggregated["Years"] = _format_year_span(year_start, year_end)
+
+        projection_count = _sum_projection_counts([row.get("ProjectionsUsed") for row in player_rows])
+        if projection_count is not None:
+            aggregated["ProjectionsUsed"] = projection_count
+        aggregated["OldestProjectionDate"] = _oldest_projection_date(
+            *(row.get("OldestProjectionDate") for row in player_rows)
+        )
+
+        stat_totals: dict[str, float] = {}
+        for row in player_rows:
+            for key, value in row.items():
+                if key in excluded_from_sum or key.startswith("Value_"):
+                    continue
+                numeric = _coerce_numeric(value)
+                if numeric is None:
+                    continue
+                stat_totals[key] = stat_totals.get(key, 0.0) + numeric
+
+        for key, value in stat_totals.items():
+            aggregated[key] = value
+
+        if is_hitter:
+            h = _coerce_numeric(aggregated.get("H"))
+            ab = _coerce_numeric(aggregated.get("AB"))
+            if h is not None and ab is not None and ab > 0:
+                aggregated["AVG"] = h / ab
+            else:
+                weighted_avg = _weighted_rate(player_rows, "AVG", "AB")
+                if weighted_avg is not None:
+                    aggregated["AVG"] = weighted_avg
+
+            b2 = _coerce_numeric(aggregated.get("2B"))
+            b3 = _coerce_numeric(aggregated.get("3B"))
+            hr = _coerce_numeric(aggregated.get("HR"))
+            bb = _coerce_numeric(aggregated.get("BB"))
+            hbp = _coerce_numeric(aggregated.get("HBP"))
+            sf = _coerce_numeric(aggregated.get("SF"))
+            if (
+                h is not None
+                and b2 is not None
+                and b3 is not None
+                and hr is not None
+                and bb is not None
+                and hbp is not None
+                and ab is not None
+                and sf is not None
+                and ab > 0
+            ):
+                tb = h + b2 + 2.0 * b3 + 3.0 * hr
+                obp_den = ab + bb + hbp + sf
+                if obp_den > 0:
+                    obp = (h + bb + hbp) / obp_den
+                    slg = tb / ab
+                    aggregated["OPS"] = obp + slg
+            else:
+                weighted_ops = _weighted_rate(player_rows, "OPS", "AB")
+                if weighted_ops is not None:
+                    aggregated["OPS"] = weighted_ops
+        else:
+            er = _coerce_numeric(aggregated.get("ER"))
+            ip = _coerce_numeric(aggregated.get("IP"))
+            if er is not None and ip is not None and ip > 0:
+                aggregated["ERA"] = (9.0 * er) / ip
+            else:
+                weighted_era = _weighted_rate(player_rows, "ERA", "IP")
+                if weighted_era is not None:
+                    aggregated["ERA"] = weighted_era
+
+            h = _coerce_numeric(aggregated.get("H"))
+            bb = _coerce_numeric(aggregated.get("BB"))
+            if h is not None and bb is not None and ip is not None and ip > 0:
+                aggregated["WHIP"] = (h + bb) / ip
+            else:
+                weighted_whip = _weighted_rate(player_rows, "WHIP", "IP")
+                if weighted_whip is not None:
+                    aggregated["WHIP"] = weighted_whip
+
+        aggregated_rows.append(aggregated)
+
+    return aggregated_rows
+
+
+def _aggregate_all_projection_career_rows(hit_rows: list[dict], pit_rows: list[dict]) -> list[dict]:
+    if not hit_rows and not pit_rows:
+        return []
+
+    hit_aggregated = _aggregate_projection_career_rows(hit_rows, is_hitter=True)
+    pit_aggregated = _aggregate_projection_career_rows(pit_rows, is_hitter=False)
+
+    hit_by_key = {_career_group_key(row): row for row in hit_aggregated}
+    pit_by_key = {_career_group_key(row): row for row in pit_aggregated}
+
+    ordered_keys: list[str] = []
+    seen: set[str] = set()
+    for row in list(hit_rows) + list(pit_rows):
+        key = _career_group_key(row)
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered_keys.append(key)
+    if not ordered_keys:
+        ordered_keys = list(dict.fromkeys(list(hit_by_key.keys()) + list(pit_by_key.keys())))
+
+    merged_rows: list[dict] = []
+    for key in ordered_keys:
+        hit = hit_by_key.get(key)
+        pit = pit_by_key.get(key)
+        if not hit and not pit:
+            continue
+
+        source = hit or pit or {}
+        merged = dict(source)
+
+        merged["Type"] = "H/P" if hit and pit else ("H" if hit else "P")
+        merged["Team"] = _row_team_value(hit or {}) or _row_team_value(pit or {})
+        merged["Pos"] = _merge_position_value((hit or {}).get("Pos"), (pit or {}).get("Pos"))
+        merged["Age"] = (hit or {}).get("Age")
+        if merged["Age"] is None:
+            merged["Age"] = (pit or {}).get("Age")
+
+        year_start_candidates = [
+            parsed
+            for value in ((hit or {}).get("YearStart"), (pit or {}).get("YearStart"), (hit or {}).get("Year"), (pit or {}).get("Year"))
+            if (parsed := _coerce_record_year(value)) is not None
+        ]
+        year_end_candidates = [
+            parsed
+            for value in ((hit or {}).get("YearEnd"), (pit or {}).get("YearEnd"), (hit or {}).get("Year"), (pit or {}).get("Year"))
+            if (parsed := _coerce_record_year(value)) is not None
+        ]
+        year_start = min(year_start_candidates) if year_start_candidates else None
+        year_end = max(year_end_candidates) if year_end_candidates else None
+        merged["Year"] = None
+        merged["YearStart"] = year_start
+        merged["YearEnd"] = year_end
+        merged["Years"] = _format_year_span(year_start, year_end)
+
+        projection_total = _sum_projection_counts([(hit or {}).get("ProjectionsUsed"), (pit or {}).get("ProjectionsUsed")])
+        if projection_total is not None:
+            merged["ProjectionsUsed"] = projection_total
+        merged["OldestProjectionDate"] = _oldest_projection_date(
+            (hit or {}).get("OldestProjectionDate"),
+            (pit or {}).get("OldestProjectionDate"),
+        )
+
+        # In the all-rows view, unprefixed hitting fields always represent hitter stats.
+        for col in ALL_TAB_HITTER_STAT_COLS:
+            merged[col] = (hit or {}).get(col)
+
+        # Pitching fields are kept separately, including prefixed collision stats.
+        for col in ALL_TAB_PITCH_STAT_COLS:
+            merged[col] = (pit or {}).get(col)
+        merged["PitH"] = (pit or {}).get("H")
+        merged["PitHR"] = (pit or {}).get("HR")
+        merged["PitBB"] = (pit or {}).get("BB")
+
+        merged_rows.append(merged)
+
+    return merged_rows
+
+
 def _normalize_sort_dir(value: str | None) -> Literal["asc", "desc"]:
     return "asc" if str(value or "").strip().lower() == "asc" else "desc"
 
@@ -1813,6 +2108,9 @@ def _projection_sortable_columns_for_dataset(dataset: Literal["all", "bat", "pit
         "Team",
         "Pos",
         "Year",
+        "Years",
+        "YearStart",
+        "YearEnd",
         "Age",
         "ProjectionsUsed",
         "OldestProjectionDate",
@@ -2013,6 +2311,7 @@ def _cached_projection_rows(
     pos: str,
     include_dynasty: bool,
     dynasty_years: str,
+    career_totals: bool,
     sort_col: str,
     sort_dir: str,
 ) -> tuple[dict, ...]:
@@ -2026,6 +2325,8 @@ def _cached_projection_rows(
         requested_years,
         pos or None,
     )
+    if career_totals:
+        filtered = _aggregate_projection_career_rows(filtered, is_hitter=(dataset == "bat"))
     if include_dynasty:
         filtered = _attach_dynasty_values(
             filtered,
@@ -2044,6 +2345,7 @@ def _cached_all_projection_rows(
     pos: str,
     include_dynasty: bool,
     dynasty_years: str,
+    career_totals: bool,
     sort_col: str,
     sort_dir: str,
 ) -> tuple[dict, ...]:
@@ -2063,7 +2365,11 @@ def _cached_all_projection_rows(
         requested_years,
         None,
     )
-    merged = _merge_all_projection_rows(hit_filtered, pit_filtered)
+    merged = (
+        _aggregate_all_projection_career_rows(hit_filtered, pit_filtered)
+        if career_totals
+        else _merge_all_projection_rows(hit_filtered, pit_filtered)
+    )
     if pos:
         requested_positions = _position_tokens(pos)
         if requested_positions:
@@ -2091,6 +2397,7 @@ def _get_projection_rows(
     pos: str | None,
     include_dynasty: bool,
     dynasty_years: str | None,
+    career_totals: bool,
     sort_col: str | None,
     sort_dir: str | None,
 ) -> tuple[dict, ...]:
@@ -2103,6 +2410,7 @@ def _get_projection_rows(
         _normalize_filter_value(pos),
         include_dynasty,
         _normalize_filter_value(dynasty_years),
+        career_totals,
         _normalize_filter_value(sort_col),
         _normalize_sort_dir(sort_dir),
     )
@@ -2117,6 +2425,7 @@ def _get_all_projection_rows(
     pos: str | None,
     include_dynasty: bool,
     dynasty_years: str | None,
+    career_totals: bool,
     sort_col: str | None,
     sort_dir: str | None,
 ) -> tuple[dict, ...]:
@@ -2128,6 +2437,7 @@ def _get_all_projection_rows(
         _normalize_filter_value(pos),
         include_dynasty,
         _normalize_filter_value(dynasty_years),
+        career_totals,
         _normalize_filter_value(sort_col),
         _normalize_sort_dir(sort_dir),
     )
@@ -2196,6 +2506,7 @@ def get_all_projections(
     years: Optional[str] = None,
     pos: Optional[str] = None,
     dynasty_years: Optional[str] = None,
+    career_totals: bool = False,
     include_dynasty: bool = True,
     sort_col: Optional[str] = None,
     sort_dir: Literal["asc", "desc"] = "desc",
@@ -2212,6 +2523,7 @@ def get_all_projections(
         pos=pos,
         include_dynasty=include_dynasty,
         dynasty_years=dynasty_years,
+        career_totals=career_totals,
         sort_col=validated_sort_col,
         sort_dir=sort_dir,
     )
@@ -2228,6 +2540,7 @@ def get_bat_projections(
     years: Optional[str] = None,
     pos: Optional[str] = None,
     dynasty_years: Optional[str] = None,
+    career_totals: bool = False,
     include_dynasty: bool = True,
     sort_col: Optional[str] = None,
     sort_dir: Literal["asc", "desc"] = "desc",
@@ -2245,6 +2558,7 @@ def get_bat_projections(
         pos=pos,
         include_dynasty=include_dynasty,
         dynasty_years=dynasty_years,
+        career_totals=career_totals,
         sort_col=validated_sort_col,
         sort_dir=sort_dir,
     )
@@ -2261,6 +2575,7 @@ def get_pitch_projections(
     years: Optional[str] = None,
     pos: Optional[str] = None,
     dynasty_years: Optional[str] = None,
+    career_totals: bool = False,
     include_dynasty: bool = True,
     sort_col: Optional[str] = None,
     sort_dir: Literal["asc", "desc"] = "desc",
@@ -2278,6 +2593,7 @@ def get_pitch_projections(
         pos=pos,
         include_dynasty=include_dynasty,
         dynasty_years=dynasty_years,
+        career_totals=career_totals,
         sort_col=validated_sort_col,
         sort_dir=sort_dir,
     )
@@ -2296,6 +2612,7 @@ def export_projections(
     years: Optional[str] = None,
     pos: Optional[str] = None,
     dynasty_years: Optional[str] = None,
+    career_totals: bool = False,
     include_dynasty: bool = True,
     sort_col: Optional[str] = None,
     sort_dir: Literal["asc", "desc"] = "desc",
@@ -2312,6 +2629,7 @@ def export_projections(
                 pos=pos,
                 include_dynasty=include_dynasty,
                 dynasty_years=dynasty_years,
+                career_totals=career_totals,
                 sort_col=validated_sort_col,
                 sort_dir=sort_dir,
             )
@@ -2327,6 +2645,7 @@ def export_projections(
                 pos=pos,
                 include_dynasty=include_dynasty,
                 dynasty_years=dynasty_years,
+                career_totals=career_totals,
                 sort_col=validated_sort_col,
                 sort_dir=sort_dir,
             )

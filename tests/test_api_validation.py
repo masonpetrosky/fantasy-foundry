@@ -572,6 +572,203 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(filter_spy.call_count, 1)
 
+    def test_bat_endpoint_career_totals_aggregates_stats_across_years(self) -> None:
+        bat_rows = [
+            {
+                "Player": "Career Bat",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "Age": 24,
+                "ProjectionsUsed": 3,
+                "OldestProjectionDate": "2026-01-10",
+                "AB": 500.0,
+                "H": 150.0,
+                "2B": 30.0,
+                "3B": 2.0,
+                "HR": 25.0,
+                "BB": 60.0,
+                "HBP": 5.0,
+                "SF": 4.0,
+                "R": 85.0,
+                "RBI": 92.0,
+                "SB": 14.0,
+                "SO": 120.0,
+            },
+            {
+                "Player": "Career Bat",
+                "Team": "SEA",
+                "Year": 2027,
+                "Pos": "OF",
+                "Age": 25,
+                "ProjectionsUsed": 2,
+                "OldestProjectionDate": "2025-12-20",
+                "AB": 550.0,
+                "H": 160.0,
+                "2B": 32.0,
+                "3B": 1.0,
+                "HR": 27.0,
+                "BB": 65.0,
+                "HBP": 6.0,
+                "SF": 5.0,
+                "R": 90.0,
+                "RBI": 98.0,
+                "SB": 16.0,
+                "SO": 130.0,
+            },
+        ]
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/bat",
+                params={"career_totals": "true", "include_dynasty": "false"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 1)
+        row = payload["data"][0]
+        self.assertEqual(row["Player"], "Career Bat")
+        self.assertEqual(row["Years"], "2026-2027")
+        self.assertEqual(row["YearStart"], 2026)
+        self.assertEqual(row["YearEnd"], 2027)
+        self.assertIsNone(row["Year"])
+        self.assertEqual(row["AB"], 1050.0)
+        self.assertEqual(row["H"], 310.0)
+        self.assertEqual(row["HR"], 52.0)
+        self.assertEqual(row["ProjectionsUsed"], 5)
+        self.assertEqual(row["OldestProjectionDate"], "2025-12-20")
+        self.assertAlmostEqual(row["AVG"], 310.0 / 1050.0, places=6)
+
+        total_tb = 310.0 + 62.0 + (2.0 * 3.0) + (3.0 * 52.0)
+        total_obp = (310.0 + 125.0 + 11.0) / (1050.0 + 125.0 + 11.0 + 9.0)
+        total_ops = total_obp + (total_tb / 1050.0)
+        self.assertAlmostEqual(row["OPS"], total_ops, places=6)
+
+    def test_all_endpoint_career_totals_merges_two_way_player(self) -> None:
+        bat_rows = [
+            {
+                "Player": "Dual Star",
+                "Team": "LAD",
+                "Year": 2026,
+                "Pos": "DH",
+                "Age": 28,
+                "ProjectionsUsed": 2,
+                "OldestProjectionDate": "2026-01-05",
+                "AB": 520.0,
+                "H": 150.0,
+                "2B": 28.0,
+                "3B": 2.0,
+                "HR": 34.0,
+                "BB": 70.0,
+                "HBP": 4.0,
+                "SF": 4.0,
+                "R": 92.0,
+                "RBI": 101.0,
+                "SB": 15.0,
+                "SO": 130.0,
+            },
+            {
+                "Player": "Dual Star",
+                "Team": "LAD",
+                "Year": 2027,
+                "Pos": "DH",
+                "Age": 29,
+                "ProjectionsUsed": 2,
+                "OldestProjectionDate": "2025-12-30",
+                "AB": 510.0,
+                "H": 148.0,
+                "2B": 27.0,
+                "3B": 1.0,
+                "HR": 32.0,
+                "BB": 68.0,
+                "HBP": 3.0,
+                "SF": 3.0,
+                "R": 90.0,
+                "RBI": 98.0,
+                "SB": 14.0,
+                "SO": 128.0,
+            },
+        ]
+        pit_rows = [
+            {
+                "Player": "Dual Star",
+                "Team": "LAD",
+                "Year": 2026,
+                "Pos": "SP",
+                "Age": 28,
+                "ProjectionsUsed": 1,
+                "OldestProjectionDate": "2026-01-20",
+                "GS": 24.0,
+                "IP": 140.0,
+                "W": 11.0,
+                "L": 5.0,
+                "K": 170.0,
+                "SV": 0.0,
+                "SVH": 0.0,
+                "ER": 50.0,
+                "H": 120.0,
+                "HR": 16.0,
+                "BB": 42.0,
+            },
+            {
+                "Player": "Dual Star",
+                "Team": "LAD",
+                "Year": 2027,
+                "Pos": "SP",
+                "Age": 29,
+                "ProjectionsUsed": 2,
+                "OldestProjectionDate": "2026-02-01",
+                "GS": 26.0,
+                "IP": 150.0,
+                "W": 12.0,
+                "L": 6.0,
+                "K": 180.0,
+                "SV": 0.0,
+                "SVH": 0.0,
+                "ER": 54.0,
+                "H": 126.0,
+                "HR": 18.0,
+                "BB": 45.0,
+            },
+        ]
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(
+            app_module, "PIT_DATA", pit_rows
+        ), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/all",
+                params={"career_totals": "true", "include_dynasty": "false"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 1)
+        row = payload["data"][0]
+        self.assertEqual(row["Player"], "Dual Star")
+        self.assertEqual(row["Type"], "H/P")
+        self.assertEqual(row["Pos"], "DH/SP")
+        self.assertEqual(row["Years"], "2026-2027")
+        self.assertEqual(row["YearStart"], 2026)
+        self.assertEqual(row["YearEnd"], 2027)
+        self.assertIsNone(row["Year"])
+        self.assertEqual(row["H"], 298.0)
+        self.assertEqual(row["HR"], 66.0)
+        self.assertEqual(row["PitH"], 246.0)
+        self.assertEqual(row["PitHR"], 34.0)
+        self.assertEqual(row["PitBB"], 87.0)
+        self.assertEqual(row["K"], 350.0)
+        self.assertEqual(row["ProjectionsUsed"], 7)
+        self.assertEqual(row["OldestProjectionDate"], "2025-12-30")
+
 
 class CalculatorValidationTests(unittest.TestCase):
     @classmethod

@@ -9,7 +9,7 @@ A web application for browsing 20-year MLB dynasty baseball projections (2026–
 
 ## Features
 
-- **Projections Explorer** — Browse, search, filter, sort, and paginate hitter/pitcher/combined projections across 20 seasons
+- **Projections Explorer** — Browse, search, filter, sort, and paginate hitter/pitcher/combined projections across 20 seasons (default view is rest-of-career totals)
 - **Dynasty Value Calculator** — Configure your league settings (teams, roster, categories, IP caps) and generate Monte Carlo–based dynasty rankings
 - **Dual scoring workflows** — Switch between roto-focused and points-focused setups, including editable custom points scoring rules
 - **Explainability panel** — Inspect per-year value contributions and detailed stat-to-points breakdowns in points mode
@@ -71,7 +71,7 @@ python -m unittest tests/test_e2e_projections_pagination.py
 python -m unittest tests/test_e2e_calculator_smoke.py
 ```
 
-`test_e2e_projections_pagination.py` launches the app locally, selects `All Years` in the projections view, and verifies:
+`test_e2e_projections_pagination.py` launches the app locally, switches the projections view to `All Years (Year-by-year)`, and verifies:
 - the UI reports more than 5,000 projection rows
 - the browser issued paginated API requests against `/api/projections/all`
 
@@ -116,8 +116,8 @@ All three support Dockerfiles out of the box:
 | GET | `/api/health` | Runtime health summary (projection row counts, cache/job stats) |
 | GET | `/api/version` | Build metadata (`build_id`, commit SHA, build timestamp) |
 | GET | `/api/meta` | Filter options (teams, years, positions) |
-| GET | `/api/projections/all` | Combined hitter+pitcher rows (query params: player, team, year, years, pos, dynasty_years, include_dynasty, sort_col, sort_dir, limit, offset) |
-| GET | `/api/projections/bat` | Hitter projections (query params: player, team, year, years, pos, dynasty_years, include_dynasty, sort_col, sort_dir, limit, offset) |
+| GET | `/api/projections/all` | Combined hitter+pitcher rows (query params: player, team, year, years, pos, dynasty_years, career_totals, include_dynasty, sort_col, sort_dir, limit, offset) |
+| GET | `/api/projections/bat` | Hitter projections (query params: player, team, year, years, pos, dynasty_years, career_totals, include_dynasty, sort_col, sort_dir, limit, offset) |
 | GET | `/api/projections/pitch` | Pitcher projections (same query params as `/api/projections/bat`) |
 | GET | `/api/projections/export/{dataset}` | Export filtered projections as CSV/XLSX (`dataset`: `all`, `bat`, `pitch`; query param: `format`) |
 | POST | `/api/calculate` | Run dynasty value calculator (JSON body with league settings) |
@@ -126,6 +126,7 @@ All three support Dockerfiles out of the box:
 `years` accepts comma-separated years and inclusive ranges, for example `2026,2028-2030`.
 If both `year` and `years` are provided, results use the intersection.
 `dynasty_years` accepts comma-separated years and inclusive ranges, for example `2026,2028-2030`.
+`career_totals=true` collapses each player to a single rest-of-career totals row across the selected years.
 `pos` accepts one or more exact position tokens (comma, slash, or space separated), for example `SP,RP` or `1B/OF`.
 `sort_dir` supports `asc` or `desc` and is applied server-side before pagination.
 `sort_col` is validated server-side and returns HTTP 422 when unsupported for that endpoint.
