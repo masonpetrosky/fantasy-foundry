@@ -568,9 +568,28 @@ def _cleanup_local_result_cache(now_ts: float | None = None) -> None:
     expired = [key for key, (expires_at, _payload) in CALC_RESULT_CACHE.items() if expires_at <= now]
     for key in expired:
         CALC_RESULT_CACHE.pop(key, None)
+
+    if CALC_RESULT_CACHE_ORDER:
+        seen: set[str] = set()
+        deduped: deque[str] = deque()
+        for key in CALC_RESULT_CACHE_ORDER:
+            if key in CALC_RESULT_CACHE and key not in seen:
+                deduped.append(key)
+                seen.add(key)
+        CALC_RESULT_CACHE_ORDER.clear()
+        CALC_RESULT_CACHE_ORDER.extend(deduped)
+
     while len(CALC_RESULT_CACHE) > CALC_RESULT_CACHE_MAX_ENTRIES and CALC_RESULT_CACHE_ORDER:
         oldest = CALC_RESULT_CACHE_ORDER.popleft()
         CALC_RESULT_CACHE.pop(oldest, None)
+
+
+def _touch_local_result_cache_key(cache_key: str) -> None:
+    try:
+        CALC_RESULT_CACHE_ORDER.remove(cache_key)
+    except ValueError:
+        pass
+    CALC_RESULT_CACHE_ORDER.append(cache_key)
 
 
 def _result_cache_get(cache_key: str) -> dict | None:
@@ -595,6 +614,7 @@ def _result_cache_get(cache_key: str) -> dict | None:
         if expires_at <= now:
             CALC_RESULT_CACHE.pop(cache_key, None)
             return None
+        _touch_local_result_cache_key(cache_key)
         return dict(payload)
 
 
@@ -613,7 +633,7 @@ def _result_cache_set(cache_key: str, payload: dict) -> None:
     expires_at = time.time() + CALC_RESULT_CACHE_TTL_SECONDS
     with CALC_RESULT_CACHE_LOCK:
         CALC_RESULT_CACHE[cache_key] = (expires_at, dict(payload))
-        CALC_RESULT_CACHE_ORDER.append(cache_key)
+        _touch_local_result_cache_key(cache_key)
         _cleanup_local_result_cache()
 
 
@@ -2127,6 +2147,45 @@ def get_version():
             "Expires": "0",
         },
     )
+
+
+@app.get("/api/health")
+def get_health():
+    _refresh_data_if_needed()
+
+    with CALCULATOR_JOB_LOCK:
+        _cleanup_calculation_jobs()
+        job_status_counts = {"queued": 0, "running": 0, "completed": 0, "failed": 0}
+        for job in CALCULATOR_JOBS.values():
+            status = str(job.get("status") or "").strip().lower()
+            if status in job_status_counts:
+                job_status_counts[status] += 1
+
+    with CALC_RESULT_CACHE_LOCK:
+        _cleanup_local_result_cache()
+        local_result_cache_entries = len(CALC_RESULT_CACHE)
+
+    with CALCULATOR_PREWARM_LOCK:
+        prewarm = dict(CALCULATOR_PREWARM_STATE)
+
+    return {
+        "status": "ok",
+        "build_id": APP_BUILD_ID,
+        "projection_rows": {
+            "bat": len(BAT_DATA),
+            "pitch": len(PIT_DATA),
+        },
+        "jobs": {
+            "total": len(CALCULATOR_JOBS),
+            **job_status_counts,
+        },
+        "result_cache": {
+            "local_entries": local_result_cache_entries,
+            "redis_configured": bool(REDIS_URL),
+        },
+        "calculator_prewarm": prewarm,
+        "timestamp": _iso_now(),
+    }
 
 
 @app.get("/api/projections/all")

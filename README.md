@@ -55,7 +55,7 @@ Then open http://localhost:8000
 
 ### Running Tests
 ```bash
-python -m unittest discover -s tests -p "test_*.py"
+pytest -q
 ```
 
 ### Running Browser E2E Tests (Playwright)
@@ -113,6 +113,8 @@ All three support Dockerfiles out of the box:
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/health` | Runtime health summary (projection row counts, cache/job stats) |
+| GET | `/api/version` | Build metadata (`build_id`, commit SHA, build timestamp) |
 | GET | `/api/meta` | Filter options (teams, years, positions) |
 | GET | `/api/projections/all` | Combined hitter+pitcher rows (query params: player, team, year, years, pos, dynasty_years, include_dynasty, sort_col, sort_dir, limit, offset) |
 | GET | `/api/projections/bat` | Hitter projections (query params: player, team, year, years, pos, dynasty_years, include_dynasty, sort_col, sort_dir, limit, offset) |

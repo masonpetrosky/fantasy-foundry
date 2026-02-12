@@ -590,6 +590,67 @@ class CalculatorValidationTests(unittest.TestCase):
         with app_module.REQUEST_RATE_LIMIT_LOCK:
             app_module.REQUEST_RATE_LIMIT_BUCKETS.clear()
 
+    def test_local_result_cache_reorders_on_get_for_lru_eviction(self) -> None:
+        with patch.object(app_module, "_redis_client", return_value=None), patch.object(
+            app_module,
+            "CALC_RESULT_CACHE_MAX_ENTRIES",
+            2,
+        ):
+            app_module._result_cache_set("a", {"value": "A"})
+            app_module._result_cache_set("b", {"value": "B"})
+            cached = app_module._result_cache_get("a")
+            app_module._result_cache_set("c", {"value": "C"})
+
+        self.assertEqual(cached, {"value": "A"})
+        self.assertIn("a", app_module.CALC_RESULT_CACHE)
+        self.assertIn("c", app_module.CALC_RESULT_CACHE)
+        self.assertNotIn("b", app_module.CALC_RESULT_CACHE)
+
+    def test_local_result_cache_upsert_deduplicates_order_queue(self) -> None:
+        with patch.object(app_module, "_redis_client", return_value=None):
+            app_module._result_cache_set("same-key", {"value": 1})
+            app_module._result_cache_set("same-key", {"value": 2})
+
+        self.assertEqual(list(app_module.CALC_RESULT_CACHE_ORDER), ["same-key"])
+        self.assertEqual(app_module._result_cache_get("same-key"), {"value": 2})
+
+    def test_health_endpoint_reports_runtime_summary(self) -> None:
+        with app_module.CALCULATOR_JOB_LOCK:
+            app_module.CALCULATOR_JOBS.clear()
+            app_module.CALCULATOR_JOBS["job-queued"] = {"status": "queued", "job_id": "job-queued"}
+            app_module.CALCULATOR_JOBS["job-failed"] = {"status": "failed", "job_id": "job-failed"}
+        with app_module.CALC_RESULT_CACHE_LOCK:
+            app_module.CALC_RESULT_CACHE.clear()
+            app_module.CALC_RESULT_CACHE_ORDER.clear()
+            app_module.CALC_RESULT_CACHE["cache-key"] = (time.time() + 60.0, {"value": 1})
+            app_module.CALC_RESULT_CACHE_ORDER.append("cache-key")
+
+        with patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ), patch.object(
+            app_module,
+            "BAT_DATA",
+            [{"Player": "Hitter"}],
+        ), patch.object(
+            app_module,
+            "PIT_DATA",
+            [{"Player": "Pitcher 1"}, {"Player": "Pitcher 2"}],
+        ):
+            response = self.client.get("/api/health")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload.get("status"), "ok")
+        self.assertEqual(payload.get("projection_rows", {}).get("bat"), 1)
+        self.assertEqual(payload.get("projection_rows", {}).get("pitch"), 2)
+        self.assertEqual(payload.get("jobs", {}).get("total"), 2)
+        self.assertEqual(payload.get("jobs", {}).get("queued"), 1)
+        self.assertEqual(payload.get("jobs", {}).get("failed"), 1)
+        self.assertEqual(payload.get("result_cache", {}).get("local_entries"), 1)
+        self.assertIn("timestamp", payload)
+
     def test_calculate_request_default_horizon_is_twenty(self) -> None:
         req = app_module.CalculateRequest()
         self.assertEqual(req.horizon, 20)

@@ -373,6 +373,33 @@ nav button.active {
   color: var(--text-muted);
 }
 
+.result-count.loading {
+  color: var(--accent-dim);
+}
+
+.table-refresh-message {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.table-refresh-message.error {
+  border-color: rgba(248, 113, 113, 0.35);
+  color: var(--red);
+}
+
+.mobile-table-controls {
+  display: none;
+}
+
+.table-swipe-hint {
+  display: none;
+}
+
 /* ====== DATA TABLE ====== */
 .table-wrapper {
   border: 1px solid var(--border);
@@ -1069,6 +1096,93 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   thead th { padding: 10px 12px; }
   tbody td { padding: 9px 12px; }
 
+  .mobile-table-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+  }
+
+  .mobile-table-controls .label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+  }
+
+  .mobile-view-toggle {
+    display: inline-flex;
+    gap: 4px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 7px;
+    padding: 3px;
+  }
+
+  .mobile-view-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.74rem;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 5px;
+    min-height: 34px;
+    touch-action: manipulation;
+  }
+
+  .mobile-view-btn.active {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .table-swipe-hint {
+    display: block;
+    margin: 0 0 8px;
+    color: var(--text-muted);
+    font-size: 0.74rem;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .projections-table thead th.index-col {
+    position: sticky;
+    left: 0;
+    z-index: 22;
+    width: 42px;
+    min-width: 42px;
+    background: var(--bg-tertiary);
+  }
+
+  .projections-table td.index-col {
+    position: sticky;
+    left: 0;
+    z-index: 9;
+    width: 42px;
+    min-width: 42px;
+    background: var(--bg-card);
+  }
+
+  .projections-table thead th.player-col {
+    left: 42px;
+    z-index: 21;
+  }
+
+  .projections-table td.player-name {
+    left: 42px;
+    z-index: 8;
+    min-width: 150px;
+  }
+
+  .projections-table tbody tr:hover td.index-col,
+  .projections-table tbody tr:hover td.player-name {
+    background: var(--bg-hover);
+  }
+
   .pagination {
     flex-wrap: wrap;
     justify-content: center;
@@ -1079,6 +1193,12 @@ footer a { color: var(--accent-dim); text-decoration: none; }
     width: 100%;
     text-align: center;
     order: 3;
+  }
+
+  .pagination button {
+    min-height: 40px;
+    padding: 9px 16px;
+    touch-action: manipulation;
   }
 
   .form-row { grid-template-columns: 1fr; gap: 10px; }
@@ -1156,6 +1276,7 @@ const BUILD_STORAGE_KEY = "ff:lastBuildId";
 const BUILD_QUERY_PARAM = "build";
 const CALC_PRESETS_STORAGE_KEY = "ff:calc-presets:v1";
 const CALC_LINK_QUERY_PARAM = "calc";
+const PROJECTION_MOBILE_COLUMN_MODE_STORAGE_KEY = "ff:proj-mobile-column-mode:v1";
 const INDEX_BUILD_ID_TOKEN = "__APP_BUILD_ID__";
 const INDEX_BUILD_ID = INDEX_BUILD_ID_TOKEN.startsWith("__APP_BUILD_") ? "" : INDEX_BUILD_ID_TOKEN;
 
@@ -1204,6 +1325,16 @@ function normalizePlayerKey(value) {
 
 function calculationRowExplainKey(row) {
   return String(row?.PlayerEntityKey || row?.PlayerKey || normalizePlayerKey(row?.Player)).trim();
+}
+
+function projectionRowKey(row, fallbackIndex = 0) {
+  const entity = String(row?.PlayerEntityKey || row?.PlayerKey || "").trim();
+  const player = String(row?.Player || "").trim();
+  const team = String(row?.Team || "").trim();
+  const year = String(row?.Year ?? "").trim();
+  const side = String(row?.Type || "").trim();
+  const stableKey = entity || `${player}|${team}|${year}|${side}`;
+  return stableKey ? `${stableKey}|${fallbackIndex}` : `row-${fallbackIndex}`;
 }
 
 function downloadBlob(filename, content, mimeType) {
@@ -1276,6 +1407,10 @@ function decodeCalculatorSettings(encoded) {
 const DEFAULT_PROJECTIONS_TAB = "all";
 const DEFAULT_PROJECTIONS_SORT_COL = "DynastyValue";
 const DEFAULT_PROJECTIONS_SORT_DIR = "desc";
+const PROJECTION_PAGE_CACHE_MAX = 80;
+const PROJECTION_SEARCH_DEBOUNCE_MS = 220;
+const PROJECTION_INITIAL_FETCH_DELAY_MS = 220;
+const CALC_SEARCH_DEBOUNCE_MS = 140;
 const SLOT_INPUT_MIN = 0;
 const SLOT_INPUT_MAX = 15;
 const HITTER_SLOT_FIELDS = [
@@ -1470,6 +1605,48 @@ function sleepWithAbort(ms, signal) {
     };
     signal.addEventListener("abort", onAbort);
   });
+}
+
+function useDebouncedValue(value, delayMs) {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [value, delayMs]);
+
+  return debounced;
+}
+
+function projectionCacheGet(cacheMapRef, cacheOrderRef, cacheKey) {
+  const cached = cacheMapRef.current.get(cacheKey);
+  if (!cached) return null;
+
+  const idx = cacheOrderRef.current.indexOf(cacheKey);
+  if (idx !== -1) {
+    cacheOrderRef.current.splice(idx, 1);
+  }
+  cacheOrderRef.current.push(cacheKey);
+  return cached;
+}
+
+function projectionCacheSet(cacheMapRef, cacheOrderRef, cacheKey, payload) {
+  cacheMapRef.current.set(cacheKey, payload);
+
+  const idx = cacheOrderRef.current.indexOf(cacheKey);
+  if (idx !== -1) {
+    cacheOrderRef.current.splice(idx, 1);
+  }
+  cacheOrderRef.current.push(cacheKey);
+
+  while (cacheOrderRef.current.length > PROJECTION_PAGE_CACHE_MAX) {
+    const oldest = cacheOrderRef.current.shift();
+    if (oldest) {
+      cacheMapRef.current.delete(oldest);
+    }
+  }
 }
 
 function buildCalculatorPayload(settings, availableYears, meta) {
@@ -1804,6 +1981,14 @@ function App() {
 function ProjectionsExplorer({ meta }) {
   const [tab, setTab] = useState(DEFAULT_PROJECTIONS_TAB); // all | bat | pitch
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search, PROJECTION_SEARCH_DEBOUNCE_MS);
+  const [isMobileViewport, setIsMobileViewport] = useState(() => (
+    window.matchMedia("(max-width: 768px)").matches
+  ));
+  const [mobileColumnMode, setMobileColumnMode] = useState(() => {
+    const saved = String(safeReadStorage(PROJECTION_MOBILE_COLUMN_MODE_STORAGE_KEY) || "").trim().toLowerCase();
+    return saved === "full" ? "full" : "compact";
+  });
   const [teamFilter, setTeamFilter] = useState("");
   const [yearFilter, setYearFilter] = useState(() => String(meta.years?.[0] ?? ""));
   const [posFilters, setPosFilters] = useState([]);
@@ -1818,11 +2003,60 @@ function ProjectionsExplorer({ meta }) {
   const [sortDir, setSortDir] = useState(DEFAULT_PROJECTIONS_SORT_DIR);
   const requestSeqRef = useRef(0);
   const abortControllerRef = useRef(null);
+  const hasLoadedProjectionPageRef = useRef(false);
+  const projectionCacheMapRef = useRef(new Map());
+  const projectionCacheOrderRef = useRef([]);
+  const projectionTableScrollRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
   const limit = 100;
   const selectedDynastyYears = useMemo(() => {
     if (yearFilter) return [String(yearFilter)];
     return (meta.years || []).map(String);
   }, [meta.years, yearFilter]);
+
+  const updateProjectionHorizontalAffordance = useCallback(() => {
+    const el = projectionTableScrollRef.current;
+    if (!el || !isMobileViewport) {
+      setCanScrollLeft(false);
+      setCanScrollRight(false);
+      return;
+    }
+    const maxLeft = Math.max(0, el.scrollWidth - el.clientWidth);
+    setCanScrollLeft(el.scrollLeft > 2);
+    setCanScrollRight(el.scrollLeft < maxLeft - 2);
+  }, [isMobileViewport]);
+
+  const handleProjectionTableScroll = useCallback(() => {
+    updateProjectionHorizontalAffordance();
+  }, [updateProjectionHorizontalAffordance]);
+
+  const prefetchProjectionPage = useCallback(async (endpointTab, paramsWithoutOffset, nextOffset) => {
+    if (nextOffset < 0) return;
+    const nextParams = new URLSearchParams(paramsWithoutOffset);
+    nextParams.set("offset", String(nextOffset));
+    const nextCacheKey = `${endpointTab}?${nextParams.toString()}`;
+    if (projectionCacheMapRef.current.has(nextCacheKey)) return;
+
+    try {
+      const response = await fetch(`${API}/api/projections/${endpointTab}?${nextParams}`);
+      if (!response.ok) return;
+      const payload = await response.json();
+      const pageRows = Array.isArray(payload.data) ? payload.data : [];
+      const parsedTotal = Number(payload.total);
+      const resolvedTotal = Number.isFinite(parsedTotal) && parsedTotal >= 0 ? parsedTotal : pageRows.length;
+      const typeTag = endpointTab === "bat" ? "H" : endpointTab === "pitch" ? "P" : "";
+      const rows = typeTag ? pageRows.map(row => ({ ...row, Type: typeTag })) : pageRows;
+      projectionCacheSet(
+        projectionCacheMapRef,
+        projectionCacheOrderRef,
+        nextCacheKey,
+        { rows, total: resolvedTotal }
+      );
+    } catch {
+      // Prefetch is best-effort only.
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     const requestSeq = requestSeqRef.current + 1;
@@ -1832,11 +2066,9 @@ function ProjectionsExplorer({ meta }) {
     }
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    setLoading(true);
-    setError("");
 
     const baseParams = new URLSearchParams();
-    if (search) baseParams.set("player", search);
+    if (debouncedSearch) baseParams.set("player", debouncedSearch);
     if (teamFilter) baseParams.set("team", teamFilter);
     if (yearFilter) baseParams.set("year", yearFilter);
     if (posFilters.length > 0) baseParams.set("pos", posFilters.join(","));
@@ -1845,11 +2077,30 @@ function ProjectionsExplorer({ meta }) {
 
     try {
       const endpointTab = tab === "all" ? "all" : tab;
-      const params = new URLSearchParams(baseParams);
-      params.set("limit", String(limit));
+      const paramsWithoutOffset = new URLSearchParams(baseParams);
+      paramsWithoutOffset.set("limit", String(limit));
+      paramsWithoutOffset.set("sort_col", sortCol);
+      paramsWithoutOffset.set("sort_dir", sortDir);
+      const params = new URLSearchParams(paramsWithoutOffset);
       params.set("offset", String(offset));
-      params.set("sort_col", sortCol);
-      params.set("sort_dir", sortDir);
+      const cacheKey = `${endpointTab}?${params.toString()}`;
+
+      const cached = projectionCacheGet(projectionCacheMapRef, projectionCacheOrderRef, cacheKey);
+      if (cached) {
+        if (requestSeq !== requestSeqRef.current) return;
+        hasLoadedProjectionPageRef.current = true;
+        setError("");
+        setData(Array.isArray(cached.rows) ? cached.rows : []);
+        setTotalRows(Number.isFinite(cached.total) ? cached.total : 0);
+        setLoading(false);
+        if (cached.total > offset + limit) {
+          prefetchProjectionPage(endpointTab, paramsWithoutOffset, offset + limit);
+        }
+        return;
+      }
+
+      setLoading(true);
+      setError("");
 
       const response = await fetch(`${API}/api/projections/${endpointTab}?${params}`, {
         signal: controller.signal,
@@ -1868,14 +2119,22 @@ function ProjectionsExplorer({ meta }) {
       const rows = typeTag ? pageRows.map(row => ({ ...row, Type: typeTag })) : pageRows;
 
       if (requestSeq !== requestSeqRef.current || controller.signal.aborted) return;
+      projectionCacheSet(
+        projectionCacheMapRef,
+        projectionCacheOrderRef,
+        cacheKey,
+        { rows, total: resolvedTotal }
+      );
+      hasLoadedProjectionPageRef.current = true;
       setData(rows);
       setTotalRows(resolvedTotal);
       setLoading(false);
+      if (resolvedTotal > offset + limit) {
+        prefetchProjectionPage(endpointTab, paramsWithoutOffset, offset + limit);
+      }
     } catch (err) {
       if (requestSeq !== requestSeqRef.current) return;
       if (err?.name === "AbortError") return;
-      setData([]);
-      setTotalRows(0);
       setLoading(false);
       setError(err.message || "Failed to load projections");
     } finally {
@@ -1883,7 +2142,19 @@ function ProjectionsExplorer({ meta }) {
         abortControllerRef.current = null;
       }
     }
-  }, [tab, search, teamFilter, yearFilter, posFilters, selectedDynastyYears, offset, sortCol, sortDir, limit]);
+  }, [
+    tab,
+    debouncedSearch,
+    teamFilter,
+    yearFilter,
+    posFilters,
+    selectedDynastyYears,
+    offset,
+    sortCol,
+    sortDir,
+    limit,
+    prefetchProjectionPage,
+  ]);
 
   useEffect(() => {
     // Ensure first entry into this view always lands on the combined tab.
@@ -1896,9 +2167,29 @@ function ProjectionsExplorer({ meta }) {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(fetchData, 300);
+    const mediaQuery = window.matchMedia("(max-width: 768px)");
+    const onViewportChange = event => {
+      setIsMobileViewport(Boolean(event.matches));
+    };
+
+    setIsMobileViewport(mediaQuery.matches);
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", onViewportChange);
+      return () => mediaQuery.removeEventListener("change", onViewportChange);
+    }
+    mediaQuery.addListener(onViewportChange);
+    return () => mediaQuery.removeListener(onViewportChange);
+  }, []);
+
+  useEffect(() => {
+    safeWriteStorage(PROJECTION_MOBILE_COLUMN_MODE_STORAGE_KEY, mobileColumnMode);
+  }, [mobileColumnMode]);
+
+  useEffect(() => {
+    const delayMs = hasLoadedProjectionPageRef.current ? 0 : PROJECTION_INITIAL_FETCH_DELAY_MS;
+    const timer = window.setTimeout(fetchData, delayMs);
     return () => {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     };
   }, [fetchData]);
 
@@ -1909,6 +2200,9 @@ function ProjectionsExplorer({ meta }) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
+      hasLoadedProjectionPageRef.current = false;
+      projectionCacheMapRef.current.clear();
+      projectionCacheOrderRef.current = [];
     };
   }, []);
 
@@ -1992,11 +2286,19 @@ function ProjectionsExplorer({ meta }) {
   }
 
   const dynastyYearCols = selectedDynastyYears.map(year => `Value_${year}`);
+  const compactDynastyCols = selectedDynastyYears.length === 1 ? [`Value_${selectedDynastyYears[0]}`] : [];
+  const compactModeActive = isMobileViewport && mobileColumnMode === "compact";
+  const compactBaseCols = ["Player", "Team", "Pos", "Year", "DynastyValue", ...compactDynastyCols];
   // Lead with player identity + dynasty value context, then projection freshness and box-score detail.
-  const batCols = ["Player","Team","Pos","Age","Year","DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS"];
-  const pitCols = ["Player","Team","Pos","Age","Year","DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","G","GS","IP","W","L","K","BB","SV","SVH","ERA","WHIP","H","HR","ER"];
-  const allCols = ["Player","Team","Pos","Type","Age","Year","DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS","GS","IP","W","L","K","PitBB","SV","SVH","ERA","WHIP","PitH","PitHR","ER"];
-  const cols = tab === "bat" ? batCols : tab === "pitch" ? pitCols : allCols;
+  const batColsFull = ["Player","Team","Pos","Age","Year","DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS"];
+  const pitColsFull = ["Player","Team","Pos","Age","Year","DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","G","GS","IP","W","L","K","BB","SV","SVH","ERA","WHIP","H","HR","ER"];
+  const allColsFull = ["Player","Team","Pos","Type","Age","Year","DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS","GS","IP","W","L","K","PitBB","SV","SVH","ERA","WHIP","PitH","PitHR","ER"];
+  const batColsCompact = [...compactBaseCols, "HR", "RBI", "SB", "AVG"];
+  const pitColsCompact = [...compactBaseCols, "IP", "K", "SV", "ERA", "WHIP"];
+  const allColsCompact = ["Player", "Team", "Pos", "Type", "Year", "DynastyValue", ...compactDynastyCols, "HR", "RBI", "SB", "K", "SV", "ERA", "WHIP"];
+  const cols = compactModeActive
+    ? (tab === "bat" ? batColsCompact : tab === "pitch" ? pitColsCompact : allColsCompact)
+    : (tab === "bat" ? batColsFull : tab === "pitch" ? pitColsFull : allColsFull);
   const colLabels = useMemo(() => {
     const labels = {
       Type: "Side",
@@ -2019,12 +2321,40 @@ function ProjectionsExplorer({ meta }) {
     : posFilters.length <= 2
       ? posFilters.join(", ")
       : `${posFilters.length} Positions`;
+  const showInitialLoadSkeleton = loading && page.length === 0;
+  const showInlineRefreshError = Boolean(error) && page.length > 0;
+  const searchIsDebouncing = search !== debouncedSearch;
+  const showMobileSwipeHint = isMobileViewport && (canScrollLeft || canScrollRight);
+  const swipeHintText = !canScrollLeft && canScrollRight
+    ? "Swipe left for more columns →"
+    : canScrollLeft && canScrollRight
+      ? "← Swipe both directions for more columns →"
+      : "← Swipe right to return";
 
   function togglePosFilter(pos) {
     setPosFilters(curr => (
       curr.includes(pos) ? curr.filter(p => p !== pos) : [...curr, pos]
     ));
   }
+
+  useEffect(() => {
+    const onResize = () => updateProjectionHorizontalAffordance();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [updateProjectionHorizontalAffordance]);
+
+  useEffect(() => {
+    const raf = window.requestAnimationFrame(() => updateProjectionHorizontalAffordance());
+    return () => window.cancelAnimationFrame(raf);
+  }, [updateProjectionHorizontalAffordance, cols.length, page.length, loading, totalRows, tab, offset]);
+
+  useEffect(() => {
+    if (!isMobileViewport) return;
+    const el = projectionTableScrollRef.current;
+    if (!el) return;
+    el.scrollLeft = 0;
+    updateProjectionHorizontalAffordance();
+  }, [tab, mobileColumnMode, isMobileViewport, updateProjectionHorizontalAffordance]);
 
   return (
     <div className="fade-up fade-up-1">
@@ -2081,20 +2411,61 @@ function ProjectionsExplorer({ meta }) {
             </div>
           )}
         </div>
-        <span className="result-count">{totalRows.toLocaleString()} rows</span>
+        <span className={`result-count ${loading || searchIsDebouncing ? "loading" : ""}`.trim()}>
+          {totalRows.toLocaleString()} rows
+          {searchIsDebouncing ? " · typing..." : loading ? " · refreshing..." : ""}
+        </span>
         <button type="button" className="inline-btn" onClick={() => exportCurrentProjections("csv")}>Export CSV</button>
         <button type="button" className="inline-btn" onClick={() => exportCurrentProjections("xlsx")}>Export XLSX</button>
       </div>
       <div style={{marginBottom: "12px", color: "var(--text-muted)", fontSize: "0.82rem"}}>
         Dynasty Value already combines hitting and pitching contributions for two-way players.
       </div>
+      {isMobileViewport && (
+        <div className="mobile-table-controls" role="group" aria-label="Projection table mobile view">
+          <span className="label">Table View</span>
+          <div className="mobile-view-toggle">
+            <button
+              type="button"
+              className={`mobile-view-btn ${mobileColumnMode === "compact" ? "active" : ""}`.trim()}
+              onClick={() => setMobileColumnMode("compact")}
+              aria-pressed={mobileColumnMode === "compact"}
+            >
+              Compact
+            </button>
+            <button
+              type="button"
+              className={`mobile-view-btn ${mobileColumnMode === "full" ? "active" : ""}`.trim()}
+              onClick={() => setMobileColumnMode("full")}
+              aria-pressed={mobileColumnMode === "full"}
+            >
+              Full Stats
+            </button>
+          </div>
+        </div>
+      )}
+      {showMobileSwipeHint && (
+        <div className="table-swipe-hint" role="note">
+          {swipeHintText}
+        </div>
+      )}
+      {showInlineRefreshError && (
+        <div className="table-refresh-message error" role="status" aria-live="polite">
+          Refresh failed. Showing last loaded page. {error}
+        </div>
+      )}
+      {loading && page.length > 0 && !showInlineRefreshError && (
+        <div className="table-refresh-message" role="status" aria-live="polite">
+          Refreshing results...
+        </div>
+      )}
 
       <div className="table-wrapper">
-        <div className="table-scroll">
+        <div className="table-scroll" ref={projectionTableScrollRef} onScroll={handleProjectionTableScroll}>
           <table className="projections-table">
             <thead>
               <tr>
-                <th style={{width:40}}>#</th>
+                <th className="index-col" style={{width:40}}>#</th>
                 {cols.map(c => (
                   <th
                     key={c}
@@ -2108,14 +2479,14 @@ function ProjectionsExplorer({ meta }) {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {showInitialLoadSkeleton ? (
                 Array.from({length: 15}).map((_,i) => (
                   <tr key={i}>
-                    <td><div className="loading-shimmer" style={{width: 24}}/></td>
+                    <td className="index-col"><div className="loading-shimmer" style={{width: 24}}/></td>
                     {cols.map((c,j) => <td key={j}><div className="loading-shimmer" style={{width: c==="Player"?120:50}}/></td>)}
                   </tr>
                 ))
-              ) : error ? (
+              ) : error && page.length === 0 ? (
                 <tr>
                   <td colSpan={cols.length + 1} style={{textAlign:"center",padding:"40px",color:"var(--red)"}}>
                     Unable to load projections. {error}
@@ -2125,8 +2496,8 @@ function ProjectionsExplorer({ meta }) {
                 <tr><td colSpan={cols.length + 1} style={{textAlign:"center",padding:"40px",color:"var(--text-muted)"}}>No results found</td></tr>
               ) : (
                 page.map((row, i) => (
-                  <tr key={i}>
-                    <td className="num" style={{color:"var(--text-muted)"}}>{offset + i + 1}</td>
+                  <tr key={projectionRowKey(row, offset + i)}>
+                    <td className="num index-col" style={{color:"var(--text-muted)"}}>{offset + i + 1}</td>
                     {cols.map(c => {
                       const val = row[c];
                       if (c === "Player") return <td key={c} className="player-name">{val}</td>;
@@ -2151,13 +2522,13 @@ function ProjectionsExplorer({ meta }) {
             </tbody>
           </table>
         </div>
-        {!loading && totalRows > limit && (
+        {totalRows > limit && (
           <div className="pagination">
-            <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>← Previous</button>
+            <button disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - limit))}>← Previous</button>
             <span className="page-info">
               {totalRows === 0 ? 0 : offset + 1}–{Math.min(offset + limit, totalRows)} of {totalRows}
             </span>
-            <button disabled={offset + limit >= totalRows} onClick={() => setOffset(offset + limit)}>Next →</button>
+            <button disabled={offset + limit >= totalRows || loading} onClick={() => setOffset(offset + limit)}>Next →</button>
           </div>
         )}
       </div>
@@ -2176,7 +2547,8 @@ function DynastyCalculator({ meta }) {
   const [status, setStatus] = useState("");
   const [sortCol, setSortCol] = useState("DynastyValue");
   const [sortDir, setSortDir] = useState("desc");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const debouncedRankSearch = useDebouncedValue(searchInput, CALC_SEARCH_DEBOUNCE_MS);
   const [posFilter, setPosFilter] = useState("");
   const [presetName, setPresetName] = useState("");
   const [selectedPresetName, setSelectedPresetName] = useState("");
@@ -2188,6 +2560,8 @@ function DynastyCalculator({ meta }) {
   const calcRequestSeqRef = useRef(0);
   const calcAbortControllerRef = useRef(null);
   const rankTableScrollRef = useRef(null);
+  const rankScrollRafRef = useRef(0);
+  const rankScrollPendingTopRef = useRef(0);
   const [rankScrollTop, setRankScrollTop] = useState(0);
   const [rankViewportHeight, setRankViewportHeight] = useState(480);
   const availableYears = useMemo(
@@ -2230,6 +2604,10 @@ function DynastyCalculator({ meta }) {
       if (calcAbortControllerRef.current) {
         calcAbortControllerRef.current.abort();
         calcAbortControllerRef.current = null;
+      }
+      if (rankScrollRafRef.current) {
+        window.cancelAnimationFrame(rankScrollRafRef.current);
+        rankScrollRafRef.current = 0;
       }
     };
   }, []);
@@ -2479,7 +2857,7 @@ function DynastyCalculator({ meta }) {
   }, [results, sortCol, sortDir]);
 
   const rankedFiltered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = debouncedRankSearch.trim().toLowerCase();
     const posNeedle = posFilter.trim().toUpperCase();
     return sortedAll
       .map((row, idx) => ({ row, rank: idx + 1 }))
@@ -2488,7 +2866,7 @@ function DynastyCalculator({ meta }) {
         if (posNeedle && !(row.Pos || "").toUpperCase().includes(posNeedle)) return false;
         return true;
       });
-  }, [sortedAll, search, posFilter]);
+  }, [sortedAll, debouncedRankSearch, posFilter]);
 
   function handleSort(col) {
     if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -2510,7 +2888,7 @@ function DynastyCalculator({ meta }) {
   }
 
   function clearRankFilters() {
-    setSearch("");
+    setSearchInput("");
     setPosFilter("");
   }
 
@@ -2564,8 +2942,18 @@ function DynastyCalculator({ meta }) {
   const reservePerTeam = benchPerTeam + minorsPerTeam;
   const totalPlayersPerTeam = hittersPerTeam + pitchersPerTeam + reservePerTeam;
   const pointRulesCount = POINTS_SCORING_FIELDS.length;
-  const hasRankFilters = Boolean(search.trim() || posFilter.trim());
+  const hasRankFilters = Boolean(searchInput.trim() || posFilter.trim());
+  const rankSearchIsDebouncing = searchInput !== debouncedRankSearch;
   const statusIsError = Boolean(validationError) || String(status || "").startsWith("Error");
+
+  const handleRankScroll = useCallback(event => {
+    rankScrollPendingTopRef.current = event.currentTarget.scrollTop;
+    if (rankScrollRafRef.current) return;
+    rankScrollRafRef.current = window.requestAnimationFrame(() => {
+      rankScrollRafRef.current = 0;
+      setRankScrollTop(rankScrollPendingTopRef.current);
+    });
+  }, []);
 
   useEffect(() => {
     if (!results || !Array.isArray(results.data) || results.data.length === 0) {
@@ -2603,8 +2991,9 @@ function DynastyCalculator({ meta }) {
   useEffect(() => {
     const tableEl = rankTableScrollRef.current;
     if (tableEl) tableEl.scrollTop = 0;
+    rankScrollPendingTopRef.current = 0;
     setRankScrollTop(0);
-  }, [search, posFilter, sortCol, sortDir, results, visibleRankCols.length]);
+  }, [debouncedRankSearch, posFilter, sortCol, sortDir, results, visibleRankCols.length]);
 
   return (
     <div className="fade-up fade-up-1">
@@ -2934,13 +3323,19 @@ function DynastyCalculator({ meta }) {
           {results ? (
             <>
               <div className="filter-bar calc-results-toolbar">
-                <input type="text" placeholder="Search ranked players…" value={search} onChange={e => setSearch(e.target.value)} />
+                <input
+                  type="text"
+                  placeholder="Search ranked players…"
+                  value={searchInput}
+                  onChange={e => setSearchInput(e.target.value)}
+                />
                 <select value={posFilter} onChange={e => setPosFilter(e.target.value)}>
                   <option value="">All Positions</option>
                   {["C","1B","2B","3B","SS","OF","SP","RP"].map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
-                <span className="result-count">
+                <span className={`result-count ${rankSearchIsDebouncing ? "loading" : ""}`.trim()}>
                   {rankedFiltered.length.toLocaleString()} / {sortedAll.length.toLocaleString()} players
+                  {rankSearchIsDebouncing ? " · filtering..." : ""}
                 </span>
                 <button type="button" className="inline-btn" onClick={clearRankFilters} disabled={!hasRankFilters}>
                   Reset Filters
@@ -2965,7 +3360,7 @@ function DynastyCalculator({ meta }) {
                 <div
                   className="table-scroll"
                   ref={rankTableScrollRef}
-                  onScroll={e => setRankScrollTop(e.currentTarget.scrollTop)}
+                  onScroll={handleRankScroll}
                 >
                   <table className="rankings-table">
                     <thead>
