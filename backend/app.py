@@ -11,9 +11,11 @@ Endpoints:
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import traceback
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
@@ -23,7 +25,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
@@ -35,6 +37,29 @@ DATA_DIR = BASE_DIR / "data"
 FRONTEND_DIR = BASE_DIR / "frontend"
 EXCEL_PATH = DATA_DIR / "Dynasty Baseball Projections.xlsx"
 BACKEND_MODULE_DIR = BASE_DIR / "backend"
+INDEX_PATH = FRONTEND_DIR / "index.html"
+DEPLOY_COMMIT_SHA = os.getenv("RAILWAY_GIT_COMMIT_SHA", "").strip()
+
+
+def _build_id() -> str:
+    if DEPLOY_COMMIT_SHA:
+        return DEPLOY_COMMIT_SHA[:12]
+    try:
+        return str(INDEX_PATH.stat().st_mtime_ns)
+    except OSError:
+        return "unknown"
+
+
+def _build_timestamp_iso() -> str | None:
+    try:
+        ts = INDEX_PATH.stat().st_mtime
+    except OSError:
+        return None
+    return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+
+
+APP_BUILD_ID = _build_id()
+APP_BUILD_AT = _build_timestamp_iso()
 
 # ---------------------------------------------------------------------------
 # Load pre-processed JSON data once at startup
@@ -464,6 +489,13 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def attach_build_header(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-App-Build", APP_BUILD_ID)
+    return response
+
+
 # ---------------------------------------------------------------------------
 # API: Metadata
 # ---------------------------------------------------------------------------
@@ -586,6 +618,22 @@ def _get_projection_rows(
         _normalize_filter_value(pos),
         include_dynasty,
         _normalize_filter_value(dynasty_years),
+    )
+
+
+@app.get("/api/version")
+def get_version():
+    return JSONResponse(
+        {
+            "build_id": APP_BUILD_ID,
+            "commit_sha": DEPLOY_COMMIT_SHA or None,
+            "built_at": APP_BUILD_AT,
+        },
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
     )
 
 
@@ -747,6 +795,7 @@ if FRONTEND_DIR.exists():
         "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
         "Pragma": "no-cache",
         "Expires": "0",
+        "X-App-Build": APP_BUILD_ID,
     }
 
     @app.get("/")
