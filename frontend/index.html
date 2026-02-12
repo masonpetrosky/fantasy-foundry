@@ -1001,6 +1001,11 @@ function buildCalculatorPayload(settings, availableYears, meta) {
     return { error: "Recent Proj. must be an integer between 1 and 10." };
   }
 
+  const twoWay = String(settings.two_way ?? "").trim().toLowerCase();
+  if (twoWay !== "sum" && twoWay !== "max") {
+    return { error: "Two-Way mode must be either 'sum' or 'max'." };
+  }
+
   const guardrails = meta?.calculator_guardrails || {};
   const playableByYear = guardrails?.playable_by_year;
   const hittersPerTeam = Number(guardrails?.hitters_per_team);
@@ -1042,6 +1047,7 @@ function buildCalculatorPayload(settings, availableYears, meta) {
       minors,
       ip_min: ipMin,
       ip_max: ipMax,
+      two_way: twoWay,
       start_year: startYear,
       recent_projections: recentProjections,
     },
@@ -1567,7 +1573,7 @@ function ProjectionsExplorer({ meta }) {
 function DynastyCalculator({ meta }) {
   const [settings, setSettings] = useState({
     teams: 12, sims: 300, horizon: 20, discount: 0.85,
-    bench: 6, minors: 0, ip_min: 0, ip_max: "",
+    bench: 6, minors: 0, ip_min: 0, ip_max: "", two_way: "sum",
     start_year: Number(meta.years?.[0] ?? 2026), recent_projections: 3,
   });
   const [results, setResults] = useState(null);
@@ -1818,6 +1824,17 @@ function DynastyCalculator({ meta }) {
               <label>Minor Slots</label>
               <input type="number" value={settings.minors} onChange={e => update("minors", e.target.value)} min="0" max="30" />
             </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Two-Way Value</label>
+              <select value={settings.two_way} onChange={e => update("two_way", e.target.value)}>
+                <option value="sum">Sum H + P</option>
+                <option value="max">Best of H/P</option>
+              </select>
+            </div>
+            <div className="form-group" />
           </div>
 
           <div className="form-row">

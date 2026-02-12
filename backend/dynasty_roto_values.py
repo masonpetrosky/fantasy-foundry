@@ -477,6 +477,7 @@ class CommonDynastyRotoSettings:
 
     # Monte Carlo settings for SGP denominators
     sims_for_sgp: int = 200
+    replacement_pitchers_n: int = 100
 
     # Dynasty parameters
     discount: float = 0.85
@@ -834,6 +835,68 @@ def team_whip(H: float, BB: float, IP: float) -> float:
     return float((H + BB) / IP) if IP > 0 else float("nan")
 
 
+def common_replacement_pitcher_rates(
+    all_pit_df: pd.DataFrame,
+    assigned_pit_df: pd.DataFrame,
+    n_rep: int,
+) -> Dict[str, float]:
+    """Per-inning replacement rates from the best available non-starter pitchers."""
+    assigned_players = set(assigned_pit_df["Player"])
+    rep = all_pit_df[~all_pit_df["Player"].isin(assigned_players)].copy()
+    rep = rep.sort_values("weight", ascending=False).head(max(int(n_rep), 1))
+
+    ip = float(rep["IP"].sum()) if not rep.empty else 0.0
+    if ip <= 0:
+        return {k: 0.0 for k in ["W", "K", "SV", "ER", "H", "BB"]}
+
+    return {
+        "W": float(rep["W"].sum() / ip),
+        "K": float(rep["K"].sum() / ip),
+        "SV": float(rep["SV"].sum() / ip),
+        "ER": float(rep["ER"].sum() / ip),
+        "H": float(rep["H"].sum() / ip),
+        "BB": float(rep["BB"].sum() / ip),
+    }
+
+
+def common_apply_pitching_bounds(
+    totals: Dict[str, float],
+    lg: CommonDynastyRotoSettings,
+    rep_rates: Optional[Dict[str, float]],
+) -> Dict[str, float]:
+    """Apply optional IP cap/fill and IP-min qualification to common-mode pitching totals."""
+    out = {k: float(totals.get(k, 0.0)) for k in PIT_COMPONENT_COLS}
+    ip = float(out["IP"])
+
+    if lg.ip_max is not None:
+        ip_cap = float(lg.ip_max)
+
+        # If over cap, scale all counting components down to cap.
+        if ip > ip_cap and ip > 0:
+            factor = ip_cap / ip
+            for col in PIT_COMPONENT_COLS:
+                out[col] = float(out[col]) * factor
+            ip = ip_cap
+
+        # If under cap, assume streamable replacement innings.
+        if ip < ip_cap and rep_rates is not None:
+            add = ip_cap - ip
+            out["IP"] = ip_cap
+            for col in ["W", "K", "SV", "ER", "H", "BB"]:
+                out[col] = float(out[col]) + add * float(rep_rates.get(col, 0.0))
+            ip = ip_cap
+
+    out["ERA"] = team_era(out["ER"], ip)
+    out["WHIP"] = team_whip(out["H"], out["BB"], ip)
+
+    # Optional IP minimum qualification rule (default OFF)
+    if lg.ip_min and lg.ip_min > 0 and ip < lg.ip_min:
+        out["ERA"] = 99.0
+        out["WHIP"] = 5.0
+
+    return out
+
+
 # ----------------------------
 # Monte Carlo SGP denominators
 # ----------------------------
@@ -880,7 +943,12 @@ def simulate_sgp_hit(assigned_hit: pd.DataFrame, lg: CommonDynastyRotoSettings, 
 
     return {c: float(np.mean(diffs[c])) for c in HIT_CATS}
 
-def simulate_sgp_pit(assigned_pit: pd.DataFrame, lg: CommonDynastyRotoSettings, rng: np.random.Generator) -> Dict[str, float]:
+def simulate_sgp_pit(
+    assigned_pit: pd.DataFrame,
+    lg: CommonDynastyRotoSettings,
+    rng: np.random.Generator,
+    rep_rates: Optional[Dict[str, float]] = None,
+) -> Dict[str, float]:
     diffs = {c: [] for c in PIT_CATS}
     per_team = lg.pitcher_slots
     groups = {slot: assigned_pit[assigned_pit["AssignedSlot"] == slot] for slot in per_team.keys()}
@@ -909,22 +977,29 @@ def simulate_sgp_pit(assigned_pit: pd.DataFrame, lg: CommonDynastyRotoSettings, 
             H += sums[:, 5]
             BB += sums[:, 6]
 
-        ERA = np.divide(9.0 * ER, IP, out=np.full_like(IP, np.nan), where=IP > 0)
-        WHIP = np.divide(H + BB, IP, out=np.full_like(IP, np.nan), where=IP > 0)
+        vals = {c: [] for c in PIT_CATS}
+        for t in range(lg.n_teams):
+            bounded = common_apply_pitching_bounds(
+                {
+                    "IP": float(IP[t]),
+                    "W": float(W[t]),
+                    "K": float(K[t]),
+                    "SV": float(SV[t]),
+                    "ER": float(ER[t]),
+                    "H": float(H[t]),
+                    "BB": float(BB[t]),
+                },
+                lg,
+                rep_rates,
+            )
+            vals["W"].append(float(bounded["W"]))
+            vals["K"].append(float(bounded["K"]))
+            vals["SV"].append(float(bounded["SV"]))
+            vals["ERA"].append(float(bounded["ERA"]))
+            vals["WHIP"].append(float(bounded["WHIP"]))
 
-        # Optional IP minimum qualification rule (default OFF)
-        if lg.ip_min and lg.ip_min > 0:
-            mask = IP < lg.ip_min
-            ERA = ERA.copy()
-            WHIP = WHIP.copy()
-            # Assign "very bad" finite values if non-qualifying,
-            # so they naturally rank last in simulation.
-            ERA[mask] = 99.0
-            WHIP[mask] = 5.0
-
-        vals = {"W": W, "K": K, "SV": SV, "ERA": ERA, "WHIP": WHIP}
         for c in PIT_CATS:
-            x = vals[c].astype(float)
+            x = np.array(vals[c], dtype=float)
             x_sorted = np.sort(x) if c in {"ERA", "WHIP"} else np.sort(x)[::-1]
             diffs[c].append(float(np.mean(np.abs(np.diff(x_sorted)))))
 
@@ -979,15 +1054,23 @@ def compute_year_context(year: int, bat: pd.DataFrame, pit: pd.DataFrame, lg: Co
     base_avg = team_avg(float(base_hit_tot["H"]), float(base_hit_tot["AB"]))
 
     base_pit_tot = baseline_pit.loc[team_pit_slots].sum()
-    base_era = team_era(float(base_pit_tot["ER"]), float(base_pit_tot["IP"]))
-    base_whip = team_whip(float(base_pit_tot["H"]), float(base_pit_tot["BB"]), float(base_pit_tot["IP"]))
+    rep_rates = common_replacement_pitcher_rates(
+        pit_play,
+        assigned_pit,
+        n_rep=lg.replacement_pitchers_n,
+    )
+    base_pit_bounded = common_apply_pitching_bounds(
+        {col: float(base_pit_tot[col]) for col in PIT_COMPONENT_COLS},
+        lg,
+        rep_rates,
+    )
 
     # SGP denominators by simulation
     seed = year if rng_seed is None else int(rng_seed)
     rng_hit = np.random.default_rng(seed)
     rng_pit = np.random.default_rng(seed + 1)
     sgp_hit = simulate_sgp_hit(assigned_hit, lg, rng_hit)
-    sgp_pit = simulate_sgp_pit(assigned_pit, lg, rng_pit)
+    sgp_pit = simulate_sgp_pit(assigned_pit, lg, rng_pit, rep_rates=rep_rates)
 
     return {
         "year": year,
@@ -998,8 +1081,8 @@ def compute_year_context(year: int, bat: pd.DataFrame, pit: pd.DataFrame, lg: Co
         "base_hit_tot": base_hit_tot,
         "base_avg": base_avg,
         "base_pit_tot": base_pit_tot,
-        "base_era": base_era,
-        "base_whip": base_whip,
+        "base_pit_bounded": base_pit_bounded,
+        "rep_rates": rep_rates,
         "sgp_hit": sgp_hit,
         "sgp_pit": sgp_pit,
     }
@@ -1015,8 +1098,8 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
     base_avg = float(ctx["base_avg"])
 
     base_pit_tot = ctx["base_pit_tot"]
-    base_era = float(ctx["base_era"])
-    base_whip = float(ctx["base_whip"])
+    base_pit_bounded = dict(ctx["base_pit_bounded"])
+    rep_rates = ctx.get("rep_rates")
 
     sgp_hit = ctx["sgp_hit"]
     sgp_pit = ctx["sgp_pit"]
@@ -1093,20 +1176,211 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
             for col in PIT_COMPONENT_COLS:
                 new_tot[col] = new_tot[col] - b[col] + getattr(row, col)
 
-            new_ip = float(new_tot["IP"])
-            new_era = team_era(float(new_tot["ER"]), new_ip)
-            new_whip = team_whip(float(new_tot["H"]), float(new_tot["BB"]), new_ip)
-
-            if lg.ip_min and lg.ip_min > 0 and new_ip < lg.ip_min:
-                new_era = 99.0
-                new_whip = 5.0
+            new_tot_bounded = common_apply_pitching_bounds(
+                {col: float(new_tot[col]) for col in PIT_COMPONENT_COLS},
+                lg,
+                rep_rates,
+            )
 
             delta = {
-                "W": float(new_tot["W"] - base_pit_tot["W"]),
-                "K": float(new_tot["K"] - base_pit_tot["K"]),
-                "SV": float(new_tot["SV"] - base_pit_tot["SV"]),
-                "ERA": float(base_era - new_era),       # lower is better
-                "WHIP": float(base_whip - new_whip),    # lower is better
+                "W": float(new_tot_bounded["W"] - base_pit_bounded["W"]),
+                "K": float(new_tot_bounded["K"] - base_pit_bounded["K"]),
+                "SV": float(new_tot_bounded["SV"] - base_pit_bounded["SV"]),
+                "ERA": float(base_pit_bounded["ERA"] - new_tot_bounded["ERA"]),       # lower is better
+                "WHIP": float(base_pit_bounded["WHIP"] - new_tot_bounded["WHIP"]),    # lower is better
+            }
+
+            val = 0.0
+            for c in PIT_CATS:
+                denom = float(sgp_pit[c])
+                val += (delta[c] / denom) if denom else 0.0
+
+            if val > best_val:
+                best_val = val
+                best_slot = slot
+
+        pit_rows.append({
+            "Player": getattr(row, "Player"),
+            "Year": year,
+            "Type": "P",
+            "Team": getattr(row, "Team", np.nan),
+            "Age": getattr(row, "Age", np.nan),
+            "Pos": getattr(row, "Pos", np.nan),
+            "BestSlot": best_slot,
+            "YearValue": float(best_val),
+        })
+
+    pit_vals = pd.DataFrame(pit_rows)
+    return hit_vals, pit_vals
+
+
+def compute_replacement_baselines(
+    ctx: dict,
+    lg: CommonDynastyRotoSettings,
+    rostered_players: Set[str],
+    n_repl: Optional[int] = None,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Build per-slot replacement baselines from the unrostered pool."""
+    n_repl = int(n_repl or lg.n_teams)
+
+    bat_y = ctx["bat_y"].copy()
+    pit_y = ctx["pit_y"].copy()
+
+    for c in HIT_COMPONENT_COLS:
+        bat_y[c] = bat_y[c].fillna(0.0)
+    for c in PIT_COMPONENT_COLS:
+        pit_y[c] = pit_y[c].fillna(0.0)
+
+    bat_y["weight"] = initial_hitter_weight(bat_y)
+    pit_y["weight"] = initial_pitcher_weight(pit_y)
+
+    fa_hit = bat_y[(~bat_y["Player"].isin(rostered_players)) & (bat_y["AB"] > 0)].copy()
+    fa_pit = pit_y[(~pit_y["Player"].isin(rostered_players)) & (pit_y["IP"] > 0)].copy()
+
+    fa_hit["elig"] = fa_hit["Pos"].apply(lambda p: eligible_hit_slots(parse_hit_positions(p)))
+    fa_pit["elig"] = fa_pit["Pos"].apply(lambda p: eligible_pit_slots(parse_pit_positions(p)))
+
+    baseline_hit_avg = ctx["baseline_hit"]
+    baseline_pit_avg = ctx["baseline_pit"]
+
+    repl_hit_rows: List[dict] = []
+    for slot in baseline_hit_avg.index:
+        cand = (
+            fa_hit[fa_hit["elig"].apply(lambda s: slot in s)]
+            .sort_values("weight", ascending=False)
+            .head(n_repl)
+        )
+        repl = baseline_hit_avg.loc[slot] if len(cand) == 0 else cand[HIT_COMPONENT_COLS].mean()
+        row = {c: float(repl.get(c, 0.0)) for c in HIT_COMPONENT_COLS}
+        row["AssignedSlot"] = slot
+        repl_hit_rows.append(row)
+
+    repl_hit = pd.DataFrame(repl_hit_rows).set_index("AssignedSlot")
+
+    repl_pit_rows: List[dict] = []
+    for slot in baseline_pit_avg.index:
+        cand = (
+            fa_pit[fa_pit["elig"].apply(lambda s: slot in s)]
+            .sort_values("weight", ascending=False)
+            .head(n_repl)
+        )
+        repl = baseline_pit_avg.loc[slot] if len(cand) == 0 else cand[PIT_COMPONENT_COLS].mean()
+        row = {c: float(repl.get(c, 0.0)) for c in PIT_COMPONENT_COLS}
+        row["AssignedSlot"] = slot
+        repl_pit_rows.append(row)
+
+    repl_pit = pd.DataFrame(repl_pit_rows).set_index("AssignedSlot")
+    return repl_hit, repl_pit
+
+
+def compute_year_player_values_vs_replacement(
+    ctx: dict,
+    lg: CommonDynastyRotoSettings,
+    repl_hit: pd.DataFrame,
+    repl_pit: pd.DataFrame,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Compute per-year values as marginal roto points above replacement."""
+    year = int(ctx["year"])
+    bat_y = ctx["bat_y"]
+    pit_y = ctx["pit_y"]
+
+    baseline_hit_avg = ctx["baseline_hit"]
+    baseline_pit_avg = ctx["baseline_pit"]
+    base_hit_tot_avg = ctx["base_hit_tot"]
+    base_pit_tot_avg = ctx["base_pit_tot"]
+    rep_rates = ctx.get("rep_rates")
+
+    sgp_hit = ctx["sgp_hit"]
+    sgp_pit = ctx["sgp_pit"]
+
+    hit_rows = []
+    for row in bat_y.itertuples(index=False):
+        pos_set = parse_hit_positions(getattr(row, "Pos", ""))
+        slots = eligible_hit_slots(pos_set)
+        if not slots:
+            continue
+
+        best_val = -1e18
+        best_slot = None
+
+        for slot in slots:
+            if slot not in baseline_hit_avg.index or slot not in repl_hit.index:
+                continue
+
+            b_avg = baseline_hit_avg.loc[slot]
+            b_rep = repl_hit.loc[slot]
+
+            base_tot = base_hit_tot_avg.copy()
+            new_tot = base_hit_tot_avg.copy()
+            for col in HIT_COMPONENT_COLS:
+                base_tot[col] = base_tot[col] - b_avg[col] + b_rep[col]
+                new_tot[col] = new_tot[col] - b_avg[col] + getattr(row, col, 0.0)
+
+            base_avg = team_avg(float(base_tot["H"]), float(base_tot["AB"]))
+            new_avg = team_avg(float(new_tot["H"]), float(new_tot["AB"]))
+
+            delta = {
+                "R": float(new_tot["R"] - base_tot["R"]),
+                "HR": float(new_tot["HR"] - base_tot["HR"]),
+                "RBI": float(new_tot["RBI"] - base_tot["RBI"]),
+                "SB": float(new_tot["SB"] - base_tot["SB"]),
+                "AVG": float(new_avg - base_avg),
+            }
+
+            val = 0.0
+            for c in HIT_CATS:
+                denom = float(sgp_hit[c])
+                val += (delta[c] / denom) if denom else 0.0
+
+            if val > best_val:
+                best_val = val
+                best_slot = slot
+
+        hit_rows.append({
+            "Player": getattr(row, "Player"),
+            "Year": year,
+            "Type": "H",
+            "Team": getattr(row, "Team", np.nan),
+            "Age": getattr(row, "Age", np.nan),
+            "Pos": getattr(row, "Pos", np.nan),
+            "BestSlot": best_slot,
+            "YearValue": float(best_val),
+        })
+
+    hit_vals = pd.DataFrame(hit_rows)
+
+    pit_rows = []
+    for row in pit_y.itertuples(index=False):
+        pos_set = parse_pit_positions(getattr(row, "Pos", ""))
+        slots = eligible_pit_slots(pos_set)
+        if not slots:
+            continue
+
+        best_val = -1e18
+        best_slot = None
+
+        for slot in slots:
+            if slot not in baseline_pit_avg.index or slot not in repl_pit.index:
+                continue
+
+            b_avg = baseline_pit_avg.loc[slot]
+            b_rep = repl_pit.loc[slot]
+
+            base_raw = {c: float(base_pit_tot_avg[c]) for c in PIT_COMPONENT_COLS}
+            new_raw = {c: float(base_pit_tot_avg[c]) for c in PIT_COMPONENT_COLS}
+            for col in PIT_COMPONENT_COLS:
+                base_raw[col] = base_raw[col] - float(b_avg[col]) + float(b_rep[col])
+                new_raw[col] = new_raw[col] - float(b_avg[col]) + float(getattr(row, col, 0.0))
+
+            base_bounded = common_apply_pitching_bounds(base_raw, lg, rep_rates)
+            new_bounded = common_apply_pitching_bounds(new_raw, lg, rep_rates)
+
+            delta = {
+                "W": float(new_bounded["W"] - base_bounded["W"]),
+                "K": float(new_bounded["K"] - base_bounded["K"]),
+                "SV": float(new_bounded["SV"] - base_bounded["SV"]),
+                "ERA": float(base_bounded["ERA"] - new_bounded["ERA"]),
+                "WHIP": float(base_bounded["WHIP"] - new_bounded["WHIP"]),
             }
 
             val = 0.0
@@ -1396,27 +1670,98 @@ def calculate_common_dynasty_values(
     # Projection metadata: how many projections were averaged (<= recent_projections) and the oldest date used
     proj_meta = projection_meta_for_start_year(bat, pit, start_year)
 
-    # Per-year values
-    all_year_tables: List[pd.DataFrame] = []
+    # Minor eligibility source precedence:
+    # 1) explicit eligibility column in projections (authoritative when present)
+    # 2) inference fallback only when explicit data is unavailable
+    if lg.minor_slots and lg.minor_slots > 0:
+        input_elig = minor_eligibility_from_input(bat, pit, start_year)
+        if input_elig is not None:
+            elig_df = input_elig.copy()
+        else:
+            elig_df = infer_minor_eligible(bat, pit, lg, start_year)
+        elig_df["minor_eligible"] = _fillna_bool(elig_df["minor_eligible"])
+    else:
+        elig_df = pd.DataFrame(columns=["Player", "minor_eligible"])
+
+    active_per_team = sum(lg.hitter_slots.values()) + sum(lg.pitcher_slots.values())
+    total_minor_slots = lg.n_teams * lg.minor_slots
+    total_mlb_slots = lg.n_teams * (active_per_team + lg.bench_slots)
+
+    # PASS 1: average-starter values to estimate who is rostered in a deep league.
+    year_contexts: Dict[int, dict] = {}
+    year_tables_avg: List[pd.DataFrame] = []
+
+    for y in years:
+        if verbose:
+            print(f"Year {y}: baseline + SGP + player values (avg-starter pass) ...")
+        ctx = compute_year_context(y, bat, pit, lg, rng_seed=seed + y)
+        year_contexts[y] = ctx
+        hit_vals, pit_vals = compute_year_player_values(ctx, lg)
+        combined = combine_two_way(hit_vals, pit_vals, two_way=lg.two_way)
+        year_tables_avg.append(combined)
+
+    all_year_avg = pd.concat(year_tables_avg, ignore_index=True)
+    wide_avg = all_year_avg.pivot_table(index="Player", columns="Year", values="YearValue", aggfunc="max").reset_index()
+    for y in years:
+        if y not in wide_avg.columns:
+            wide_avg[y] = 0.0
+
+    elig_map = dict(zip(elig_df["Player"], elig_df["minor_eligible"].astype(bool))) if not elig_df.empty else {}
+
+    def _stash_row(row: pd.Series) -> float:
+        player = row["Player"]
+        can_stash = bool(lg.minor_slots and lg.minor_slots > 0 and bool(elig_map.get(player, False)))
+        vals: List[float] = []
+        for y in years:
+            v = row.get(y)
+            if pd.isna(v):
+                v = 0.0
+            v = float(v)
+            if can_stash and v < 0.0:
+                v = 0.0
+            vals.append(v)
+        return dynasty_keep_or_drop_value(vals, years, lg.discount)
+
+    wide_avg["StashScore"] = wide_avg.apply(_stash_row, axis=1)
+    stash = wide_avg[["Player", "StashScore"]].copy()
+    stash = stash.merge(elig_df, on="Player", how="left")
+    stash["minor_eligible"] = _fillna_bool(stash["minor_eligible"])
+
+    stash_sorted = stash.sort_values("StashScore", ascending=False).reset_index(drop=True)
+    minors_pool = stash_sorted[stash_sorted["minor_eligible"]]
+    minors_sel = minors_pool.head(total_minor_slots)
+    minor_names = set(minors_sel["Player"])
+
+    remaining = stash_sorted[~stash_sorted["Player"].isin(minor_names)]
+    extra_minor_needed = max(total_minor_slots - len(minors_sel), 0)
+    extra_minors = remaining.head(extra_minor_needed)
+    extra_minor_names = set(extra_minors["Player"])
+
+    remaining = remaining[~remaining["Player"].isin(extra_minor_names)]
+    mlb_sel = remaining.head(total_mlb_slots)
+    rostered_names: Set[str] = set(mlb_sel["Player"]) | minor_names | extra_minor_names
+
+    # PASS 2: replacement-level per-year values from the unrostered pool.
+    year_tables: List[pd.DataFrame] = []
     hit_year_tables: List[pd.DataFrame] = []
     pit_year_tables: List[pd.DataFrame] = []
 
     for y in years:
         if verbose:
-            print(f"Year {y}: baseline + SGP + player values ...")
-        ctx = compute_year_context(y, bat, pit, lg, rng_seed=seed + y)
-        hit_vals, pit_vals = compute_year_player_values(ctx, lg)
+            print(f"Year {y}: replacement baselines + player values (replacement pass) ...")
+        ctx = year_contexts[y]
+        repl_hit, repl_pit = compute_replacement_baselines(ctx, lg, rostered_names, n_repl=lg.n_teams)
+        hit_vals, pit_vals = compute_year_player_values_vs_replacement(ctx, lg, repl_hit, repl_pit)
 
-        # Store side-specific year values for the detail tabs
         if not hit_vals.empty:
             hit_year_tables.append(hit_vals[["Player", "Year", "BestSlot", "YearValue"]].copy())
         if not pit_vals.empty:
             pit_year_tables.append(pit_vals[["Player", "Year", "BestSlot", "YearValue"]].copy())
 
         combined = combine_two_way(hit_vals, pit_vals, two_way=lg.two_way)
-        all_year_tables.append(combined)
+        year_tables.append(combined)
 
-    all_year = pd.concat(all_year_tables, ignore_index=True) if all_year_tables else pd.DataFrame()
+    all_year = pd.concat(year_tables, ignore_index=True) if year_tables else pd.DataFrame()
 
     # Wide format: one row per player with Value_YEAR columns
     wide = all_year.pivot_table(index="Player", columns="Year", values="YearValue", aggfunc="max").reset_index()
@@ -1431,20 +1776,8 @@ def calculate_common_dynasty_values(
 
     # Attach projection metadata (based on the start-year averaged projections)
     out = out.merge(proj_meta, on="Player", how="left")
-
-    # Minor eligibility flag (optional informational output)
-    # If your common setup has no minor-league roster spots, treat everyone as MLB.
-    if lg.minor_slots and lg.minor_slots > 0:
-        input_elig = minor_eligibility_from_input(bat, pit, start_year)
-        infer_elig = infer_minor_eligible(bat, pit, lg, start_year)
-        out = out.merge(infer_elig, on="Player", how="left")
-        if input_elig is not None:
-            out = out.merge(input_elig, on="Player", how="left", suffixes=("_infer", "_input"))
-            out["minor_eligible"] = out["minor_eligible_input"].combine_first(out["minor_eligible_infer"])
-            out = out.drop(columns=["minor_eligible_input", "minor_eligible_infer"])
-        out["minor_eligible"] = _fillna_bool(out["minor_eligible"])
-    else:
-        out["minor_eligible"] = False
+    out = out.merge(elig_df, on="Player", how="left")
+    out["minor_eligible"] = _fillna_bool(out["minor_eligible"])
 
     # Raw dynasty value: optimal keep/drop value.
     #
@@ -1472,12 +1805,21 @@ def calculate_common_dynasty_values(
 
     out["RawDynastyValue"] = raw_vals
 
-    # Centering: define replacement-level (last rostered) baseline
-    active_per_team = sum(lg.hitter_slots.values()) + sum(lg.pitcher_slots.values())
-    rostered_total = lg.n_teams * (active_per_team + lg.bench_slots + lg.minor_slots)
-
+    # Centering: replacement-level roster cutoff with minors reserved first.
     out_sorted = out.sort_values("RawDynastyValue", ascending=False).reset_index(drop=True)
-    rostered = out_sorted.head(rostered_total)
+    minors_pool = out_sorted[out_sorted["minor_eligible"]]
+    minors_sel = minors_pool.head(total_minor_slots)
+    minor_names = set(minors_sel["Player"])
+
+    remaining = out_sorted[~out_sorted["Player"].isin(minor_names)]
+    extra_minor_needed = max(total_minor_slots - len(minors_sel), 0)
+    extra_minors = remaining.head(extra_minor_needed)
+    extra_minor_names = set(extra_minors["Player"])
+
+    remaining = remaining[~remaining["Player"].isin(extra_minor_names)]
+    mlb_sel = remaining.head(total_mlb_slots)
+
+    rostered = pd.concat([minors_sel, extra_minors, mlb_sel], ignore_index=True)
     baseline_value = float(rostered["RawDynastyValue"].iloc[-1]) if len(rostered) else 0.0
 
     out["DynastyValue"] = out["RawDynastyValue"] - baseline_value
@@ -2814,13 +3156,12 @@ def calculate_league_dynasty_values(
     proj_meta = projection_meta_for_start_year(bat_df, pit_df, start_year)
 
     # --- Minor eligibility (for roster selection + output/centering) ---
+    # Explicit eligibility from input is authoritative when present; only infer as fallback.
     input_elig = minor_eligibility_from_input(bat_df, pit_df, start_year)
-    infer_elig = league_infer_minor_eligible_start(bat_df, pit_df, lg, start_year)
-    elig_df = infer_elig.copy()
     if input_elig is not None:
-        elig_df = elig_df.merge(input_elig, on="Player", how="left", suffixes=("_infer", "_input"))
-        elig_df["minor_eligible"] = elig_df["minor_eligible_input"].combine_first(elig_df["minor_eligible_infer"])
-        elig_df = elig_df.drop(columns=["minor_eligible_input", "minor_eligible_infer"])
+        elig_df = input_elig.copy()
+    else:
+        elig_df = league_infer_minor_eligible_start(bat_df, pit_df, lg, start_year)
     elig_df["minor_eligible"] = _fillna_bool(elig_df["minor_eligible"])
 
     # Roster depth (league-wide)

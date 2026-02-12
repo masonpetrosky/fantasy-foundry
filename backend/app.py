@@ -431,6 +431,7 @@ def _calculate_common_dynasty_frame_cached(
     minors: int,
     ip_min: float,
     ip_max: float | None,
+    two_way: str,
     start_year: int,
     recent_projections: int,
 ) -> pd.DataFrame:
@@ -446,7 +447,7 @@ def _calculate_common_dynasty_frame_cached(
         minor_slots=minors,
         ip_min=ip_min,
         ip_max=ip_max,
-        two_way="sum",
+        two_way=two_way,
     )
 
     out = calculate_common_dynasty_values(
@@ -525,7 +526,7 @@ def _playable_pool_counts_by_year() -> dict[str, dict[str, int]]:
     return {str(year): counts for year, counts in sorted(by_year.items())}
 
 
-def _default_calculation_cache_params() -> dict[str, int | float | None]:
+def _default_calculation_cache_params() -> dict[str, int | float | str | None]:
     years = _coerce_meta_years(META)
     start_year = years[0] if years else 2026
     horizon = len(years) if years else 10
@@ -538,6 +539,7 @@ def _default_calculation_cache_params() -> dict[str, int | float | None]:
         "minors": 0,
         "ip_min": 0.0,
         "ip_max": None,
+        "two_way": "sum",
         "start_year": start_year,
         "recent_projections": 3,
     }
@@ -624,6 +626,7 @@ def _prewarm_default_calculation_caches() -> None:
             minors=int(params["minors"]),
             ip_min=float(params["ip_min"]),
             ip_max=float(ip_max) if ip_max is not None else None,
+            two_way=str(params["two_way"]),
             start_year=int(params["start_year"]),
             recent_projections=int(params["recent_projections"]),
         )
@@ -671,6 +674,7 @@ def _get_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set
             minors=0,
             ip_min=0.0,
             ip_max=None,
+            two_way="sum",
             start_year=start_year,
             recent_projections=3,
         ).copy(deep=True)
@@ -1484,6 +1488,7 @@ def get_pitch_projections(
 # ---------------------------------------------------------------------------
 class CalculateRequest(BaseModel):
     mode: Literal["common"] = "common"
+    two_way: Literal["sum", "max"] = "sum"
     teams: int = Field(default=12, ge=2, le=30)
     sims: int = Field(default=300, ge=1, le=5000)
     horizon: int = Field(default=20, ge=1, le=20)
@@ -1527,6 +1532,7 @@ def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
                 minors=req.minors,
                 ip_min=req.ip_min,
                 ip_max=req.ip_max,
+                two_way=req.two_way,
                 start_year=req.start_year,
                 recent_projections=req.recent_projections,
             ).copy(deep=True)
