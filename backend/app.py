@@ -743,8 +743,14 @@ def calculate_dynasty_values(req: CalculateRequest):
 # Serve frontend
 # ---------------------------------------------------------------------------
 if FRONTEND_DIR.exists():
+    INDEX_CACHE_HEADERS = {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
+
     @app.get("/")
     def serve_index():
-        return FileResponse(FRONTEND_DIR / "index.html")
+        return FileResponse(FRONTEND_DIR / "index.html", headers=INDEX_CACHE_HEADERS)
 
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
