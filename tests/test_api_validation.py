@@ -596,6 +596,34 @@ class CalculatorValidationTests(unittest.TestCase):
         response = self.client.post("/api/calculate", json={"ip_min": 1200, "ip_max": 1000})
         self.assertEqual(response.status_code, 422)
 
+    def test_rejects_zero_total_hitter_slots(self) -> None:
+        response = self.client.post(
+            "/api/calculate",
+            json={
+                "hit_c": 0,
+                "hit_1b": 0,
+                "hit_2b": 0,
+                "hit_3b": 0,
+                "hit_ss": 0,
+                "hit_ci": 0,
+                "hit_mi": 0,
+                "hit_of": 0,
+                "hit_ut": 0,
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_rejects_zero_total_pitcher_slots(self) -> None:
+        response = self.client.post(
+            "/api/calculate",
+            json={
+                "pit_p": 0,
+                "pit_sp": 0,
+                "pit_rp": 0,
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+
     def test_calculate_response_includes_identity_fields(self) -> None:
         fake_out = pd.DataFrame(
             [
@@ -693,6 +721,71 @@ class CalculatorValidationTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assertIn("Not enough players", response.json()["detail"])
+
+    def test_calculate_passes_slot_overrides_and_ir_to_settings(self) -> None:
+        fake_out = pd.DataFrame(
+            [
+                {
+                    "Player": "Jane Roe",
+                    "Team": "SEA",
+                    "Pos": "OF",
+                    "Age": 26,
+                    "DynastyValue": 5.0,
+                    "RawDynastyValue": 6.0,
+                    "minor_eligible": False,
+                    "Value_2026": 5.0,
+                }
+            ]
+        )
+        captured_kwargs: dict = {}
+
+        class FakeSettings:
+            def __init__(self, **kwargs) -> None:
+                captured_kwargs.update(kwargs)
+
+        def fake_calculate(*args, **kwargs):
+            return fake_out
+
+        fake_module = types.SimpleNamespace(
+            CommonDynastyRotoSettings=FakeSettings,
+            calculate_common_dynasty_values=fake_calculate,
+        )
+
+        with patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ), patch.object(
+            app_module,
+            "META",
+            {"years": [2026]},
+        ), patch.object(
+            app_module,
+            "_player_identity_by_name",
+            return_value={"Jane Roe": ("jane-roe", "jane-roe")},
+        ), patch.dict(
+            sys.modules,
+            {"dynasty_roto_values": fake_module},
+        ):
+            response = self.client.post(
+                "/api/calculate",
+                json={
+                    "hit_c": 2,
+                    "hit_of": 3,
+                    "pit_p": 7,
+                    "pit_sp": 1,
+                    "pit_rp": 1,
+                    "ir": 4,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(captured_kwargs.get("hitter_slots", {}).get("C"), 2)
+        self.assertEqual(captured_kwargs.get("hitter_slots", {}).get("OF"), 3)
+        self.assertEqual(captured_kwargs.get("pitcher_slots", {}).get("P"), 7)
+        self.assertEqual(captured_kwargs.get("pitcher_slots", {}).get("SP"), 1)
+        self.assertEqual(captured_kwargs.get("pitcher_slots", {}).get("RP"), 1)
+        self.assertEqual(captured_kwargs.get("ir_slots"), 4)
 
     def test_meta_includes_calculator_guardrails_payload(self) -> None:
         with patch.object(

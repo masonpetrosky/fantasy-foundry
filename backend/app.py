@@ -92,8 +92,25 @@ PROJECTION_TEXT_SORT_COLS = {"Player", "Team", "Pos", "Type"}
 PLAYER_KEY_COL = "PlayerKey"
 PLAYER_ENTITY_KEY_COL = "PlayerEntityKey"
 PLAYER_KEY_PATTERN = re.compile(r"[^a-z0-9]+")
-COMMON_HITTER_STARTER_SLOTS_PER_TEAM = 13
-COMMON_PITCHER_STARTER_SLOTS_PER_TEAM = 9
+COMMON_HITTER_SLOT_DEFAULTS = {
+    "C": 1,
+    "1B": 1,
+    "2B": 1,
+    "3B": 1,
+    "SS": 1,
+    "CI": 1,
+    "MI": 1,
+    "OF": 5,
+    "UT": 1,
+}
+COMMON_PITCHER_SLOT_DEFAULTS = {
+    "P": 9,
+    "SP": 0,
+    "RP": 0,
+}
+COMMON_DEFAULT_IR_SLOTS = 0
+COMMON_HITTER_STARTER_SLOTS_PER_TEAM = sum(COMMON_HITTER_SLOT_DEFAULTS.values())
+COMMON_PITCHER_STARTER_SLOTS_PER_TEAM = sum(COMMON_PITCHER_SLOT_DEFAULTS.values())
 CALCULATOR_JOB_TTL_SECONDS = max(60, int(os.getenv("FF_CALC_JOB_TTL_SECONDS", "1800")))
 CALCULATOR_JOB_MAX_ENTRIES = max(10, int(os.getenv("FF_CALC_JOB_MAX_ENTRIES", "256")))
 CALCULATOR_JOB_WORKERS = max(1, int(os.getenv("FF_CALC_JOB_WORKERS", "2")))
@@ -427,8 +444,21 @@ def _calculate_common_dynasty_frame_cached(
     sims: int,
     horizon: int,
     discount: float,
+    hit_c: int,
+    hit_1b: int,
+    hit_2b: int,
+    hit_3b: int,
+    hit_ss: int,
+    hit_ci: int,
+    hit_mi: int,
+    hit_of: int,
+    hit_ut: int,
+    pit_p: int,
+    pit_sp: int,
+    pit_rp: int,
     bench: int,
     minors: int,
+    ir: int,
     ip_min: float,
     ip_max: float | None,
     two_way: str,
@@ -443,8 +473,25 @@ def _calculate_common_dynasty_frame_cached(
         sims_for_sgp=sims,
         horizon_years=horizon,
         discount=discount,
+        hitter_slots={
+            "C": hit_c,
+            "1B": hit_1b,
+            "2B": hit_2b,
+            "3B": hit_3b,
+            "SS": hit_ss,
+            "CI": hit_ci,
+            "MI": hit_mi,
+            "OF": hit_of,
+            "UT": hit_ut,
+        },
+        pitcher_slots={
+            "P": pit_p,
+            "SP": pit_sp,
+            "RP": pit_rp,
+        },
         bench_slots=bench,
         minor_slots=minors,
+        ir_slots=ir,
         ip_min=ip_min,
         ip_max=ip_max,
         two_way=two_way,
@@ -535,8 +582,21 @@ def _default_calculation_cache_params() -> dict[str, int | float | str | None]:
         "sims": 300,
         "horizon": horizon,
         "discount": 0.85,
+        "hit_c": COMMON_HITTER_SLOT_DEFAULTS["C"],
+        "hit_1b": COMMON_HITTER_SLOT_DEFAULTS["1B"],
+        "hit_2b": COMMON_HITTER_SLOT_DEFAULTS["2B"],
+        "hit_3b": COMMON_HITTER_SLOT_DEFAULTS["3B"],
+        "hit_ss": COMMON_HITTER_SLOT_DEFAULTS["SS"],
+        "hit_ci": COMMON_HITTER_SLOT_DEFAULTS["CI"],
+        "hit_mi": COMMON_HITTER_SLOT_DEFAULTS["MI"],
+        "hit_of": COMMON_HITTER_SLOT_DEFAULTS["OF"],
+        "hit_ut": COMMON_HITTER_SLOT_DEFAULTS["UT"],
+        "pit_p": COMMON_PITCHER_SLOT_DEFAULTS["P"],
+        "pit_sp": COMMON_PITCHER_SLOT_DEFAULTS["SP"],
+        "pit_rp": COMMON_PITCHER_SLOT_DEFAULTS["RP"],
         "bench": 6,
         "minors": 0,
+        "ir": COMMON_DEFAULT_IR_SLOTS,
         "ip_min": 0.0,
         "ip_max": None,
         "two_way": "sum",
@@ -549,6 +609,9 @@ def _calculator_guardrails_payload() -> dict:
     return {
         "hitters_per_team": COMMON_HITTER_STARTER_SLOTS_PER_TEAM,
         "pitchers_per_team": COMMON_PITCHER_STARTER_SLOTS_PER_TEAM,
+        "default_hitter_slots": COMMON_HITTER_SLOT_DEFAULTS.copy(),
+        "default_pitcher_slots": COMMON_PITCHER_SLOT_DEFAULTS.copy(),
+        "default_ir_slots": COMMON_DEFAULT_IR_SLOTS,
         "playable_by_year": _playable_pool_counts_by_year(),
         "job_timeout_seconds": CALCULATOR_REQUEST_TIMEOUT_SECONDS,
     }
@@ -622,8 +685,21 @@ def _prewarm_default_calculation_caches() -> None:
             sims=int(params["sims"]),
             horizon=int(params["horizon"]),
             discount=float(params["discount"]),
+            hit_c=int(params["hit_c"]),
+            hit_1b=int(params["hit_1b"]),
+            hit_2b=int(params["hit_2b"]),
+            hit_3b=int(params["hit_3b"]),
+            hit_ss=int(params["hit_ss"]),
+            hit_ci=int(params["hit_ci"]),
+            hit_mi=int(params["hit_mi"]),
+            hit_of=int(params["hit_of"]),
+            hit_ut=int(params["hit_ut"]),
+            pit_p=int(params["pit_p"]),
+            pit_sp=int(params["pit_sp"]),
+            pit_rp=int(params["pit_rp"]),
             bench=int(params["bench"]),
             minors=int(params["minors"]),
+            ir=int(params["ir"]),
             ip_min=float(params["ip_min"]),
             ip_max=float(ip_max) if ip_max is not None else None,
             two_way=str(params["two_way"]),
@@ -670,8 +746,21 @@ def _get_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set
             sims=300,
             horizon=horizon,
             discount=0.85,
+            hit_c=COMMON_HITTER_SLOT_DEFAULTS["C"],
+            hit_1b=COMMON_HITTER_SLOT_DEFAULTS["1B"],
+            hit_2b=COMMON_HITTER_SLOT_DEFAULTS["2B"],
+            hit_3b=COMMON_HITTER_SLOT_DEFAULTS["3B"],
+            hit_ss=COMMON_HITTER_SLOT_DEFAULTS["SS"],
+            hit_ci=COMMON_HITTER_SLOT_DEFAULTS["CI"],
+            hit_mi=COMMON_HITTER_SLOT_DEFAULTS["MI"],
+            hit_of=COMMON_HITTER_SLOT_DEFAULTS["OF"],
+            hit_ut=COMMON_HITTER_SLOT_DEFAULTS["UT"],
+            pit_p=COMMON_PITCHER_SLOT_DEFAULTS["P"],
+            pit_sp=COMMON_PITCHER_SLOT_DEFAULTS["SP"],
+            pit_rp=COMMON_PITCHER_SLOT_DEFAULTS["RP"],
             bench=6,
             minors=0,
+            ir=COMMON_DEFAULT_IR_SLOTS,
             ip_min=0.0,
             ip_max=None,
             two_way="sum",
@@ -1493,8 +1582,21 @@ class CalculateRequest(BaseModel):
     sims: int = Field(default=300, ge=1, le=5000)
     horizon: int = Field(default=20, ge=1, le=20)
     discount: float = Field(default=0.85, gt=0.0, le=1.0)
+    hit_c: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["C"], ge=0, le=15)
+    hit_1b: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["1B"], ge=0, le=15)
+    hit_2b: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["2B"], ge=0, le=15)
+    hit_3b: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["3B"], ge=0, le=15)
+    hit_ss: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["SS"], ge=0, le=15)
+    hit_ci: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["CI"], ge=0, le=15)
+    hit_mi: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["MI"], ge=0, le=15)
+    hit_of: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["OF"], ge=0, le=15)
+    hit_ut: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["UT"], ge=0, le=15)
+    pit_p: int = Field(default=COMMON_PITCHER_SLOT_DEFAULTS["P"], ge=0, le=15)
+    pit_sp: int = Field(default=COMMON_PITCHER_SLOT_DEFAULTS["SP"], ge=0, le=15)
+    pit_rp: int = Field(default=COMMON_PITCHER_SLOT_DEFAULTS["RP"], ge=0, le=15)
     bench: int = Field(default=6, ge=0, le=40)
     minors: int = Field(default=0, ge=0, le=60)
+    ir: int = Field(default=COMMON_DEFAULT_IR_SLOTS, ge=0, le=40)
     ip_min: float = Field(default=0.0, ge=0.0)
     ip_max: Optional[float] = Field(default=None, ge=0.0)
     start_year: int = Field(default=2026, ge=1900)
@@ -1504,6 +1606,22 @@ class CalculateRequest(BaseModel):
     def validate_ip_bounds(self) -> "CalculateRequest":
         if self.ip_max is not None and self.ip_max < self.ip_min:
             raise ValueError("ip_max must be greater than or equal to ip_min")
+        total_hitter_slots = (
+            self.hit_c
+            + self.hit_1b
+            + self.hit_2b
+            + self.hit_3b
+            + self.hit_ss
+            + self.hit_ci
+            + self.hit_mi
+            + self.hit_of
+            + self.hit_ut
+        )
+        total_pitcher_slots = self.pit_p + self.pit_sp + self.pit_rp
+        if total_hitter_slots <= 0:
+            raise ValueError("At least one hitter slot must be greater than 0.")
+        if total_pitcher_slots <= 0:
+            raise ValueError("At least one pitcher slot must be greater than 0.")
         return self
 
 
@@ -1528,8 +1646,21 @@ def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
                 sims=req.sims,
                 horizon=req.horizon,
                 discount=req.discount,
+                hit_c=req.hit_c,
+                hit_1b=req.hit_1b,
+                hit_2b=req.hit_2b,
+                hit_3b=req.hit_3b,
+                hit_ss=req.hit_ss,
+                hit_ci=req.hit_ci,
+                hit_mi=req.hit_mi,
+                hit_of=req.hit_of,
+                hit_ut=req.hit_ut,
+                pit_p=req.pit_p,
+                pit_sp=req.pit_sp,
+                pit_rp=req.pit_rp,
                 bench=req.bench,
                 minors=req.minors,
+                ir=req.ir,
                 ip_min=req.ip_min,
                 ip_max=req.ip_max,
                 two_way=req.two_way,

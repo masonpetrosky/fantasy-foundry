@@ -469,6 +469,7 @@ class CommonDynastyRotoSettings:
     # Typical dynasty roster extras (you can tune these)
     bench_slots: int = 6
     minor_slots: int = 0
+    ir_slots: int = 0
 
     # Many “standard” roto leagues do NOT enforce an IP cap.
     # Some do enforce an IP minimum for ERA/WHIP qualification; default off.
@@ -1685,7 +1686,7 @@ def calculate_common_dynasty_values(
 
     active_per_team = sum(lg.hitter_slots.values()) + sum(lg.pitcher_slots.values())
     total_minor_slots = lg.n_teams * lg.minor_slots
-    total_mlb_slots = lg.n_teams * (active_per_team + lg.bench_slots)
+    total_mlb_slots = lg.n_teams * (active_per_team + lg.bench_slots + lg.ir_slots)
 
     # PASS 1: average-starter values to estimate who is rostered in a deep league.
     year_contexts: Dict[int, dict] = {}
@@ -3379,6 +3380,7 @@ def main() -> None:
     common.add_argument("--seed", type=int, default=0, help="Global random seed offset for deterministic simulations.")
     common.add_argument("--bench", type=non_negative_int_arg, default=6)
     common.add_argument("--minors", type=non_negative_int_arg, default=0)
+    common.add_argument("--ir", type=non_negative_int_arg, default=0)
     common.add_argument("--ip-min", type=non_negative_float_arg, default=0.0, help="Optional IP minimum to qualify for ERA/WHIP (default 0).")
     common.add_argument(
         "--ip-max",
@@ -3417,6 +3419,7 @@ def main() -> None:
             discount=args.discount,
             bench_slots=args.bench,
             minor_slots=args.minors,
+            ir_slots=args.ir,
             ip_min=args.ip_min,
             ip_max=args.ip_max,
         )

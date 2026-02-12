@@ -458,6 +458,15 @@ td.value-negative { color: var(--red); }
   color: var(--accent);
 }
 
+.calc-subheading {
+  margin: 4px 0 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 .form-group {
   margin-bottom: 16px;
 }
@@ -884,6 +893,24 @@ function safeWriteStorage(key, value) {
 const DEFAULT_PROJECTIONS_TAB = "all";
 const DEFAULT_PROJECTIONS_SORT_COL = "DynastyValue";
 const DEFAULT_PROJECTIONS_SORT_DIR = "desc";
+const SLOT_INPUT_MIN = 0;
+const SLOT_INPUT_MAX = 15;
+const HITTER_SLOT_FIELDS = [
+  { key: "hit_c", label: "C", defaultValue: 1 },
+  { key: "hit_1b", label: "1B", defaultValue: 1 },
+  { key: "hit_2b", label: "2B", defaultValue: 1 },
+  { key: "hit_3b", label: "3B", defaultValue: 1 },
+  { key: "hit_ss", label: "SS", defaultValue: 1 },
+  { key: "hit_ci", label: "CI", defaultValue: 1 },
+  { key: "hit_mi", label: "MI", defaultValue: 1 },
+  { key: "hit_of", label: "OF", defaultValue: 5 },
+  { key: "hit_ut", label: "UT", defaultValue: 1 },
+];
+const PITCHER_SLOT_FIELDS = [
+  { key: "pit_p", label: "P", defaultValue: 9 },
+  { key: "pit_sp", label: "SP", defaultValue: 0 },
+  { key: "pit_rp", label: "RP", defaultValue: 0 },
+];
 
 function formatApiError(status, payload, rawText = "") {
   const detail = payload && payload.detail;
@@ -939,6 +966,25 @@ function sleepWithAbort(ms, signal) {
 }
 
 function buildCalculatorPayload(settings, availableYears, meta) {
+  const parsedSlots = {};
+  for (const slot of [...HITTER_SLOT_FIELDS, ...PITCHER_SLOT_FIELDS]) {
+    const value = Number(settings[slot.key]);
+    if (!Number.isInteger(value) || value < SLOT_INPUT_MIN || value > SLOT_INPUT_MAX) {
+      return { error: `${slot.label} slots must be an integer between ${SLOT_INPUT_MIN} and ${SLOT_INPUT_MAX}.` };
+    }
+    parsedSlots[slot.key] = value;
+  }
+
+  const hittersPerTeam = HITTER_SLOT_FIELDS.reduce((sum, slot) => sum + parsedSlots[slot.key], 0);
+  if (hittersPerTeam <= 0) {
+    return { error: "At least one hitter slot must be greater than 0." };
+  }
+
+  const pitchersPerTeam = PITCHER_SLOT_FIELDS.reduce((sum, slot) => sum + parsedSlots[slot.key], 0);
+  if (pitchersPerTeam <= 0) {
+    return { error: "At least one pitcher slot must be greater than 0." };
+  }
+
   const teams = Number(settings.teams);
   if (!Number.isInteger(teams) || teams < 2 || teams > 30) {
     return { error: "Teams must be an integer between 2 and 30." };
@@ -967,6 +1013,11 @@ function buildCalculatorPayload(settings, availableYears, meta) {
   const minors = Number(settings.minors);
   if (!Number.isInteger(minors) || minors < 0 || minors > 60) {
     return { error: "Minor slots must be an integer between 0 and 60." };
+  }
+
+  const ir = Number(settings.ir);
+  if (!Number.isInteger(ir) || ir < 0 || ir > 40) {
+    return { error: "IR slots must be an integer between 0 and 40." };
   }
 
   const ipMin = Number(settings.ip_min);
@@ -1008,14 +1059,7 @@ function buildCalculatorPayload(settings, availableYears, meta) {
 
   const guardrails = meta?.calculator_guardrails || {};
   const playableByYear = guardrails?.playable_by_year;
-  const hittersPerTeam = Number(guardrails?.hitters_per_team);
-  const pitchersPerTeam = Number(guardrails?.pitchers_per_team);
-  if (
-    playableByYear &&
-    typeof playableByYear === "object" &&
-    Number.isFinite(hittersPerTeam) &&
-    Number.isFinite(pitchersPerTeam)
-  ) {
+  if (playableByYear && typeof playableByYear === "object") {
     const pool = playableByYear[String(startYear)] || playableByYear[startYear];
     if (pool && typeof pool === "object") {
       const availableHitters = Number(pool.hitters);
@@ -1043,8 +1087,10 @@ function buildCalculatorPayload(settings, availableYears, meta) {
       sims,
       horizon,
       discount,
+      ...parsedSlots,
       bench,
       minors,
+      ir,
       ip_min: ipMin,
       ip_max: ipMax,
       two_way: twoWay,
@@ -1571,10 +1617,40 @@ function ProjectionsExplorer({ meta }) {
 // Dynasty Value Calculator
 // ---------------------------------------------------------------------------
 function DynastyCalculator({ meta }) {
-  const [settings, setSettings] = useState({
-    teams: 12, sims: 300, horizon: 20, discount: 0.85,
-    bench: 6, minors: 0, ip_min: 0, ip_max: "", two_way: "sum",
-    start_year: Number(meta.years?.[0] ?? 2026), recent_projections: 3,
+  const [settings, setSettings] = useState(() => {
+    const guardrails = meta?.calculator_guardrails || {};
+    const defaultHitSlots = guardrails?.default_hitter_slots || {};
+    const defaultPitchSlots = guardrails?.default_pitcher_slots || {};
+    const defaultIr = Number(guardrails?.default_ir_slots);
+    const resolvedHitSlots = Object.fromEntries(
+      HITTER_SLOT_FIELDS.map(slot => {
+        const value = Number(defaultHitSlots[slot.label]);
+        return [slot.key, Number.isInteger(value) && value >= SLOT_INPUT_MIN ? value : slot.defaultValue];
+      })
+    );
+    const resolvedPitchSlots = Object.fromEntries(
+      PITCHER_SLOT_FIELDS.map(slot => {
+        const value = Number(defaultPitchSlots[slot.label]);
+        return [slot.key, Number.isInteger(value) && value >= SLOT_INPUT_MIN ? value : slot.defaultValue];
+      })
+    );
+
+    return {
+      teams: 12,
+      sims: 300,
+      horizon: 20,
+      discount: 0.85,
+      ...resolvedHitSlots,
+      ...resolvedPitchSlots,
+      bench: 6,
+      minors: 0,
+      ir: Number.isInteger(defaultIr) && defaultIr >= 0 ? defaultIr : 0,
+      ip_min: 0,
+      ip_max: "",
+      two_way: "sum",
+      start_year: Number(meta.years?.[0] ?? 2026),
+      recent_projections: 3,
+    };
   });
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1815,18 +1891,90 @@ function DynastyCalculator({ meta }) {
             </div>
           </div>
 
+          <p className="calc-subheading">Starter Slots Per Team</p>
+
           <div className="form-row">
             <div className="form-group">
-              <label>Bench Slots</label>
-              <input type="number" value={settings.bench} onChange={e => update("bench", e.target.value)} min="0" max="30" />
+              <label>C</label>
+              <input type="number" value={settings.hit_c} onChange={e => update("hit_c", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
             </div>
             <div className="form-group">
-              <label>Minor Slots</label>
-              <input type="number" value={settings.minors} onChange={e => update("minors", e.target.value)} min="0" max="30" />
+              <label>1B</label>
+              <input type="number" value={settings.hit_1b} onChange={e => update("hit_1b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
             </div>
           </div>
 
           <div className="form-row">
+            <div className="form-group">
+              <label>2B</label>
+              <input type="number" value={settings.hit_2b} onChange={e => update("hit_2b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+            </div>
+            <div className="form-group">
+              <label>3B</label>
+              <input type="number" value={settings.hit_3b} onChange={e => update("hit_3b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>SS</label>
+              <input type="number" value={settings.hit_ss} onChange={e => update("hit_ss", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+            </div>
+            <div className="form-group">
+              <label>CI</label>
+              <input type="number" value={settings.hit_ci} onChange={e => update("hit_ci", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>MI</label>
+              <input type="number" value={settings.hit_mi} onChange={e => update("hit_mi", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+            </div>
+            <div className="form-group">
+              <label>OF</label>
+              <input type="number" value={settings.hit_of} onChange={e => update("hit_of", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>UT</label>
+              <input type="number" value={settings.hit_ut} onChange={e => update("hit_ut", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+            </div>
+            <div className="form-group">
+              <label>P</label>
+              <input type="number" value={settings.pit_p} onChange={e => update("pit_p", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>SP</label>
+              <input type="number" value={settings.pit_sp} onChange={e => update("pit_sp", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+            </div>
+            <div className="form-group">
+              <label>RP</label>
+              <input type="number" value={settings.pit_rp} onChange={e => update("pit_rp", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Bench Slots</label>
+              <input type="number" value={settings.bench} onChange={e => update("bench", e.target.value)} min="0" max="40" />
+            </div>
+            <div className="form-group">
+              <label>Minor Slots</label>
+              <input type="number" value={settings.minors} onChange={e => update("minors", e.target.value)} min="0" max="60" />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>IR Slots</label>
+              <input type="number" value={settings.ir} onChange={e => update("ir", e.target.value)} min="0" max="40" />
+            </div>
             <div className="form-group">
               <label>Two-Way Value</label>
               <select value={settings.two_way} onChange={e => update("two_way", e.target.value)}>
@@ -1834,7 +1982,6 @@ function DynastyCalculator({ meta }) {
                 <option value="max">Best of H/P</option>
               </select>
             </div>
-            <div className="form-group" />
           </div>
 
           <div className="form-row">
