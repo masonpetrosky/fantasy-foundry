@@ -838,6 +838,8 @@ function resolveApiBase() {
 const API = resolveApiBase();
 const BUILD_STORAGE_KEY = "ff:lastBuildId";
 const BUILD_QUERY_PARAM = "build";
+const INDEX_BUILD_ID_TOKEN = "__APP_BUILD_ID__";
+const INDEX_BUILD_ID = INDEX_BUILD_ID_TOKEN.startsWith("__APP_BUILD_") ? "" : INDEX_BUILD_ID_TOKEN;
 
 // ---------------------------------------------------------------------------
 // Utility
@@ -1023,13 +1025,22 @@ function App() {
         setBuildLabel(buildId.slice(0, 12));
 
         const previousBuildId = safeReadStorage(BUILD_STORAGE_KEY);
-        if (previousBuildId && previousBuildId !== buildId) {
-          const url = new URL(window.location.href);
-          if (url.searchParams.get(BUILD_QUERY_PARAM) !== buildId) {
-            url.searchParams.set(BUILD_QUERY_PARAM, buildId);
-            window.location.replace(url.toString());
-            return;
-          }
+        const url = new URL(window.location.href);
+        const urlBuildId = String(url.searchParams.get(BUILD_QUERY_PARAM) || "").trim();
+
+        // If the currently loaded HTML build is stale (or we previously saw a
+        // different build), force one cache-busting navigation to the latest build.
+        const pageIsStale = Boolean(INDEX_BUILD_ID && INDEX_BUILD_ID !== buildId);
+        const seenBuildChange = Boolean(previousBuildId && previousBuildId !== buildId);
+        if ((pageIsStale || seenBuildChange) && urlBuildId !== buildId) {
+          url.searchParams.set(BUILD_QUERY_PARAM, buildId);
+          window.location.replace(url.toString());
+          return;
+        }
+
+        if (urlBuildId && urlBuildId !== buildId) {
+          url.searchParams.set(BUILD_QUERY_PARAM, buildId);
+          window.history.replaceState({}, "", url.toString());
         }
 
         safeWriteStorage(BUILD_STORAGE_KEY, buildId);

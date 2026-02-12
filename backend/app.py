@@ -25,7 +25,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
@@ -60,6 +60,7 @@ def _build_timestamp_iso() -> str | None:
 
 APP_BUILD_ID = _build_id()
 APP_BUILD_AT = _build_timestamp_iso()
+INDEX_BUILD_TOKEN = "__APP_BUILD_ID__"
 
 # ---------------------------------------------------------------------------
 # Load pre-processed JSON data once at startup
@@ -800,6 +801,14 @@ if FRONTEND_DIR.exists():
 
     @app.get("/")
     def serve_index():
-        return FileResponse(FRONTEND_DIR / "index.html", headers=INDEX_CACHE_HEADERS)
+        try:
+            html = INDEX_PATH.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail="Frontend index.html is unavailable") from exc
+
+        if INDEX_BUILD_TOKEN in html:
+            html = html.replace(INDEX_BUILD_TOKEN, APP_BUILD_ID)
+
+        return HTMLResponse(content=html, headers=INDEX_CACHE_HEADERS)
 
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
