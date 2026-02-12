@@ -852,6 +852,8 @@ function parsePosTokens(posValue) {
 }
 
 const DEFAULT_PROJECTIONS_TAB = "all";
+const DEFAULT_PROJECTIONS_SORT_COL = "DynastyValue";
+const DEFAULT_PROJECTIONS_SORT_DIR = "desc";
 
 function formatApiError(status, payload) {
   const detail = payload && payload.detail;
@@ -1080,8 +1082,8 @@ function ProjectionsExplorer({ meta }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [offset, setOffset] = useState(0);
-  const [sortCol, setSortCol] = useState("DynastyValue");
-  const [sortDir, setSortDir] = useState("desc");
+  const [sortCol, setSortCol] = useState(DEFAULT_PROJECTIONS_SORT_COL);
+  const [sortDir, setSortDir] = useState(DEFAULT_PROJECTIONS_SORT_DIR);
   const requestSeqRef = useRef(0);
   const abortControllerRef = useRef(null);
   const limit = 100;
@@ -1185,8 +1187,8 @@ function ProjectionsExplorer({ meta }) {
   useEffect(() => {
     // Ensure first entry into this view always lands on the combined tab.
     setTab(DEFAULT_PROJECTIONS_TAB);
-    setSortCol("DynastyValue");
-    setSortDir("desc");
+    setSortCol(DEFAULT_PROJECTIONS_SORT_COL);
+    setSortDir(DEFAULT_PROJECTIONS_SORT_DIR);
     setOffset(0);
     setPosFilters([]);
     setShowPosMenu(false);
@@ -1333,9 +1335,9 @@ function ProjectionsExplorer({ meta }) {
   return (
     <div className="fade-up fade-up-1">
       <div className="section-tabs">
-        <button className={`section-tab ${tab==="all"?"active":""}`} onClick={() => {setTab("all"); setSortCol("DynastyValue"); setSortDir("desc"); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="all"}>All</button>
-        <button className={`section-tab ${tab==="bat"?"active":""}`} onClick={() => {setTab("bat"); setSortCol("DynastyValue"); setSortDir("desc"); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="bat"}>Hitters</button>
-        <button className={`section-tab ${tab==="pitch"?"active":""}`} onClick={() => {setTab("pitch"); setSortCol("DynastyValue"); setSortDir("desc"); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="pitch"}>Pitchers</button>
+        <button className={`section-tab ${tab==="all"?"active":""}`} onClick={() => {setTab(DEFAULT_PROJECTIONS_TAB); setSortCol(DEFAULT_PROJECTIONS_SORT_COL); setSortDir(DEFAULT_PROJECTIONS_SORT_DIR); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="all"}>All</button>
+        <button className={`section-tab ${tab==="bat"?"active":""}`} onClick={() => {setTab("bat"); setSortCol(DEFAULT_PROJECTIONS_SORT_COL); setSortDir(DEFAULT_PROJECTIONS_SORT_DIR); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="bat"}>Hitters</button>
+        <button className={`section-tab ${tab==="pitch"?"active":""}`} onClick={() => {setTab("pitch"); setSortCol(DEFAULT_PROJECTIONS_SORT_COL); setSortDir(DEFAULT_PROJECTIONS_SORT_DIR); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="pitch"}>Pitchers</button>
       </div>
 
       <div className="filter-bar">
