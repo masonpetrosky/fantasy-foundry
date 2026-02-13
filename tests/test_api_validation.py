@@ -1165,6 +1165,7 @@ class CalculatorValidationTests(unittest.TestCase):
                 "Year": 2026,
                 "Pos": "OF",
                 "Age": 28,
+                "AB": 100,
                 "H": 30,
                 "2B": 5,
                 "3B": 0,
@@ -1204,14 +1205,14 @@ class CalculatorValidationTests(unittest.TestCase):
             "start_year": 2026,
             "horizon": 1,
             "teams": 2,
-            "hit_c": 1,
+            "hit_c": 0,
             "hit_1b": 0,
             "hit_2b": 0,
             "hit_3b": 0,
             "hit_ss": 0,
             "hit_ci": 0,
             "hit_mi": 0,
-            "hit_of": 0,
+            "hit_of": 1,
             "hit_ut": 0,
             "pit_p": 1,
             "pit_sp": 0,
@@ -1273,6 +1274,121 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(low_raw, 20.0)
         self.assertEqual(high_raw, 40.0)
         self.assertGreater(high_raw, low_raw)
+
+    def test_points_mode_applies_position_eligibility_for_year_values(self) -> None:
+        bat_rows = [
+            {
+                "Player": "Dual Threat",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "Age": 28,
+                "AB": 100,
+                "H": 30,
+                "2B": 5,
+                "3B": 0,
+                "HR": 10,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "PlayerKey": "dual-threat",
+                "PlayerEntityKey": "dual-threat",
+            }
+        ]
+        pit_rows = [
+            {
+                "Player": "Dual Threat",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "SP",
+                "Age": 28,
+                "IP": 100,
+                "W": 10,
+                "L": 5,
+                "K": 120,
+                "SV": 0,
+                "SVH": 0,
+                "H": 80,
+                "ER": 30,
+                "BB": 25,
+                "PlayerKey": "dual-threat",
+                "PlayerEntityKey": "dual-threat",
+            }
+        ]
+
+        payload = {
+            "scoring_mode": "points",
+            "start_year": 2026,
+            "horizon": 1,
+            "teams": 2,
+            "hit_c": 1,
+            "hit_1b": 0,
+            "hit_2b": 0,
+            "hit_3b": 0,
+            "hit_ss": 0,
+            "hit_ci": 0,
+            "hit_mi": 0,
+            "hit_of": 0,
+            "hit_ut": 0,
+            "pit_p": 1,
+            "pit_sp": 0,
+            "pit_rp": 0,
+            "bench": 0,
+            "minors": 0,
+            "ir": 0,
+            "pts_hit_1b": 0,
+            "pts_hit_2b": 0,
+            "pts_hit_3b": 0,
+            "pts_hit_hr": 4,
+            "pts_hit_r": 0,
+            "pts_hit_rbi": 0,
+            "pts_hit_sb": 0,
+            "pts_hit_bb": 0,
+            "pts_hit_so": 0,
+            "pts_pit_ip": 0,
+            "pts_pit_w": 0,
+            "pts_pit_l": 0,
+            "pts_pit_k": 0,
+            "pts_pit_sv": 0,
+            "pts_pit_svh": 0,
+            "pts_pit_h": 0,
+            "pts_pit_er": 0,
+            "pts_pit_bb": 0,
+        }
+
+        with patch.object(app_module, "_refresh_data_if_needed", return_value=None), patch.object(
+            app_module,
+            "META",
+            {"years": [2026]},
+        ), patch.object(
+            app_module,
+            "BAT_DATA",
+            bat_rows,
+        ), patch.object(
+            app_module,
+            "PIT_DATA",
+            pit_rows,
+        ), patch.object(
+            app_module,
+            "BAT_DATA_RAW",
+            bat_rows,
+        ), patch.object(
+            app_module,
+            "PIT_DATA_RAW",
+            pit_rows,
+        ), patch.object(
+            app_module,
+            "_player_identity_by_name",
+            return_value={"Dual Threat": ("dual-threat", "dual-threat")},
+        ):
+            response = self.client.post("/api/calculate", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        row = response.json()["data"][0]
+        self.assertEqual(row["Value_2026"], 0.0)
+        self.assertEqual(row["RawDynastyValue"], 0.0)
 
     def test_meta_includes_calculator_guardrails_payload(self) -> None:
         with patch.object(

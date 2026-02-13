@@ -483,6 +483,10 @@ class CommonDynastyRotoSettings:
     # Dynasty parameters
     discount: float = 0.85
     horizon_years: int = 10
+    # If True, compute replacement baselines from start_year once and reuse
+    # for all future valuation years. This avoids late-horizon value inflation
+    # caused by an increasingly thin projected replacement pool.
+    freeze_replacement_baselines: bool = True
 
     # Two-way players: "max" = choose best of hitter/pitcher per year
     # (Most leagues effectively work like this for valuation purposes)
@@ -2014,15 +2018,43 @@ def calculate_common_dynasty_values(
     rostered_names: Set[str] = set(mlb_sel["Player"]) | minor_names | extra_minor_names
 
     # PASS 2: replacement-level per-year values from the unrostered pool.
+    # By default, replacement baselines are frozen from start_year.
     year_tables: List[pd.DataFrame] = []
     hit_year_tables: List[pd.DataFrame] = []
     pit_year_tables: List[pd.DataFrame] = []
+
+    frozen_repl_hit: Optional[pd.DataFrame] = None
+    frozen_repl_pit: Optional[pd.DataFrame] = None
+    if lg.freeze_replacement_baselines:
+        start_ctx_for_replacement = year_contexts.get(start_year)
+        if start_ctx_for_replacement is None:
+            raise ValueError(
+                f"Start year {start_year} context is unavailable for replacement baseline calculation."
+            )
+        frozen_repl_hit, frozen_repl_pit = compute_replacement_baselines(
+            start_ctx_for_replacement,
+            lg,
+            rostered_names,
+            n_repl=lg.n_teams,
+        )
 
     for y in years:
         if verbose:
             print(f"Year {y}: replacement baselines + player values (replacement pass) ...")
         ctx = year_contexts[y]
-        repl_hit, repl_pit = compute_replacement_baselines(ctx, lg, rostered_names, n_repl=lg.n_teams)
+        if lg.freeze_replacement_baselines:
+            # Reuse a fixed replacement baseline from the start year.
+            repl_hit = frozen_repl_hit
+            repl_pit = frozen_repl_pit
+        else:
+            repl_hit, repl_pit = compute_replacement_baselines(
+                ctx,
+                lg,
+                rostered_names,
+                n_repl=lg.n_teams,
+            )
+        if repl_hit is None or repl_pit is None:
+            raise ValueError("Replacement baselines were not initialized.")
         hit_vals, pit_vals = compute_year_player_values_vs_replacement(ctx, lg, repl_hit, repl_pit)
 
         if not hit_vals.empty:
@@ -2202,6 +2234,10 @@ class LeagueSettings:
     # Dynasty parameters
     discount: float = 0.85            # 0.85 = ~15% annual discount
     horizon_years: int = 10           # number of seasons included in dynasty value
+    # If True, compute replacement baselines from start_year once and reuse
+    # for all future valuation years. This avoids late-horizon value inflation
+    # caused by an increasingly thin projected replacement pool.
+    freeze_replacement_baselines: bool = True
 
     # To reduce false positives when inferring minor eligibility from projections
     infer_minor_age_max_hit: int = 25
@@ -3528,18 +3564,45 @@ def calculate_league_dynasty_values(
     rostered_names: Set[str] = set(mlb_sel["Player"]) | minor_names | extra_minor_names
 
     # ------------------------------------------------------------------
-    # PASS 2: compute per-year values vs *replacement* (from unrostered pool)
+    # PASS 2: compute per-year values vs *replacement* (from unrostered pool).
+    # By default, replacement baselines are frozen from start_year.
     # ------------------------------------------------------------------
     year_tables: List[pd.DataFrame] = []
     hit_year_tables: List[pd.DataFrame] = []
     pit_year_tables: List[pd.DataFrame] = []
 
+    frozen_repl_hit: Optional[pd.DataFrame] = None
+    frozen_repl_pit: Optional[pd.DataFrame] = None
+    if lg.freeze_replacement_baselines:
+        start_ctx_for_replacement = year_contexts.get(start_year)
+        if start_ctx_for_replacement is None:
+            raise ValueError(
+                f"Start year {start_year} context is unavailable for replacement baseline calculation."
+            )
+        frozen_repl_hit, frozen_repl_pit = league_compute_replacement_baselines(
+            start_ctx_for_replacement,
+            lg,
+            rostered_names,
+            n_repl=lg.n_teams,
+        )
+
     for y in years:
         if verbose:
             print(f"Year {y}: computing replacement baselines + player values (replacement pass) ...")
         ctx = year_contexts[y]
-
-        repl_hit, repl_pit = league_compute_replacement_baselines(ctx, lg, rostered_names, n_repl=lg.n_teams)
+        if lg.freeze_replacement_baselines:
+            # Reuse a fixed replacement baseline from the start year.
+            repl_hit = frozen_repl_hit
+            repl_pit = frozen_repl_pit
+        else:
+            repl_hit, repl_pit = league_compute_replacement_baselines(
+                ctx,
+                lg,
+                rostered_names,
+                n_repl=lg.n_teams,
+            )
+        if repl_hit is None or repl_pit is None:
+            raise ValueError("Replacement baselines were not initialized.")
         hit_vals, pit_vals = league_compute_year_player_values_vs_replacement(ctx, lg, repl_hit, repl_pit)
 
         # Store side-specific year values for the detail tabs
@@ -3680,6 +3743,11 @@ def main() -> None:
         default=None,
         help="Optional IP maximum/cap (default none). Accepts numeric values or 'none'.",
     )
+    common.add_argument(
+        "--dynamic-replacement-baselines",
+        action="store_true",
+        help="Recompute replacement baselines for each valuation year (legacy behavior).",
+    )
     common.add_argument("--out-prefix", default="common_player_values", help="Output prefix for CSV/XLSX.")
     common.add_argument("--recent-projections", type=positive_int_arg, default=3, help="Number of most recent projections to average per player/year.")
 
@@ -3694,6 +3762,11 @@ def main() -> None:
     league.add_argument("--horizon", type=positive_int_arg, default=10, help="Dynasty horizon years.")
     league.add_argument("--discount", type=discount_arg, default=0.85, help="Annual discount factor in (0, 1].")
     league.add_argument("--seed", type=int, default=0, help="Global random seed offset for deterministic simulations.")
+    league.add_argument(
+        "--dynamic-replacement-baselines",
+        action="store_true",
+        help="Recompute replacement baselines for each valuation year (legacy behavior).",
+    )
     league.add_argument("--out-prefix", default="player_values", help="Output prefix for CSV/XLSX.")
     league.add_argument("--recent-projections", type=positive_int_arg, default=3, help="Number of most recent projections to average per player/year.")
 
@@ -3714,6 +3787,7 @@ def main() -> None:
             ir_slots=args.ir,
             ip_min=args.ip_min,
             ip_max=args.ip_max,
+            freeze_replacement_baselines=not args.dynamic_replacement_baselines,
         )
 
         out, bat_detail, pit_detail = calculate_common_dynasty_values(
@@ -3749,6 +3823,7 @@ def main() -> None:
             horizon_years=args.horizon,
             discount=args.discount,
             two_way="max",
+            freeze_replacement_baselines=not args.dynamic_replacement_baselines,
         )
         validate_ip_bounds(lg.ip_min, lg.ip_max)
 

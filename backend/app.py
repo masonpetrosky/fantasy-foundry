@@ -554,7 +554,8 @@ def _active_jobs_for_ip(client_ip: str) -> int:
 def _calc_result_cache_key(settings: dict[str, Any]) -> str:
     canonical = json.dumps(settings, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-    return f"v1:{digest}"
+    # v3: points mode now uses per-slot replacement-level valuation
+    return f"v3:{digest}"
 
 
 def _redis_client() -> Any | None:
@@ -862,6 +863,95 @@ def _points_player_identity(row: dict) -> str:
     return _normalize_player_key(row.get("Player"))
 
 
+def _points_hitter_eligible_slots(pos_value: object) -> set[str]:
+    tokens = _position_tokens(pos_value)
+    if not tokens:
+        return set()
+
+    aliases = {
+        "LF": "OF",
+        "CF": "OF",
+        "RF": "OF",
+        "DH": "UT",
+        "UTIL": "UT",
+        "U": "UT",
+    }
+    normalized = {aliases.get(token, token) for token in tokens}
+
+    slots: set[str] = {"UT"}
+    if "C" in normalized:
+        slots.add("C")
+    if "1B" in normalized:
+        slots.update({"1B", "CI"})
+    if "3B" in normalized:
+        slots.update({"3B", "CI"})
+    if "2B" in normalized:
+        slots.update({"2B", "MI"})
+    if "SS" in normalized:
+        slots.update({"SS", "MI"})
+    if "OF" in normalized:
+        slots.add("OF")
+    if "CI" in normalized:
+        slots.add("CI")
+    if "MI" in normalized:
+        slots.add("MI")
+    return slots
+
+
+def _points_pitcher_eligible_slots(pos_value: object) -> set[str]:
+    tokens = _position_tokens(pos_value)
+    if not tokens:
+        return set()
+
+    aliases = {
+        "RHP": "SP",
+        "LHP": "SP",
+    }
+    normalized = {aliases.get(token, token) for token in tokens}
+
+    slots: set[str] = {"P"}
+    if "SP" in normalized:
+        slots.add("SP")
+    if "RP" in normalized:
+        slots.add("RP")
+    return slots
+
+
+def _points_slot_replacement(
+    entries: list[dict[str, object]],
+    *,
+    active_slots: set[str],
+    rostered_player_ids: set[str],
+    n_replacement: int,
+) -> dict[str, float]:
+    baselines: dict[str, float] = {}
+    top_n = max(int(n_replacement), 1)
+
+    for slot in sorted(active_slots):
+        candidate_points: list[float] = []
+        for entry in entries:
+            player_id = str(entry.get("player_id") or "")
+            if not player_id or player_id in rostered_player_ids:
+                continue
+            slots = entry.get("slots")
+            if not isinstance(slots, set) or slot not in slots:
+                continue
+            points = _as_float(entry.get("points"))
+            if points is None:
+                continue
+            candidate_points.append(points)
+
+        if not candidate_points:
+            baselines[slot] = 0.0
+            continue
+
+        candidate_points.sort(reverse=True)
+        selected = candidate_points[:top_n]
+        baselines[slot] = float(sum(selected) / len(selected))
+
+    return baselines
+
+
 @lru_cache(maxsize=16)
 def _calculate_points_dynasty_frame_cached(
     teams: int,
@@ -959,7 +1049,51 @@ def _calculate_points_dynasty_frame_cached(
         pair = bucket.setdefault(year, {"hit": None, "pit": None})
         pair["pit"] = row
 
-    result_rows: list[dict] = []
+    roster_slots_per_team = (
+        hit_c
+        + hit_1b
+        + hit_2b
+        + hit_3b
+        + hit_ss
+        + hit_ci
+        + hit_mi
+        + hit_of
+        + hit_ut
+        + pit_p
+        + pit_sp
+        + pit_rp
+        + bench
+        + minors
+        + ir
+    )
+    replacement_rank = max(1, teams * max(1, roster_slots_per_team))
+    hitter_slot_counts = {
+        "C": int(hit_c),
+        "1B": int(hit_1b),
+        "2B": int(hit_2b),
+        "3B": int(hit_3b),
+        "SS": int(hit_ss),
+        "CI": int(hit_ci),
+        "MI": int(hit_mi),
+        "OF": int(hit_of),
+        "UT": int(hit_ut),
+    }
+    pitcher_slot_counts = {
+        "P": int(pit_p),
+        "SP": int(pit_sp),
+        "RP": int(pit_rp),
+    }
+    active_hitter_slots = {slot for slot, count in hitter_slot_counts.items() if count > 0}
+    active_pitcher_slots = {slot for slot, count in pitcher_slot_counts.items() if count > 0}
+    n_replacement = max(int(teams), 1)
+    freeze_replacement_baselines = True
+
+    player_meta: dict[str, dict[str, object]] = {}
+    per_player_year: dict[str, dict[int, dict[str, object]]] = {}
+    year_hit_entries: dict[int, list[dict[str, object]]] = {}
+    year_pit_entries: dict[int, list[dict[str, object]]] = {}
+    player_raw_totals: dict[str, float] = {}
+
     for player_id, per_year in rows_by_player.items():
         if not per_year:
             continue
@@ -979,7 +1113,7 @@ def _calculate_points_dynasty_frame_cached(
         player_key = str(meta_row.get(PLAYER_KEY_COL) or "").strip() or _normalize_player_key(player_name)
         entity_key = str(meta_row.get(PLAYER_ENTITY_KEY_COL) or "").strip() or player_key
 
-        row_out: dict[str, object] = {
+        player_meta[player_id] = {
             "Player": player_name,
             "Team": _row_team_value(meta_hit or {}) or _row_team_value(meta_pit or {}),
             "Pos": _merge_position_value((meta_hit or {}).get("Pos"), (meta_pit or {}).get("Pos")),
@@ -988,25 +1122,174 @@ def _calculate_points_dynasty_frame_cached(
             or _coerce_minor_eligible((meta_pit or {}).get("minor_eligible")),
             PLAYER_KEY_COL: player_key,
             PLAYER_ENTITY_KEY_COL: entity_key,
-            "_ExplainPointsByYear": {},
         }
 
+        year_map: dict[int, dict[str, object]] = {}
         raw_total = 0.0
+
         for year_offset, year in enumerate(valuation_years):
             pair = per_year.get(year) or {"hit": None, "pit": None}
-            hit_breakdown = _calculate_hitter_points_breakdown(pair.get("hit"), scoring)
-            pit_breakdown = _calculate_pitcher_points_breakdown(pair.get("pit"), scoring)
+            hit_row = pair.get("hit")
+            pit_row = pair.get("pit")
+
+            hit_breakdown = _calculate_hitter_points_breakdown(hit_row, scoring)
+            pit_breakdown = _calculate_pitcher_points_breakdown(pit_row, scoring)
             hit_points = float(hit_breakdown["total_points"])
             pit_points = float(pit_breakdown["total_points"])
 
-            if pair.get("hit") and pair.get("pit"):
-                year_points = hit_points + pit_points if two_way == "sum" else max(hit_points, pit_points)
-            elif pair.get("hit"):
-                year_points = hit_points
-            elif pair.get("pit"):
-                year_points = pit_points
+            hit_slots = set()
+            if isinstance(hit_row, dict) and _stat_or_zero(hit_row, "AB") > 0:
+                hit_slots = _points_hitter_eligible_slots(hit_row.get("Pos")) & active_hitter_slots
+            pit_slots = set()
+            if isinstance(pit_row, dict) and _stat_or_zero(pit_row, "IP") > 0:
+                pit_slots = _points_pitcher_eligible_slots(pit_row.get("Pos")) & active_pitcher_slots
+
+            if hit_slots:
+                year_hit_entries.setdefault(year, []).append(
+                    {"player_id": player_id, "points": hit_points, "slots": set(hit_slots)}
+                )
+            if pit_slots:
+                year_pit_entries.setdefault(year, []).append(
+                    {"player_id": player_id, "points": pit_points, "slots": set(pit_slots)}
+                )
+
+            selected_raw_points = 0.0
+            if hit_slots and pit_slots:
+                selected_raw_points = hit_points + pit_points if two_way == "sum" else max(hit_points, pit_points)
+            elif hit_slots:
+                selected_raw_points = hit_points
+            elif pit_slots:
+                selected_raw_points = pit_points
+
+            raw_total += selected_raw_points * (float(discount) ** year_offset)
+
+            year_map[year] = {
+                "hit_breakdown": hit_breakdown,
+                "pit_breakdown": pit_breakdown,
+                "hit_points": hit_points,
+                "pit_points": pit_points,
+                "hit_slots": set(hit_slots),
+                "pit_slots": set(pit_slots),
+                "selected_raw_points": float(selected_raw_points),
+            }
+
+        per_player_year[player_id] = year_map
+        player_raw_totals[player_id] = float(raw_total)
+
+    if not player_meta:
+        empty_columns = [
+            "Player",
+            "Team",
+            "Pos",
+            "Age",
+            "DynastyValue",
+            "RawDynastyValue",
+            "minor_eligible",
+            PLAYER_KEY_COL,
+            PLAYER_ENTITY_KEY_COL,
+        ] + [f"Value_{year}" for year in valuation_years]
+        return pd.DataFrame(columns=empty_columns)
+
+    ranked_players = sorted(
+        player_raw_totals.items(),
+        key=lambda item: (-float(item[1]), str(item[0])),
+    )
+    rostered_player_ids = {player_id for player_id, _score in ranked_players[:replacement_rank]}
+
+    year_hit_replacement: dict[int, dict[str, float]] = {}
+    year_pit_replacement: dict[int, dict[str, float]] = {}
+    if freeze_replacement_baselines:
+        frozen_hit = _points_slot_replacement(
+            year_hit_entries.get(start_year, []),
+            active_slots=active_hitter_slots,
+            rostered_player_ids=rostered_player_ids,
+            n_replacement=n_replacement,
+        )
+        frozen_pit = _points_slot_replacement(
+            year_pit_entries.get(start_year, []),
+            active_slots=active_pitcher_slots,
+            rostered_player_ids=rostered_player_ids,
+            n_replacement=n_replacement,
+        )
+        for year in valuation_years:
+            year_hit_replacement[year] = dict(frozen_hit)
+            year_pit_replacement[year] = dict(frozen_pit)
+    else:
+        for year in valuation_years:
+            year_hit_replacement[year] = _points_slot_replacement(
+                year_hit_entries.get(year, []),
+                active_slots=active_hitter_slots,
+                rostered_player_ids=rostered_player_ids,
+                n_replacement=n_replacement,
+            )
+            year_pit_replacement[year] = _points_slot_replacement(
+                year_pit_entries.get(year, []),
+                active_slots=active_pitcher_slots,
+                rostered_player_ids=rostered_player_ids,
+                n_replacement=n_replacement,
+            )
+
+    result_rows: list[dict] = []
+    for player_id, meta in player_meta.items():
+        row_out: dict[str, object] = dict(meta)
+        row_out["_ExplainPointsByYear"] = {}
+
+        raw_total = 0.0
+        for year_offset, year in enumerate(valuation_years):
+            info = per_player_year.get(player_id, {}).get(year, {})
+
+            hit_points = float(info.get("hit_points", 0.0))
+            pit_points = float(info.get("pit_points", 0.0))
+            hit_slots = set(info.get("hit_slots", set()))
+            pit_slots = set(info.get("pit_slots", set()))
+            hit_breakdown = info.get("hit_breakdown") if isinstance(info.get("hit_breakdown"), dict) else _calculate_hitter_points_breakdown(None, scoring)
+            pit_breakdown = info.get("pit_breakdown") if isinstance(info.get("pit_breakdown"), dict) else _calculate_pitcher_points_breakdown(None, scoring)
+
+            hit_repl_map = year_hit_replacement.get(year, {})
+            pit_repl_map = year_pit_replacement.get(year, {})
+
+            hit_best_value: float | None = None
+            hit_best_slot: str | None = None
+            hit_best_replacement: float | None = None
+            for slot in sorted(hit_slots):
+                replacement_points = float(hit_repl_map.get(slot, 0.0))
+                value = hit_points - replacement_points
+                if hit_best_value is None or value > hit_best_value:
+                    hit_best_value = float(value)
+                    hit_best_slot = slot
+                    hit_best_replacement = replacement_points
+
+            pit_best_value: float | None = None
+            pit_best_slot: str | None = None
+            pit_best_replacement: float | None = None
+            for slot in sorted(pit_slots):
+                replacement_points = float(pit_repl_map.get(slot, 0.0))
+                value = pit_points - replacement_points
+                if pit_best_value is None or value > pit_best_value:
+                    pit_best_value = float(value)
+                    pit_best_slot = slot
+                    pit_best_replacement = replacement_points
+
+            selected_raw_points = 0.0
+            if hit_best_value is not None and pit_best_value is not None:
+                if two_way == "sum":
+                    year_points = hit_best_value + pit_best_value
+                    selected_raw_points = hit_points + pit_points
+                elif hit_best_value >= pit_best_value:
+                    year_points = hit_best_value
+                    selected_raw_points = hit_points
+                else:
+                    year_points = pit_best_value
+                    selected_raw_points = pit_points
+            elif hit_best_value is not None:
+                year_points = hit_best_value
+                selected_raw_points = hit_points
+            elif pit_best_value is not None:
+                year_points = pit_best_value
+                selected_raw_points = pit_points
             else:
                 year_points = 0.0
+                selected_raw_points = 0.0
 
             row_out[f"Value_{year}"] = year_points
             discount_factor = float(discount) ** year_offset
@@ -1015,6 +1298,13 @@ def _calculate_points_dynasty_frame_cached(
             row_out["_ExplainPointsByYear"][str(year)] = {
                 "hitting_points": round(hit_points, 4),
                 "pitching_points": round(pit_points, 4),
+                "hitting_replacement": round(float(hit_best_replacement), 4) if hit_best_replacement is not None else None,
+                "pitching_replacement": round(float(pit_best_replacement), 4) if pit_best_replacement is not None else None,
+                "hitting_best_slot": hit_best_slot,
+                "pitching_best_slot": pit_best_slot,
+                "hitting_value": round(float(hit_best_value), 4) if hit_best_value is not None else None,
+                "pitching_value": round(float(pit_best_value), 4) if pit_best_value is not None else None,
+                "selected_raw_points": round(float(selected_raw_points), 4),
                 "selected_points": round(float(year_points), 4),
                 "discount_factor": round(float(discount_factor), 6),
                 "discounted_contribution": round(float(discounted_value), 4),
@@ -1022,7 +1312,7 @@ def _calculate_points_dynasty_frame_cached(
                 "pitching": pit_breakdown,
             }
 
-        row_out["RawDynastyValue"] = raw_total
+        row_out["RawDynastyValue"] = float(raw_total)
         result_rows.append(row_out)
 
     if not result_rows:
@@ -1039,24 +1329,6 @@ def _calculate_points_dynasty_frame_cached(
         ] + [f"Value_{year}" for year in valuation_years]
         return pd.DataFrame(columns=empty_columns)
 
-    roster_slots_per_team = (
-        hit_c
-        + hit_1b
-        + hit_2b
-        + hit_3b
-        + hit_ss
-        + hit_ci
-        + hit_mi
-        + hit_of
-        + hit_ut
-        + pit_p
-        + pit_sp
-        + pit_rp
-        + bench
-        + minors
-        + ir
-    )
-    replacement_rank = max(1, teams * max(1, roster_slots_per_team))
     sorted_raw_values = sorted((float(row["RawDynastyValue"]) for row in result_rows), reverse=True)
     cutoff_idx = min(replacement_rank - 1, len(sorted_raw_values) - 1)
     replacement_raw = sorted_raw_values[cutoff_idx]
