@@ -1545,7 +1545,7 @@ function buildDefaultCalculatorSettings(meta) {
     horizon: 20,
     discount: 0.85,
     ...resolveRotoSlotDefaults(meta),
-    bench: 8,
+    bench: 6,
     minors: Number.isInteger(defaultMinors) && defaultMinors >= 0 ? defaultMinors : 0,
     ir: Number.isInteger(defaultIr) && defaultIr >= 0 ? defaultIr : 0,
     ip_min: 0,
@@ -1980,7 +1980,7 @@ function App() {
           </p>
           <p>
             Roster defaults: 22 starters (13 hitters: <code>C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT</code>; 9 pitchers as <code>9 P</code>),
-            plus 8 bench, 12 MiLB, and 4 IL slots.
+            plus 6 bench, 0 MiLB, and 0 IL slots.
           </p>
           <p className="methodology-note" style={{ marginBottom: 0 }}>
             Need custom rankings? Open the <strong>Dynasty Calculator</strong> tab and adjust league settings before you run values.

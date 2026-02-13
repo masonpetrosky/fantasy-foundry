@@ -16,7 +16,7 @@ Default dynasty roto configuration:
 - Typical roto lineup:
     Hitters: C(1), 1B, 2B, 3B, SS, CI, MI, OF(5), UT
     Pitchers: P(9)
-- Roster (common defaults): 46 total = 22 starters + 8 bench + 12 minors + 4 IL.
+- Roster (common defaults): 28 total = 22 starters + 6 bench + 0 minors + 0 IL.
 - Dynasty value: discounted multi-year marginal roto points (SGP),
   then centered so that ~0 corresponds to the replacement-level roster
   cutoff (active + bench).
@@ -646,9 +646,9 @@ class CommonDynastyRotoSettings:
     })
 
     # Typical dynasty roster extras (you can tune these)
-    bench_slots: int = 8
-    minor_slots: int = 12
-    ir_slots: int = 4
+    bench_slots: int = 6
+    minor_slots: int = 0
+    ir_slots: int = 0
 
     # Many “standard” roto leagues do NOT enforce an IP cap.
     # Some do enforce an IP minimum for ERA/WHIP qualification; default off.
@@ -4041,9 +4041,9 @@ def main() -> None:
     common.add_argument("--horizon", type=positive_int_arg, default=10, help="Dynasty horizon years.")
     common.add_argument("--discount", type=discount_arg, default=0.85, help="Annual discount factor in (0, 1].")
     common.add_argument("--seed", type=int, default=0, help="Global random seed offset for deterministic simulations.")
-    common.add_argument("--bench", type=non_negative_int_arg, default=8)
-    common.add_argument("--minors", type=non_negative_int_arg, default=12)
-    common.add_argument("--ir", type=non_negative_int_arg, default=4)
+    common.add_argument("--bench", type=non_negative_int_arg, default=6)
+    common.add_argument("--minors", type=non_negative_int_arg, default=0)
+    common.add_argument("--ir", type=non_negative_int_arg, default=0)
     common.add_argument("--ip-min", type=non_negative_float_arg, default=0.0, help="Optional IP minimum to qualify for ERA/WHIP (default 0).")
     common.add_argument(
         "--ip-max",

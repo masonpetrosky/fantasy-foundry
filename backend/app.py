@@ -157,8 +157,8 @@ DEFAULT_POINTS_SCORING = {
     "pts_pit_er": -2.0,
     "pts_pit_bb": -1.0,
 }
-COMMON_DEFAULT_IR_SLOTS = 4
-COMMON_DEFAULT_MINOR_SLOTS = 12
+COMMON_DEFAULT_IR_SLOTS = 0
+COMMON_DEFAULT_MINOR_SLOTS = 0
 COMMON_HITTER_STARTER_SLOTS_PER_TEAM = sum(COMMON_HITTER_SLOT_DEFAULTS.values())
 COMMON_PITCHER_STARTER_SLOTS_PER_TEAM = sum(COMMON_PITCHER_SLOT_DEFAULTS.values())
 CALCULATOR_JOB_TTL_SECONDS = max(60, int(os.getenv("FF_CALC_JOB_TTL_SECONDS", "1800")))
@@ -1775,7 +1775,7 @@ def _default_calculation_cache_params() -> dict[str, int | float | str | None]:
         "pit_p": COMMON_PITCHER_SLOT_DEFAULTS["P"],
         "pit_sp": COMMON_PITCHER_SLOT_DEFAULTS["SP"],
         "pit_rp": COMMON_PITCHER_SLOT_DEFAULTS["RP"],
-        "bench": 8,
+        "bench": 6,
         "minors": COMMON_DEFAULT_MINOR_SLOTS,
         "ir": COMMON_DEFAULT_IR_SLOTS,
         "ip_min": 0.0,
@@ -3259,7 +3259,7 @@ class CalculateRequest(BaseModel):
     pit_p: int = Field(default=COMMON_PITCHER_SLOT_DEFAULTS["P"], ge=0, le=15)
     pit_sp: int = Field(default=COMMON_PITCHER_SLOT_DEFAULTS["SP"], ge=0, le=15)
     pit_rp: int = Field(default=COMMON_PITCHER_SLOT_DEFAULTS["RP"], ge=0, le=15)
-    bench: int = Field(default=8, ge=0, le=40)
+    bench: int = Field(default=6, ge=0, le=40)
     minors: int = Field(default=COMMON_DEFAULT_MINOR_SLOTS, ge=0, le=60)
     ir: int = Field(default=COMMON_DEFAULT_IR_SLOTS, ge=0, le=40)
     ip_min: float = Field(default=0.0, ge=0.0)
