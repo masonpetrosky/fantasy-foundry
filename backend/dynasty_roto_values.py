@@ -1539,8 +1539,8 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
 
     # --- Hitters: best eligible slot vs average starter at that slot ---
     hit_rows = []
-    for row in bat_y.itertuples(index=False):
-        pos_set = parse_hit_positions(getattr(row, "Pos", ""))
+    for row in bat_y.to_dict(orient="records"):
+        pos_set = parse_hit_positions(row.get("Pos", ""))
         slots = eligible_hit_slots(pos_set)
         if not slots:
             continue
@@ -1555,7 +1555,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
 
             new_tot = base_hit_tot.copy()
             for col in HIT_COMPONENT_COLS:
-                new_tot[col] = new_tot[col] - b[col] + getattr(row, col)
+                new_tot[col] = new_tot[col] - b[col] + float(row.get(col, 0.0))
 
             new_obp = team_obp(
                 float(new_tot["H"]),
@@ -1594,12 +1594,12 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                 best_slot = slot
 
         hit_rows.append({
-            "Player": getattr(row, "Player"),
+            "Player": row.get("Player"),
             "Year": year,
             "Type": "H",
-            "Team": getattr(row, "Team", np.nan),
-            "Age": getattr(row, "Age", np.nan),
-            "Pos": getattr(row, "Pos", np.nan),
+            "Team": row.get("Team", np.nan),
+            "Age": row.get("Age", np.nan),
+            "Pos": row.get("Pos", np.nan),
             "BestSlot": best_slot,
             "YearValue": float(best_val),
         })
@@ -1608,8 +1608,8 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
 
     # --- Pitchers: best eligible slot (usually just P) vs average starter at that slot ---
     pit_rows = []
-    for row in pit_y.itertuples(index=False):
-        pos_set = parse_pit_positions(getattr(row, "Pos", ""))
+    for row in pit_y.to_dict(orient="records"):
+        pos_set = parse_pit_positions(row.get("Pos", ""))
         slots = eligible_pit_slots(pos_set)
         if not slots:
             continue
@@ -1624,7 +1624,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
 
             new_tot = base_pit_tot.copy()
             for col in PIT_COMPONENT_COLS:
-                new_tot[col] = new_tot[col] - b[col] + getattr(row, col)
+                new_tot[col] = new_tot[col] - b[col] + float(row.get(col, 0.0))
 
             new_tot_bounded = common_apply_pitching_bounds(
                 {col: float(new_tot[col]) for col in PIT_COMPONENT_COLS},
@@ -1651,12 +1651,12 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                 best_slot = slot
 
         pit_rows.append({
-            "Player": getattr(row, "Player"),
+            "Player": row.get("Player"),
             "Year": year,
             "Type": "P",
-            "Team": getattr(row, "Team", np.nan),
-            "Age": getattr(row, "Age", np.nan),
-            "Pos": getattr(row, "Pos", np.nan),
+            "Team": row.get("Team", np.nan),
+            "Age": row.get("Age", np.nan),
+            "Pos": row.get("Pos", np.nan),
             "BestSlot": best_slot,
             "YearValue": float(best_val),
         })
@@ -1745,8 +1745,8 @@ def compute_year_player_values_vs_replacement(
     sgp_pit = ctx["sgp_pit"]
 
     hit_rows = []
-    for row in bat_y.itertuples(index=False):
-        pos_set = parse_hit_positions(getattr(row, "Pos", ""))
+    for row in bat_y.to_dict(orient="records"):
+        pos_set = parse_hit_positions(row.get("Pos", ""))
         slots = eligible_hit_slots(pos_set)
         if not slots:
             continue
@@ -1765,7 +1765,7 @@ def compute_year_player_values_vs_replacement(
             new_tot = base_hit_tot_avg.copy()
             for col in HIT_COMPONENT_COLS:
                 base_tot[col] = base_tot[col] - b_avg[col] + b_rep[col]
-                new_tot[col] = new_tot[col] - b_avg[col] + getattr(row, col, 0.0)
+                new_tot[col] = new_tot[col] - b_avg[col] + float(row.get(col, 0.0))
 
             base_obp = team_obp(
                 float(base_tot["H"]),
@@ -1821,12 +1821,12 @@ def compute_year_player_values_vs_replacement(
                 best_slot = slot
 
         hit_rows.append({
-            "Player": getattr(row, "Player"),
+            "Player": row.get("Player"),
             "Year": year,
             "Type": "H",
-            "Team": getattr(row, "Team", np.nan),
-            "Age": getattr(row, "Age", np.nan),
-            "Pos": getattr(row, "Pos", np.nan),
+            "Team": row.get("Team", np.nan),
+            "Age": row.get("Age", np.nan),
+            "Pos": row.get("Pos", np.nan),
             "BestSlot": best_slot,
             "YearValue": float(best_val),
         })
@@ -1834,8 +1834,8 @@ def compute_year_player_values_vs_replacement(
     hit_vals = pd.DataFrame(hit_rows)
 
     pit_rows = []
-    for row in pit_y.itertuples(index=False):
-        pos_set = parse_pit_positions(getattr(row, "Pos", ""))
+    for row in pit_y.to_dict(orient="records"):
+        pos_set = parse_pit_positions(row.get("Pos", ""))
         slots = eligible_pit_slots(pos_set)
         if not slots:
             continue
@@ -1854,7 +1854,7 @@ def compute_year_player_values_vs_replacement(
             new_raw = {c: float(base_pit_tot_avg[c]) for c in PIT_COMPONENT_COLS}
             for col in PIT_COMPONENT_COLS:
                 base_raw[col] = base_raw[col] - float(b_avg[col]) + float(b_rep[col])
-                new_raw[col] = new_raw[col] - float(b_avg[col]) + float(getattr(row, col, 0.0))
+                new_raw[col] = new_raw[col] - float(b_avg[col]) + float(row.get(col, 0.0))
 
             base_bounded = common_apply_pitching_bounds(base_raw, lg, rep_rates)
             new_bounded = common_apply_pitching_bounds(new_raw, lg, rep_rates)
@@ -1878,12 +1878,12 @@ def compute_year_player_values_vs_replacement(
                 best_slot = slot
 
         pit_rows.append({
-            "Player": getattr(row, "Player"),
+            "Player": row.get("Player"),
             "Year": year,
             "Type": "P",
-            "Team": getattr(row, "Team", np.nan),
-            "Age": getattr(row, "Age", np.nan),
-            "Pos": getattr(row, "Pos", np.nan),
+            "Team": row.get("Team", np.nan),
+            "Age": row.get("Age", np.nan),
+            "Pos": row.get("Pos", np.nan),
             "BestSlot": best_slot,
             "YearValue": float(best_val),
         })
@@ -3044,8 +3044,8 @@ def league_compute_year_player_values(ctx: dict, lg: LeagueSettings) -> Tuple[pd
 
     # --- Hitters: best-slot marginal SGP vs average starter in that slot ---
     hit_rows = []
-    for row in bat_y.itertuples(index=False):
-        pos_set = league_parse_hit_positions(getattr(row, "Pos", ""))
+    for row in bat_y.to_dict(orient="records"):
+        pos_set = league_parse_hit_positions(row.get("Pos", ""))
         slots = league_eligible_hit_slots(pos_set)
         if not slots:
             continue
@@ -3060,7 +3060,7 @@ def league_compute_year_player_values(ctx: dict, lg: LeagueSettings) -> Tuple[pd
             b = baseline_hit.loc[slot]
             new_tot = base_hit_tot.copy()
             for col in LEAGUE_HIT_STAT_COLS:
-                new_tot[col] = new_tot[col] - b[col] + getattr(row, col)
+                new_tot[col] = new_tot[col] - b[col] + float(row.get(col, 0.0))
 
             new_avg, new_ops = league_team_avg_ops(new_tot)
 
@@ -3085,12 +3085,12 @@ def league_compute_year_player_values(ctx: dict, lg: LeagueSettings) -> Tuple[pd
                 best_slot = slot
 
         hit_rows.append({
-            "Player": getattr(row, "Player"),
+            "Player": row.get("Player"),
             "Year": year,
             "Type": "H",
-            "MLBTeam": getattr(row, "MLBTeam", np.nan),
-            "Age": getattr(row, "Age", np.nan),
-            "Pos": getattr(row, "Pos", np.nan),
+            "MLBTeam": row.get("MLBTeam", np.nan),
+            "Age": row.get("Age", np.nan),
+            "Pos": row.get("Pos", np.nan),
             "BestSlot": best_slot,
             "YearValue": float(best_val),
         })
@@ -3099,8 +3099,8 @@ def league_compute_year_player_values(ctx: dict, lg: LeagueSettings) -> Tuple[pd
 
     # --- Pitchers: best-slot marginal SGP vs average starter in that slot, with IP cap ---
     pit_rows = []
-    for row in pit_y.itertuples(index=False):
-        pos_set = league_parse_pit_positions(getattr(row, "Pos", ""))
+    for row in pit_y.to_dict(orient="records"):
+        pos_set = league_parse_pit_positions(row.get("Pos", ""))
         slots = league_eligible_pit_slots(pos_set)
         if not slots:
             continue
@@ -3115,7 +3115,7 @@ def league_compute_year_player_values(ctx: dict, lg: LeagueSettings) -> Tuple[pd
             b = baseline_pit.loc[slot]
             new_raw = dict(base_pit_raw)
             for col in ["IP", "W", "K", "SVH", "QA3", "ER", "H", "BB"]:
-                new_raw[col] = float(new_raw[col]) - float(b[col]) + float(getattr(row, col, 0.0))
+                new_raw[col] = float(new_raw[col]) - float(b[col]) + float(row.get(col, 0.0))
 
             new_capped = league_apply_ip_cap(new_raw, ip_cap=lg.ip_max, rep_rates=rep_rates)
 
@@ -3142,12 +3142,12 @@ def league_compute_year_player_values(ctx: dict, lg: LeagueSettings) -> Tuple[pd
                 best_slot = slot
 
         pit_rows.append({
-            "Player": getattr(row, "Player"),
+            "Player": row.get("Player"),
             "Year": year,
             "Type": "P",
-            "MLBTeam": getattr(row, "MLBTeam", np.nan),
-            "Age": getattr(row, "Age", np.nan),
-            "Pos": getattr(row, "Pos", np.nan),
+            "MLBTeam": row.get("MLBTeam", np.nan),
+            "Age": row.get("Age", np.nan),
+            "Pos": row.get("Pos", np.nan),
             "BestSlot": best_slot,
             "YearValue": float(best_val),
         })
@@ -3272,8 +3272,8 @@ def league_compute_year_player_values_vs_replacement(
 
     # --- Hitters ---
     hit_rows = []
-    for row in bat_y.itertuples(index=False):
-        pos_set = league_parse_hit_positions(getattr(row, "Pos", ""))
+    for row in bat_y.to_dict(orient="records"):
+        pos_set = league_parse_hit_positions(row.get("Pos", ""))
         slots = league_eligible_hit_slots(pos_set)
         if not slots:
             continue
@@ -3296,7 +3296,7 @@ def league_compute_year_player_values_vs_replacement(
             # New team with this player in this slot
             new_tot = base_hit_tot_avg.copy()
             for col in LEAGUE_HIT_STAT_COLS:
-                new_tot[col] = new_tot[col] - b_avg[col] + getattr(row, col, 0.0)
+                new_tot[col] = new_tot[col] - b_avg[col] + float(row.get(col, 0.0))
 
             base_avg, base_ops = league_team_avg_ops(base_tot)
             new_avg, new_ops = league_team_avg_ops(new_tot)
@@ -3322,12 +3322,12 @@ def league_compute_year_player_values_vs_replacement(
                 best_slot = slot
 
         hit_rows.append({
-            "Player": getattr(row, "Player"),
+            "Player": row.get("Player"),
             "Year": year,
             "Type": "H",
-            "MLBTeam": getattr(row, "MLBTeam", np.nan),
-            "Age": getattr(row, "Age", np.nan),
-            "Pos": getattr(row, "Pos", np.nan),
+            "MLBTeam": row.get("MLBTeam", np.nan),
+            "Age": row.get("Age", np.nan),
+            "Pos": row.get("Pos", np.nan),
             "BestSlot": best_slot,
             "YearValue": float(best_val),
         })
@@ -3338,8 +3338,8 @@ def league_compute_year_player_values_vs_replacement(
     pit_rows = []
     pit_cols = ["IP", "W", "K", "SVH", "QA3", "ER", "H", "BB"]
 
-    for row in pit_y.itertuples(index=False):
-        pos_set = league_parse_pit_positions(getattr(row, "Pos", ""))
+    for row in pit_y.to_dict(orient="records"):
+        pos_set = league_parse_pit_positions(row.get("Pos", ""))
         slots = league_eligible_pit_slots(pos_set)
         if not slots:
             continue
@@ -3362,7 +3362,7 @@ def league_compute_year_player_values_vs_replacement(
             # New team with this player in this slot
             new_raw = dict(base_pit_raw_avg)
             for col in pit_cols:
-                new_raw[col] = float(new_raw.get(col, 0.0)) - float(b_avg.get(col, 0.0)) + float(getattr(row, col, 0.0))
+                new_raw[col] = float(new_raw.get(col, 0.0)) - float(b_avg.get(col, 0.0)) + float(row.get(col, 0.0))
 
             base_capped = league_apply_ip_cap(base_raw, ip_cap=lg.ip_max, rep_rates=rep_rates)
             new_capped = league_apply_ip_cap(new_raw, ip_cap=lg.ip_max, rep_rates=rep_rates)
@@ -3390,12 +3390,12 @@ def league_compute_year_player_values_vs_replacement(
                 best_slot = slot
 
         pit_rows.append({
-            "Player": getattr(row, "Player"),
+            "Player": row.get("Player"),
             "Year": year,
             "Type": "P",
-            "MLBTeam": getattr(row, "MLBTeam", np.nan),
-            "Age": getattr(row, "Age", np.nan),
-            "Pos": getattr(row, "Pos", np.nan),
+            "MLBTeam": row.get("MLBTeam", np.nan),
+            "Age": row.get("Age", np.nan),
+            "Pos": row.get("Pos", np.nan),
             "BestSlot": best_slot,
             "YearValue": float(best_val),
         })

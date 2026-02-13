@@ -9,6 +9,7 @@ from backend.dynasty_roto_values import (
     _estimate_bench_negative_penalty,
     assign_players_to_slots_with_vacancy_fill,
     compute_year_context,
+    compute_year_player_values,
     eligible_pit_slots,
 )
 
@@ -126,6 +127,104 @@ class VacancyBackfillTests(unittest.TestCase):
 
         self.assertIn("RP", ctx["baseline_pit"].index)
         self.assertAlmostEqual(float(ctx["base_pit_tot"]["IP"]), 30.0, places=6)
+
+    def test_compute_year_player_values_handles_hitter_columns_with_digits(self) -> None:
+        bat = pd.DataFrame(
+            [
+                {
+                    "Player": "Corner Bat",
+                    "Year": 2026,
+                    "Team": "AAA",
+                    "Age": 27,
+                    "Pos": "3B",
+                    "AB": 550.0,
+                    "H": 150.0,
+                    "R": 85.0,
+                    "HR": 28.0,
+                    "RBI": 92.0,
+                    "SB": 5.0,
+                    "BB": 62.0,
+                    "HBP": 4.0,
+                    "SF": 5.0,
+                    "2B": 32.0,
+                    "3B": 2.0,
+                },
+                {
+                    "Player": "Middle Bat",
+                    "Year": 2026,
+                    "Team": "BBB",
+                    "Age": 25,
+                    "Pos": "SS",
+                    "AB": 520.0,
+                    "H": 142.0,
+                    "R": 80.0,
+                    "HR": 22.0,
+                    "RBI": 78.0,
+                    "SB": 12.0,
+                    "BB": 58.0,
+                    "HBP": 6.0,
+                    "SF": 4.0,
+                    "2B": 27.0,
+                    "3B": 3.0,
+                },
+            ]
+        )
+        pit = pd.DataFrame(
+            [
+                {
+                    "Player": "Starter One",
+                    "Year": 2026,
+                    "Team": "AAA",
+                    "Age": 28,
+                    "Pos": "SP",
+                    "IP": 170.0,
+                    "W": 12.0,
+                    "QS": 18.0,
+                    "K": 180.0,
+                    "SVH": 0.0,
+                    "ER": 64.0,
+                    "H": 152.0,
+                    "BB": 48.0,
+                    "ERA": 3.39,
+                    "WHIP": 1.18,
+                },
+                {
+                    "Player": "Reliever One",
+                    "Year": 2026,
+                    "Team": "BBB",
+                    "Age": 29,
+                    "Pos": "RP",
+                    "IP": 64.0,
+                    "W": 4.0,
+                    "QS": 0.0,
+                    "K": 82.0,
+                    "SVH": 28.0,
+                    "ER": 18.0,
+                    "H": 50.0,
+                    "BB": 20.0,
+                    "ERA": 2.53,
+                    "WHIP": 1.09,
+                },
+            ]
+        )
+
+        lg = CommonDynastyRotoSettings(
+            n_teams=1,
+            sims_for_sgp=2,
+            hitter_slots={"C": 0, "1B": 0, "2B": 0, "3B": 1, "SS": 1, "CI": 0, "MI": 0, "OF": 0, "UT": 0},
+            pitcher_slots={"P": 0, "SP": 1, "RP": 1},
+            bench_slots=0,
+            minor_slots=0,
+            ir_slots=0,
+            ip_min=0.0,
+            ip_max=None,
+        )
+
+        ctx = compute_year_context(2026, bat, pit, lg, rng_seed=13)
+        hit_vals, pit_vals = compute_year_player_values(ctx, lg)
+
+        self.assertEqual(set(hit_vals["Player"]), {"Corner Bat", "Middle Bat"})
+        self.assertEqual(set(pit_vals["Player"]), {"Starter One", "Reliever One"})
 
 
 class BenchStashPenaltyTests(unittest.TestCase):
