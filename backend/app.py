@@ -92,15 +92,15 @@ def load_json(name: str):
 
 
 PROJECTION_DATE_COLS = ["ProjectionDate", "Date", "Updated", "LastUpdated", "Timestamp", "Created", "AsOf"]
-DERIVED_HIT_RATE_COLS = {"AVG", "OPS"}
+DERIVED_HIT_RATE_COLS = {"AVG", "OBP", "OPS"}
 DERIVED_PIT_RATE_COLS = {"ERA", "WHIP"}
 TEAM_COL_CANDIDATES = ("Team", "MLBTeam")
 YEAR_RANGE_TOKEN_RE = re.compile(r"^(\d{4})\s*-\s*(\d{4})$")
 POSITION_TOKEN_SPLIT_RE = re.compile(r"[,\s/]+")
 PROJECTION_QUERY_CACHE_MAXSIZE = 256
 POSITION_DISPLAY_ORDER = ("C", "1B", "2B", "3B", "SS", "OF", "DH", "UT", "SP", "RP")
-ALL_TAB_HITTER_STAT_COLS = ("G", "AB", "R", "H", "2B", "3B", "HR", "RBI", "SB", "BB", "SO", "AVG", "OPS")
-ALL_TAB_PITCH_STAT_COLS = ("GS", "IP", "W", "L", "K", "SV", "SVH", "ERA", "WHIP", "ER")
+ALL_TAB_HITTER_STAT_COLS = ("G", "AB", "R", "H", "2B", "3B", "HR", "RBI", "SB", "BB", "SO", "AVG", "OBP", "OPS")
+ALL_TAB_PITCH_STAT_COLS = ("GS", "IP", "W", "QS", "L", "K", "SV", "SVH", "ERA", "WHIP", "ER")
 PROJECTION_TEXT_SORT_COLS = {"Player", "Team", "Pos", "Type", "Years"}
 PLAYER_KEY_COL = "PlayerKey"
 PLAYER_ENTITY_KEY_COL = "PlayerEntityKey"
@@ -157,8 +157,8 @@ DEFAULT_POINTS_SCORING = {
     "pts_pit_er": -2.0,
     "pts_pit_bb": -1.0,
 }
-COMMON_DEFAULT_IR_SLOTS = 0
-COMMON_DEFAULT_MINOR_SLOTS = 0
+COMMON_DEFAULT_IR_SLOTS = 4
+COMMON_DEFAULT_MINOR_SLOTS = 12
 COMMON_HITTER_STARTER_SLOTS_PER_TEAM = sum(COMMON_HITTER_SLOT_DEFAULTS.values())
 COMMON_PITCHER_STARTER_SLOTS_PER_TEAM = sum(COMMON_PITCHER_SLOT_DEFAULTS.values())
 CALCULATOR_JOB_TTL_SECONDS = max(60, int(os.getenv("FF_CALC_JOB_TTL_SECONDS", "1800")))
@@ -397,8 +397,19 @@ def _average_recent_projection_rows(
             obp_den = ab + bb + hbp + sf
             obp = ((h + bb + hbp) / obp_den).where(obp_den > 0, 0.0)
             slg = (tb / ab).where(ab > 0, 0.0)
+            out["OBP"] = obp
             out["OPS"] = obp + slg
     else:
+        if "SVH" not in out.columns:
+            if "SV" in out.columns and "HLD" in out.columns:
+                out["SVH"] = out["SV"].astype(float).fillna(0.0) + out["HLD"].astype(float).fillna(0.0)
+            elif "SV" in out.columns:
+                out["SVH"] = out["SV"].astype(float).fillna(0.0)
+        if "QS" not in out.columns:
+            if "QA3" in out.columns:
+                out["QS"] = out["QA3"].astype(float).fillna(0.0)
+            else:
+                out["QS"] = 0.0
         if "ER" in out.columns and "IP" in out.columns:
             er = out["ER"].astype(float)
             ip = out["IP"].astype(float)
@@ -1549,7 +1560,7 @@ def _default_calculation_cache_params() -> dict[str, int | float | str | None]:
         "pit_p": COMMON_PITCHER_SLOT_DEFAULTS["P"],
         "pit_sp": COMMON_PITCHER_SLOT_DEFAULTS["SP"],
         "pit_rp": COMMON_PITCHER_SLOT_DEFAULTS["RP"],
-        "bench": 6,
+        "bench": 8,
         "minors": COMMON_DEFAULT_MINOR_SLOTS,
         "ir": COMMON_DEFAULT_IR_SLOTS,
         "ip_min": 0.0,
@@ -2311,12 +2322,35 @@ def _aggregate_projection_career_rows(rows: list[dict], *, is_hitter: bool) -> l
                 if obp_den > 0:
                     obp = (h + bb + hbp) / obp_den
                     slg = tb / ab
+                    aggregated["OBP"] = obp
                     aggregated["OPS"] = obp + slg
+                else:
+                    weighted_obp = _weighted_rate(player_rows, "OBP", "AB")
+                    if weighted_obp is not None:
+                        aggregated["OBP"] = weighted_obp
             else:
+                weighted_obp = _weighted_rate(player_rows, "OBP", "AB")
+                if weighted_obp is not None:
+                    aggregated["OBP"] = weighted_obp
                 weighted_ops = _weighted_rate(player_rows, "OPS", "AB")
                 if weighted_ops is not None:
                     aggregated["OPS"] = weighted_ops
         else:
+            svh = _coerce_numeric(aggregated.get("SVH"))
+            if svh is None:
+                sv = _coerce_numeric(aggregated.get("SV"))
+                hld = _coerce_numeric(aggregated.get("HLD"))
+                if sv is not None and hld is not None:
+                    aggregated["SVH"] = sv + hld
+                elif sv is not None:
+                    aggregated["SVH"] = sv
+
+            qs = _coerce_numeric(aggregated.get("QS"))
+            if qs is None:
+                qa3 = _coerce_numeric(aggregated.get("QA3"))
+                if qa3 is not None:
+                    aggregated["QS"] = qa3
+
             er = _coerce_numeric(aggregated.get("ER"))
             ip = _coerce_numeric(aggregated.get("IP"))
             if er is not None and ip is not None and ip > 0:
@@ -3010,7 +3044,7 @@ class CalculateRequest(BaseModel):
     pit_p: int = Field(default=COMMON_PITCHER_SLOT_DEFAULTS["P"], ge=0, le=15)
     pit_sp: int = Field(default=COMMON_PITCHER_SLOT_DEFAULTS["SP"], ge=0, le=15)
     pit_rp: int = Field(default=COMMON_PITCHER_SLOT_DEFAULTS["RP"], ge=0, le=15)
-    bench: int = Field(default=6, ge=0, le=40)
+    bench: int = Field(default=8, ge=0, le=40)
     minors: int = Field(default=COMMON_DEFAULT_MINOR_SLOTS, ge=0, le=60)
     ir: int = Field(default=COMMON_DEFAULT_IR_SLOTS, ge=0, le=40)
     ip_min: float = Field(default=0.0, ge=0.0)

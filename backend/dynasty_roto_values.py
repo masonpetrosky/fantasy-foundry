@@ -4,19 +4,19 @@ dynasty_roto_values.py
 Unified script for dynasty roto player values.
 
 Modes:
-- common: 5x5 roto, typical lineup, no IP cap by default.
+- common: 6x6 roto defaults, typical lineup, no IP cap by default.
 - league: custom league settings (SP/RP/P slots, IP min/max, OPS/SVH/QA3 cats).
 
-"Most common" dynasty roto configuration:
+Default dynasty roto configuration:
 - 12-team roto
-- 5x5 categories:
-    Hitters: R, HR, RBI, SB, AVG
-    Pitchers: W, K, SV, ERA, WHIP
+- 6x6 categories:
+    Hitters: R, HR, RBI, SB, OBP, OPS
+    Pitchers: W, QS, K, SVH, ERA, WHIP
 - No IP cap (by default)
 - Typical roto lineup:
     Hitters: C(1), 1B, 2B, 3B, SS, CI, MI, OF(5), UT
     Pitchers: P(9)
-- Roster (common defaults): 28 total = 22 starters + 6 bench; 0 minors; 0 IR.
+- Roster (common defaults): 46 total = 22 starters + 8 bench + 12 minors + 4 IL.
 - Dynasty value: discounted multi-year marginal roto points (SGP),
   then centered so that ~0 corresponds to the replacement-level roster
   cutoff (active + bench).
@@ -26,13 +26,13 @@ Excel workbook with sheets:
 - "Bat" with columns at least:
   Player, Year, Team, Age, Pos, AB, H, R, HR, RBI, SB
 - "Pitch" with columns at least:
-  Player, Year, Team, Age, Pos, IP, W, K, SV, ER, H, BB
-  (If SV missing but SVH present, we use SV = SVH)
+  Player, Year, Team, Age, Pos, IP, W, K, ER, H, BB
+  (QS and SVH are recommended; if missing, we attempt fallbacks)
 Optional:
   - A minors eligibility column in either sheet named like MinorEligible, Minor, or minor_eligible.
 If multiple projections exist for the same Player/Year, the script averages the
 three most recent rows (by projection date column if present, otherwise file order)
-over counting stats, then recomputes rate stats (AVG/ERA/WHIP/OPS).
+over counting stats, then recomputes rate stats (AVG/OBP/OPS/ERA/WHIP).
 
 Outputs:
 - common_player_values.csv
@@ -463,7 +463,7 @@ def projection_meta_for_start_year(
 # Helpers: recent-projection averaging + detail sheet formatting
 # ----------------------------
 
-DERIVED_HIT_RATE_COLS: Set[str] = {"AVG", "OPS"}
+DERIVED_HIT_RATE_COLS: Set[str] = {"AVG", "OBP", "OPS"}
 DERIVED_PIT_RATE_COLS: Set[str] = {"ERA", "WHIP"}
 
 
@@ -522,9 +522,9 @@ def reorder_detail_columns(
 def recompute_common_rates_hit(df: pd.DataFrame) -> pd.DataFrame:
     """Recompute rate stats after averaging counting components.
 
-    Common mode uses AVG/ERA/WHIP, but many projection files also include OPS.
-    If the necessary component columns are present, we recompute OPS as well so
-    the aggregated rows stay internally consistent.
+    Common mode uses OBP/OPS as categories, while AVG remains useful for
+    display. Recompute all three from counting components when possible so
+    aggregated rows stay internally consistent.
     """
     df = df.copy()
 
@@ -534,7 +534,7 @@ def recompute_common_rates_hit(df: pd.DataFrame) -> pd.DataFrame:
         ab = df["AB"].to_numpy(dtype=float)
         df["AVG"] = np.divide(h, ab, out=np.zeros_like(h), where=ab > 0)
 
-    # OPS = OBP + SLG
+    # OBP + OPS (OPS = OBP + SLG)
     needed = {"H", "2B", "3B", "HR", "BB", "HBP", "AB", "SF"}
     if needed.issubset(df.columns):
         h = df["H"].to_numpy(dtype=float)
@@ -554,6 +554,7 @@ def recompute_common_rates_hit(df: pd.DataFrame) -> pd.DataFrame:
         obp = np.divide(h + bb + hbp, obp_den, out=np.zeros_like(obp_den), where=obp_den > 0)
         slg = np.divide(tb, ab, out=np.zeros_like(ab), where=ab > 0)
 
+        df["OBP"] = obp
         df["OPS"] = obp + slg
 
     return df
@@ -643,9 +644,9 @@ class CommonDynastyRotoSettings:
     })
 
     # Typical dynasty roster extras (you can tune these)
-    bench_slots: int = 6
-    minor_slots: int = 0
-    ir_slots: int = 0
+    bench_slots: int = 8
+    minor_slots: int = 12
+    ir_slots: int = 4
 
     # Many “standard” roto leagues do NOT enforce an IP cap.
     # Some do enforce an IP minimum for ERA/WHIP qualification; default off.
@@ -676,14 +677,14 @@ class CommonDynastyRotoSettings:
 
 
 # ----------------------------
-# Column requirements (5x5)
+# Column requirements (default 6x6)
 # ----------------------------
 
-HIT_COMPONENT_COLS = ["AB", "H", "R", "HR", "RBI", "SB"]
-PIT_COMPONENT_COLS = ["IP", "W", "K", "SV", "ER", "H", "BB"]
+HIT_COMPONENT_COLS = ["AB", "H", "R", "HR", "RBI", "SB", "BB", "HBP", "SF", "2B", "3B"]
+PIT_COMPONENT_COLS = ["IP", "W", "QS", "K", "SVH", "ER", "H", "BB"]
 
-HIT_CATS = ["R", "HR", "RBI", "SB", "AVG"]
-PIT_CATS = ["W", "K", "SV", "ERA", "WHIP"]
+HIT_CATS = ["R", "HR", "RBI", "SB", "OBP", "OPS"]
+PIT_CATS = ["W", "QS", "K", "SVH", "ERA", "WHIP"]
 
 COMMON_COLUMN_ALIASES = {
     "mlbteam": "Team",
@@ -830,19 +831,36 @@ def zscore(s: pd.Series) -> pd.Series:
 def initial_hitter_weight(df: pd.DataFrame) -> pd.Series:
     """
     Rough first-pass weight to select/assign starters with positional scarcity.
-    Uses counting stats + "hits above average given AB" for AVG impact.
+    Uses counting stats plus weighted OBP/OPS surplus terms.
     """
     df = df.copy()
-    ab_sum = float(df["AB"].sum())
-    mean_avg = float(df["H"].sum() / ab_sum) if ab_sum > 0 else 0.0
-    df["AVG_surplus_H"] = df["H"] - mean_avg * df["AB"]
+    h = df["H"].astype(float)
+    bb = df["BB"].astype(float)
+    hbp = df["HBP"].astype(float)
+    sf = df["SF"].astype(float)
+    ab = df["AB"].astype(float)
+    b2 = df["2B"].astype(float)
+    b3 = df["3B"].astype(float)
+    hr = df["HR"].astype(float)
+
+    obp_den = ab + bb + hbp + sf
+    obp = np.divide(h + bb + hbp, obp_den, out=np.zeros_like(ab, dtype=float), where=obp_den > 0)
+    slg = np.divide(h + b2 + 2.0 * b3 + 3.0 * hr, ab, out=np.zeros_like(ab, dtype=float), where=ab > 0)
+    ops = obp + slg
+
+    mean_obp = float(np.nanmean(obp)) if len(obp) else 0.0
+    mean_ops = float(np.nanmean(ops)) if len(ops) else 0.0
+
+    df["OBP_surplus"] = (obp - mean_obp) * obp_den
+    df["OPS_surplus"] = (ops - mean_ops) * ab
 
     w = (
         zscore(df["R"]) +
         zscore(df["HR"]) +
         zscore(df["RBI"]) +
         zscore(df["SB"]) +
-        zscore(df["AVG_surplus_H"])
+        zscore(df["OBP_surplus"]) +
+        zscore(df["OPS_surplus"])
     )
     return w
 
@@ -862,8 +880,9 @@ def initial_pitcher_weight(df: pd.DataFrame) -> pd.Series:
 
     w = (
         zscore(df["W"]) +
+        zscore(df["QS"]) +
         zscore(df["K"]) +
-        zscore(df["SV"]) +
+        zscore(df["SVH"]) +
         zscore(df["ERA_surplus_ER"]) +
         zscore(df["WHIP_surplus"])
     )
@@ -1149,11 +1168,20 @@ def assign_players_to_slots_with_vacancy_fill(
 
 
 # ----------------------------
-# Team stat calculations (5x5)
+# Team stat calculations (default 6x6)
 # ----------------------------
 
 def team_avg(H: float, AB: float) -> float:
     return float(H / AB) if AB > 0 else 0.0
+
+def team_obp(H: float, BB: float, HBP: float, AB: float, SF: float) -> float:
+    den = AB + BB + HBP + SF
+    return float((H + BB + HBP) / den) if den > 0 else 0.0
+
+def team_ops(H: float, BB: float, HBP: float, AB: float, SF: float, b2: float, b3: float, HR: float) -> float:
+    obp = team_obp(H, BB, HBP, AB, SF)
+    slg = float((H + b2 + 2.0 * b3 + 3.0 * HR) / AB) if AB > 0 else 0.0
+    return float(obp + slg)
 
 def team_era(ER: float, IP: float) -> float:
     return float(9.0 * ER / IP) if IP > 0 else float("nan")
@@ -1174,12 +1202,13 @@ def common_replacement_pitcher_rates(
 
     ip = float(rep["IP"].sum()) if not rep.empty else 0.0
     if ip <= 0:
-        return {k: 0.0 for k in ["W", "K", "SV", "ER", "H", "BB"]}
+        return {k: 0.0 for k in ["W", "QS", "K", "SVH", "ER", "H", "BB"]}
 
     return {
         "W": float(rep["W"].sum() / ip),
+        "QS": float(rep["QS"].sum() / ip),
         "K": float(rep["K"].sum() / ip),
-        "SV": float(rep["SV"].sum() / ip),
+        "SVH": float(rep["SVH"].sum() / ip),
         "ER": float(rep["ER"].sum() / ip),
         "H": float(rep["H"].sum() / ip),
         "BB": float(rep["BB"].sum() / ip),
@@ -1209,7 +1238,7 @@ def common_apply_pitching_bounds(
         if ip < ip_cap and rep_rates is not None:
             add = ip_cap - ip
             out["IP"] = ip_cap
-            for col in ["W", "K", "SV", "ER", "H", "BB"]:
+            for col in ["W", "QS", "K", "SVH", "ER", "H", "BB"]:
                 out[col] = float(out[col]) + add * float(rep_rates.get(col, 0.0))
             ip = ip_cap
 
@@ -1237,6 +1266,17 @@ def simulate_sgp_hit(assigned_hit: pd.DataFrame, lg: CommonDynastyRotoSettings, 
     diffs = {c: [] for c in HIT_CATS}
 
     groups = {slot: assigned_hit[assigned_hit["AssignedSlot"] == slot] for slot in per_team.keys()}
+    idx_ab = HIT_COMPONENT_COLS.index("AB")
+    idx_h = HIT_COMPONENT_COLS.index("H")
+    idx_r = HIT_COMPONENT_COLS.index("R")
+    idx_hr = HIT_COMPONENT_COLS.index("HR")
+    idx_rbi = HIT_COMPONENT_COLS.index("RBI")
+    idx_sb = HIT_COMPONENT_COLS.index("SB")
+    idx_bb = HIT_COMPONENT_COLS.index("BB")
+    idx_hbp = HIT_COMPONENT_COLS.index("HBP")
+    idx_sf = HIT_COMPONENT_COLS.index("SF")
+    idx_2b = HIT_COMPONENT_COLS.index("2B")
+    idx_3b = HIT_COMPONENT_COLS.index("3B")
 
     for _ in range(lg.sims_for_sgp):
         AB = np.zeros(lg.n_teams)
@@ -1245,6 +1285,11 @@ def simulate_sgp_hit(assigned_hit: pd.DataFrame, lg: CommonDynastyRotoSettings, 
         HR = np.zeros(lg.n_teams)
         RBI = np.zeros(lg.n_teams)
         SB = np.zeros(lg.n_teams)
+        BB = np.zeros(lg.n_teams)
+        HBP = np.zeros(lg.n_teams)
+        SF = np.zeros(lg.n_teams)
+        B2 = np.zeros(lg.n_teams)
+        B3 = np.zeros(lg.n_teams)
 
         for slot, cnt in per_team.items():
             df_slot = groups[slot]
@@ -1253,16 +1298,25 @@ def simulate_sgp_hit(assigned_hit: pd.DataFrame, lg: CommonDynastyRotoSettings, 
             arr = arr.reshape(lg.n_teams, cnt, len(HIT_COMPONENT_COLS))
             sums = arr.sum(axis=1)
 
-            AB += sums[:, 0]
-            H += sums[:, 1]
-            R += sums[:, 2]
-            HR += sums[:, 3]
-            RBI += sums[:, 4]
-            SB += sums[:, 5]
+            AB += sums[:, idx_ab]
+            H += sums[:, idx_h]
+            R += sums[:, idx_r]
+            HR += sums[:, idx_hr]
+            RBI += sums[:, idx_rbi]
+            SB += sums[:, idx_sb]
+            BB += sums[:, idx_bb]
+            HBP += sums[:, idx_hbp]
+            SF += sums[:, idx_sf]
+            B2 += sums[:, idx_2b]
+            B3 += sums[:, idx_3b]
 
-        AVG = np.divide(H, AB, out=np.zeros_like(H), where=AB > 0)
+        obp_den = AB + BB + HBP + SF
+        OBP = np.divide(H + BB + HBP, obp_den, out=np.zeros_like(H), where=obp_den > 0)
+        TB = H + B2 + 2.0 * B3 + 3.0 * HR
+        SLG = np.divide(TB, AB, out=np.zeros_like(H), where=AB > 0)
+        OPS = OBP + SLG
 
-        vals = {"R": R, "HR": HR, "RBI": RBI, "SB": SB, "AVG": AVG}
+        vals = {"R": R, "HR": HR, "RBI": RBI, "SB": SB, "OBP": OBP, "OPS": OPS}
         for c in HIT_CATS:
             x = vals[c].astype(float)
             x_sorted = np.sort(x)[::-1]  # higher is better
@@ -1279,12 +1333,21 @@ def simulate_sgp_pit(
     diffs = {c: [] for c in PIT_CATS}
     per_team = lg.pitcher_slots
     groups = {slot: assigned_pit[assigned_pit["AssignedSlot"] == slot] for slot in per_team.keys()}
+    idx_ip = PIT_COMPONENT_COLS.index("IP")
+    idx_w = PIT_COMPONENT_COLS.index("W")
+    idx_qs = PIT_COMPONENT_COLS.index("QS")
+    idx_k = PIT_COMPONENT_COLS.index("K")
+    idx_svh = PIT_COMPONENT_COLS.index("SVH")
+    idx_er = PIT_COMPONENT_COLS.index("ER")
+    idx_h = PIT_COMPONENT_COLS.index("H")
+    idx_bb = PIT_COMPONENT_COLS.index("BB")
 
     for _ in range(lg.sims_for_sgp):
         IP = np.zeros(lg.n_teams)
         W = np.zeros(lg.n_teams)
+        QS = np.zeros(lg.n_teams)
         K = np.zeros(lg.n_teams)
-        SV = np.zeros(lg.n_teams)
+        SVH = np.zeros(lg.n_teams)
         ER = np.zeros(lg.n_teams)
         H = np.zeros(lg.n_teams)
         BB = np.zeros(lg.n_teams)
@@ -1296,13 +1359,14 @@ def simulate_sgp_pit(
             arr = arr.reshape(lg.n_teams, cnt, len(PIT_COMPONENT_COLS))
             sums = arr.sum(axis=1)
 
-            IP += sums[:, 0]
-            W += sums[:, 1]
-            K += sums[:, 2]
-            SV += sums[:, 3]
-            ER += sums[:, 4]
-            H += sums[:, 5]
-            BB += sums[:, 6]
+            IP += sums[:, idx_ip]
+            W += sums[:, idx_w]
+            QS += sums[:, idx_qs]
+            K += sums[:, idx_k]
+            SVH += sums[:, idx_svh]
+            ER += sums[:, idx_er]
+            H += sums[:, idx_h]
+            BB += sums[:, idx_bb]
 
         vals = {c: [] for c in PIT_CATS}
         for t in range(lg.n_teams):
@@ -1310,8 +1374,9 @@ def simulate_sgp_pit(
                 {
                     "IP": float(IP[t]),
                     "W": float(W[t]),
+                    "QS": float(QS[t]),
                     "K": float(K[t]),
-                    "SV": float(SV[t]),
+                    "SVH": float(SVH[t]),
                     "ER": float(ER[t]),
                     "H": float(H[t]),
                     "BB": float(BB[t]),
@@ -1320,8 +1385,9 @@ def simulate_sgp_pit(
                 rep_rates,
             )
             vals["W"].append(float(bounded["W"]))
+            vals["QS"].append(float(bounded["QS"]))
             vals["K"].append(float(bounded["K"]))
-            vals["SV"].append(float(bounded["SV"]))
+            vals["SVH"].append(float(bounded["SVH"]))
             vals["ERA"].append(float(bounded["ERA"]))
             vals["WHIP"].append(float(bounded["WHIP"]))
 
@@ -1343,8 +1409,12 @@ def compute_year_context(year: int, bat: pd.DataFrame, pit: pd.DataFrame, lg: Co
 
     # Clean numeric NaNs
     for c in HIT_COMPONENT_COLS:
+        if c not in bat_y.columns:
+            bat_y[c] = 0.0
         bat_y[c] = bat_y[c].fillna(0.0)
     for c in PIT_COMPONENT_COLS:
+        if c not in pit_y.columns:
+            pit_y[c] = 0.0
         pit_y[c] = pit_y[c].fillna(0.0)
 
     # Starter-pool candidates (must have playing time)
@@ -1394,7 +1464,23 @@ def compute_year_context(year: int, bat: pd.DataFrame, pit: pd.DataFrame, lg: Co
     team_pit_slots = build_team_slot_template(lg.pitcher_slots)
 
     base_hit_tot = baseline_hit.loc[team_hit_slots].sum()
-    base_avg = team_avg(float(base_hit_tot["H"]), float(base_hit_tot["AB"]))
+    base_obp = team_obp(
+        float(base_hit_tot["H"]),
+        float(base_hit_tot["BB"]),
+        float(base_hit_tot["HBP"]),
+        float(base_hit_tot["AB"]),
+        float(base_hit_tot["SF"]),
+    )
+    base_ops = team_ops(
+        float(base_hit_tot["H"]),
+        float(base_hit_tot["BB"]),
+        float(base_hit_tot["HBP"]),
+        float(base_hit_tot["AB"]),
+        float(base_hit_tot["SF"]),
+        float(base_hit_tot["2B"]),
+        float(base_hit_tot["3B"]),
+        float(base_hit_tot["HR"]),
+    )
 
     base_pit_tot = baseline_pit.loc[team_pit_slots].sum()
     rep_rates = common_replacement_pitcher_rates(
@@ -1424,7 +1510,8 @@ def compute_year_context(year: int, bat: pd.DataFrame, pit: pd.DataFrame, lg: Co
         "baseline_hit": baseline_hit,
         "baseline_pit": baseline_pit,
         "base_hit_tot": base_hit_tot,
-        "base_avg": base_avg,
+        "base_obp": base_obp,
+        "base_ops": base_ops,
         "base_pit_tot": base_pit_tot,
         "base_pit_bounded": base_pit_bounded,
         "rep_rates": rep_rates,
@@ -1440,7 +1527,8 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
     baseline_hit = ctx["baseline_hit"]
     baseline_pit = ctx["baseline_pit"]
     base_hit_tot = ctx["base_hit_tot"]
-    base_avg = float(ctx["base_avg"])
+    base_obp = float(ctx["base_obp"])
+    base_ops = float(ctx["base_ops"])
 
     base_pit_tot = ctx["base_pit_tot"]
     base_pit_bounded = dict(ctx["base_pit_bounded"])
@@ -1469,14 +1557,31 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
             for col in HIT_COMPONENT_COLS:
                 new_tot[col] = new_tot[col] - b[col] + getattr(row, col)
 
-            new_avg = team_avg(float(new_tot["H"]), float(new_tot["AB"]))
+            new_obp = team_obp(
+                float(new_tot["H"]),
+                float(new_tot["BB"]),
+                float(new_tot["HBP"]),
+                float(new_tot["AB"]),
+                float(new_tot["SF"]),
+            )
+            new_ops = team_ops(
+                float(new_tot["H"]),
+                float(new_tot["BB"]),
+                float(new_tot["HBP"]),
+                float(new_tot["AB"]),
+                float(new_tot["SF"]),
+                float(new_tot["2B"]),
+                float(new_tot["3B"]),
+                float(new_tot["HR"]),
+            )
 
             delta = {
                 "R": float(new_tot["R"] - base_hit_tot["R"]),
                 "HR": float(new_tot["HR"] - base_hit_tot["HR"]),
                 "RBI": float(new_tot["RBI"] - base_hit_tot["RBI"]),
                 "SB": float(new_tot["SB"] - base_hit_tot["SB"]),
-                "AVG": float(new_avg - base_avg),
+                "OBP": float(new_obp - base_obp),
+                "OPS": float(new_ops - base_ops),
             }
 
             val = 0.0
@@ -1529,8 +1634,9 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
 
             delta = {
                 "W": float(new_tot_bounded["W"] - base_pit_bounded["W"]),
+                "QS": float(new_tot_bounded["QS"] - base_pit_bounded["QS"]),
                 "K": float(new_tot_bounded["K"] - base_pit_bounded["K"]),
-                "SV": float(new_tot_bounded["SV"] - base_pit_bounded["SV"]),
+                "SVH": float(new_tot_bounded["SVH"] - base_pit_bounded["SVH"]),
                 "ERA": float(base_pit_bounded["ERA"] - new_tot_bounded["ERA"]),       # lower is better
                 "WHIP": float(base_pit_bounded["WHIP"] - new_tot_bounded["WHIP"]),    # lower is better
             }
@@ -1661,15 +1767,48 @@ def compute_year_player_values_vs_replacement(
                 base_tot[col] = base_tot[col] - b_avg[col] + b_rep[col]
                 new_tot[col] = new_tot[col] - b_avg[col] + getattr(row, col, 0.0)
 
-            base_avg = team_avg(float(base_tot["H"]), float(base_tot["AB"]))
-            new_avg = team_avg(float(new_tot["H"]), float(new_tot["AB"]))
+            base_obp = team_obp(
+                float(base_tot["H"]),
+                float(base_tot["BB"]),
+                float(base_tot["HBP"]),
+                float(base_tot["AB"]),
+                float(base_tot["SF"]),
+            )
+            new_obp = team_obp(
+                float(new_tot["H"]),
+                float(new_tot["BB"]),
+                float(new_tot["HBP"]),
+                float(new_tot["AB"]),
+                float(new_tot["SF"]),
+            )
+            base_ops = team_ops(
+                float(base_tot["H"]),
+                float(base_tot["BB"]),
+                float(base_tot["HBP"]),
+                float(base_tot["AB"]),
+                float(base_tot["SF"]),
+                float(base_tot["2B"]),
+                float(base_tot["3B"]),
+                float(base_tot["HR"]),
+            )
+            new_ops = team_ops(
+                float(new_tot["H"]),
+                float(new_tot["BB"]),
+                float(new_tot["HBP"]),
+                float(new_tot["AB"]),
+                float(new_tot["SF"]),
+                float(new_tot["2B"]),
+                float(new_tot["3B"]),
+                float(new_tot["HR"]),
+            )
 
             delta = {
                 "R": float(new_tot["R"] - base_tot["R"]),
                 "HR": float(new_tot["HR"] - base_tot["HR"]),
                 "RBI": float(new_tot["RBI"] - base_tot["RBI"]),
                 "SB": float(new_tot["SB"] - base_tot["SB"]),
-                "AVG": float(new_avg - base_avg),
+                "OBP": float(new_obp - base_obp),
+                "OPS": float(new_ops - base_ops),
             }
 
             val = 0.0
@@ -1722,8 +1861,9 @@ def compute_year_player_values_vs_replacement(
 
             delta = {
                 "W": float(new_bounded["W"] - base_bounded["W"]),
+                "QS": float(new_bounded["QS"] - base_bounded["QS"]),
                 "K": float(new_bounded["K"] - base_bounded["K"]),
-                "SV": float(new_bounded["SV"] - base_bounded["SV"]),
+                "SVH": float(new_bounded["SVH"] - base_bounded["SVH"]),
                 "ERA": float(base_bounded["ERA"] - new_bounded["ERA"]),
                 "WHIP": float(base_bounded["WHIP"] - new_bounded["WHIP"]),
             }
@@ -2082,18 +2222,33 @@ def calculate_common_dynasty_values(
     bat = recompute_common_rates_hit(bat)
     pit = recompute_common_rates_pit(pit)
 
+    # Backfill optional hitter rate components when source files omit them.
+    for missing_col in ("BB", "HBP", "SF", "2B", "3B"):
+        if missing_col not in bat.columns:
+            bat[missing_col] = 0.0
+
     # Required fields
     require_cols(bat, ["Player", "Year", "Team", "Age", "Pos"] + HIT_COMPONENT_COLS, "Bat")
     require_cols(pit, ["Player", "Year", "Team", "Age", "Pos"], "Pitch")
     require_cols(pit, ["IP", "W", "K", "ER", "H", "BB"], "Pitch")
 
-    # Ensure SV exists
-    if "SV" not in pit.columns:
-        if "SVH" in pit.columns:
-            pit["SV"] = pit["SVH"]
+    # Ensure SVH exists.
+    if "SVH" not in pit.columns:
+        if {"SV", "HLD"}.issubset(pit.columns):
+            pit["SVH"] = pit["SV"].fillna(0.0) + pit["HLD"].fillna(0.0)
+        elif "SV" in pit.columns:
+            pit["SVH"] = pit["SV"].fillna(0.0)
         else:
-            pit["SV"] = 0.0
-    pit["SV"] = pit["SV"].fillna(0.0)
+            pit["SVH"] = 0.0
+    pit["SVH"] = pit["SVH"].fillna(0.0)
+
+    # Ensure QS exists (fallback to QA3 when provided by source).
+    if "QS" not in pit.columns:
+        if "QA3" in pit.columns:
+            pit["QS"] = pit["QA3"].fillna(0.0)
+        else:
+            pit["QS"] = 0.0
+    pit["QS"] = pit["QS"].fillna(0.0)
 
     if start_year is None:
         start_year = int(min(bat["Year"].min(), pit["Year"].min()))
@@ -3947,7 +4102,7 @@ def main() -> None:
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="mode", required=True)
 
-    common = sub.add_parser("common", help="Run the common 5x5 dynasty roto valuation.")
+    common = sub.add_parser("common", help="Run the common 6x6 dynasty roto valuation.")
     common.add_argument(
         "--input",
         default="Dynasty Baseball Projections.xlsx",
@@ -3959,9 +4114,9 @@ def main() -> None:
     common.add_argument("--horizon", type=positive_int_arg, default=10, help="Dynasty horizon years.")
     common.add_argument("--discount", type=discount_arg, default=0.85, help="Annual discount factor in (0, 1].")
     common.add_argument("--seed", type=int, default=0, help="Global random seed offset for deterministic simulations.")
-    common.add_argument("--bench", type=non_negative_int_arg, default=6)
-    common.add_argument("--minors", type=non_negative_int_arg, default=0)
-    common.add_argument("--ir", type=non_negative_int_arg, default=0)
+    common.add_argument("--bench", type=non_negative_int_arg, default=8)
+    common.add_argument("--minors", type=non_negative_int_arg, default=12)
+    common.add_argument("--ir", type=non_negative_int_arg, default=4)
     common.add_argument("--ip-min", type=non_negative_float_arg, default=0.0, help="Optional IP minimum to qualify for ERA/WHIP (default 0).")
     common.add_argument(
         "--ip-max",

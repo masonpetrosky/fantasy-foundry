@@ -1545,7 +1545,7 @@ function buildDefaultCalculatorSettings(meta) {
     horizon: 20,
     discount: 0.85,
     ...resolveRotoSlotDefaults(meta),
-    bench: 6,
+    bench: 8,
     minors: Number.isInteger(defaultMinors) && defaultMinors >= 0 ? defaultMinors : 0,
     ir: Number.isInteger(defaultIr) && defaultIr >= 0 ? defaultIr : 0,
     ip_min: 0,
@@ -1970,6 +1970,22 @@ function App() {
       </div>
 
       <div className="container">
+        <div className="methodology-card" style={{ marginBottom: "20px" }}>
+          <h2 style={{ marginBottom: "10px" }}>Default League Configuration</h2>
+          <p>This site defaults to a 12-team, 6x6 roto setup for rankings.</p>
+          <p>
+            Hitting categories: <code>R</code>, <code>HR</code>, <code>RBI</code>, <code>SB</code>, <code>OBP</code>, <code>OPS</code>
+            {" · "}
+            Pitching categories: <code>W</code>, <code>QS</code>, <code>K</code>, <code>SVH</code>, <code>ERA</code>, <code>WHIP</code>.
+          </p>
+          <p>
+            Roster defaults: 22 starters (13 hitters: <code>C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT</code>; 9 pitchers with any role),
+            plus 8 bench, 12 MiLB, and 4 IL slots.
+          </p>
+          <p className="methodology-note" style={{ marginBottom: 0 }}>
+            Need custom rankings? Open the <strong>Dynasty Calculator</strong> tab and adjust league settings before you run values.
+          </p>
+        </div>
         {metaError && (
           <p style={{marginBottom: "16px", color: "var(--red)"}}>
             Unable to load API data. Check that the backend is running and reachable. ({metaError})
@@ -2355,12 +2371,12 @@ function ProjectionsExplorer({ meta, dataVersion }) {
   const compactModeActive = isMobileViewport && mobileColumnMode === "compact";
   const compactBaseCols = ["Player", "Team", "Pos", seasonCol, "DynastyValue", ...compactDynastyCols];
   // Lead with player identity + dynasty value context, then projection freshness and box-score detail.
-  const batColsFull = ["Player","Team","Pos","Age",seasonCol,"DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS"];
-  const pitColsFull = ["Player","Team","Pos","Age",seasonCol,"DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","G","GS","IP","W","L","K","BB","SV","SVH","ERA","WHIP","H","HR","ER"];
-  const allColsFull = ["Player","Team","Pos","Type","Age",seasonCol,"DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","G","AB","R","H","2B","3B","HR","RBI","SB","BB","SO","AVG","OPS","GS","IP","W","L","K","PitBB","SV","SVH","ERA","WHIP","PitH","PitHR","ER"];
-  const batColsCompact = [...compactBaseCols, "HR", "RBI", "SB", "AVG"];
-  const pitColsCompact = [...compactBaseCols, "IP", "K", "SV", "ERA", "WHIP"];
-  const allColsCompact = ["Player", "Team", "Pos", "Type", seasonCol, "DynastyValue", ...compactDynastyCols, "HR", "RBI", "SB", "K", "SV", "ERA", "WHIP"];
+  const batColsFull = ["Player","Team","Pos","Age",seasonCol,"DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","R","HR","RBI","SB","OBP","OPS","AVG","G","AB","H","2B","3B","BB","SO"];
+  const pitColsFull = ["Player","Team","Pos","Age",seasonCol,"DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","W","QS","K","SVH","ERA","WHIP","G","GS","IP","L","BB","SV","H","HR","ER"];
+  const allColsFull = ["Player","Team","Pos","Type","Age",seasonCol,"DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","R","HR","RBI","SB","OBP","OPS","AVG","W","QS","K","SVH","ERA","WHIP","G","AB","H","2B","3B","BB","SO","GS","IP","L","PitBB","SV","PitH","PitHR","ER"];
+  const batColsCompact = [...compactBaseCols, "R", "HR", "RBI", "SB", "OBP", "OPS", "AVG"];
+  const pitColsCompact = [...compactBaseCols, "W", "QS", "K", "SVH", "ERA", "WHIP"];
+  const allColsCompact = ["Player", "Team", "Pos", "Type", seasonCol, "DynastyValue", ...compactDynastyCols, "R", "HR", "RBI", "SB", "OBP", "OPS", "AVG", "W", "QS", "K", "SVH", "ERA", "WHIP"];
   const cols = compactModeActive
     ? (tab === "bat" ? batColsCompact : tab === "pitch" ? pitColsCompact : allColsCompact)
     : (tab === "bat" ? batColsFull : tab === "pitch" ? pitColsFull : allColsFull);
@@ -2380,7 +2396,7 @@ function ProjectionsExplorer({ meta, dataVersion }) {
     });
     return labels;
   }, [dynastyYearCols]);
-  const rateCols = new Set(["AVG","OPS","ERA","WHIP"]);
+  const rateCols = new Set(["AVG","OBP","OPS","ERA","WHIP"]);
   const intCols = new Set(careerTotalsView ? ["Age","ProjectionsUsed"] : ["Year","Age","ProjectionsUsed"]);
   const posFilterLabel = posFilters.length === 0
     ? "All Positions"

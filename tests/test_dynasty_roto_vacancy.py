@@ -25,8 +25,9 @@ class VacancyBackfillTests(unittest.TestCase):
                     "Pos": "RP",
                     "IP": 60.0,
                     "W": 4.0,
+                    "QS": 0.0,
                     "K": 70.0,
-                    "SV": 20.0,
+                    "SVH": 20.0,
                     "ER": 18.0,
                     "H": 45.0,
                     "BB": 16.0,
@@ -54,7 +55,7 @@ class VacancyBackfillTests(unittest.TestCase):
         vacancy_rows = assigned[assigned["Player"].astype(str).str.startswith("__VACANT_PITCHER_2026_RP_")]
         self.assertEqual(len(vacancy_rows), 1)
         self.assertEqual(float(vacancy_rows["IP"].iloc[0]), 0.0)
-        self.assertEqual(float(vacancy_rows["SV"].iloc[0]), 0.0)
+        self.assertEqual(float(vacancy_rows["SVH"].iloc[0]), 0.0)
 
     def test_compute_year_context_handles_slot_shortage_with_vacancy_backfill(self) -> None:
         bat = pd.DataFrame(
@@ -97,8 +98,9 @@ class VacancyBackfillTests(unittest.TestCase):
                     "Pos": "RP",
                     "IP": 60.0,
                     "W": 4.0,
+                    "QS": 0.0,
                     "K": 70.0,
-                    "SV": 20.0,
+                    "SVH": 20.0,
                     "ER": 18.0,
                     "H": 45.0,
                     "BB": 16.0,
