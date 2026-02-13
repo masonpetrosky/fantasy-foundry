@@ -1408,6 +1408,7 @@ const DEFAULT_PROJECTIONS_TAB = "all";
 const DEFAULT_PROJECTIONS_SORT_COL = "DynastyValue";
 const DEFAULT_PROJECTIONS_SORT_DIR = "desc";
 const CAREER_TOTALS_FILTER_VALUE = "__career_totals__";
+const VERSION_POLL_INTERVAL_MS = 60000;
 const PROJECTION_PAGE_CACHE_MAX = 80;
 const PROJECTION_SEARCH_DEBOUNCE_MS = 220;
 const PROJECTION_INITIAL_FETCH_DELAY_MS = 220;
@@ -1815,6 +1816,7 @@ function App() {
   const [meta, setMeta] = useState(null);
   const [metaError, setMetaError] = useState("");
   const [buildLabel, setBuildLabel] = useState("");
+  const [dataVersion, setDataVersion] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1838,51 +1840,84 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
+    let cancelled = false;
+    let timer = null;
+    let activeController = null;
 
-    fetch(`${API}/api/version`, {
-      signal: controller.signal,
-      cache: "no-store",
-      headers: { "Cache-Control": "no-cache" },
-    })
-      .then(r => {
-        if (!r.ok) throw new Error(`Server returned ${r.status} while loading /api/version`);
-        return r.json();
+    const scheduleNextPoll = () => {
+      if (cancelled) return;
+      timer = window.setTimeout(runVersionCheck, VERSION_POLL_INTERVAL_MS);
+    };
+
+    const runVersionCheck = () => {
+      if (cancelled) return;
+      if (activeController) activeController.abort();
+      const controller = new AbortController();
+      activeController = controller;
+
+      fetch(`${API}/api/version`, {
+        signal: controller.signal,
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
       })
-      .then(res => {
-        const buildId = String(res?.build_id || "").trim();
-        if (!buildId) return;
+        .then(r => {
+          if (!r.ok) throw new Error(`Server returned ${r.status} while loading /api/version`);
+          return r.json();
+        })
+        .then(res => {
+          if (cancelled) return;
 
-        setBuildLabel(buildId.slice(0, 12));
+          const buildId = String(res?.build_id || "").trim();
+          const resolvedDataVersion = String(res?.data_version || buildId || "").trim();
+          if (resolvedDataVersion) {
+            setDataVersion(resolvedDataVersion);
+          }
+          if (!buildId) return;
 
-        const previousBuildId = safeReadStorage(BUILD_STORAGE_KEY);
-        const url = new URL(window.location.href);
-        const urlBuildId = String(url.searchParams.get(BUILD_QUERY_PARAM) || "").trim();
+          setBuildLabel(buildId.slice(0, 12));
 
-        // If the currently loaded HTML build is stale (or we previously saw a
-        // different build), force one cache-busting navigation to the latest build.
-        const pageIsStale = Boolean(INDEX_BUILD_ID && INDEX_BUILD_ID !== buildId);
-        const seenBuildChange = Boolean(previousBuildId && previousBuildId !== buildId);
-        if ((pageIsStale || seenBuildChange) && urlBuildId !== buildId) {
-          url.searchParams.set(BUILD_QUERY_PARAM, buildId);
-          window.location.replace(url.toString());
-          return;
-        }
+          const previousBuildId = safeReadStorage(BUILD_STORAGE_KEY);
+          const url = new URL(window.location.href);
+          const urlBuildId = String(url.searchParams.get(BUILD_QUERY_PARAM) || "").trim();
 
-        if (urlBuildId && urlBuildId !== buildId) {
-          url.searchParams.set(BUILD_QUERY_PARAM, buildId);
-          window.history.replaceState({}, "", url.toString());
-        }
+          // If the currently loaded HTML build is stale (or we previously saw a
+          // different build), force one cache-busting navigation to the latest build.
+          const pageIsStale = Boolean(INDEX_BUILD_ID && INDEX_BUILD_ID !== buildId);
+          const seenBuildChange = Boolean(previousBuildId && previousBuildId !== buildId);
+          if ((pageIsStale || seenBuildChange) && urlBuildId !== buildId) {
+            url.searchParams.set(BUILD_QUERY_PARAM, buildId);
+            window.location.replace(url.toString());
+            return;
+          }
 
-        safeWriteStorage(BUILD_STORAGE_KEY, buildId);
-      })
-      .catch(err => {
-        if (err?.name === "AbortError") return;
-        console.warn("Version check failed:", err);
-      });
+          if (urlBuildId && urlBuildId !== buildId) {
+            url.searchParams.set(BUILD_QUERY_PARAM, buildId);
+            window.history.replaceState({}, "", url.toString());
+          }
+
+          safeWriteStorage(BUILD_STORAGE_KEY, buildId);
+        })
+        .catch(err => {
+          if (err?.name === "AbortError" || cancelled) return;
+          console.warn("Version check failed:", err);
+        })
+        .finally(() => {
+          if (activeController === controller) {
+            activeController = null;
+          }
+          scheduleNextPoll();
+        });
+    };
+
+    runVersionCheck();
 
     return () => {
-      controller.abort();
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      if (activeController) {
+        activeController.abort();
+        activeController = null;
+      }
     };
   }, []);
 
@@ -1939,7 +1974,7 @@ function App() {
             Unable to load API data. Check that the backend is running and reachable. ({metaError})
           </p>
         )}
-        {section === "projections" && meta && <ProjectionsExplorer meta={meta} />}
+        {section === "projections" && meta && <ProjectionsExplorer meta={meta} dataVersion={dataVersion} />}
         {section === "calculator" && meta && <DynastyCalculator meta={meta} />}
       </div>
 
@@ -1979,7 +2014,7 @@ function App() {
 // ---------------------------------------------------------------------------
 // Projections Explorer
 // ---------------------------------------------------------------------------
-function ProjectionsExplorer({ meta }) {
+function ProjectionsExplorer({ meta, dataVersion }) {
   const [tab, setTab] = useState(DEFAULT_PROJECTIONS_TAB); // all | bat | pitch
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, PROJECTION_SEARCH_DEBOUNCE_MS);
@@ -2012,6 +2047,7 @@ function ProjectionsExplorer({ meta }) {
   const [canScrollRight, setCanScrollRight] = useState(false);
   const limit = 100;
   const careerTotalsView = yearFilter === CAREER_TOTALS_FILTER_VALUE;
+  const resolvedDataVersion = String(dataVersion || "").trim();
   const selectedDynastyYears = useMemo(() => {
     if (careerTotalsView) return (meta.years || []).map(String);
     if (yearFilter) return [String(yearFilter)];
@@ -2038,11 +2074,14 @@ function ProjectionsExplorer({ meta }) {
     if (nextOffset < 0) return;
     const nextParams = new URLSearchParams(paramsWithoutOffset);
     nextParams.set("offset", String(nextOffset));
-    const nextCacheKey = `${endpointTab}?${nextParams.toString()}`;
+    const nextCacheKey = `${resolvedDataVersion}:${endpointTab}?${nextParams.toString()}`;
     if (projectionCacheMapRef.current.has(nextCacheKey)) return;
 
     try {
-      const response = await fetch(`${API}/api/projections/${endpointTab}?${nextParams}`);
+      const response = await fetch(`${API}/api/projections/${endpointTab}?${nextParams}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       if (!response.ok) return;
       const payload = await response.json();
       const pageRows = Array.isArray(payload.data) ? payload.data : [];
@@ -2059,7 +2098,7 @@ function ProjectionsExplorer({ meta }) {
     } catch {
       // Prefetch is best-effort only.
     }
-  }, []);
+  }, [resolvedDataVersion]);
 
   const fetchData = useCallback(async () => {
     const requestSeq = requestSeqRef.current + 1;
@@ -2090,7 +2129,7 @@ function ProjectionsExplorer({ meta }) {
       paramsWithoutOffset.set("sort_dir", sortDir);
       const params = new URLSearchParams(paramsWithoutOffset);
       params.set("offset", String(offset));
-      const cacheKey = `${endpointTab}?${params.toString()}`;
+      const cacheKey = `${resolvedDataVersion}:${endpointTab}?${params.toString()}`;
 
       const cached = projectionCacheGet(projectionCacheMapRef, projectionCacheOrderRef, cacheKey);
       if (cached) {
@@ -2111,6 +2150,8 @@ function ProjectionsExplorer({ meta }) {
 
       const response = await fetch(`${API}/api/projections/${endpointTab}?${params}`, {
         signal: controller.signal,
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
       });
       if (!response.ok) {
         throw new Error(`Server returned ${response.status} while loading projections`);
@@ -2160,6 +2201,7 @@ function ProjectionsExplorer({ meta }) {
     sortCol,
     sortDir,
     limit,
+    resolvedDataVersion,
     prefetchProjectionPage,
   ]);
 
@@ -2212,6 +2254,13 @@ function ProjectionsExplorer({ meta }) {
       projectionCacheOrderRef.current = [];
     };
   }, []);
+
+  useEffect(() => {
+    projectionCacheMapRef.current.clear();
+    projectionCacheOrderRef.current = [];
+    hasLoadedProjectionPageRef.current = false;
+    setOffset(0);
+  }, [resolvedDataVersion]);
 
   useEffect(() => {
     function handleOutsideClick(event) {

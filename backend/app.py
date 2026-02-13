@@ -76,6 +76,11 @@ def _build_timestamp_iso() -> str | None:
 APP_BUILD_ID = _build_id()
 APP_BUILD_AT = _build_timestamp_iso()
 INDEX_BUILD_TOKEN = "__APP_BUILD_ID__"
+API_NO_CACHE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
 
 # ---------------------------------------------------------------------------
 # Load pre-processed JSON data once at startup
@@ -466,6 +471,15 @@ CALC_RESULT_CACHE_ORDER: deque[str] = deque()
 REDIS_CLIENT_LOCK = Lock()
 REDIS_CLIENT: Any | None = None
 REDIS_CLIENT_INIT_ATTEMPTED = False
+
+
+def _data_signature_version(signature: tuple[tuple[str, int | None, int | None], ...] | None) -> str:
+    payload = json.dumps(signature or (), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
+
+
+def _current_data_version() -> str:
+    return _data_signature_version(_DATA_SOURCE_SIGNATURE)
 
 
 def _reload_projection_data() -> None:
@@ -1678,8 +1692,14 @@ app.add_middleware(
 
 @app.middleware("http")
 async def attach_build_header(request, call_next):
+    if request.url.path.startswith("/api/"):
+        _refresh_data_if_needed()
     response = await call_next(request)
     response.headers.setdefault("X-App-Build", APP_BUILD_ID)
+    response.headers.setdefault("X-Data-Version", _current_data_version())
+    if request.url.path.startswith("/api/"):
+        for header, value in API_NO_CACHE_HEADERS.items():
+            response.headers.setdefault(header, value)
     return response
 
 # ---------------------------------------------------------------------------
@@ -2447,17 +2467,15 @@ def _get_all_projection_rows(
 
 @app.get("/api/version")
 def get_version():
+    _refresh_data_if_needed()
     return JSONResponse(
         {
             "build_id": APP_BUILD_ID,
             "commit_sha": DEPLOY_COMMIT_SHA or None,
             "built_at": APP_BUILD_AT,
+            "data_version": _current_data_version(),
         },
-        headers={
-            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-            "Pragma": "no-cache",
-            "Expires": "0",
-        },
+        headers=dict(API_NO_CACHE_HEADERS),
     )
 
 
