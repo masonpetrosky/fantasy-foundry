@@ -1427,9 +1427,9 @@ const HITTER_SLOT_FIELDS = [
   { key: "hit_ut", label: "UT", defaultValue: 1 },
 ];
 const PITCHER_SLOT_FIELDS = [
-  { key: "pit_p", label: "P", defaultValue: 3 },
-  { key: "pit_sp", label: "SP", defaultValue: 3 },
-  { key: "pit_rp", label: "RP", defaultValue: 3 },
+  { key: "pit_p", label: "P", defaultValue: 9 },
+  { key: "pit_sp", label: "SP", defaultValue: 0 },
+  { key: "pit_rp", label: "RP", defaultValue: 0 },
 ];
 const POINTS_SETUP_SLOT_DEFAULTS = {
   hit_c: 1,
@@ -1972,14 +1972,14 @@ function App() {
       <div className="container">
         <div className="methodology-card" style={{ marginBottom: "20px" }}>
           <h2 style={{ marginBottom: "10px" }}>Default League Configuration</h2>
-          <p>This site defaults to a 12-team, 6x6 roto setup for rankings.</p>
+          <p>This site defaults to a 12-team, 5x5 roto setup for rankings.</p>
           <p>
-            Hitting categories: <code>R</code>, <code>HR</code>, <code>RBI</code>, <code>SB</code>, <code>OBP</code>, <code>OPS</code>
+            Hitting categories: <code>R</code>, <code>RBI</code>, <code>HR</code>, <code>SB</code>, <code>AVG</code>
             {" · "}
-            Pitching categories: <code>W</code>, <code>QS</code>, <code>K</code>, <code>SVH</code>, <code>ERA</code>, <code>WHIP</code>.
+            Pitching categories: <code>W</code>, <code>K</code>, <code>SV</code>, <code>ERA</code>, <code>WHIP</code>.
           </p>
           <p>
-            Roster defaults: 22 starters (13 hitters: <code>C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT</code>; 9 pitchers split as <code>3 SP, 3 RP, 3 P</code>),
+            Roster defaults: 22 starters (13 hitters: <code>C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT</code>; 9 pitchers as <code>9 P</code>),
             plus 8 bench, 12 MiLB, and 4 IL slots.
           </p>
           <p className="methodology-note" style={{ marginBottom: 0 }}>
@@ -2374,9 +2374,9 @@ function ProjectionsExplorer({ meta, dataVersion }) {
   const batColsFull = ["Player","Team","Pos","Age",seasonCol,"DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","R","HR","RBI","SB","OBP","OPS","AVG","G","AB","H","2B","3B","BB","SO"];
   const pitColsFull = ["Player","Team","Pos","Age",seasonCol,"DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","W","QS","K","SVH","ERA","WHIP","G","GS","IP","L","BB","SV","H","HR","ER"];
   const allColsFull = ["Player","Team","Pos","Type","Age",seasonCol,"DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","R","HR","RBI","SB","OBP","OPS","AVG","W","QS","K","SVH","ERA","WHIP","G","AB","H","2B","3B","BB","SO","GS","IP","L","PitBB","SV","PitH","PitHR","ER"];
-  const batColsCompact = [...compactBaseCols, "R", "HR", "RBI", "SB", "OBP", "OPS", "AVG"];
-  const pitColsCompact = [...compactBaseCols, "W", "QS", "K", "SVH", "ERA", "WHIP"];
-  const allColsCompact = ["Player", "Team", "Pos", "Type", seasonCol, "DynastyValue", ...compactDynastyCols, "R", "HR", "RBI", "SB", "OBP", "OPS", "AVG", "W", "QS", "K", "SVH", "ERA", "WHIP"];
+  const batColsCompact = [...compactBaseCols, "R", "HR", "RBI", "SB", "AVG"];
+  const pitColsCompact = [...compactBaseCols, "W", "K", "SV", "ERA", "WHIP"];
+  const allColsCompact = ["Player", "Team", "Pos", "Type", seasonCol, "DynastyValue", ...compactDynastyCols, "R", "HR", "RBI", "SB", "AVG", "W", "K", "SV", "ERA", "WHIP"];
   const cols = compactModeActive
     ? (tab === "bat" ? batColsCompact : tab === "pitch" ? pitColsCompact : allColsCompact)
     : (tab === "bat" ? batColsFull : tab === "pitch" ? pitColsFull : allColsFull);

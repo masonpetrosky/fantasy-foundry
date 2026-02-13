@@ -117,9 +117,9 @@ COMMON_HITTER_SLOT_DEFAULTS = {
     "UT": 1,
 }
 COMMON_PITCHER_SLOT_DEFAULTS = {
-    "P": 3,
-    "SP": 3,
-    "RP": 3,
+    "P": 9,
+    "SP": 0,
+    "RP": 0,
 }
 POINTS_HITTER_SLOT_DEFAULTS = {
     "C": 1,
