@@ -572,6 +572,51 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(filter_spy.call_count, 1)
 
+    def test_projection_filters_are_cached_across_sort_variants(self) -> None:
+        sample_rows = [
+            {"Player": f"Player {idx}", "Team": "NYY", "Year": 2026, "Pos": "OF"}
+            for idx in range(10)
+        ]
+
+        with patch.object(app_module, "BAT_DATA", sample_rows), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ), patch.object(
+            app_module,
+            "filter_records",
+            wraps=app_module.filter_records,
+        ) as filter_spy:
+            asc = self.client.get(
+                "/api/projections/bat",
+                params={
+                    "team": "NYY",
+                    "include_dynasty": "false",
+                    "sort_col": "Player",
+                    "sort_dir": "asc",
+                    "limit": 3,
+                    "offset": 0,
+                },
+            )
+            desc = self.client.get(
+                "/api/projections/bat",
+                params={
+                    "team": "NYY",
+                    "include_dynasty": "false",
+                    "sort_col": "Player",
+                    "sort_dir": "desc",
+                    "limit": 3,
+                    "offset": 0,
+                },
+            )
+
+        self.assertEqual(asc.status_code, 200)
+        self.assertEqual(desc.status_code, 200)
+        asc_players = [row["Player"] for row in asc.json()["data"]]
+        desc_players = [row["Player"] for row in desc.json()["data"]]
+        self.assertNotEqual(asc_players, desc_players)
+        self.assertEqual(filter_spy.call_count, 1)
+
     def test_bat_endpoint_career_totals_aggregates_stats_across_years(self) -> None:
         bat_rows = [
             {

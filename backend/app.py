@@ -2312,8 +2312,6 @@ def _cached_projection_rows(
     include_dynasty: bool,
     dynasty_years: str,
     career_totals: bool,
-    sort_col: str,
-    sort_dir: str,
 ) -> tuple[dict, ...]:
     valid_years = _coerce_meta_years(META)
     requested_years = _resolve_projection_year_filter(year, years or None, valid_years=valid_years)
@@ -2332,7 +2330,6 @@ def _cached_projection_rows(
             filtered,
             _parse_dynasty_years(dynasty_years or None, valid_years=valid_years),
         )
-    filtered = _sort_projection_rows(filtered, sort_col or None, sort_dir or None)
     return tuple(filtered)
 
 
@@ -2346,8 +2343,6 @@ def _cached_all_projection_rows(
     include_dynasty: bool,
     dynasty_years: str,
     career_totals: bool,
-    sort_col: str,
-    sort_dir: str,
 ) -> tuple[dict, ...]:
     valid_years = _coerce_meta_years(META)
     requested_years = _resolve_projection_year_filter(year, years or None, valid_years=valid_years)
@@ -2383,7 +2378,6 @@ def _cached_all_projection_rows(
             merged,
             _parse_dynasty_years(dynasty_years or None, valid_years=valid_years),
         )
-    merged = _sort_projection_rows(merged, sort_col or None, sort_dir or None)
     return tuple(merged)
 
 
@@ -2401,7 +2395,7 @@ def _get_projection_rows(
     sort_col: str | None,
     sort_dir: str | None,
 ) -> tuple[dict, ...]:
-    return _cached_projection_rows(
+    cached_rows = _cached_projection_rows(
         dataset,
         _normalize_filter_value(player),
         _normalize_filter_value(team),
@@ -2411,9 +2405,13 @@ def _get_projection_rows(
         include_dynasty,
         _normalize_filter_value(dynasty_years),
         career_totals,
+    )
+    sorted_rows = _sort_projection_rows(
+        list(cached_rows),
         _normalize_filter_value(sort_col),
         _normalize_sort_dir(sort_dir),
     )
+    return tuple(sorted_rows)
 
 
 def _get_all_projection_rows(
@@ -2429,7 +2427,7 @@ def _get_all_projection_rows(
     sort_col: str | None,
     sort_dir: str | None,
 ) -> tuple[dict, ...]:
-    return _cached_all_projection_rows(
+    cached_rows = _cached_all_projection_rows(
         _normalize_filter_value(player),
         _normalize_filter_value(team),
         year,
@@ -2438,9 +2436,13 @@ def _get_all_projection_rows(
         include_dynasty,
         _normalize_filter_value(dynasty_years),
         career_totals,
+    )
+    sorted_rows = _sort_projection_rows(
+        list(cached_rows),
         _normalize_filter_value(sort_col),
         _normalize_sort_dir(sort_dir),
     )
+    return tuple(sorted_rows)
 
 
 @app.get("/api/version")
