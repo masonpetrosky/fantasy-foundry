@@ -72,6 +72,9 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 
 # Projection de-duplication helpers
 PROJECTION_DATE_COLS = ["ProjectionDate", "Date", "Updated", "LastUpdated", "Timestamp", "Created", "AsOf"]
+PLAYER_KEY_COL = "PlayerKey"
+PLAYER_ENTITY_KEY_COL = "PlayerEntityKey"
+PLAYER_KEY_PATTERN = re.compile(r"[^a-z0-9]+")
 
 
 def positive_int_arg(value: Union[str, int]) -> int:
@@ -153,6 +156,162 @@ def _find_projection_date_col(df: pd.DataFrame) -> Optional[str]:
     return None
 
 
+def _normalize_player_key(value: object) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return "unknown-player"
+    key = PLAYER_KEY_PATTERN.sub("-", text).strip("-")
+    return key or "unknown-player"
+
+
+def _normalize_team_key(value: object) -> str:
+    return str(value or "").strip().upper()
+
+
+def _normalize_year_key(value: object) -> str:
+    if value is None or value == "":
+        return ""
+    try:
+        numeric = float(value)
+        if pd.notna(numeric) and numeric.is_integer():
+            return str(int(numeric))
+    except (TypeError, ValueError):
+        pass
+    return str(value).strip()
+
+
+def _team_column_for_dataframe(df: pd.DataFrame) -> Optional[str]:
+    for col in ("Team", "MLBTeam"):
+        if col in df.columns:
+            return col
+    return None
+
+
+def _add_player_identity_keys(
+    bat: pd.DataFrame,
+    pit: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    bat_out = bat.copy()
+    pit_out = pit.copy()
+
+    def _prepare(df: pd.DataFrame, *, team_col: Optional[str]) -> pd.DataFrame:
+        out = df.copy()
+
+        if PLAYER_KEY_COL in out.columns:
+            existing_keys = out[PLAYER_KEY_COL].astype("string").fillna("").str.strip()
+        else:
+            existing_keys = pd.Series("", index=out.index, dtype="string")
+        normalized_keys = out.get("Player", pd.Series("", index=out.index)).map(_normalize_player_key)
+        out["_player_key"] = existing_keys.where(existing_keys != "", normalized_keys)
+
+        if "Year" in out.columns:
+            out["_year_key"] = out["Year"].map(_normalize_year_key)
+        else:
+            out["_year_key"] = ""
+
+        if team_col and team_col in out.columns:
+            out["_team_key"] = out[team_col].map(_normalize_team_key)
+        else:
+            out["_team_key"] = ""
+
+        return out
+
+    bat_prepared = _prepare(bat_out, team_col=_team_column_for_dataframe(bat_out))
+    pit_prepared = _prepare(pit_out, team_col=_team_column_for_dataframe(pit_out))
+    combined = pd.concat([bat_prepared, pit_prepared], ignore_index=True, sort=False)
+
+    teams_by_player_year: dict[tuple[str, str], set[str]] = {}
+    for _, row in combined.iterrows():
+        player_key = str(row.get("_player_key", "")).strip()
+        year_key = str(row.get("_year_key", "")).strip()
+        team_key = str(row.get("_team_key", "")).strip()
+        if not player_key or not team_key:
+            continue
+        teams_by_player_year.setdefault((player_key, year_key), set()).add(team_key)
+
+    ambiguous_players = {
+        player_key
+        for (player_key, _), teams in teams_by_player_year.items()
+        if len(teams) > 1
+    }
+
+    def _finalize(df: pd.DataFrame) -> pd.DataFrame:
+        out = df.copy()
+        out[PLAYER_KEY_COL] = out["_player_key"].map(lambda value: str(value).strip() or "unknown-player")
+
+        if PLAYER_ENTITY_KEY_COL in out.columns:
+            existing_entities = out[PLAYER_ENTITY_KEY_COL].astype("string").fillna("").str.strip()
+        else:
+            existing_entities = pd.Series("", index=out.index, dtype="string")
+
+        entity_values: list[str] = []
+        for idx, row in out.iterrows():
+            existing_entity = str(existing_entities.loc[idx]).strip()
+            if existing_entity:
+                entity_values.append(existing_entity)
+                continue
+
+            player_key = str(row.get(PLAYER_KEY_COL, "")).strip() or "unknown-player"
+            if player_key in ambiguous_players:
+                team_key = str(row.get("_team_key", "")).strip().lower() or "unknown"
+                entity_values.append(f"{player_key}__{team_key}")
+            else:
+                entity_values.append(player_key)
+
+        out[PLAYER_ENTITY_KEY_COL] = entity_values
+        return out.drop(columns=["_player_key", "_year_key", "_team_key"], errors="ignore")
+
+    return _finalize(bat_prepared), _finalize(pit_prepared)
+
+
+def _build_player_identity_lookup(bat: pd.DataFrame, pit: pd.DataFrame) -> pd.DataFrame:
+    parts: list[pd.DataFrame] = []
+    for frame in (bat, pit):
+        if frame.empty or PLAYER_ENTITY_KEY_COL not in frame.columns:
+            continue
+        subset = frame[[PLAYER_ENTITY_KEY_COL, PLAYER_KEY_COL, "Player"]].copy()
+        subset[PLAYER_ENTITY_KEY_COL] = subset[PLAYER_ENTITY_KEY_COL].astype("string").fillna("").str.strip()
+        subset[PLAYER_KEY_COL] = subset[PLAYER_KEY_COL].astype("string").fillna("").str.strip()
+        subset["Player"] = subset["Player"].astype("string").fillna("").str.strip()
+        parts.append(subset)
+
+    if not parts:
+        return pd.DataFrame(columns=[PLAYER_ENTITY_KEY_COL, PLAYER_KEY_COL, "Player"])
+
+    merged = pd.concat(parts, ignore_index=True).dropna(subset=[PLAYER_ENTITY_KEY_COL])
+    merged = merged[merged[PLAYER_ENTITY_KEY_COL] != ""]
+    merged = merged.drop_duplicates(subset=[PLAYER_ENTITY_KEY_COL], keep="first").reset_index(drop=True)
+    merged[PLAYER_KEY_COL] = merged.apply(
+        lambda row: (
+            str(row.get(PLAYER_KEY_COL) or "").strip()
+            or str(row.get(PLAYER_ENTITY_KEY_COL) or "").split("__", 1)[0]
+            or _normalize_player_key(row.get("Player"))
+        ),
+        axis=1,
+    )
+    return merged[[PLAYER_ENTITY_KEY_COL, PLAYER_KEY_COL, "Player"]]
+
+
+def _attach_identity_columns_to_output(out: pd.DataFrame, identity_lookup: pd.DataFrame) -> pd.DataFrame:
+    if "Player" not in out.columns:
+        return out
+
+    result = out.rename(columns={"Player": PLAYER_ENTITY_KEY_COL}).copy()
+    if identity_lookup.empty:
+        result["Player"] = result[PLAYER_ENTITY_KEY_COL]
+        result[PLAYER_KEY_COL] = result[PLAYER_ENTITY_KEY_COL].astype("string").str.split("__").str[0]
+    else:
+        result = result.merge(identity_lookup, on=PLAYER_ENTITY_KEY_COL, how="left")
+        result["Player"] = result["Player"].fillna(result[PLAYER_ENTITY_KEY_COL])
+        result[PLAYER_KEY_COL] = result[PLAYER_KEY_COL].fillna(
+            result[PLAYER_ENTITY_KEY_COL].astype("string").str.split("__").str[0]
+        )
+
+    front = ["Player", PLAYER_KEY_COL, PLAYER_ENTITY_KEY_COL]
+    rest = [c for c in result.columns if c not in front]
+    return result[front + rest]
+
+
 def average_recent_projections(
     df: pd.DataFrame,
     stat_cols: List[str],
@@ -174,10 +333,26 @@ def average_recent_projections(
 
     df = df.copy()
     group_cols = group_cols or ["Player", "Year"]
+    effective_group_cols = list(group_cols)
 
     missing_group_cols = [c for c in group_cols if c not in df.columns]
     if missing_group_cols:
         raise ValueError(f"average_recent_projections missing required group columns: {missing_group_cols}")
+
+    team_col = _team_column_for_dataframe(df)
+    if (
+        team_col
+        and "Player" in group_cols
+        and "Year" in group_cols
+        and "_entity_team" not in effective_group_cols
+    ):
+        team_values = df[team_col].astype("string").fillna("").str.strip()
+        team_nonempty = team_values.where(team_values != "", pd.NA)
+        team_counts = team_nonempty.groupby([df[c] for c in group_cols], dropna=False).transform("nunique")
+        if team_counts.gt(1).any():
+            # Split only ambiguous same-name/same-year groups where teams differ.
+            df["_entity_team"] = team_values.where(team_counts > 1, "")
+            effective_group_cols.append("_entity_team")
 
     date_col = _find_projection_date_col(df)
 
@@ -194,7 +369,7 @@ def average_recent_projections(
     # Keep up to `max_entries` most-recent rows per (Player, Year)
     recent = (
         df.sort_values(["_sort_key", "_projection_order"], ascending=False)
-        .groupby(group_cols, as_index=False, sort=False)
+        .groupby(effective_group_cols, as_index=False, sort=False)
         .head(max_entries)
     )
 
@@ -208,7 +383,7 @@ def average_recent_projections(
     meta_cols = [
         c for c in recent.columns
         if c not in stat_cols_present
-        and c not in group_cols
+        and c not in effective_group_cols
         and c
         not in {
             "_projection_order",
@@ -227,9 +402,10 @@ def average_recent_projections(
 
     out = (
         recent.sort_values(["_sort_key", "_projection_order"], ascending=False)
-        .groupby(group_cols, as_index=False, sort=False)
+        .groupby(effective_group_cols, as_index=False, sort=False)
         .agg(agg)
     )
+    out = out.drop(columns=["_entity_team"], errors="ignore")
 
     # Nice column order: group keys, then the new metadata columns, then everything else
     front = list(group_cols) + ["ProjectionsUsed", "OldestProjectionDate"]
@@ -1881,6 +2057,11 @@ def calculate_common_dynasty_values(
     bat_date_col = _find_projection_date_col(bat_raw)
     pit_date_col = _find_projection_date_col(pit_raw)
 
+    bat_raw, pit_raw = _add_player_identity_keys(bat_raw, pit_raw)
+    identity_lookup = _build_player_identity_lookup(bat_raw, pit_raw)
+    bat_raw["Player"] = bat_raw[PLAYER_ENTITY_KEY_COL].astype("string").fillna("").str.strip()
+    pit_raw["Player"] = pit_raw[PLAYER_ENTITY_KEY_COL].astype("string").fillna("").str.strip()
+
     # Average *all numeric stat columns* (except derived rates and Age) so the
     # aggregated detail tabs reflect the true averaged projections.
     bat_stat_cols = numeric_stat_cols_for_recent_avg(
@@ -2137,6 +2318,7 @@ def calculate_common_dynasty_values(
     out["CenteringBaselineMean"] = baseline_value
 
     out = out.sort_values("DynastyValue", ascending=False).reset_index(drop=True)
+    out = _attach_identity_columns_to_output(out, identity_lookup)
 
     if not return_details:
         return out
@@ -2147,13 +2329,32 @@ def calculate_common_dynasty_values(
     hit_year = pd.concat(hit_year_tables, ignore_index=True) if hit_year_tables else pd.DataFrame(columns=["Player", "Year", "BestSlot", "YearValue"])
     pit_year = pd.concat(pit_year_tables, ignore_index=True) if pit_year_tables else pd.DataFrame(columns=["Player", "Year", "BestSlot", "YearValue"])
 
-    player_vals = out[["Player", "DynastyValue", "RawDynastyValue", "minor_eligible"]].copy()
+    player_vals = out[[PLAYER_ENTITY_KEY_COL, "DynastyValue", "RawDynastyValue", "minor_eligible"]].copy()
 
     bat_detail = bat.merge(hit_year, on=["Player", "Year"], how="left")
-    bat_detail = bat_detail.merge(player_vals, on="Player", how="left")
+    bat_detail = bat_detail.merge(
+        player_vals,
+        left_on="Player",
+        right_on=PLAYER_ENTITY_KEY_COL,
+        how="left",
+    ).drop(columns=[PLAYER_ENTITY_KEY_COL], errors="ignore")
 
     pit_detail = pit.merge(pit_year, on=["Player", "Year"], how="left")
-    pit_detail = pit_detail.merge(player_vals, on="Player", how="left")
+    pit_detail = pit_detail.merge(
+        player_vals,
+        left_on="Player",
+        right_on=PLAYER_ENTITY_KEY_COL,
+        how="left",
+    ).drop(columns=[PLAYER_ENTITY_KEY_COL], errors="ignore")
+
+    display_by_entity = (
+        dict(zip(identity_lookup[PLAYER_ENTITY_KEY_COL], identity_lookup["Player"]))
+        if not identity_lookup.empty
+        else {}
+    )
+    if display_by_entity:
+        bat_detail["Player"] = bat_detail["Player"].map(display_by_entity).fillna(bat_detail["Player"])
+        pit_detail["Player"] = pit_detail["Player"].map(display_by_entity).fillna(pit_detail["Player"])
 
     extra = ["ProjectionsUsed", "OldestProjectionDate", "BestSlot", "YearValue", "DynastyValue", "RawDynastyValue", "minor_eligible"]
     bat_detail = reorder_detail_columns(bat_detail, bat_input_cols, add_after=bat_date_col, extra_cols=extra)
@@ -3421,6 +3622,11 @@ def calculate_league_dynasty_values(
     bat_date_col = _find_projection_date_col(bat_raw)
     pit_date_col = _find_projection_date_col(pit_raw)
 
+    bat_raw, pit_raw = _add_player_identity_keys(bat_raw, pit_raw)
+    identity_lookup = _build_player_identity_lookup(bat_raw, pit_raw)
+    bat_raw["Player"] = bat_raw[PLAYER_ENTITY_KEY_COL].astype("string").fillna("").str.strip()
+    pit_raw["Player"] = pit_raw[PLAYER_ENTITY_KEY_COL].astype("string").fillna("").str.strip()
+
     # Average *all numeric stat columns* (except derived rates and Age) so the
     # aggregated detail tabs (and category stats like SVH/QA3) reflect the true averaged projections.
     bat_stat_cols = numeric_stat_cols_for_recent_avg(
@@ -3689,6 +3895,7 @@ def calculate_league_dynasty_values(
     out["CenteringBaselineMean"] = baseline_value
 
     out = out.sort_values("DynastyValue", ascending=False).reset_index(drop=True)
+    out = _attach_identity_columns_to_output(out, identity_lookup)
 
     if not return_details:
         return out
@@ -3699,13 +3906,32 @@ def calculate_league_dynasty_values(
     hit_year = pd.concat(hit_year_tables, ignore_index=True) if hit_year_tables else pd.DataFrame(columns=["Player", "Year", "BestSlot", "YearValue"])
     pit_year = pd.concat(pit_year_tables, ignore_index=True) if pit_year_tables else pd.DataFrame(columns=["Player", "Year", "BestSlot", "YearValue"])
 
-    player_vals = out[["Player", "DynastyValue", "RawDynastyValue", "minor_eligible"]].copy()
+    player_vals = out[[PLAYER_ENTITY_KEY_COL, "DynastyValue", "RawDynastyValue", "minor_eligible"]].copy()
 
     bat_detail = bat_df.merge(hit_year, on=["Player", "Year"], how="left")
-    bat_detail = bat_detail.merge(player_vals, on="Player", how="left")
+    bat_detail = bat_detail.merge(
+        player_vals,
+        left_on="Player",
+        right_on=PLAYER_ENTITY_KEY_COL,
+        how="left",
+    ).drop(columns=[PLAYER_ENTITY_KEY_COL], errors="ignore")
 
     pit_detail = pit_df.merge(pit_year, on=["Player", "Year"], how="left")
-    pit_detail = pit_detail.merge(player_vals, on="Player", how="left")
+    pit_detail = pit_detail.merge(
+        player_vals,
+        left_on="Player",
+        right_on=PLAYER_ENTITY_KEY_COL,
+        how="left",
+    ).drop(columns=[PLAYER_ENTITY_KEY_COL], errors="ignore")
+
+    display_by_entity = (
+        dict(zip(identity_lookup[PLAYER_ENTITY_KEY_COL], identity_lookup["Player"]))
+        if not identity_lookup.empty
+        else {}
+    )
+    if display_by_entity:
+        bat_detail["Player"] = bat_detail["Player"].map(display_by_entity).fillna(bat_detail["Player"])
+        pit_detail["Player"] = pit_detail["Player"].map(display_by_entity).fillna(pit_detail["Player"])
 
     extra = ["ProjectionsUsed", "OldestProjectionDate", "BestSlot", "YearValue", "DynastyValue", "RawDynastyValue", "minor_eligible"]
     bat_detail = reorder_detail_columns(bat_detail, bat_input_cols, add_after=bat_date_col, extra_cols=extra)

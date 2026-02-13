@@ -517,6 +517,54 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(by_team["BOS"]["DynastyMatchStatus"], "no_unique_match")
         self.assertEqual(by_team["NYY"]["DynastyMatchStatus"], "matched")
 
+    def test_attach_dynasty_values_disambiguates_same_name_by_team(self) -> None:
+        rows = [
+            {
+                "Player": "Max Muncy",
+                "Team": "Athletics",
+                "Age": 23,
+                "Year": 2026,
+                "PlayerKey": "max-muncy",
+                "PlayerEntityKey": "max-muncy__athletics",
+            },
+            {
+                "Player": "Max Muncy",
+                "Team": "Dodgers",
+                "Age": 35,
+                "Year": 2026,
+                "PlayerKey": "max-muncy",
+                "PlayerEntityKey": "max-muncy__dodgers",
+            },
+        ]
+        dynasty_frame = pd.DataFrame(
+            [
+                {
+                    "Player": "Max Muncy",
+                    "Team": "Athletics",
+                    "Age": 23,
+                    "DynastyValue": -4.42,
+                    "Value_2026": -1.23,
+                }
+            ]
+        )
+
+        app_module._get_default_dynasty_lookup.cache_clear()
+        try:
+            with patch.object(
+                app_module,
+                "_calculate_common_dynasty_frame_cached",
+                return_value=dynasty_frame,
+            ), patch.object(app_module, "BAT_DATA", rows), patch.object(app_module, "PIT_DATA", []):
+                enriched = app_module._attach_dynasty_values(rows)
+        finally:
+            app_module._get_default_dynasty_lookup.cache_clear()
+
+        by_team = {row["Team"]: row for row in enriched}
+        self.assertEqual(by_team["Athletics"]["DynastyMatchStatus"], "matched")
+        self.assertEqual(by_team["Athletics"]["DynastyValue"], -4.42)
+        self.assertEqual(by_team["Dodgers"]["DynastyMatchStatus"], "no_unique_match")
+        self.assertIsNone(by_team["Dodgers"]["DynastyValue"])
+
     def test_large_projection_response_is_gzip_compressed(self) -> None:
         sample_rows = [
             {

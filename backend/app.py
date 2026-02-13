@@ -1729,25 +1729,33 @@ def _get_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set
             [c for c in out.columns if isinstance(c, str) and c.startswith("Value_")],
             key=_value_col_sort_key,
         )
-        keep_cols = [c for c in ["Player", "DynastyValue"] + year_cols if c in out.columns]
+        keep_cols = [c for c in ["Player", "Team", "DynastyValue"] + year_cols if c in out.columns]
         df = out[keep_cols].copy()
 
         for col in df.select_dtypes(include="float").columns:
             df[col] = df[col].round(2)
 
-        lookup_by_name: dict[str, dict] = {}
+        lookup_candidates_by_name: dict[str, list[dict[str, object]]] = {}
         for row in df.to_dict(orient="records"):
-            player = row.pop("Player", None)
+            player = str(row.get("Player", "")).strip()
             if not player:
                 continue
 
             cleaned: dict = {}
             for key, value in row.items():
+                if key in {"Player", "Team"}:
+                    continue
                 if pd.isna(value):
                     cleaned[key] = None
                 else:
                     cleaned[key] = value
-            lookup_by_name[str(player).strip()] = cleaned
+            team_key = _normalize_team_key(row.get("Team")).lower()
+            lookup_candidates_by_name.setdefault(player, []).append(
+                {
+                    "team_key": team_key,
+                    "values": cleaned,
+                }
+            )
 
         combined_records = list(BAT_DATA) + list(PIT_DATA)
         entities_by_player_key: dict[str, set[str]] = {}
@@ -1766,21 +1774,50 @@ def _get_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set
             if len(entity_keys) > 1
         }
 
+        def _candidate_values_for_record(
+            record: dict,
+            candidates: list[dict[str, object]],
+            *,
+            require_team_match: bool,
+        ) -> dict | None:
+            if not candidates:
+                return None
+
+            record_team_key = _normalize_team_key(record.get("Team") or record.get("MLBTeam")).lower()
+            if require_team_match:
+                if record_team_key:
+                    team_matches = [c for c in candidates if str(c.get("team_key") or "") == record_team_key]
+                    if len(team_matches) == 1:
+                        return team_matches[0].get("values") if isinstance(team_matches[0].get("values"), dict) else None
+                    return None
+                return candidates[0].get("values") if len(candidates) == 1 and isinstance(candidates[0].get("values"), dict) else None
+
+            if record_team_key:
+                team_matches = [c for c in candidates if str(c.get("team_key") or "") == record_team_key]
+                if len(team_matches) == 1:
+                    return team_matches[0].get("values") if isinstance(team_matches[0].get("values"), dict) else None
+            return candidates[0].get("values") if len(candidates) == 1 and isinstance(candidates[0].get("values"), dict) else None
+
         lookup_by_entity: dict[str, dict] = {}
         lookup_by_player_key: dict[str, dict] = {}
         for record in combined_records:
             player_name = str(record.get("Player", "")).strip()
             if not player_name:
                 continue
-            player_values = lookup_by_name.get(player_name)
-            if player_values is None:
-                continue
 
             player_key = str(record.get(PLAYER_KEY_COL) or "").strip() or _normalize_player_key(player_name)
             entity_key = str(record.get(PLAYER_ENTITY_KEY_COL) or "").strip() or player_key
+            player_values = _candidate_values_for_record(
+                record,
+                lookup_candidates_by_name.get(player_name, []),
+                require_team_match=player_key in ambiguous_player_keys,
+            )
+            if player_values is None:
+                continue
+
             if player_key not in ambiguous_player_keys:
                 lookup_by_player_key.setdefault(player_key, player_values)
-                lookup_by_entity.setdefault(entity_key, player_values)
+            lookup_by_entity.setdefault(entity_key, player_values)
 
         return lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, year_cols
     except Exception:
