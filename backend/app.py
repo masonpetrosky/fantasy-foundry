@@ -770,6 +770,11 @@ def _calculate_common_dynasty_frame_cached(
         seed=0,
         recent_projections=recent_projections,
     )
+    out = _apply_projection_confidence_adjustments(
+        out,
+        start_year=start_year,
+        recent_projections=recent_projections,
+    )
     return out
 
 
@@ -787,6 +792,212 @@ def _coerce_minor_eligible(value: object) -> bool:
         return value > 0
     text = str(value or "").strip().lower()
     return text in {"1", "true", "yes", "y"}
+
+
+def _projection_identity_key(row: dict | pd.Series) -> str:
+    entity_key = str(row.get(PLAYER_ENTITY_KEY_COL) or "").strip()
+    if entity_key:
+        return entity_key
+    player_key = str(row.get(PLAYER_KEY_COL) or "").strip()
+    if player_key:
+        return player_key
+    return _normalize_player_key(row.get("Player"))
+
+
+def _build_projection_confidence_context(*, start_year: int, recent_projections: int) -> dict[str, dict[str, object]]:
+    if recent_projections == 3:
+        bat_rows = BAT_DATA
+        pit_rows = PIT_DATA
+    else:
+        bat_rows = _average_recent_projection_rows(BAT_DATA_RAW, max_entries=recent_projections, is_hitter=True)
+        pit_rows = _average_recent_projection_rows(PIT_DATA_RAW, max_entries=recent_projections, is_hitter=False)
+
+    context: dict[str, dict[str, object]] = {}
+
+    def _merge_row(row: dict) -> None:
+        year = _coerce_record_year(row.get("Year"))
+        if year != int(start_year):
+            return
+
+        key = _projection_identity_key(row)
+        if not key:
+            return
+
+        entry = context.setdefault(
+            key,
+            {
+                "projections_used": None,
+                "ab": 0.0,
+                "ip": 0.0,
+                "pos": None,
+            },
+        )
+
+        merged_used = _max_projection_count(entry.get("projections_used"), row.get("ProjectionsUsed"))
+        if merged_used is not None:
+            entry["projections_used"] = int(merged_used)
+
+        ab = _coerce_numeric(row.get("AB")) or 0.0
+        ip = _coerce_numeric(row.get("IP")) or 0.0
+        entry["ab"] = max(float(entry.get("ab") or 0.0), float(ab))
+        entry["ip"] = max(float(entry.get("ip") or 0.0), float(ip))
+        entry["pos"] = _merge_position_value(entry.get("pos"), row.get("Pos"))
+
+    for row in bat_rows:
+        _merge_row(row)
+    for row in pit_rows:
+        _merge_row(row)
+
+    return context
+
+
+def _hitter_playing_time_factor(ab: float) -> float:
+    if ab <= 0:
+        return 0.68
+    if ab < 80:
+        return 0.78
+    if ab < 180:
+        return 0.88
+    if ab < 300:
+        return 0.94
+    return 1.0
+
+
+def _pitcher_playing_time_factor(ip: float) -> float:
+    if ip <= 0:
+        return 0.68
+    if ip < 30:
+        return 0.78
+    if ip < 80:
+        return 0.88
+    if ip < 120:
+        return 0.94
+    return 1.0
+
+
+def _projection_playing_time_factor(*, ab: float, ip: float, pos: object) -> float:
+    pos_tokens = _position_tokens(pos)
+    has_pitcher_flag = bool(pos_tokens & {"P", "SP", "RP"})
+    has_hitter_flag = bool(pos_tokens - {"P", "SP", "RP"})
+
+    hit_factor = _hitter_playing_time_factor(ab)
+    pit_factor = _pitcher_playing_time_factor(ip)
+
+    has_hit_signal = ab > 0 or has_hitter_flag
+    has_pit_signal = ip > 0 or has_pitcher_flag
+
+    if has_hit_signal and has_pit_signal:
+        return max(hit_factor, pit_factor)
+    if has_pit_signal:
+        return pit_factor
+    if has_hit_signal:
+        return hit_factor
+    return 0.82
+
+
+def _projection_confidence_multiplier(
+    row: dict | pd.Series,
+    *,
+    context_entry: dict[str, object] | None,
+    start_year: int,
+) -> float:
+    used = _coerce_numeric(row.get("ProjectionsUsed"))
+    if used is None and context_entry:
+        used = _coerce_numeric(context_entry.get("projections_used"))
+
+    # If confidence signals are unavailable, preserve existing values.
+    if used is None:
+        return 1.0
+
+    projections_used = int(round(used))
+    if projections_used >= 3:
+        source_factor = 1.0
+    elif projections_used == 2:
+        source_factor = 0.96
+    else:
+        source_factor = 0.90
+
+    ab = float(_coerce_numeric((context_entry or {}).get("ab")) or 0.0)
+    ip = float(_coerce_numeric((context_entry or {}).get("ip")) or 0.0)
+    pos = (context_entry or {}).get("pos") or row.get("Pos")
+    playing_time_factor = _projection_playing_time_factor(ab=ab, ip=ip, pos=pos)
+    pos_tokens = _position_tokens(pos)
+    is_pitcher = ip > 0 or bool(pos_tokens & {"P", "SP", "RP"})
+
+    age = _coerce_numeric(row.get("Age"))
+    minor_eligible = _coerce_minor_eligible(row.get("minor_eligible"))
+    if minor_eligible and age is not None and age <= 23:
+        age_factor = 0.92
+    elif minor_eligible and age is not None and age <= 25:
+        age_factor = 0.96
+    else:
+        age_factor = 1.0
+
+    dynasty_value = _coerce_numeric(row.get("DynastyValue"))
+    # Keep downside values mostly intact; only add a mild uplift for durable starters
+    # who are often under-ranked by replacement-level centering.
+    if dynasty_value is not None and dynasty_value <= 0:
+        if is_pitcher and projections_used <= 1 and ip >= 120:
+            return 0.92
+        if is_pitcher and projections_used <= 1 and ip >= 90:
+            return 0.96
+        return 1.0
+
+    multiplier = source_factor * playing_time_factor * age_factor
+    return max(0.55, min(1.0, float(multiplier)))
+
+
+def _apply_projection_confidence_adjustments(
+    df: pd.DataFrame,
+    *,
+    start_year: int,
+    recent_projections: int,
+) -> pd.DataFrame:
+    if df.empty or "DynastyValue" not in df.columns:
+        return df
+
+    value_cols = sorted(
+        [col for col in df.columns if isinstance(col, str) and col.startswith("Value_")],
+        key=_value_col_sort_key,
+    )
+
+    # Only adjust outputs when confidence inputs are actually available.
+    if "ProjectionsUsed" not in df.columns and not value_cols:
+        return df
+
+    context = _build_projection_confidence_context(
+        start_year=int(start_year),
+        recent_projections=int(recent_projections),
+    )
+
+    out = df.copy(deep=True)
+    for idx, row in out.iterrows():
+        player_id = _projection_identity_key(row)
+        context_entry = context.get(player_id)
+        multiplier = _projection_confidence_multiplier(
+            row,
+            context_entry=context_entry,
+            start_year=int(start_year),
+        )
+        if abs(multiplier - 1.0) < 1e-9:
+            continue
+
+        for col in value_cols:
+            value = _coerce_numeric(row.get(col))
+            if value is not None:
+                out.at[idx, col] = float(value) * multiplier
+
+        raw_value = _coerce_numeric(row.get("RawDynastyValue"))
+        if raw_value is not None:
+            out.at[idx, "RawDynastyValue"] = float(raw_value) * multiplier
+
+        dynasty_value = _coerce_numeric(row.get("DynastyValue"))
+        if dynasty_value is not None:
+            out.at[idx, "DynastyValue"] = float(dynasty_value) * multiplier
+
+    if "DynastyValue" in out.columns:
+        out = out.sort_values(["DynastyValue", "Player"], ascending=[False, True], na_position="last")
+    return out
 
 
 def _valuation_years(start_year: int, horizon: int, valid_years: list[int]) -> list[int]:
@@ -1348,7 +1559,11 @@ def _calculate_points_dynasty_frame_cached(
         row["DynastyValue"] = float(row["RawDynastyValue"]) - replacement_raw
 
     df = pd.DataFrame.from_records(result_rows)
-    df = df.sort_values(["DynastyValue", "Player"], ascending=[False, True], na_position="last")
+    df = _apply_projection_confidence_adjustments(
+        df,
+        start_year=start_year,
+        recent_projections=recent_projections,
+    )
     return df
 
 

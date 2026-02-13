@@ -58,6 +58,66 @@ class YearCoercionTests(unittest.TestCase):
         self.assertIsNone(app_module._coerce_record_year(True))
 
 
+class ProjectionConfidenceAdjustmentTests(unittest.TestCase):
+    def test_multiplier_downweights_uncertain_positive_upside(self) -> None:
+        row = {
+            "DynastyValue": 12.5,
+            "ProjectionsUsed": 1,
+            "Age": 22,
+            "minor_eligible": True,
+            "Pos": "1B",
+            "Value_2026": -1.0,
+        }
+        context_entry = {"projections_used": 1, "ab": 0.0, "ip": 0.0, "pos": "1B"}
+
+        multiplier = app_module._projection_confidence_multiplier(
+            row,
+            context_entry=context_entry,
+            start_year=2026,
+        )
+
+        self.assertLess(multiplier, 1.0)
+        self.assertGreaterEqual(multiplier, 0.55)
+
+    def test_multiplier_keeps_negative_non_pitcher_values_intact(self) -> None:
+        row = {
+            "DynastyValue": -1.3,
+            "ProjectionsUsed": 1,
+            "Age": 27,
+            "minor_eligible": False,
+            "Pos": "OF",
+            "Value_2026": -0.8,
+        }
+        context_entry = {"projections_used": 1, "ab": 140.0, "ip": 0.0, "pos": "OF"}
+
+        multiplier = app_module._projection_confidence_multiplier(
+            row,
+            context_entry=context_entry,
+            start_year=2026,
+        )
+
+        self.assertEqual(multiplier, 1.0)
+
+    def test_multiplier_applies_mild_uplift_to_durable_negative_sp(self) -> None:
+        row = {
+            "DynastyValue": -2.1,
+            "ProjectionsUsed": 1,
+            "Age": 30,
+            "minor_eligible": False,
+            "Pos": "SP",
+            "Value_2026": -0.9,
+        }
+        context_entry = {"projections_used": 1, "ab": 0.0, "ip": 158.0, "pos": "SP"}
+
+        multiplier = app_module._projection_confidence_multiplier(
+            row,
+            context_entry=context_entry,
+            start_year=2026,
+        )
+
+        self.assertEqual(multiplier, 0.92)
+
+
 class ProjectionEndpointValidationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
