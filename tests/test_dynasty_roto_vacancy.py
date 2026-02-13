@@ -5,6 +5,8 @@ import pandas as pd
 from backend.dynasty_roto_values import (
     CommonDynastyRotoSettings,
     PIT_COMPONENT_COLS,
+    _apply_negative_value_stash_rules,
+    _estimate_bench_negative_penalty,
     assign_players_to_slots_with_vacancy_fill,
     compute_year_context,
     eligible_pit_slots,
@@ -122,6 +124,67 @@ class VacancyBackfillTests(unittest.TestCase):
 
         self.assertIn("RP", ctx["baseline_pit"].index)
         self.assertAlmostEqual(float(ctx["base_pit_tot"]["IP"]), 30.0, places=6)
+
+
+class BenchStashPenaltyTests(unittest.TestCase):
+    def test_estimate_bench_negative_penalty_uses_open_hitter_games(self) -> None:
+        lg_two_bench = CommonDynastyRotoSettings(
+            n_teams=1,
+            hitter_slots={"C": 1, "1B": 1, "2B": 0, "3B": 0, "SS": 0, "CI": 0, "MI": 0, "OF": 0, "UT": 0},
+            pitcher_slots={"P": 0, "SP": 0, "RP": 0},
+            bench_slots=2,
+            minor_slots=0,
+            ir_slots=0,
+        )
+        assigned_hit = pd.DataFrame(
+            [
+                {"Player": "Starter One", "G": 162.0},
+                {"Player": "Starter Two", "G": 81.0},
+            ]
+        )
+        penalty = _estimate_bench_negative_penalty({"assigned_hit": assigned_hit}, lg_two_bench)
+        self.assertAlmostEqual(penalty, 0.0, places=6)
+
+        lg_one_bench = CommonDynastyRotoSettings(
+            n_teams=1,
+            hitter_slots={"C": 1, "1B": 1, "2B": 0, "3B": 0, "SS": 0, "CI": 0, "MI": 0, "OF": 0, "UT": 0},
+            pitcher_slots={"P": 0, "SP": 0, "RP": 0},
+            bench_slots=1,
+            minor_slots=0,
+            ir_slots=0,
+        )
+        penalty_one_bench = _estimate_bench_negative_penalty({"assigned_hit": assigned_hit}, lg_one_bench)
+        self.assertAlmostEqual(penalty_one_bench, 0.5, places=6)
+
+    def test_apply_negative_value_stash_rules_prioritizes_minor_then_bench(self) -> None:
+        self.assertEqual(
+            _apply_negative_value_stash_rules(
+                -4.0,
+                can_minor_stash=True,
+                can_bench_stash=True,
+                bench_negative_penalty=0.3,
+            ),
+            0.0,
+        )
+        self.assertAlmostEqual(
+            _apply_negative_value_stash_rules(
+                -4.0,
+                can_minor_stash=False,
+                can_bench_stash=True,
+                bench_negative_penalty=0.3,
+            ),
+            -1.2,
+            places=6,
+        )
+        self.assertEqual(
+            _apply_negative_value_stash_rules(
+                2.0,
+                can_minor_stash=True,
+                can_bench_stash=True,
+                bench_negative_penalty=0.3,
+            ),
+            2.0,
+        )
 
 
 if __name__ == "__main__":

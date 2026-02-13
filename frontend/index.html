@@ -1537,6 +1537,7 @@ function resolvePointsScoringDefaults(meta) {
 function buildDefaultCalculatorSettings(meta) {
   const guardrails = meta?.calculator_guardrails || {};
   const defaultIr = Number(guardrails?.default_ir_slots);
+  const defaultMinors = Number(guardrails?.default_minors_slots);
   return {
     scoring_mode: "roto",
     teams: 12,
@@ -1545,7 +1546,7 @@ function buildDefaultCalculatorSettings(meta) {
     discount: 0.85,
     ...resolveRotoSlotDefaults(meta),
     bench: 6,
-    minors: 0,
+    minors: Number.isInteger(defaultMinors) && defaultMinors >= 0 ? defaultMinors : 0,
     ir: Number.isInteger(defaultIr) && defaultIr >= 0 ? defaultIr : 0,
     ip_min: 0,
     ip_max: "",

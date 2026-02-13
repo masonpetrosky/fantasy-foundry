@@ -158,6 +158,7 @@ DEFAULT_POINTS_SCORING = {
     "pts_pit_bb": -1.0,
 }
 COMMON_DEFAULT_IR_SLOTS = 0
+COMMON_DEFAULT_MINOR_SLOTS = 0
 COMMON_HITTER_STARTER_SLOTS_PER_TEAM = sum(COMMON_HITTER_SLOT_DEFAULTS.values())
 COMMON_PITCHER_STARTER_SLOTS_PER_TEAM = sum(COMMON_PITCHER_SLOT_DEFAULTS.values())
 CALCULATOR_JOB_TTL_SECONDS = max(60, int(os.getenv("FF_CALC_JOB_TTL_SECONDS", "1800")))
@@ -1277,7 +1278,7 @@ def _default_calculation_cache_params() -> dict[str, int | float | str | None]:
         "pit_sp": COMMON_PITCHER_SLOT_DEFAULTS["SP"],
         "pit_rp": COMMON_PITCHER_SLOT_DEFAULTS["RP"],
         "bench": 6,
-        "minors": 0,
+        "minors": COMMON_DEFAULT_MINOR_SLOTS,
         "ir": COMMON_DEFAULT_IR_SLOTS,
         "ip_min": 0.0,
         "ip_max": None,
@@ -1296,6 +1297,7 @@ def _calculator_guardrails_payload() -> dict:
         "default_points_hitter_slots": POINTS_HITTER_SLOT_DEFAULTS.copy(),
         "default_points_pitcher_slots": POINTS_PITCHER_SLOT_DEFAULTS.copy(),
         "default_points_scoring": DEFAULT_POINTS_SCORING.copy(),
+        "default_minors_slots": COMMON_DEFAULT_MINOR_SLOTS,
         "default_ir_slots": COMMON_DEFAULT_IR_SLOTS,
         "playable_by_year": _playable_pool_counts_by_year(),
         "job_timeout_seconds": CALCULATOR_REQUEST_TIMEOUT_SECONDS,
@@ -1422,35 +1424,33 @@ def _prewarm_default_calculation_caches() -> None:
 def _get_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]]:
     """Cached default dynasty values keyed by PlayerEntityKey first, then unique PlayerKey."""
     try:
-        years = _coerce_meta_years(META)
-        start_year = years[0] if years else 2026
-        horizon = len(years) if years else 10
+        params = _default_calculation_cache_params()
 
         out = _calculate_common_dynasty_frame_cached(
-            teams=12,
-            sims=300,
-            horizon=horizon,
-            discount=0.85,
-            hit_c=COMMON_HITTER_SLOT_DEFAULTS["C"],
-            hit_1b=COMMON_HITTER_SLOT_DEFAULTS["1B"],
-            hit_2b=COMMON_HITTER_SLOT_DEFAULTS["2B"],
-            hit_3b=COMMON_HITTER_SLOT_DEFAULTS["3B"],
-            hit_ss=COMMON_HITTER_SLOT_DEFAULTS["SS"],
-            hit_ci=COMMON_HITTER_SLOT_DEFAULTS["CI"],
-            hit_mi=COMMON_HITTER_SLOT_DEFAULTS["MI"],
-            hit_of=COMMON_HITTER_SLOT_DEFAULTS["OF"],
-            hit_ut=COMMON_HITTER_SLOT_DEFAULTS["UT"],
-            pit_p=COMMON_PITCHER_SLOT_DEFAULTS["P"],
-            pit_sp=COMMON_PITCHER_SLOT_DEFAULTS["SP"],
-            pit_rp=COMMON_PITCHER_SLOT_DEFAULTS["RP"],
-            bench=6,
-            minors=0,
-            ir=COMMON_DEFAULT_IR_SLOTS,
-            ip_min=0.0,
-            ip_max=None,
-            two_way="sum",
-            start_year=start_year,
-            recent_projections=3,
+            teams=int(params["teams"]),
+            sims=int(params["sims"]),
+            horizon=int(params["horizon"]),
+            discount=float(params["discount"]),
+            hit_c=int(params["hit_c"]),
+            hit_1b=int(params["hit_1b"]),
+            hit_2b=int(params["hit_2b"]),
+            hit_3b=int(params["hit_3b"]),
+            hit_ss=int(params["hit_ss"]),
+            hit_ci=int(params["hit_ci"]),
+            hit_mi=int(params["hit_mi"]),
+            hit_of=int(params["hit_of"]),
+            hit_ut=int(params["hit_ut"]),
+            pit_p=int(params["pit_p"]),
+            pit_sp=int(params["pit_sp"]),
+            pit_rp=int(params["pit_rp"]),
+            bench=int(params["bench"]),
+            minors=int(params["minors"]),
+            ir=int(params["ir"]),
+            ip_min=float(params["ip_min"]),
+            ip_max=params["ip_max"],
+            two_way=str(params["two_way"]),
+            start_year=int(params["start_year"]),
+            recent_projections=int(params["recent_projections"]),
         ).copy(deep=True)
 
         year_cols = sorted(
@@ -2702,7 +2702,7 @@ class CalculateRequest(BaseModel):
     pit_sp: int = Field(default=COMMON_PITCHER_SLOT_DEFAULTS["SP"], ge=0, le=15)
     pit_rp: int = Field(default=COMMON_PITCHER_SLOT_DEFAULTS["RP"], ge=0, le=15)
     bench: int = Field(default=6, ge=0, le=40)
-    minors: int = Field(default=0, ge=0, le=60)
+    minors: int = Field(default=COMMON_DEFAULT_MINOR_SLOTS, ge=0, le=60)
     ir: int = Field(default=COMMON_DEFAULT_IR_SLOTS, ge=0, le=40)
     ip_min: float = Field(default=0.0, ge=0.0)
     ip_max: Optional[float] = Field(default=None, ge=0.0)

@@ -896,6 +896,7 @@ class CalculatorValidationTests(unittest.TestCase):
     def test_calculate_request_default_horizon_is_twenty(self) -> None:
         req = app_module.CalculateRequest()
         self.assertEqual(req.horizon, 20)
+        self.assertEqual(req.minors, app_module.COMMON_DEFAULT_MINOR_SLOTS)
 
     def test_mode_must_be_common(self) -> None:
         response = self.client.post("/api/calculate", json={"mode": "league"})
@@ -1286,6 +1287,7 @@ class CalculatorValidationTests(unittest.TestCase):
         guardrails = payload.get("calculator_guardrails", {})
         self.assertEqual(guardrails.get("hitters_per_team"), 13)
         self.assertEqual(guardrails.get("pitchers_per_team"), 9)
+        self.assertEqual(guardrails.get("default_minors_slots"), app_module.COMMON_DEFAULT_MINOR_SLOTS)
         self.assertIn("default_points_scoring", guardrails)
         self.assertIn("playable_by_year", guardrails)
 

@@ -1729,6 +1729,60 @@ def _select_mlb_roster_with_active_floor(
     return pd.concat([floor, fill], ignore_index=True)
 
 
+def _estimate_bench_negative_penalty(start_ctx: dict, lg: object) -> float:
+    """Estimate marginal active-slot opportunity cost for one hitter stash slot.
+
+    Returns a factor in [0, 1] used to scale negative year values for hitters
+    that can be stashed on the bench instead of occupying an active lineup spot.
+    """
+    bench_slots = int(getattr(lg, "bench_slots", 0) or 0)
+    if bench_slots <= 0:
+        return 1.0
+
+    hitter_slots = getattr(lg, "hitter_slots", {}) or {}
+    active_hit_slots_per_team = int(sum(max(int(v), 0) for v in hitter_slots.values()))
+    if active_hit_slots_per_team <= 0:
+        return 1.0
+
+    default_open_fraction = 0.15
+    open_fraction = default_open_fraction
+
+    assigned_hit = start_ctx.get("assigned_hit")
+    if isinstance(assigned_hit, pd.DataFrame) and not assigned_hit.empty and "G" in assigned_hit.columns:
+        non_vacant = assigned_hit[~assigned_hit["Player"].astype(str).str.startswith("__VACANT_")].copy()
+        if not non_vacant.empty:
+            g_total = float(non_vacant["G"].fillna(0.0).clip(lower=0.0).sum())
+            max_games = float(max(len(non_vacant) * 162, 1))
+            modeled_open = (max_games - g_total) / max_games
+            open_fraction = float(np.clip(modeled_open, 0.0, 1.0))
+
+    # Opportunity cost of one stash slot:
+    # 1) Estimate total open hitter slot-seasons across a team.
+    # 2) Assume remaining bench slots can absorb those open starts first.
+    # 3) Only uncovered open starts create a real stash penalty.
+    open_slot_seasons = open_fraction * float(active_hit_slots_per_team)
+    remaining_bench_slots = float(max(bench_slots - 1, 0))
+    uncovered_open_slots = max(open_slot_seasons - remaining_bench_slots, 0.0)
+    return float(np.clip(uncovered_open_slots, 0.0, 1.0))
+
+
+def _apply_negative_value_stash_rules(
+    value: float,
+    *,
+    can_minor_stash: bool,
+    can_bench_stash: bool,
+    bench_negative_penalty: float,
+) -> float:
+    """Apply stash rules to negative year values before keep/drop aggregation."""
+    if value >= 0.0:
+        return float(value)
+    if can_minor_stash:
+        return 0.0
+    if can_bench_stash:
+        return float(value) * float(np.clip(bench_negative_penalty, 0.0, 1.0))
+    return float(value)
+
+
 
 def _fillna_bool(series: pd.Series, default: bool = False) -> pd.Series:
     """
@@ -1904,6 +1958,7 @@ def calculate_common_dynasty_values(
         _non_vacant_player_names(start_ctx.get("assigned_hit"))
         | _non_vacant_player_names(start_ctx.get("assigned_pit"))
     )
+    bench_negative_penalty = _estimate_bench_negative_penalty(start_ctx, lg)
 
     all_year_avg = pd.concat(year_tables_avg, ignore_index=True)
     wide_avg = all_year_avg.pivot_table(index="Player", columns="Year", values="YearValue", aggfunc="max").reset_index()
@@ -1912,18 +1967,26 @@ def calculate_common_dynasty_values(
             wide_avg[y] = 0.0
 
     elig_map = dict(zip(elig_df["Player"], elig_df["minor_eligible"].astype(bool))) if not elig_df.empty else {}
+    hitter_players = set(
+        bat.loc[(bat["Year"].isin(years)) & (bat["AB"] > 0), "Player"].dropna().astype(str)
+    )
 
     def _stash_row(row: pd.Series) -> float:
         player = row["Player"]
         can_stash = bool(lg.minor_slots and lg.minor_slots > 0 and bool(elig_map.get(player, False)))
+        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and str(player) in hitter_players)
         vals: List[float] = []
         for y in years:
             v = row.get(y)
             if pd.isna(v):
                 v = 0.0
             v = float(v)
-            if can_stash and v < 0.0:
-                v = 0.0
+            v = _apply_negative_value_stash_rules(
+                v,
+                can_minor_stash=can_stash,
+                can_bench_stash=can_bench_stash,
+                bench_negative_penalty=bench_negative_penalty,
+            )
             vals.append(v)
         return dynasty_keep_or_drop_value(vals, years, lg.discount)
 
@@ -1998,7 +2061,9 @@ def calculate_common_dynasty_values(
     #     the player permanently for 0 (so truly droppable players won't go negative overall).
     raw_vals: List[float] = []
     for _, r in out.iterrows():
+        player = str(r.get("Player") or "")
         can_stash = bool(lg.minor_slots and lg.minor_slots > 0 and bool(r.get("minor_eligible", False)))
+        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and player in hitter_players)
 
         vals: List[float] = []
         for y in years:
@@ -2006,8 +2071,12 @@ def calculate_common_dynasty_values(
             if pd.isna(v):
                 v = 0.0
             v = float(v)
-            if can_stash and v < 0.0:
-                v = 0.0
+            v = _apply_negative_value_stash_rules(
+                v,
+                can_minor_stash=can_stash,
+                can_bench_stash=can_bench_stash,
+                bench_negative_penalty=bench_negative_penalty,
+            )
             vals.append(v)
 
         raw_vals.append(dynasty_keep_or_drop_value(vals, years, lg.discount))
@@ -3396,11 +3465,16 @@ def calculate_league_dynasty_values(
         year_tables_avg.append(combined)
 
     all_year_avg = pd.concat(year_tables_avg, ignore_index=True)
+    start_ctx = year_contexts.get(start_year, {})
+    bench_negative_penalty = _estimate_bench_negative_penalty(start_ctx, lg)
 
     # Stash score: optimal keep/drop value on the avg-starter YearValue stream.
     # Minor-eligible players can be stashed in minors (negative years treated as 0)
     # when the league has minors slots.
     elig_map = dict(zip(elig_df["Player"], elig_df["minor_eligible"].astype(bool)))
+    hitter_players = set(
+        bat_df.loc[(bat_df["Year"].isin(years)) & (bat_df["AB"] > 0), "Player"].dropna().astype(str)
+    )
 
     wide_avg = all_year_avg.pivot_table(index="Player", columns="Year", values="YearValue", aggfunc="max").reset_index()
 
@@ -3412,6 +3486,7 @@ def calculate_league_dynasty_values(
     def _stash_row(row: pd.Series) -> float:
         player = row["Player"]
         can_stash = bool(lg.minor_slots and lg.minor_slots > 0 and bool(elig_map.get(player, False)))
+        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and str(player) in hitter_players)
 
         vals: List[float] = []
         for y in years:
@@ -3419,8 +3494,12 @@ def calculate_league_dynasty_values(
             if pd.isna(v):
                 v = 0.0
             v = float(v)
-            if can_stash and v < 0.0:
-                v = 0.0
+            v = _apply_negative_value_stash_rules(
+                v,
+                can_minor_stash=can_stash,
+                can_bench_stash=can_bench_stash,
+                bench_negative_penalty=bench_negative_penalty,
+            )
             vals.append(v)
 
         return dynasty_keep_or_drop_value(vals, years, lg.discount)
@@ -3499,6 +3578,7 @@ def calculate_league_dynasty_values(
     for _, r in out.iterrows():
         player = r.get("Player")
         can_stash = bool(lg.minor_slots and lg.minor_slots > 0 and bool(elig_map.get(player, False)))
+        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and str(player) in hitter_players)
 
         vals: List[float] = []
         for y in years:
@@ -3507,8 +3587,12 @@ def calculate_league_dynasty_values(
             if pd.isna(v):
                 v = 0.0
             v = float(v)
-            if can_stash and v < 0.0:
-                v = 0.0
+            v = _apply_negative_value_stash_rules(
+                v,
+                can_minor_stash=can_stash,
+                can_bench_stash=can_bench_stash,
+                bench_negative_penalty=bench_negative_penalty,
+            )
             vals.append(v)
 
         raw_vals.append(dynasty_keep_or_drop_value(vals, years, lg.discount))
