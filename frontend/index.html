@@ -1427,9 +1427,9 @@ const HITTER_SLOT_FIELDS = [
   { key: "hit_ut", label: "UT", defaultValue: 1 },
 ];
 const PITCHER_SLOT_FIELDS = [
-  { key: "pit_p", label: "P", defaultValue: 9 },
-  { key: "pit_sp", label: "SP", defaultValue: 0 },
-  { key: "pit_rp", label: "RP", defaultValue: 0 },
+  { key: "pit_p", label: "P", defaultValue: 3 },
+  { key: "pit_sp", label: "SP", defaultValue: 3 },
+  { key: "pit_rp", label: "RP", defaultValue: 3 },
 ];
 const POINTS_SETUP_SLOT_DEFAULTS = {
   hit_c: 1,
@@ -1979,7 +1979,7 @@ function App() {
             Pitching categories: <code>W</code>, <code>QS</code>, <code>K</code>, <code>SVH</code>, <code>ERA</code>, <code>WHIP</code>.
           </p>
           <p>
-            Roster defaults: 22 starters (13 hitters: <code>C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT</code>; 9 pitchers with any role),
+            Roster defaults: 22 starters (13 hitters: <code>C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT</code>; 9 pitchers split as <code>3 SP, 3 RP, 3 P</code>),
             plus 8 bench, 12 MiLB, and 4 IL slots.
           </p>
           <p className="methodology-note" style={{ marginBottom: 0 }}>

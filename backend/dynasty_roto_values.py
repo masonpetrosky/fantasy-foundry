@@ -638,9 +638,11 @@ class CommonDynastyRotoSettings:
         "UT": 1,
     })
 
-    # Typical roto pitchers: just "P" slots (no SP/RP split)
+    # Default common setup: balanced starter/reliever split with flex pitcher slots.
     pitcher_slots: Dict[str, int] = field(default_factory=lambda: {
-        "P": 9,
+        "P": 3,
+        "SP": 3,
+        "RP": 3,
     })
 
     # Typical dynasty roster extras (you can tune these)
@@ -802,8 +804,8 @@ def parse_pit_positions(pos_str: str) -> Set[str]:
 
 def eligible_pit_slots(pos_set: Set[str]) -> Set[str]:
     """
-    Default common setup uses P-only slots, so everyone eligible for "P".
-    Still supports SP/RP if you customize pitcher_slots.
+    Common setup uses SP/RP/P slots.
+    Pitchers are always eligible for P and role-matched slots when available.
     """
     if not pos_set:
         return set()
@@ -2023,6 +2025,22 @@ def _non_vacant_player_names(df: Optional[pd.DataFrame]) -> Set[str]:
     return {name for name in names if name and not name.startswith("__VACANT_")}
 
 
+def _players_with_playing_time(bat_df: pd.DataFrame, pit_df: pd.DataFrame, years: List[int]) -> Set[str]:
+    """Return players with projected MLB playing time in the valuation window."""
+    years_set = {int(y) for y in years}
+    players: Set[str] = set()
+
+    if {"Player", "Year", "AB"}.issubset(bat_df.columns):
+        hitters = bat_df.loc[(bat_df["Year"].isin(years_set)) & (bat_df["AB"] > 0), "Player"]
+        players.update(hitters.dropna().astype(str))
+
+    if {"Player", "Year", "IP"}.issubset(pit_df.columns):
+        pitchers = pit_df.loc[(pit_df["Year"].isin(years_set)) & (pit_df["IP"] > 0), "Player"]
+        players.update(pitchers.dropna().astype(str))
+
+    return players
+
+
 def _select_mlb_roster_with_active_floor(
     stash_sorted: pd.DataFrame,
     *,
@@ -2050,10 +2068,11 @@ def _select_mlb_roster_with_active_floor(
 
 
 def _estimate_bench_negative_penalty(start_ctx: dict, lg: object) -> float:
-    """Estimate marginal active-slot opportunity cost for one hitter stash slot.
+    """Estimate marginal active-slot opportunity cost for one bench stash slot.
 
-    Returns a factor in [0, 1] used to scale negative year values for hitters
+    Returns a factor in [0, 1] used to scale negative year values for players
     that can be stashed on the bench instead of occupying an active lineup spot.
+    The openness heuristic is derived from hitter usage when available.
     """
     bench_slots = int(getattr(lg, "bench_slots", 0) or 0)
     if bench_slots <= 0:
@@ -2307,14 +2326,12 @@ def calculate_common_dynasty_values(
             wide_avg[y] = 0.0
 
     elig_map = dict(zip(elig_df["Player"], elig_df["minor_eligible"].astype(bool))) if not elig_df.empty else {}
-    hitter_players = set(
-        bat.loc[(bat["Year"].isin(years)) & (bat["AB"] > 0), "Player"].dropna().astype(str)
-    )
+    bench_stash_players = _players_with_playing_time(bat, pit, years)
 
     def _stash_row(row: pd.Series) -> float:
         player = row["Player"]
         can_stash = bool(lg.minor_slots and lg.minor_slots > 0 and bool(elig_map.get(player, False)))
-        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and str(player) in hitter_players)
+        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and str(player) in bench_stash_players)
         vals: List[float] = []
         for y in years:
             v = row.get(y)
@@ -2431,7 +2448,7 @@ def calculate_common_dynasty_values(
     for _, r in out.iterrows():
         player = str(r.get("Player") or "")
         can_stash = bool(lg.minor_slots and lg.minor_slots > 0 and bool(r.get("minor_eligible", False)))
-        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and player in hitter_players)
+        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and player in bench_stash_players)
 
         vals: List[float] = []
         for y in years:
@@ -3869,9 +3886,7 @@ def calculate_league_dynasty_values(
     # Minor-eligible players can be stashed in minors (negative years treated as 0)
     # when the league has minors slots.
     elig_map = dict(zip(elig_df["Player"], elig_df["minor_eligible"].astype(bool)))
-    hitter_players = set(
-        bat_df.loc[(bat_df["Year"].isin(years)) & (bat_df["AB"] > 0), "Player"].dropna().astype(str)
-    )
+    bench_stash_players = _players_with_playing_time(bat_df, pit_df, years)
 
     wide_avg = all_year_avg.pivot_table(index="Player", columns="Year", values="YearValue", aggfunc="max").reset_index()
 
@@ -3883,7 +3898,7 @@ def calculate_league_dynasty_values(
     def _stash_row(row: pd.Series) -> float:
         player = row["Player"]
         can_stash = bool(lg.minor_slots and lg.minor_slots > 0 and bool(elig_map.get(player, False)))
-        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and str(player) in hitter_players)
+        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and str(player) in bench_stash_players)
 
         vals: List[float] = []
         for y in years:
@@ -4002,7 +4017,7 @@ def calculate_league_dynasty_values(
     for _, r in out.iterrows():
         player = r.get("Player")
         can_stash = bool(lg.minor_slots and lg.minor_slots > 0 and bool(elig_map.get(player, False)))
-        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and str(player) in hitter_players)
+        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and str(player) in bench_stash_players)
 
         vals: List[float] = []
         for y in years:

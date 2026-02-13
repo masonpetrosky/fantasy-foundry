@@ -7,6 +7,7 @@ from backend.dynasty_roto_values import (
     PIT_COMPONENT_COLS,
     _apply_negative_value_stash_rules,
     _estimate_bench_negative_penalty,
+    _players_with_playing_time,
     assign_players_to_slots_with_vacancy_fill,
     compute_year_context,
     compute_year_player_values,
@@ -228,6 +229,25 @@ class VacancyBackfillTests(unittest.TestCase):
 
 
 class BenchStashPenaltyTests(unittest.TestCase):
+    def test_players_with_playing_time_includes_pitchers_and_filters_zero_playing_time(self) -> None:
+        bat = pd.DataFrame(
+            [
+                {"Player": "Hitter", "Year": 2026, "AB": 200.0},
+                {"Player": "NoBat", "Year": 2026, "AB": 0.0},
+            ]
+        )
+        pit = pd.DataFrame(
+            [
+                {"Player": "Pitcher", "Year": 2026, "IP": 55.0},
+                {"Player": "NoIP", "Year": 2026, "IP": 0.0},
+                {"Player": "FuturePitcher", "Year": 2027, "IP": 40.0},
+            ]
+        )
+
+        players = _players_with_playing_time(bat, pit, [2026])
+
+        self.assertEqual(players, {"Hitter", "Pitcher"})
+
     def test_estimate_bench_negative_penalty_uses_open_hitter_games(self) -> None:
         lg_two_bench = CommonDynastyRotoSettings(
             n_teams=1,
