@@ -1,4 +1,5 @@
 import unittest
+import warnings
 
 import pandas as pd
 
@@ -221,8 +222,12 @@ class VacancyBackfillTests(unittest.TestCase):
             ip_max=None,
         )
 
-        ctx = compute_year_context(2026, bat, pit, lg, rng_seed=13)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            ctx = compute_year_context(2026, bat, pit, lg, rng_seed=13)
         hit_vals, pit_vals = compute_year_player_values(ctx, lg)
+        runtime_warnings = [w for w in caught if issubclass(w.category, RuntimeWarning)]
+        self.assertEqual(runtime_warnings, [])
 
         self.assertEqual(set(hit_vals["Player"]), {"Corner Bat", "Middle Bat"})
         self.assertEqual(set(pit_vals["Player"]), {"Starter One", "Reliever One"})

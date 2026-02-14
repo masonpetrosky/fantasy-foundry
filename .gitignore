@@ -15,3 +15,6 @@ venv/
 # OS/editor noise
 .DS_Store
 Thumbs.db
+
+# Frontend tooling
+frontend/node_modules/

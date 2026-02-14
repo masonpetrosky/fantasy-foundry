@@ -2,6 +2,7 @@ import unittest
 import types
 import sys
 import time
+import re
 from unittest.mock import patch
 
 import pandas as pd
@@ -127,6 +128,27 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         app_module._cached_projection_rows.cache_clear()
         app_module._cached_all_projection_rows.cache_clear()
         app_module._projection_sortable_columns_for_dataset.cache_clear()
+
+    def test_root_serves_built_frontend_with_injected_build_id(self) -> None:
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("x-app-build"), app_module.APP_BUILD_ID)
+        self.assertNotIn(app_module.INDEX_BUILD_TOKEN, response.text)
+        self.assertIn(app_module.APP_BUILD_ID, response.text)
+        self.assertIn('/assets/index-', response.text)
+
+    def test_assets_endpoint_sets_immutable_cache_headers(self) -> None:
+        index_response = self.client.get("/")
+        self.assertEqual(index_response.status_code, 200)
+        asset_match = re.search(r'/assets/[^"\']+\.js', index_response.text)
+        self.assertIsNotNone(asset_match)
+
+        asset_response = self.client.get(asset_match.group(0))
+        self.assertEqual(asset_response.status_code, 200)
+        self.assertEqual(
+            asset_response.headers.get("cache-control"),
+            "public, max-age=31536000, immutable",
+        )
 
     def test_bat_limit_must_be_positive(self) -> None:
         response = self.client.get("/api/projections/bat", params={"limit": 0})

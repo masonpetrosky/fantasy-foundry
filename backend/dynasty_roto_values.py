@@ -57,12 +57,78 @@ from __future__ import annotations
 
 import argparse
 import re
-from dataclasses import dataclass, field
-from importlib.util import find_spec
 from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
+
+try:
+    from backend.valuation.assignment import (
+        HAVE_SCIPY,
+        assign_players_to_slots,
+        assign_players_to_slots_with_vacancy_fill,
+        build_slot_list,
+        build_team_slot_template,
+        expand_slot_counts,
+        league_assign_players_to_slots,
+        league_build_slot_list,
+        league_build_team_slot_template,
+        league_expand_slot_counts,
+        validate_assigned_slots,
+    )
+    from backend.valuation.models import (
+        CommonDynastyRotoSettings,
+        HIT_CATS,
+        HIT_COMPONENT_COLS,
+        LEAGUE_HIT_STAT_COLS,
+        LeagueSettings,
+        PIT_CATS,
+        PIT_COMPONENT_COLS,
+    )
+    from backend.valuation.positions import (
+        eligible_hit_slots,
+        eligible_pit_slots,
+        league_eligible_hit_slots,
+        league_eligible_pit_slots,
+        league_parse_hit_positions,
+        league_parse_pit_positions,
+        parse_hit_positions,
+        parse_pit_positions,
+    )
+except ImportError:
+    # Support direct execution/import when /backend is added to sys.path.
+    from valuation.assignment import (
+        HAVE_SCIPY,
+        assign_players_to_slots,
+        assign_players_to_slots_with_vacancy_fill,
+        build_slot_list,
+        build_team_slot_template,
+        expand_slot_counts,
+        league_assign_players_to_slots,
+        league_build_slot_list,
+        league_build_team_slot_template,
+        league_expand_slot_counts,
+        validate_assigned_slots,
+    )
+    from valuation.models import (
+        CommonDynastyRotoSettings,
+        HIT_CATS,
+        HIT_COMPONENT_COLS,
+        LEAGUE_HIT_STAT_COLS,
+        LeagueSettings,
+        PIT_CATS,
+        PIT_COMPONENT_COLS,
+    )
+    from valuation.positions import (
+        eligible_hit_slots,
+        eligible_pit_slots,
+        league_eligible_hit_slots,
+        league_eligible_pit_slots,
+        league_parse_hit_positions,
+        league_parse_pit_positions,
+        parse_hit_positions,
+        parse_pit_positions,
+    )
 
 # Excel formatting (output workbook)
 from openpyxl.formatting.rule import ColorScaleRule
@@ -606,87 +672,9 @@ def recompute_league_rates_pit(df: pd.DataFrame) -> pd.DataFrame:
         df["WHIP"] = np.divide(h + bb, ip, out=np.full_like(ip, np.nan), where=ip > 0)
     return df
 
-# Optional: gives globally optimal assignment for positional scarcity baseline
-# NOTE: probing a submodule via find_spec("scipy.optimize") raises when scipy
-# itself is not installed, so we guard on the package first.
-if find_spec("scipy") is not None and find_spec("scipy.optimize") is not None:
-    from scipy.optimize import linear_sum_assignment  # type: ignore
-    HAVE_SCIPY = True
-else:
-    HAVE_SCIPY = False
-    linear_sum_assignment = None
-
-
 # ----------------------------
-# Defaults: "common" dynasty roto
+# Column aliases and requirements
 # ----------------------------
-
-@dataclass
-class CommonDynastyRotoSettings:
-    n_teams: int = 12
-
-    # Typical roto hitter lineup (NFBC-ish)
-    hitter_slots: Dict[str, int] = field(default_factory=lambda: {
-        "C": 1,
-        "1B": 1,
-        "2B": 1,
-        "3B": 1,
-        "SS": 1,
-        "CI": 1,
-        "MI": 1,
-        "OF": 5,
-        "UT": 1,
-    })
-
-    # Default common setup: nine generic pitcher slots.
-    pitcher_slots: Dict[str, int] = field(default_factory=lambda: {
-        "P": 9,
-        "SP": 0,
-        "RP": 0,
-    })
-
-    # Typical dynasty roster extras (you can tune these)
-    bench_slots: int = 6
-    minor_slots: int = 0
-    ir_slots: int = 0
-
-    # Many “standard” roto leagues do NOT enforce an IP cap.
-    # Some do enforce an IP minimum for ERA/WHIP qualification; default off.
-    ip_min: float = 0.0  # set e.g. 900 or 1000 if your league has it
-    ip_max: Optional[float] = None  # no cap
-
-    # Monte Carlo settings for SGP denominators
-    sims_for_sgp: int = 200
-    replacement_pitchers_n: int = 100
-
-    # Dynasty parameters
-    discount: float = 0.85
-    horizon_years: int = 10
-    # If True, compute replacement baselines from start_year once and reuse
-    # for all future valuation years. This avoids late-horizon value inflation
-    # caused by an increasingly thin projected replacement pool.
-    freeze_replacement_baselines: bool = True
-
-    # Two-way players: "max" = choose best of hitter/pitcher per year
-    # (Most leagues effectively work like this for valuation purposes)
-    two_way: str = "max"
-
-    # Minor eligibility (best-effort inference, since projections file usually lacks career AB/IP):
-    minor_ab_max: int = 130
-    minor_ip_max: int = 50
-    minor_age_max_hit: int = 25
-    minor_age_max_pit: int = 26
-
-
-# ----------------------------
-# Column requirements (default 5x5)
-# ----------------------------
-
-HIT_COMPONENT_COLS = ["AB", "H", "R", "HR", "RBI", "SB", "BB", "HBP", "SF", "2B", "3B"]
-PIT_COMPONENT_COLS = ["IP", "W", "QS", "K", "SV", "SVH", "ER", "H", "BB"]
-
-HIT_CATS = ["R", "RBI", "HR", "SB", "AVG"]
-PIT_CATS = ["W", "K", "SV", "ERA", "WHIP"]
 
 COMMON_COLUMN_ALIASES = {
     "mlbteam": "Team",
@@ -724,97 +712,6 @@ def normalize_input_schema(df: pd.DataFrame, aliases: Dict[str, str]) -> pd.Data
     if rename_map:
         out = out.rename(columns=rename_map)
     return out
-
-
-# ----------------------------
-# Position parsing / eligibility
-# ----------------------------
-
-POSITION_SPLIT_RE = re.compile(r"[\s\/,;|+\-]+")
-
-
-def _normalize_position_tokens(pos_str: str) -> Set[str]:
-    """Split a raw position field into normalized uppercase tokens.
-
-    Projection sources commonly mix delimiters ("/", ",", ";", "|") and
-    inconsistent whitespace/casing. Normalizing once keeps the slot-eligibility
-    logic resilient without changing downstream assumptions.
-    """
-    if pd.isna(pos_str):
-        return set()
-
-    normalized = POSITION_SPLIT_RE.sub("/", str(pos_str).upper())
-    return {p.strip() for p in normalized.split("/") if p.strip()}
-
-
-def parse_hit_positions(pos_str: str) -> Set[str]:
-    tokens = _normalize_position_tokens(pos_str)
-    if not tokens:
-        return set()
-
-    aliases = {
-        "LF": "OF",
-        "CF": "OF",
-        "RF": "OF",
-        "DH": "UT",
-        "UTIL": "UT",
-        "U": "UT",
-    }
-    return {aliases.get(token, token) for token in tokens}
-
-def eligible_hit_slots(pos_set: Set[str]) -> Set[str]:
-    """
-    Common roto eligibility mapping:
-      - UT for any hitter
-      - CI if 1B or 3B
-      - MI if 2B or SS
-    """
-    if not pos_set:
-        return set()
-
-    slots: Set[str] = {"UT"}
-    if "C" in pos_set:
-        slots.add("C")
-    if "1B" in pos_set:
-        slots.update({"1B", "CI"})
-    if "3B" in pos_set:
-        slots.update({"3B", "CI"})
-    if "2B" in pos_set:
-        slots.update({"2B", "MI"})
-    if "SS" in pos_set:
-        slots.update({"SS", "MI"})
-    if "OF" in pos_set:
-        slots.add("OF")
-    if "CI" in pos_set:
-        slots.add("CI")
-    if "MI" in pos_set:
-        slots.add("MI")
-    return slots
-
-def parse_pit_positions(pos_str: str) -> Set[str]:
-    tokens = _normalize_position_tokens(pos_str)
-    if not tokens:
-        return set()
-
-    aliases = {
-        "RHP": "SP",
-        "LHP": "SP",
-    }
-    return {aliases.get(token, token) for token in tokens}
-
-def eligible_pit_slots(pos_set: Set[str]) -> Set[str]:
-    """
-    Common setup uses SP/RP/P slots.
-    Pitchers are always eligible for P and role-matched slots when available.
-    """
-    if not pos_set:
-        return set()
-    slots: Set[str] = {"P"}
-    if "SP" in pos_set:
-        slots.add("SP")
-    if "RP" in pos_set:
-        slots.add("RP")
-    return slots
 
 
 # ----------------------------
@@ -874,284 +771,6 @@ def initial_pitcher_weight(df: pd.DataFrame) -> pd.Series:
         zscore(df["WHIP_surplus"])
     )
     return w
-
-
-# ----------------------------
-# Slot assignment for league-wide baseline (positional scarcity)
-# ----------------------------
-
-def expand_slot_counts(per_team: Dict[str, int], n_teams: int) -> Dict[str, int]:
-    return {slot: cnt * n_teams for slot, cnt in per_team.items()}
-
-def build_slot_list(slot_counts: Dict[str, int]) -> List[str]:
-    slots: List[str] = []
-    for s, c in slot_counts.items():
-        slots.extend([s] * c)
-    return slots
-
-def build_team_slot_template(per_team: Dict[str, int]) -> List[str]:
-    slots: List[str] = []
-    for s, c in per_team.items():
-        slots.extend([s] * c)
-    return slots
-
-
-def validate_assigned_slots(
-    assigned: pd.DataFrame,
-    slot_counts: Dict[str, int],
-    elig_sets: List[Set[str]],
-    mode_label: str,
-) -> None:
-    """Ensure slot assignment is complete and eligibility-valid with clear diagnostics."""
-    if assigned.empty and sum(slot_counts.values()) == 0:
-        return
-
-    idx_col = "_assign_idx"
-    if idx_col not in assigned.columns:
-        raise ValueError(f"{mode_label} assignment missing internal index column '{idx_col}'.")
-
-    bad_rows: List[Tuple[str, str]] = []
-    for player_idx, slot, player in zip(
-        assigned[idx_col].to_numpy(dtype=int),
-        assigned["AssignedSlot"].astype(str).to_numpy(),
-        assigned.get("Player", pd.Series(["<unknown>"] * len(assigned))).astype(str).to_numpy(),
-    ):
-        if player_idx < 0 or player_idx >= len(elig_sets) or slot not in elig_sets[player_idx]:
-            bad_rows.append((player, slot))
-
-    if bad_rows:
-        preview = ", ".join([f"{p}->{s}" for p, s in bad_rows[:5]])
-        raise ValueError(
-            f"{mode_label} assignment produced ineligible player-slot mappings. "
-            f"Examples: {preview}. Check position eligibility and slot settings."
-        )
-
-    actual_counts = assigned["AssignedSlot"].value_counts().to_dict()
-    missing = {slot: need - int(actual_counts.get(slot, 0)) for slot, need in slot_counts.items() if int(actual_counts.get(slot, 0)) < need}
-    if missing:
-        details = ", ".join([f"{slot}: short {short}" for slot, short in sorted(missing.items())])
-        raise ValueError(f"{mode_label} assignment cannot fill required slots ({details}).")
-
-def assign_players_to_slots(
-    df: pd.DataFrame,
-    slot_counts: Dict[str, int],
-    eligible_func: Callable[[Set[str]], Set[str]],
-    weight_col: str = "weight",
-) -> pd.DataFrame:
-    """
-    Choose exactly (sum slot_counts) distinct players and assign each to a slot
-    to maximize total weight.
-    - Uses Hungarian algorithm if scipy is available.
-    - Falls back to a reasonable greedy method if not.
-    """
-    df = df.copy().reset_index(drop=True)
-    df["_assign_idx"] = np.arange(len(df))
-
-    slots = build_slot_list(slot_counts)
-    n_slots = len(slots)
-    if n_slots == 0:
-        return df.iloc[0:0].copy()
-
-    weights = df[weight_col].to_numpy(dtype=float)
-    n_players = len(df)
-
-    if n_players < n_slots:
-        raise ValueError(f"Not enough players ({n_players}) to fill required slots ({n_slots}).")
-
-    elig_sets: List[Set[str]] = []
-    parse_func = parse_hit_positions if eligible_func == eligible_hit_slots else parse_pit_positions
-    for pos_str in df["Pos"]:
-        elig_sets.append(eligible_func(parse_func(pos_str)))
-
-    for slot, req in slot_counts.items():
-        elig_count = sum(1 for e in elig_sets if slot in e)
-        if elig_count < req:
-            raise ValueError(
-                f"Cannot fill slot '{slot}': need {req} eligible players but only found {elig_count}."
-            )
-
-    if HAVE_SCIPY:
-        BIG = 1e6
-        cost = np.full((n_slots, n_players), BIG, dtype=float)
-        for i, slot in enumerate(slots):
-            for j in range(n_players):
-                if slot in elig_sets[j]:
-                    cost[i, j] = -weights[j]  # maximize weight
-        row_ind, col_ind = linear_sum_assignment(cost)  # type: ignore
-
-        chosen_cost = cost[row_ind, col_ind]
-        infeasible_rows = row_ind[chosen_cost >= (BIG / 2.0)]
-        if len(infeasible_rows) > 0:
-            missing: Dict[str, int] = {}
-            for row_idx in infeasible_rows:
-                slot = slots[int(row_idx)]
-                missing[slot] = missing.get(slot, 0) + 1
-            details = ", ".join([f"{slot}: short {short}" for slot, short in sorted(missing.items())])
-            raise ValueError(f"Common mode assignment cannot fill required slots ({details}).")
-
-        assigned = df.loc[col_ind].copy()
-        assigned["AssignedSlot"] = [slots[i] for i in row_ind]
-        validate_assigned_slots(assigned, slot_counts, elig_sets, mode_label="Common mode")
-        return assigned.drop(columns=["_assign_idx"])
-
-    # Greedy fallback (works, but not globally optimal)
-    remaining = set(range(n_players))
-
-    # Fill scarcer slots first (fewer eligible players)
-    slot_order = sorted(
-        range(n_slots),
-        key=lambda i: sum(1 for j in remaining if slots[i] in elig_sets[j])
-    )
-
-    chosen: List[Tuple[int, str]] = []
-    for i in slot_order:
-        slot = slots[i]
-        candidates = [j for j in remaining if slot in elig_sets[j]]
-        if not candidates:
-            continue
-        best = max(candidates, key=lambda j: weights[j])
-        remaining.remove(best)
-        chosen.append((best, slot))
-
-    assigned = df.loc[[j for j, _ in chosen]].copy()
-    assigned["AssignedSlot"] = [slot for _, slot in chosen]
-    validate_assigned_slots(assigned, slot_counts, elig_sets, mode_label="Common mode")
-    return assigned.drop(columns=["_assign_idx"])
-
-
-SLOT_SHORTAGE_RE = re.compile(r"Cannot fill slot '([^']+)': need (\d+) eligible players but only found (\d+)\.")
-ASSIGN_SHORT_RE = re.compile(r"([A-Za-z0-9]+): short (\d+)")
-NOT_ENOUGH_PLAYERS_RE = re.compile(r"Not enough players \((\d+)\) to fill required slots \((\d+)\)\.")
-VACANCY_WEIGHT = -1e5
-
-
-def _infer_slot_shortages_from_assignment_error(message: str, slot_counts: Dict[str, int]) -> Dict[str, int]:
-    shortages: Dict[str, int] = {}
-
-    slot_match = SLOT_SHORTAGE_RE.search(message)
-    if slot_match:
-        slot = slot_match.group(1)
-        need = int(slot_match.group(2))
-        found = int(slot_match.group(3))
-        if slot in slot_counts and need > found:
-            shortages[slot] = need - found
-        return shortages
-
-    if "cannot fill required slots" in message.lower():
-        for slot, short_text in ASSIGN_SHORT_RE.findall(message):
-            short = int(short_text)
-            if slot in slot_counts and short > 0:
-                shortages[slot] = shortages.get(slot, 0) + short
-        if shortages:
-            return shortages
-
-    count_match = NOT_ENOUGH_PLAYERS_RE.search(message)
-    if count_match:
-        available = int(count_match.group(1))
-        required = int(count_match.group(2))
-        short = max(required - available, 0)
-        if short > 0:
-            if slot_counts.get("UT", 0) > 0:
-                shortages["UT"] = short
-            elif slot_counts.get("P", 0) > 0:
-                shortages["P"] = short
-            else:
-                fallback_slot = max(slot_counts.items(), key=lambda item: int(item[1]))[0]
-                shortages[fallback_slot] = short
-
-    return shortages
-
-
-def _build_vacancy_rows(
-    *,
-    year: int,
-    side_label: str,
-    shortages: Dict[str, int],
-    stat_cols: List[str],
-    weight_col: str,
-    existing_cols: List[str],
-    existing_count: int,
-    attempt: int,
-) -> pd.DataFrame:
-    rows: List[Dict[str, object]] = []
-    for slot, short in shortages.items():
-        for i in range(int(short)):
-            idx = existing_count + len(rows) + 1
-            row: Dict[str, object] = {
-                "Player": f"__VACANT_{side_label.upper()}_{year}_{slot}_{attempt}_{idx}",
-                "Year": year,
-                "Team": "VAC",
-                "Age": 0,
-                "Pos": slot,
-                weight_col: VACANCY_WEIGHT,
-            }
-            for stat_col in stat_cols:
-                row[stat_col] = 0.0
-            rows.append(row)
-
-    if not rows:
-        return pd.DataFrame(columns=existing_cols)
-
-    out = pd.DataFrame(rows)
-    for col in existing_cols:
-        if col not in out.columns:
-            out[col] = np.nan
-    return out[existing_cols]
-
-
-def assign_players_to_slots_with_vacancy_fill(
-    df: pd.DataFrame,
-    slot_counts: Dict[str, int],
-    eligible_func: Callable[[Set[str]], Set[str]],
-    *,
-    stat_cols: List[str],
-    year: int,
-    side_label: str,
-    weight_col: str = "weight",
-    max_attempts: int = 8,
-) -> pd.DataFrame:
-    """Assign players, auto-filling unfillable slots with zero-value vacancy rows.
-
-    This keeps common-mode calculations runnable in deep settings where late-horizon
-    years do not have enough eligible players at one or more specific positions.
-    """
-    working = df.copy()
-    if weight_col not in working.columns:
-        working[weight_col] = 0.0
-
-    for attempt in range(1, max_attempts + 1):
-        try:
-            return assign_players_to_slots(
-                working,
-                slot_counts,
-                eligible_func,
-                weight_col=weight_col,
-            )
-        except ValueError as exc:
-            shortages = _infer_slot_shortages_from_assignment_error(str(exc), slot_counts)
-            if not shortages:
-                raise
-            vacancy_rows = _build_vacancy_rows(
-                year=year,
-                side_label=side_label,
-                shortages=shortages,
-                stat_cols=stat_cols,
-                weight_col=weight_col,
-                existing_cols=list(working.columns),
-                existing_count=len(working),
-                attempt=attempt,
-            )
-            if vacancy_rows.empty:
-                raise
-            vacancy_rows = vacancy_rows.dropna(axis=1, how="all")
-            working = pd.concat([working, vacancy_rows], ignore_index=True, sort=False)
-
-    return assign_players_to_slots(
-        working,
-        slot_counts,
-        eligible_func,
-        weight_col=weight_col,
-    )
 
 
 # ----------------------------
@@ -1245,6 +864,23 @@ def common_apply_pitching_bounds(
 # Monte Carlo SGP denominators
 # ----------------------------
 
+def _mean_adjacent_rank_gap(values: np.ndarray, *, ascending: bool) -> float:
+    """Mean absolute adjacent difference after rank-order sorting.
+
+    Returns 0.0 for degenerate inputs (<2 finite values), which can occur
+    in single-team test leagues and avoids NumPy empty-slice warnings.
+    """
+    arr = np.asarray(values, dtype=float)
+    arr = arr[np.isfinite(arr)]
+    if arr.size < 2:
+        return 0.0
+
+    sorted_arr = np.sort(arr)
+    if not ascending:
+        sorted_arr = sorted_arr[::-1]
+    return float(np.mean(np.abs(np.diff(sorted_arr))))
+
+
 def simulate_sgp_hit(assigned_hit: pd.DataFrame, lg: CommonDynastyRotoSettings, rng: np.random.Generator) -> Dict[str, float]:
     """
     Estimates how many of each stat ~= 1 roto point (SGP denominator),
@@ -1288,10 +924,9 @@ def simulate_sgp_hit(assigned_hit: pd.DataFrame, lg: CommonDynastyRotoSettings, 
         vals = {"R": R, "RBI": RBI, "HR": HR, "SB": SB, "AVG": AVG}
         for c in HIT_CATS:
             x = vals[c].astype(float)
-            x_sorted = np.sort(x)[::-1]  # higher is better
-            diffs[c].append(float(np.mean(np.abs(np.diff(x_sorted)))))
+            diffs[c].append(_mean_adjacent_rank_gap(x, ascending=False))
 
-    return {c: float(np.mean(diffs[c])) for c in HIT_CATS}
+    return {c: (float(np.mean(diffs[c])) if diffs[c] else 0.0) for c in HIT_CATS}
 
 def simulate_sgp_pit(
     assigned_pit: pd.DataFrame,
@@ -1357,10 +992,9 @@ def simulate_sgp_pit(
 
         for c in PIT_CATS:
             x = np.array(vals[c], dtype=float)
-            x_sorted = np.sort(x) if c in {"ERA", "WHIP"} else np.sort(x)[::-1]
-            diffs[c].append(float(np.mean(np.abs(np.diff(x_sorted)))))
+            diffs[c].append(_mean_adjacent_rank_gap(x, ascending=(c in {"ERA", "WHIP"})))
 
-    return {c: float(np.mean(diffs[c])) for c in PIT_CATS}
+    return {c: (float(np.mean(diffs[c])) if diffs[c] else 0.0) for c in PIT_CATS}
 
 
 # ----------------------------
@@ -2474,132 +2108,8 @@ Dependencies:
 
 
 # ----------------------------
-# League settings / parameters
-# ----------------------------
-
-@dataclass
-class LeagueSettings:
-    n_teams: int = 12
-
-    # Active roster slots per team
-    hitter_slots: Dict[str, int] = field(default_factory=lambda: {
-        "C": 2,
-        "1B": 1,
-        "2B": 1,
-        "3B": 1,
-        "SS": 1,
-        "CI": 1,
-        "MI": 1,
-        "OF": 5,
-        "UT": 1,
-    })
-    pitcher_slots: Dict[str, int] = field(default_factory=lambda: {
-        "SP": 3,
-        "RP": 3,
-        "P": 3,   # any pitcher
-    })
-
-    # Pitching innings rules
-    ip_min: float = 1000.0
-    ip_max: float = 1500.0
-
-    # Bench / minors / IR (used for dynasty centering baseline)
-    bench_slots: int = 15
-    minor_slots: int = 20
-    ir_slots: int = 8
-
-    # Minor eligibility thresholds (career), used as a *best-effort* inference
-    minor_hitters_career_ab_max: int = 130
-    minor_pitchers_career_ip_max: int = 50
-
-    # Monte Carlo settings
-    sims_for_sgp: int = 200           # increase for more stable SGP; decrease for speed
-    replacement_pitchers_n: int = 100 # how many non-starter pitchers define "replacement innings"
-
-    # Dynasty parameters
-    discount: float = 0.85            # 0.85 = ~15% annual discount
-    horizon_years: int = 10           # number of seasons included in dynasty value
-    # If True, compute replacement baselines from start_year once and reuse
-    # for all future valuation years. This avoids late-horizon value inflation
-    # caused by an increasingly thin projected replacement pool.
-    freeze_replacement_baselines: bool = True
-
-    # To reduce false positives when inferring minor eligibility from projections
-    infer_minor_age_max_hit: int = 25
-    infer_minor_age_max_pit: int = 26
-
-    # Two-way handling if player appears in both Bat and Pitch:
-    #   "max" = treat as choose hitter OR pitcher each season
-    #   "sum" = count both (only use if your league counts both simultaneously)
-    two_way: str = "max"
-
-
-# ----------------------------
-# Helpers: positions / eligibility
-# ----------------------------
-
-def league_parse_hit_positions(pos_str: str) -> Set[str]:
-    if pd.isna(pos_str):
-        return set()
-    return {p.strip() for p in str(pos_str).split("/") if p.strip()}
-
-def league_eligible_hit_slots(pos_set: Set[str]) -> Set[str]:
-    slots: Set[str] = set()
-    if not pos_set:
-        return slots
-
-    # UT always if any hitter projection row exists
-    slots.add("UT")
-
-    if "C" in pos_set:
-        slots.add("C")
-    if "1B" in pos_set:
-        slots.update({"1B", "CI"})
-    if "3B" in pos_set:
-        slots.update({"3B", "CI"})
-    if "2B" in pos_set:
-        slots.update({"2B", "MI"})
-    if "SS" in pos_set:
-        slots.update({"SS", "MI"})
-    if "OF" in pos_set:
-        slots.add("OF")
-
-    # "DH" -> only UT (already included)
-    return slots
-
-def league_parse_pit_positions(pos_str: str) -> Set[str]:
-    if pd.isna(pos_str):
-        return set()
-    parts = [p.strip() for p in str(pos_str).split("/") if p.strip()]
-    out: Set[str] = set()
-    for p in parts:
-        if p == "UT":
-            continue
-        if p in {"UT/SP", "UT-SP"}:
-            out.add("SP")
-        else:
-            out.add(p)
-    return out
-
-def league_eligible_pit_slots(pos_set: Set[str]) -> Set[str]:
-    slots: Set[str] = set()
-    if "SP" in pos_set:
-        slots.update({"SP", "P"})
-    if "RP" in pos_set:
-        slots.update({"RP", "P"})
-    if not slots and pos_set:
-        slots.add("P")
-    return slots
-
-
-# ----------------------------
 # Helpers: stat components
 # ----------------------------
-
-LEAGUE_HIT_STAT_COLS = [
-    "AB", "H", "R", "HR", "RBI", "SB", "BB", "HBP", "SF", "2B", "3B",
-    "TB", "OBP_num", "OBP_den",
-]
 
 def league_hitter_components(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -2673,68 +2183,6 @@ def league_initial_pitcher_weight(df: pd.DataFrame) -> pd.Series:
     for c in cols:
         zsum += league_zscore(df[c])
     return zsum
-
-def league_expand_slot_counts(slot_counts_per_team: Dict[str, int], n_teams: int) -> Dict[str, int]:
-    return {slot: cnt * n_teams for slot, cnt in slot_counts_per_team.items()}
-
-def league_build_slot_list(slot_counts: Dict[str, int]) -> List[str]:
-    slots: List[str] = []
-    for slot, count in slot_counts.items():
-        slots.extend([slot] * count)
-    return slots
-
-def league_build_team_slot_template(slot_counts_per_team: Dict[str, int]) -> List[str]:
-    slots: List[str] = []
-    for slot, count in slot_counts_per_team.items():
-        slots.extend([slot] * count)
-    return slots
-
-def league_assign_players_to_slots(
-    df: pd.DataFrame,
-    slot_counts: Dict[str, int],
-    eligible_func: Callable[[Set[str]], Set[str]],
-    weight_col: str = "weight",
-) -> pd.DataFrame:
-    """
-    Maximum-weight assignment (Hungarian algorithm) to fill all league slots with distinct players.
-    """
-    df = df.copy().reset_index(drop=True)
-    df["_assign_idx"] = np.arange(len(df))
-
-    slots = league_build_slot_list(slot_counts)
-    n_slots = len(slots)
-    n_players = len(df)
-
-    if n_players < n_slots:
-        raise ValueError(f"Not enough players ({n_players}) to fill required slots ({n_slots}).")
-
-    elig_sets: List[Set[str]] = []
-    parse_func = league_parse_hit_positions if eligible_func == league_eligible_hit_slots else league_parse_pit_positions
-    for pos_str in df["Pos"]:
-        pos_set = parse_func(pos_str)
-        elig_sets.append(eligible_func(pos_set))
-
-    for slot, req in slot_counts.items():
-        elig_count = sum(1 for e in elig_sets if slot in e)
-        if elig_count < req:
-            raise ValueError(
-                f"Cannot fill slot '{slot}': need {req} eligible players but only found {elig_count}."
-            )
-
-    weights = df[weight_col].to_numpy(dtype=float)
-    BIG = 1e6
-
-    cost = np.full((n_slots, n_players), BIG, dtype=float)
-    for i, slot in enumerate(slots):
-        for j in range(n_players):
-            if slot in elig_sets[j]:
-                cost[i, j] = -weights[j]  # maximize weight => minimize negative weight
-
-    row_ind, col_ind = linear_sum_assignment(cost)
-    assigned = df.loc[col_ind].copy()
-    assigned["AssignedSlot"] = [slots[i] for i in row_ind]
-    validate_assigned_slots(assigned, slot_counts, elig_sets, mode_label="League mode")
-    return assigned.drop(columns=["_assign_idx"])
 
 def league_team_avg_ops(hit_tot: pd.Series) -> Tuple[float, float]:
     ab = float(hit_tot["AB"])
@@ -2835,10 +2283,9 @@ def league_simulate_sgp_hit(assigned_hit_df: pd.DataFrame, lg: LeagueSettings, r
 
         for c in cats:
             arr = np.array(vals[c], dtype=float)
-            arr_sorted = np.sort(arr)[::-1]  # higher is better for all hitter cats here
-            diffs[c].append(float(np.mean(np.abs(np.diff(arr_sorted)))))
+            diffs[c].append(_mean_adjacent_rank_gap(arr, ascending=False))
 
-    return {c: float(np.mean(diffs[c])) for c in cats}
+    return {c: (float(np.mean(diffs[c])) if diffs[c] else 0.0) for c in cats}
 
 def league_simulate_sgp_pit(assigned_pit_df: pd.DataFrame, lg: LeagueSettings, rep_rates: Dict[str, float], rng: np.random.Generator) -> Dict[str, float]:
     """
@@ -2878,11 +2325,9 @@ def league_simulate_sgp_pit(assigned_pit_df: pd.DataFrame, lg: LeagueSettings, r
 
         for c in cats:
             arr = np.array(vals[c], dtype=float)
-            # For ERA/WHIP lower is better => sort ascending for rank gaps
-            arr_sorted = np.sort(arr) if c in {"ERA", "WHIP"} else np.sort(arr)[::-1]
-            diffs[c].append(float(np.mean(np.abs(np.diff(arr_sorted)))))
+            diffs[c].append(_mean_adjacent_rank_gap(arr, ascending=(c in {"ERA", "WHIP"})))
 
-    return {c: float(np.mean(diffs[c])) for c in cats}
+    return {c: (float(np.mean(diffs[c])) if diffs[c] else 0.0) for c in cats}
 
 
 # ----------------------------
@@ -3695,7 +3140,7 @@ def calculate_league_dynasty_values(
       - keep the original input columns in roughly the same order
       - attach YearValue/BestSlot (per side) and DynastyValue to each Player/Year row
     """
-    if linear_sum_assignment is None:
+    if not HAVE_SCIPY:
         raise ImportError("scipy is required for league mode (linear_sum_assignment not available).")
 
     bat_raw = normalize_input_schema(pd.read_excel(excel_path, sheet_name="Bat"), LEAGUE_COLUMN_ALIASES)

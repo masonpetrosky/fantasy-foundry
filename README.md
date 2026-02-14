@@ -24,9 +24,13 @@ A web application for browsing 20-year MLB dynasty baseball projections (2026–
 dynasty-site/
 ├── backend/
 │   ├── app.py                          # FastAPI application
-│   └── dynasty_roto_values.py          # Core calculation engine
+│   ├── dynasty_roto_values.py          # Main valuation workflow + CLI facade
+│   └── valuation/                      # Shared valuation modules (models/positions/assignment)
 ├── frontend/
-│   └── index.html                      # Single-page React app
+│   ├── index.html                      # Vite entry HTML (with inline styles)
+│   ├── src/                            # React source modules
+│   ├── dist/                           # Built frontend assets (served by backend)
+│   └── package.json                    # Frontend build scripts/deps
 ├── data/
 │   ├── Dynasty Baseball Projections.xlsx
 │   ├── bat.json                        # Pre-processed hitter data
@@ -41,11 +45,13 @@ dynasty-site/
 
 ### Prerequisites
 - Python 3.10+
+- Node.js 20+ (for frontend build)
 
 ### Setup
 ```bash
 # Install dependencies
 pip install -r requirements.txt
+cd frontend && npm install && npm run build && cd ..
 
 # Run the dev server
 uvicorn backend.app:app --reload --port 8000
@@ -53,10 +59,30 @@ uvicorn backend.app:app --reload --port 8000
 
 Then open http://localhost:8000
 
+### Frontend-Only Dev (optional)
+```bash
+cd frontend
+npm run dev
+```
+
+Vite serves the UI at http://localhost:5173 and proxies API calls to `localhost:8000` via existing frontend API-base detection.
+FastAPI serves `frontend/dist` in normal app mode, so rebuild (`npm run build`) after frontend source changes.
+
 ### Running Tests
 ```bash
 pytest -q
 ```
+
+### CI Parity Check (Frontend Dist Freshness)
+```bash
+cd frontend
+npm ci
+npm run build
+cd ..
+git diff --exit-code -- frontend/dist
+```
+
+`git diff` should be clean. If it is not, commit the regenerated `frontend/dist` output.
 
 ### Running Browser E2E Tests (Playwright)
 ```bash

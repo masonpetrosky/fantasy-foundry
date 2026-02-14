@@ -35,8 +35,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 try:  # pragma: no cover - optional dependency
@@ -50,9 +49,11 @@ except Exception:  # pragma: no cover - exercised only when redis is unavailable
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 FRONTEND_DIR = BASE_DIR / "frontend"
+FRONTEND_DIST_DIR = FRONTEND_DIR / "dist"
+FRONTEND_DIST_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 EXCEL_PATH = DATA_DIR / "Dynasty Baseball Projections.xlsx"
 BACKEND_MODULE_DIR = BASE_DIR / "backend"
-INDEX_PATH = FRONTEND_DIR / "index.html"
+INDEX_PATH = FRONTEND_DIST_DIR / "index.html"
 DEPLOY_COMMIT_SHA = os.getenv("RAILWAY_GIT_COMMIT_SHA", "").strip()
 
 
@@ -3676,17 +3677,32 @@ if FRONTEND_DIR.exists():
         "Expires": "0",
         "X-App-Build": APP_BUILD_ID,
     }
+    ASSET_CACHE_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
 
     @app.get("/")
     def serve_index():
         try:
             html = INDEX_PATH.read_text(encoding="utf-8")
         except OSError as exc:
-            raise HTTPException(status_code=500, detail="Frontend index.html is unavailable") from exc
+            raise HTTPException(
+                status_code=500,
+                detail="Frontend dist/index.html is unavailable. Build the frontend with: npm run build (in frontend/).",
+            ) from exc
 
         if INDEX_BUILD_TOKEN in html:
             html = html.replace(INDEX_BUILD_TOKEN, APP_BUILD_ID)
 
         return HTMLResponse(content=html, headers=INDEX_CACHE_HEADERS)
 
-    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+    @app.get("/assets/{asset_path:path}")
+    def serve_frontend_asset(asset_path: str):
+        normalized = asset_path.lstrip("/")
+        candidate = (FRONTEND_DIST_ASSETS_DIR / normalized).resolve()
+        assets_root = FRONTEND_DIST_ASSETS_DIR.resolve()
+        try:
+            candidate.relative_to(assets_root)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        if not candidate.is_file():
+            raise HTTPException(status_code=404, detail="Asset not found")
+        return FileResponse(path=str(candidate), headers=ASSET_CACHE_HEADERS)
