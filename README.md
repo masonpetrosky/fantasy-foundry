@@ -142,8 +142,8 @@ All three support Dockerfiles out of the box:
 | GET | `/api/health` | Runtime health summary (projection row counts, cache/job stats) |
 | GET | `/api/version` | Build metadata (`build_id`, commit SHA, build timestamp) |
 | GET | `/api/meta` | Filter options (teams, years, positions) |
-| GET | `/api/projections/all` | Combined hitter+pitcher rows (query params: player, team, year, years, pos, dynasty_years, career_totals, include_dynasty, sort_col, sort_dir, limit, offset) |
-| GET | `/api/projections/bat` | Hitter projections (query params: player, team, year, years, pos, dynasty_years, career_totals, include_dynasty, sort_col, sort_dir, limit, offset) |
+| GET | `/api/projections/all` | Combined hitter+pitcher rows (query params: player, team, player_keys, year, years, pos, dynasty_years, career_totals, include_dynasty, sort_col, sort_dir, limit, offset) |
+| GET | `/api/projections/bat` | Hitter projections (query params: player, team, player_keys, year, years, pos, dynasty_years, career_totals, include_dynasty, sort_col, sort_dir, limit, offset) |
 | GET | `/api/projections/pitch` | Pitcher projections (same query params as `/api/projections/bat`) |
 | GET | `/api/projections/export/{dataset}` | Export filtered projections as CSV/XLSX (`dataset`: `all`, `bat`, `pitch`; query param: `format`) |
 | POST | `/api/calculate` | Run dynasty value calculator (JSON body with league settings) |
@@ -151,6 +151,7 @@ All three support Dockerfiles out of the box:
 
 `years` accepts comma-separated years and inclusive ranges, for example `2026,2028-2030`.
 If both `year` and `years` are provided, results use the intersection.
+`player_keys` accepts comma/space-separated `PlayerEntityKey` or `PlayerKey` values to fetch specific tracked players.
 `dynasty_years` accepts comma-separated years and inclusive ranges, for example `2026,2028-2030`.
 `career_totals=true` collapses each player to a single rest-of-career totals row across the selected years.
 `pos` accepts one or more exact position tokens (comma, slash, or space separated), for example `SP,RP` or `1B/OF`.

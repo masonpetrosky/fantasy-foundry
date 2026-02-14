@@ -419,6 +419,140 @@ nav button.active {
   color: var(--accent-dim);
 }
 
+.data-freshness-banner {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.collection-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.collection-toolbar-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.comparison-panel,
+.watchlist-panel {
+  margin: 0 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  padding: 12px;
+}
+
+.comparison-header,
+.watchlist-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.comparison-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  padding: 10px;
+}
+
+.comparison-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.comparison-card-head h4 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.comparison-card p {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.comparison-card dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 8px;
+  font-size: 0.76rem;
+}
+
+.comparison-card dt {
+  color: var(--text-muted);
+}
+
+.comparison-card dd {
+  margin: 0;
+  font-family: 'IBM Plex Mono', monospace;
+  text-align: right;
+}
+
+.watchlist-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.watchlist-chip {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  padding: 8px;
+  display: grid;
+  gap: 2px;
+}
+
+.watchlist-chip span {
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+
+.watchlist-chip small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.watchlist-chip button {
+  justify-self: end;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+
+.watchlist-chip button:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
 .table-refresh-message {
   margin-bottom: 10px;
   padding: 8px 10px;
@@ -578,6 +712,80 @@ td.team { color: var(--text-secondary); }
 td.value-positive { color: var(--green); }
 td.value-negative { color: var(--red); }
 
+.row-actions-cell {
+  white-space: nowrap;
+}
+
+.row-actions-cell .inline-btn {
+  margin-right: 6px;
+}
+
+.row-actions-cell .inline-btn:last-child {
+  margin-right: 0;
+}
+
+.projection-card-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.projection-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  padding: 12px;
+}
+
+.projection-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.projection-card-head h4 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.projection-card-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.projection-card p {
+  margin: 6px 0 8px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.projection-card dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  font-size: 0.78rem;
+}
+
+.projection-card dt {
+  color: var(--text-muted);
+}
+
+.projection-card dd {
+  margin: 0;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.projection-card-empty {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  text-align: center;
+}
+
 /* ====== CALCULATOR SECTION ====== */
 .calc-layout {
   display: grid;
@@ -690,6 +898,32 @@ td.value-negative { color: var(--red); }
   margin-bottom: 6px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.field-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+  cursor: help;
+  line-height: 1;
+}
+
+.field-help:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.field-help:focus-visible {
+  outline: 2px solid rgba(212, 168, 83, 0.55);
+  outline-offset: 2px;
 }
 
 .form-group input,
@@ -1161,14 +1395,21 @@ footer a { color: var(--accent-dim); text-decoration: none; }
 
   .mobile-table-controls {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
     margin-bottom: 10px;
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--bg-secondary);
+  }
+
+  .mobile-control-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
   }
 
   .mobile-table-controls .label {
@@ -1293,7 +1534,7 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   .methodology-card h2 { font-size: 1.35rem; }
 }
 </style>
-  <script type="module" crossorigin src="/assets/index-D9-Y6Lqk.js"></script>
+  <script type="module" crossorigin src="/assets/index-CNrcO5Nb.js"></script>
 </head>
 <body>
 

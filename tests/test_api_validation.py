@@ -198,6 +198,141 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(payload["total"], 1)
         self.assertEqual(payload["data"][0]["Player"], "Juan Soto")
 
+    def test_player_keys_filter_matches_entity_or_player_key(self) -> None:
+        sample_rows = [
+            {
+                "Player": "Jane Roe",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "PlayerKey": "jane-roe",
+                "PlayerEntityKey": "jane-roe__sea",
+            },
+            {
+                "Player": "John Doe",
+                "Team": "LAD",
+                "Year": 2026,
+                "Pos": "SP",
+                "PlayerKey": "john-doe",
+                "PlayerEntityKey": "john-doe__lad",
+            },
+        ]
+
+        with patch.object(app_module, "BAT_DATA", sample_rows), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/bat",
+                params={"player_keys": "jane-roe__sea,john-doe", "include_dynasty": "false"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 2)
+        players = {row["Player"] for row in payload["data"]}
+        self.assertSetEqual(players, {"Jane Roe", "John Doe"})
+
+    def test_all_projections_player_keys_filter(self) -> None:
+        bat_rows = [
+            {
+                "Player": "Dual Threat",
+                "Team": "LAA",
+                "Year": 2026,
+                "Pos": "OF",
+                "PlayerKey": "dual-threat",
+                "PlayerEntityKey": "dual-threat",
+                "AB": 500,
+                "H": 150,
+                "HR": 30,
+                "R": 90,
+                "RBI": 95,
+                "SB": 10,
+            },
+            {
+                "Player": "Other Bat",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "1B",
+                "PlayerKey": "other-bat",
+                "PlayerEntityKey": "other-bat",
+            },
+        ]
+        pit_rows = [
+            {
+                "Player": "Dual Threat",
+                "Team": "LAA",
+                "Year": 2026,
+                "Pos": "SP",
+                "PlayerKey": "dual-threat",
+                "PlayerEntityKey": "dual-threat",
+                "IP": 120,
+                "W": 10,
+                "K": 130,
+                "SV": 0,
+            },
+            {
+                "Player": "Other Arm",
+                "Team": "BOS",
+                "Year": 2026,
+                "Pos": "RP",
+                "PlayerKey": "other-arm",
+                "PlayerEntityKey": "other-arm",
+            },
+        ]
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(
+            app_module,
+            "PIT_DATA",
+            pit_rows,
+        ), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/all",
+                params={"player_keys": "dual-threat", "include_dynasty": "false"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["data"][0]["Player"], "Dual Threat")
+
+    def test_projection_export_respects_player_keys_filter(self) -> None:
+        sample_rows = [
+            {
+                "Player": "Jane Roe",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "PlayerKey": "jane-roe",
+                "PlayerEntityKey": "jane-roe",
+            },
+            {
+                "Player": "John Doe",
+                "Team": "LAD",
+                "Year": 2026,
+                "Pos": "SP",
+                "PlayerKey": "john-doe",
+                "PlayerEntityKey": "john-doe",
+            },
+        ]
+        with patch.object(app_module, "BAT_DATA", sample_rows), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/export/bat",
+                params={"format": "csv", "include_dynasty": "false", "player_keys": "john-doe"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("John Doe", response.text)
+        self.assertNotIn("Jane Roe", response.text)
+
     def test_year_filter_handles_float_and_string_year_values(self) -> None:
         sample_rows = [
             {"Player": "Player A", "Team": "NYY", "Year": 2026, "Pos": "OF"},
@@ -1536,6 +1671,9 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(guardrails.get("default_minors_slots"), app_module.COMMON_DEFAULT_MINOR_SLOTS)
         self.assertIn("default_points_scoring", guardrails)
         self.assertIn("playable_by_year", guardrails)
+        freshness = payload.get("projection_freshness", {})
+        self.assertIn("newest_projection_date", freshness)
+        self.assertIn("date_coverage_pct", freshness)
 
     def test_calculate_response_includes_explanations_payload(self) -> None:
         fake_out = pd.DataFrame(
@@ -1674,6 +1812,11 @@ class CalculatorValidationTests(unittest.TestCase):
             second = self.client.post("/api/calculate/jobs", json={})
 
         self.assertEqual(first.status_code, 202)
+        first_payload = first.json()
+        self.assertEqual(first_payload.get("status"), "queued")
+        self.assertEqual(first_payload.get("queue_position"), 1)
+        self.assertEqual(first_payload.get("queued_jobs"), 1)
+        self.assertEqual(first_payload.get("running_jobs"), 0)
         self.assertEqual(second.status_code, 429)
 
     def test_calculation_job_lifecycle_success(self) -> None:

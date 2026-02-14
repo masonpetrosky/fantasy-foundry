@@ -205,6 +205,22 @@ def _parse_projection_dates(values: pd.Series) -> pd.Series:
     return parsed
 
 
+def _coerce_iso_date_text(value: object) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    token = text[:10]
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", token):
+        return token
+    parsed = pd.to_datetime(text, errors="coerce")
+    if pd.isna(parsed):
+        return None
+    try:
+        return parsed.strftime("%Y-%m-%d")
+    except Exception:
+        return None
+
+
 def _normalize_player_key(value: object) -> str:
     text = str(value or "").strip().lower()
     if not text:
@@ -437,12 +453,42 @@ def _average_recent_projection_rows(
     return records_out
 
 
+def _projection_freshness_payload(
+    bat_rows: list[dict],
+    pit_rows: list[dict],
+) -> dict[str, object]:
+    oldest_date: str | None = None
+    newest_date: str | None = None
+    rows_with_projection_date = 0
+    total_rows = len(bat_rows) + len(pit_rows)
+
+    for row in [*bat_rows, *pit_rows]:
+        date_text = _coerce_iso_date_text(row.get("OldestProjectionDate"))
+        if not date_text:
+            continue
+        rows_with_projection_date += 1
+        if oldest_date is None or date_text < oldest_date:
+            oldest_date = date_text
+        if newest_date is None or date_text > newest_date:
+            newest_date = date_text
+
+    coverage = (rows_with_projection_date / total_rows * 100.0) if total_rows else 0.0
+    return {
+        "oldest_projection_date": oldest_date,
+        "newest_projection_date": newest_date,
+        "rows_with_projection_date": rows_with_projection_date,
+        "total_rows": total_rows,
+        "date_coverage_pct": round(coverage, 1),
+    }
+
+
 META = load_json("meta.json")
 BAT_DATA_RAW = load_json("bat.json")
 PIT_DATA_RAW = load_json("pitch.json")
 BAT_DATA_RAW, PIT_DATA_RAW = _with_player_identity_keys(BAT_DATA_RAW, PIT_DATA_RAW)
 BAT_DATA = _average_recent_projection_rows(BAT_DATA_RAW, max_entries=3, is_hitter=True)
 PIT_DATA = _average_recent_projection_rows(PIT_DATA_RAW, max_entries=3, is_hitter=False)
+PROJECTION_FRESHNESS = _projection_freshness_payload(BAT_DATA, PIT_DATA)
 DATA_REFRESH_PATHS = (
     DATA_DIR / "meta.json",
     DATA_DIR / "bat.json",
@@ -496,13 +542,14 @@ def _current_data_version() -> str:
 
 
 def _reload_projection_data() -> None:
-    global META, BAT_DATA_RAW, PIT_DATA_RAW, BAT_DATA, PIT_DATA
+    global META, BAT_DATA_RAW, PIT_DATA_RAW, BAT_DATA, PIT_DATA, PROJECTION_FRESHNESS
     META = load_json("meta.json")
     BAT_DATA_RAW = load_json("bat.json")
     PIT_DATA_RAW = load_json("pitch.json")
     BAT_DATA_RAW, PIT_DATA_RAW = _with_player_identity_keys(BAT_DATA_RAW, PIT_DATA_RAW)
     BAT_DATA = _average_recent_projection_rows(BAT_DATA_RAW, max_entries=3, is_hitter=True)
     PIT_DATA = _average_recent_projection_rows(PIT_DATA_RAW, max_entries=3, is_hitter=False)
+    PROJECTION_FRESHNESS = _projection_freshness_payload(BAT_DATA, PIT_DATA)
 
 
 def _coerce_meta_years(meta: dict) -> list[int]:
@@ -1846,6 +1893,24 @@ def _calculation_job_public_payload(job: dict) -> dict:
         payload["result"] = job.get("result")
     elif job["status"] == "failed":
         payload["error"] = job.get("error")
+    elif str(job.get("status") or "").lower() == "queued":
+        queued_jobs = [
+            candidate
+            for candidate in CALCULATOR_JOBS.values()
+            if str(candidate.get("status") or "").lower() == "queued"
+        ]
+        queued_jobs.sort(key=lambda candidate: float(candidate.get("created_ts") or 0.0))
+        payload["queued_jobs"] = len(queued_jobs)
+        payload["running_jobs"] = sum(
+            1
+            for candidate in CALCULATOR_JOBS.values()
+            if str(candidate.get("status") or "").lower() == "running"
+        )
+        payload["queue_position"] = None
+        for idx, candidate in enumerate(queued_jobs, start=1):
+            if str(candidate.get("job_id") or "") == str(job.get("job_id") or ""):
+                payload["queue_position"] = idx
+                break
     return payload
 
 
@@ -2246,6 +2311,7 @@ def get_meta():
     _refresh_data_if_needed()
     payload = dict(META)
     payload["calculator_guardrails"] = _calculator_guardrails_payload()
+    payload["projection_freshness"] = dict(PROJECTION_FRESHNESS)
     with CALCULATOR_PREWARM_LOCK:
         payload["calculator_prewarm"] = dict(CALCULATOR_PREWARM_STATE)
     return payload
@@ -2279,6 +2345,32 @@ def _position_tokens(value: object) -> set[str]:
     if not text:
         return set()
     return {token for token in POSITION_TOKEN_SPLIT_RE.split(text) if token}
+
+
+def _normalize_player_keys_filter(value: str | None) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    tokens = sorted({token.strip().lower() for token in re.split(r"[\s,]+", text) if token.strip()})
+    return ",".join(tokens)
+
+
+def _parse_player_keys_filter(value: str | None) -> set[str] | None:
+    normalized = _normalize_player_keys_filter(value)
+    if not normalized:
+        return None
+    return {token for token in normalized.split(",") if token}
+
+
+def _row_player_filter_keys(row: dict) -> set[str]:
+    keys: set[str] = set()
+    entity_key = str(row.get(PLAYER_ENTITY_KEY_COL) or "").strip().lower()
+    if entity_key:
+        keys.add(entity_key)
+    player_key = str(row.get(PLAYER_KEY_COL) or "").strip().lower()
+    if player_key:
+        keys.add(player_key)
+    return keys
 
 
 def _normalize_filter_value(value: str | None) -> str:
@@ -2856,6 +2948,7 @@ def filter_records(
     team: str | None,
     years: set[int] | None,
     pos: str | None,
+    player_keys: set[str] | None = None,
 ):
     out = records
     if player:
@@ -2877,6 +2970,11 @@ def filter_records(
                 r for r in out
                 if requested_positions.intersection(_position_tokens(r.get("Pos", "")))
             ]
+    if player_keys:
+        out = [
+            r for r in out
+            if player_keys.intersection(_row_player_filter_keys(r))
+        ]
     return out
 
 
@@ -2885,6 +2983,7 @@ def _cached_projection_rows(
     dataset: Literal["bat", "pitch"],
     player: str,
     team: str,
+    player_keys: str,
     year: int | None,
     years: str,
     pos: str,
@@ -2901,6 +3000,7 @@ def _cached_projection_rows(
         team or None,
         requested_years,
         pos or None,
+        _parse_player_keys_filter(player_keys),
     )
     if career_totals:
         filtered = _aggregate_projection_career_rows(filtered, is_hitter=(dataset == "bat"))
@@ -2916,6 +3016,7 @@ def _cached_projection_rows(
 def _cached_all_projection_rows(
     player: str,
     team: str,
+    player_keys: str,
     year: int | None,
     years: str,
     pos: str,
@@ -2931,6 +3032,7 @@ def _cached_all_projection_rows(
         team or None,
         requested_years,
         None,
+        _parse_player_keys_filter(player_keys),
     )
     pit_filtered = filter_records(
         PIT_DATA,
@@ -2938,6 +3040,7 @@ def _cached_all_projection_rows(
         team or None,
         requested_years,
         None,
+        _parse_player_keys_filter(player_keys),
     )
     merged = (
         _aggregate_all_projection_career_rows(hit_filtered, pit_filtered)
@@ -2965,6 +3068,7 @@ def _get_projection_rows(
     *,
     player: str | None,
     team: str | None,
+    player_keys: str | None,
     year: int | None,
     years: str | None,
     pos: str | None,
@@ -2978,6 +3082,7 @@ def _get_projection_rows(
         dataset,
         _normalize_filter_value(player),
         _normalize_filter_value(team),
+        _normalize_player_keys_filter(player_keys),
         year,
         _normalize_filter_value(years),
         _normalize_filter_value(pos),
@@ -2997,6 +3102,7 @@ def _get_all_projection_rows(
     *,
     player: str | None,
     team: str | None,
+    player_keys: str | None,
     year: int | None,
     years: str | None,
     pos: str | None,
@@ -3009,6 +3115,7 @@ def _get_all_projection_rows(
     cached_rows = _cached_all_projection_rows(
         _normalize_filter_value(player),
         _normalize_filter_value(team),
+        _normalize_player_keys_filter(player_keys),
         year,
         _normalize_filter_value(years),
         _normalize_filter_value(pos),
@@ -3033,6 +3140,7 @@ def get_version():
             "commit_sha": DEPLOY_COMMIT_SHA or None,
             "built_at": APP_BUILD_AT,
             "data_version": _current_data_version(),
+            "projection_freshness": dict(PROJECTION_FRESHNESS),
         },
         headers=dict(API_NO_CACHE_HEADERS),
     )
@@ -3081,6 +3189,7 @@ def get_health():
 def get_all_projections(
     player: Optional[str] = None,
     team: Optional[str] = None,
+    player_keys: Optional[str] = None,
     year: Optional[int] = None,
     years: Optional[str] = None,
     pos: Optional[str] = None,
@@ -3097,6 +3206,7 @@ def get_all_projections(
     filtered = _get_all_projection_rows(
         player=player,
         team=team,
+        player_keys=player_keys,
         year=year,
         years=years,
         pos=pos,
@@ -3115,6 +3225,7 @@ def get_all_projections(
 def get_bat_projections(
     player: Optional[str] = None,
     team: Optional[str] = None,
+    player_keys: Optional[str] = None,
     year: Optional[int] = None,
     years: Optional[str] = None,
     pos: Optional[str] = None,
@@ -3132,6 +3243,7 @@ def get_bat_projections(
         "bat",
         player=player,
         team=team,
+        player_keys=player_keys,
         year=year,
         years=years,
         pos=pos,
@@ -3150,6 +3262,7 @@ def get_bat_projections(
 def get_pitch_projections(
     player: Optional[str] = None,
     team: Optional[str] = None,
+    player_keys: Optional[str] = None,
     year: Optional[int] = None,
     years: Optional[str] = None,
     pos: Optional[str] = None,
@@ -3167,6 +3280,7 @@ def get_pitch_projections(
         "pitch",
         player=player,
         team=team,
+        player_keys=player_keys,
         year=year,
         years=years,
         pos=pos,
@@ -3187,6 +3301,7 @@ def export_projections(
     file_format: Literal["csv", "xlsx"] = Query(default="csv", alias="format"),
     player: Optional[str] = None,
     team: Optional[str] = None,
+    player_keys: Optional[str] = None,
     year: Optional[int] = None,
     years: Optional[str] = None,
     pos: Optional[str] = None,
@@ -3203,6 +3318,7 @@ def export_projections(
             _get_all_projection_rows(
                 player=player,
                 team=team,
+                player_keys=player_keys,
                 year=year,
                 years=years,
                 pos=pos,
@@ -3219,6 +3335,7 @@ def export_projections(
                 dataset,
                 player=player,
                 team=team,
+                player_keys=player_keys,
                 year=year,
                 years=years,
                 pos=pos,
@@ -3638,6 +3755,7 @@ def create_calculate_dynasty_job(req: CalculateRequest, request: Request):
         CALCULATOR_JOBS[job_id] = job
         if cached_result is not None:
             _cache_calculation_job_snapshot(job)
+        response_payload = _calculation_job_public_payload(job)
 
     if cached_result is None:
         try:
@@ -3650,7 +3768,7 @@ def create_calculate_dynasty_job(req: CalculateRequest, request: Request):
     else:
         CALC_LOGGER.info("calculator job cache-hit job_id=%s settings=%s", job_id, json.dumps(payload, sort_keys=True))
 
-    return _calculation_job_public_payload(job)
+    return response_payload
 
 
 @app.get("/api/calculate/jobs/{job_id}")

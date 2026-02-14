@@ -35,6 +35,9 @@ const BUILD_QUERY_PARAM = "build";
 const CALC_PRESETS_STORAGE_KEY = "ff:calc-presets:v1";
 const CALC_LINK_QUERY_PARAM = "calc";
 const PROJECTION_MOBILE_COLUMN_MODE_STORAGE_KEY = "ff:proj-mobile-column-mode:v1";
+const PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY = "ff:proj-mobile-layout-mode:v1";
+const PLAYER_WATCHLIST_STORAGE_KEY = "ff:player-watchlist:v1";
+const MAX_COMPARE_PLAYERS = 4;
 const INDEX_BUILD_ID = (() => {
   const metaEl = document.querySelector('meta[name="ff-build-id"]');
   const value = String(metaEl?.getAttribute("content") || "").trim();
@@ -134,6 +137,76 @@ function readCalculatorPresets() {
 
 function writeCalculatorPresets(presets) {
   safeWriteStorage(CALC_PRESETS_STORAGE_KEY, JSON.stringify(presets || {}));
+}
+
+function stablePlayerKeyFromRow(row) {
+  const explicitKey = String(row?.PlayerEntityKey || row?.PlayerKey || "").trim();
+  if (explicitKey) return explicitKey;
+  const playerKey = normalizePlayerKey(row?.Player);
+  const teamKey = String(row?.Team || "").trim().toLowerCase();
+  return teamKey ? `${playerKey}__${teamKey}` : playerKey;
+}
+
+function playerWatchEntryFromRow(row) {
+  return {
+    key: stablePlayerKeyFromRow(row),
+    player: String(row?.Player || "Unknown Player").trim() || "Unknown Player",
+    team: String(row?.Team || "").trim(),
+    pos: String(row?.Pos || "").trim(),
+  };
+}
+
+function readPlayerWatchlist() {
+  const raw = safeReadStorage(PLAYER_WATCHLIST_STORAGE_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const entries = {};
+    Object.entries(parsed).forEach(([rawKey, value]) => {
+      const key = String(rawKey || "").trim();
+      if (!key) return;
+      if (!value || typeof value !== "object") return;
+      entries[key] = {
+        key,
+        player: String(value.player || "").trim() || "Unknown Player",
+        team: String(value.team || "").trim(),
+        pos: String(value.pos || "").trim(),
+      };
+    });
+    return entries;
+  } catch {
+    return {};
+  }
+}
+
+function writePlayerWatchlist(watchlist) {
+  safeWriteStorage(PLAYER_WATCHLIST_STORAGE_KEY, JSON.stringify(watchlist || {}));
+}
+
+function csvEscape(value) {
+  const text = String(value ?? "");
+  if (text.includes("\"") || text.includes(",") || text.includes("\n")) {
+    return `"${text.replace(/"/g, "\"\"")}"`;
+  }
+  return text;
+}
+
+function buildWatchlistCsv(watchlist) {
+  const rows = Object.values(watchlist || {})
+    .filter(entry => entry && typeof entry === "object")
+    .sort((a, b) => String(a.player || "").localeCompare(String(b.player || "")));
+  const header = ["Player", "Team", "Pos", "PlayerKey"];
+  const lines = [header.join(",")];
+  rows.forEach(entry => {
+    lines.push([
+      csvEscape(entry.player || ""),
+      csvEscape(entry.team || ""),
+      csvEscape(entry.pos || ""),
+      csvEscape(entry.key || ""),
+    ].join(","));
+  });
+  return lines.join("\n");
 }
 
 function mergeKnownCalculatorSettings(baseSettings, incomingSettings) {
@@ -749,6 +822,14 @@ function App() {
             <p className="methodology-note" style={{ marginBottom: 0 }}>
               Need custom rankings? Open the <strong>Dynasty Calculator</strong> tab and adjust league settings before you run values.
             </p>
+            {meta?.projection_freshness && (
+              <p className="methodology-note" style={{ marginBottom: 0, marginTop: 10 }}>
+                Projection freshness: latest source date{" "}
+                <code>{meta.projection_freshness.newest_projection_date || "unknown"}</code>
+                {" · "}
+                coverage {fmt(meta.projection_freshness.date_coverage_pct, 1)}%
+              </p>
+            )}
           </div>
           {metaError && (
             <p style={{marginBottom: "16px", color: "var(--red)"}}>
@@ -807,6 +888,13 @@ function ProjectionsExplorer({ meta, dataVersion }) {
     const saved = String(safeReadStorage(PROJECTION_MOBILE_COLUMN_MODE_STORAGE_KEY) || "").trim().toLowerCase();
     return saved === "full" ? "full" : "compact";
   });
+  const [mobileLayoutMode, setMobileLayoutMode] = useState(() => {
+    const saved = String(safeReadStorage(PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY) || "").trim().toLowerCase();
+    return saved === "cards" ? "cards" : "table";
+  });
+  const [watchlist, setWatchlist] = useState(() => readPlayerWatchlist());
+  const [watchlistOnly, setWatchlistOnly] = useState(false);
+  const [compareRowsByKey, setCompareRowsByKey] = useState({});
   const [teamFilter, setTeamFilter] = useState("");
   const [yearFilter, setYearFilter] = useState(CAREER_TOTALS_FILTER_VALUE);
   const [posFilters, setPosFilters] = useState([]);
@@ -830,6 +918,10 @@ function ProjectionsExplorer({ meta, dataVersion }) {
   const limit = 100;
   const careerTotalsView = yearFilter === CAREER_TOTALS_FILTER_VALUE;
   const resolvedDataVersion = String(dataVersion || "").trim();
+  const watchlistKeysFilter = useMemo(
+    () => Object.keys(watchlist).sort().join(","),
+    [watchlist]
+  );
   const selectedDynastyYears = useMemo(() => {
     if (careerTotalsView) return (meta.years || []).map(String);
     if (yearFilter) return [String(yearFilter)];
@@ -894,6 +986,20 @@ function ProjectionsExplorer({ meta, dataVersion }) {
     const baseParams = new URLSearchParams();
     if (debouncedSearch) baseParams.set("player", debouncedSearch);
     if (teamFilter) baseParams.set("team", teamFilter);
+    if (watchlistOnly) {
+      if (!watchlistKeysFilter) {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
+        hasLoadedProjectionPageRef.current = true;
+        setLoading(false);
+        setError("");
+        setData([]);
+        setTotalRows(0);
+        return;
+      }
+      baseParams.set("player_keys", watchlistKeysFilter);
+    }
     if (careerTotalsView) {
       baseParams.set("career_totals", "true");
     } else if (yearFilter) {
@@ -976,6 +1082,8 @@ function ProjectionsExplorer({ meta, dataVersion }) {
     tab,
     debouncedSearch,
     teamFilter,
+    watchlistOnly,
+    watchlistKeysFilter,
     yearFilter,
     posFilters,
     selectedDynastyYears,
@@ -1015,6 +1123,20 @@ function ProjectionsExplorer({ meta, dataVersion }) {
   useEffect(() => {
     safeWriteStorage(PROJECTION_MOBILE_COLUMN_MODE_STORAGE_KEY, mobileColumnMode);
   }, [mobileColumnMode]);
+
+  useEffect(() => {
+    safeWriteStorage(PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY, mobileLayoutMode);
+  }, [mobileLayoutMode]);
+
+  useEffect(() => {
+    writePlayerWatchlist(watchlist);
+  }, [watchlist]);
+
+  useEffect(() => {
+    if (watchlistOnly && Object.keys(watchlist).length === 0) {
+      setWatchlistOnly(false);
+    }
+  }, [watchlistOnly, watchlist]);
 
   useEffect(() => {
     const delayMs = hasLoadedProjectionPageRef.current ? 0 : PROJECTION_INITIAL_FETCH_DELAY_MS;
@@ -1057,7 +1179,7 @@ function ProjectionsExplorer({ meta, dataVersion }) {
 
   useEffect(() => {
     setOffset(0);
-  }, [tab, search, teamFilter, yearFilter, posFilters, sortCol, sortDir]);
+  }, [tab, search, teamFilter, watchlistOnly, watchlistKeysFilter, yearFilter, posFilters, sortCol, sortDir]);
 
   useEffect(() => {
     const availableYears = (meta.years || []).map(String);
@@ -1100,6 +1222,73 @@ function ProjectionsExplorer({ meta, dataVersion }) {
   }, [tab, meta.bat_positions, meta.pit_positions]);
 
   const page = data;
+  const watchlistCount = Object.keys(watchlist).length;
+  const compareRows = useMemo(
+    () => Object.values(compareRowsByKey || {}).filter(Boolean),
+    [compareRowsByKey]
+  );
+
+  function isRowWatched(row) {
+    const key = stablePlayerKeyFromRow(row);
+    return Boolean(watchlist[key]);
+  }
+
+  function toggleRowWatch(row) {
+    const nextEntry = playerWatchEntryFromRow(row);
+    setWatchlist(current => {
+      const next = { ...current };
+      if (next[nextEntry.key]) {
+        delete next[nextEntry.key];
+      } else {
+        next[nextEntry.key] = nextEntry;
+      }
+      return next;
+    });
+  }
+
+  function removeWatchlistEntry(key) {
+    setWatchlist(current => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
+  function clearWatchlist() {
+    setWatchlist({});
+  }
+
+  function exportWatchlistCsv() {
+    const csv = buildWatchlistCsv(watchlist);
+    downloadBlob("player-watchlist.csv", csv, "text/csv;charset=utf-8");
+  }
+
+  function toggleCompareRow(row) {
+    const key = stablePlayerKeyFromRow(row);
+    setCompareRowsByKey(current => {
+      if (current[key]) {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      }
+      if (Object.keys(current).length >= MAX_COMPARE_PLAYERS) return current;
+      return { ...current, [key]: row };
+    });
+  }
+
+  function clearCompareRows() {
+    setCompareRowsByKey({});
+  }
+
+  function removeCompareRow(key) {
+    setCompareRowsByKey(current => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
 
   function handleSort(col) {
     if (sortCol === col) {
@@ -1115,6 +1304,7 @@ function ProjectionsExplorer({ meta, dataVersion }) {
     const params = new URLSearchParams();
     if (search) params.set("player", search);
     if (teamFilter) params.set("team", teamFilter);
+    if (watchlistOnly && watchlistKeysFilter) params.set("player_keys", watchlistKeysFilter);
     if (careerTotalsView) {
       params.set("career_totals", "true");
     } else if (yearFilter) {
@@ -1168,15 +1358,32 @@ function ProjectionsExplorer({ meta, dataVersion }) {
     : posFilters.length <= 2
       ? posFilters.join(", ")
       : `${posFilters.length} Positions`;
-  const showInitialLoadSkeleton = loading && page.length === 0;
-  const showInlineRefreshError = Boolean(error) && page.length > 0;
+  const displayedPage = page;
+  const showMobileCards = isMobileViewport && mobileLayoutMode === "cards";
+  const showInitialLoadSkeleton = loading && displayedPage.length === 0;
+  const showInlineRefreshError = Boolean(error) && displayedPage.length > 0;
   const searchIsDebouncing = search !== debouncedSearch;
-  const showMobileSwipeHint = isMobileViewport && (canScrollLeft || canScrollRight);
+  const freshness = meta?.projection_freshness || {};
+  const freshnessLatestDate = String(freshness.newest_projection_date || "").trim();
+  const freshnessDatedRows = Number(freshness.rows_with_projection_date);
+  const freshnessCoveragePct = Number(freshness.date_coverage_pct);
+  const dataVersionShort = resolvedDataVersion ? resolvedDataVersion.slice(0, 8) : "";
+  const showMobileSwipeHint = !showMobileCards && isMobileViewport && (canScrollLeft || canScrollRight);
   const swipeHintText = !canScrollLeft && canScrollRight
     ? "Swipe left for more columns →"
     : canScrollLeft && canScrollRight
       ? "← Swipe both directions for more columns →"
       : "← Swipe right to return";
+  const comparisonColumns = tab === "bat"
+    ? [seasonCol, "DynastyValue", "R", "HR", "RBI", "SB", "AVG", "OBP"]
+    : tab === "pitch"
+      ? [seasonCol, "DynastyValue", "W", "K", "SV", "ERA", "WHIP", "IP"]
+      : [seasonCol, "DynastyValue", "R", "HR", "RBI", "SB", "W", "K", "SV", "ERA", "WHIP"];
+  const cardColumns = tab === "bat"
+    ? ["DynastyValue", seasonCol, "R", "HR", "RBI", "SB", "AVG"]
+    : tab === "pitch"
+      ? ["DynastyValue", seasonCol, "W", "K", "SV", "ERA", "WHIP"]
+      : ["DynastyValue", seasonCol, "R", "HR", "RBI", "SB", "W", "K", "SV", "ERA", "WHIP"];
 
   function togglePosFilter(pos) {
     setPosFilters(curr => (
@@ -1193,15 +1400,20 @@ function ProjectionsExplorer({ meta, dataVersion }) {
   useEffect(() => {
     const raf = window.requestAnimationFrame(() => updateProjectionHorizontalAffordance());
     return () => window.cancelAnimationFrame(raf);
-  }, [updateProjectionHorizontalAffordance, cols.length, page.length, loading, totalRows, tab, offset]);
+  }, [updateProjectionHorizontalAffordance, cols.length, displayedPage.length, loading, totalRows, tab, offset, mobileLayoutMode]);
 
   useEffect(() => {
     if (!isMobileViewport) return;
+    if (mobileLayoutMode === "cards") {
+      setCanScrollLeft(false);
+      setCanScrollRight(false);
+      return;
+    }
     const el = projectionTableScrollRef.current;
     if (!el) return;
     el.scrollLeft = 0;
     updateProjectionHorizontalAffordance();
-  }, [tab, mobileColumnMode, isMobileViewport, updateProjectionHorizontalAffordance]);
+  }, [tab, mobileColumnMode, mobileLayoutMode, isMobileViewport, updateProjectionHorizontalAffordance]);
 
   return (
     <div className="fade-up fade-up-1">
@@ -1270,36 +1482,215 @@ function ProjectionsExplorer({ meta, dataVersion }) {
           )}
         </div>
         <span className={`result-count ${loading || searchIsDebouncing ? "loading" : ""}`.trim()} aria-live="polite" aria-atomic="true">
-          {totalRows.toLocaleString()} rows
+          {watchlistOnly ? `${totalRows.toLocaleString()} watchlist rows` : `${totalRows.toLocaleString()} rows`}
           {searchIsDebouncing ? " · typing..." : loading ? " · refreshing..." : ""}
         </span>
+        <button
+          type="button"
+          className={`inline-btn ${watchlistOnly ? "open" : ""}`.trim()}
+          onClick={() => setWatchlistOnly(value => !value)}
+          disabled={watchlistCount === 0}
+        >
+          {watchlistOnly ? "All Players View" : "Watchlist View"}
+        </button>
         <button type="button" className="inline-btn" onClick={() => exportCurrentProjections("csv")}>Export CSV</button>
         <button type="button" className="inline-btn" onClick={() => exportCurrentProjections("xlsx")}>Export XLSX</button>
+      </div>
+      <div className="collection-toolbar" role="group" aria-label="Watchlist and comparison actions">
+        <span className="collection-toolbar-label">Watchlist: {watchlistCount}</span>
+        <span className="collection-toolbar-label">View: {watchlistOnly ? "Watchlist" : "All Players"}</span>
+        <button type="button" className="inline-btn" onClick={exportWatchlistCsv} disabled={watchlistCount === 0}>
+          Export Watchlist CSV
+        </button>
+        <button type="button" className="inline-btn" onClick={clearWatchlist} disabled={watchlistCount === 0}>
+          Clear Watchlist
+        </button>
+        <span className="collection-toolbar-label">Compare: {compareRows.length}/{MAX_COMPARE_PLAYERS}</span>
+        <button type="button" className="inline-btn" onClick={clearCompareRows} disabled={compareRows.length === 0}>
+          Clear Compare
+        </button>
+      </div>
+      {compareRows.length > 0 && (
+        <div className="comparison-panel" role="region" aria-label="Player comparison">
+          <div className="comparison-header">
+            <strong>Player Comparison</strong>
+            <span>{compareRows.length}/{MAX_COMPARE_PLAYERS} selected</span>
+          </div>
+          <div className="comparison-grid">
+            {compareRows.map(row => {
+              const compareKey = stablePlayerKeyFromRow(row);
+              return (
+                <article className="comparison-card" key={compareKey}>
+                  <div className="comparison-card-head">
+                    <h4>{row.Player || "Player"}</h4>
+                    <button type="button" className="inline-btn" onClick={() => removeCompareRow(compareKey)}>Remove</button>
+                  </div>
+                  <p>{row.Team || "—"} · {row.Pos || "—"}</p>
+                  <dl>
+                    {comparisonColumns.map(col => (
+                      <React.Fragment key={`${compareKey}-${col}`}>
+                        <dt>{colLabels[col] || col}</dt>
+                        <dd>
+                          {(col === "DynastyValue" || col.startsWith("Value_"))
+                            ? fmt(row[col], 2)
+                            : rateCols.has(col)
+                              ? fmt(row[col], 3)
+                              : intCols.has(col)
+                                ? fmtInt(row[col], col !== "Year")
+                                : (typeof row[col] === "number" ? fmt(row[col]) : (row[col] ?? "—"))}
+                        </dd>
+                      </React.Fragment>
+                    ))}
+                  </dl>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {watchlistCount > 0 && (
+        <div className="watchlist-panel" role="region" aria-label="Saved watchlist">
+          <div className="watchlist-panel-head">
+            <strong>Saved Watchlist</strong>
+            <span>{watchlistCount} players</span>
+          </div>
+          <div className="watchlist-chip-grid">
+            {Object.values(watchlist)
+              .sort((a, b) => String(a.player || "").localeCompare(String(b.player || "")))
+              .slice(0, 40)
+              .map(entry => (
+                <div key={entry.key} className="watchlist-chip">
+                  <span>{entry.player}</span>
+                  <small>{entry.team || "—"} · {entry.pos || "—"}</small>
+                  <button type="button" onClick={() => removeWatchlistEntry(entry.key)} aria-label={`Remove ${entry.player}`}>
+                    ×
+                  </button>
+                </div>
+              ))}
+          </div>
+          {watchlistCount > 40 && <p className="calc-note">Showing first 40 watchlist entries.</p>}
+        </div>
+      )}
+      <div className="data-freshness-banner" role="note">
+        Data freshness:{" "}
+        {freshnessLatestDate ? `latest source date ${freshnessLatestDate}` : "projection dates unavailable"}
+        {Number.isFinite(freshnessDatedRows) && freshnessDatedRows > 0 ? ` · ${freshnessDatedRows.toLocaleString()} dated rows` : ""}
+        {Number.isFinite(freshnessCoveragePct) ? ` (${freshnessCoveragePct.toFixed(1)}% coverage)` : ""}
+        {dataVersionShort ? ` · Data v${dataVersionShort}` : ""}
+        {watchlistOnly ? " · Watchlist query active" : ""}
       </div>
       <div style={{marginBottom: "12px", color: "var(--text-muted)", fontSize: "0.82rem"}}>
         Dynasty Value already combines hitting and pitching contributions for two-way players.
       </div>
       {isMobileViewport && (
         <div className="mobile-table-controls" role="group" aria-label="Projection table mobile view">
-          <span className="label">Table View</span>
-          <div className="mobile-view-toggle">
-            <button
-              type="button"
-              className={`mobile-view-btn ${mobileColumnMode === "compact" ? "active" : ""}`.trim()}
-              onClick={() => setMobileColumnMode("compact")}
-              aria-pressed={mobileColumnMode === "compact"}
-            >
-              Compact
-            </button>
-            <button
-              type="button"
-              className={`mobile-view-btn ${mobileColumnMode === "full" ? "active" : ""}`.trim()}
-              onClick={() => setMobileColumnMode("full")}
-              aria-pressed={mobileColumnMode === "full"}
-            >
-              Full Stats
-            </button>
+          <div className="mobile-control-row">
+            <span className="label">Layout</span>
+            <div className="mobile-view-toggle">
+              <button
+                type="button"
+                className={`mobile-view-btn ${mobileLayoutMode === "table" ? "active" : ""}`.trim()}
+                onClick={() => setMobileLayoutMode("table")}
+                aria-pressed={mobileLayoutMode === "table"}
+              >
+                Table
+              </button>
+              <button
+                type="button"
+                className={`mobile-view-btn ${mobileLayoutMode === "cards" ? "active" : ""}`.trim()}
+                onClick={() => setMobileLayoutMode("cards")}
+                aria-pressed={mobileLayoutMode === "cards"}
+              >
+                Cards
+              </button>
+            </div>
           </div>
+          {mobileLayoutMode === "table" && (
+            <div className="mobile-control-row">
+              <span className="label">Density</span>
+              <div className="mobile-view-toggle">
+                <button
+                  type="button"
+                  className={`mobile-view-btn ${mobileColumnMode === "compact" ? "active" : ""}`.trim()}
+                  onClick={() => setMobileColumnMode("compact")}
+                  aria-pressed={mobileColumnMode === "compact"}
+                >
+                  Compact
+                </button>
+                <button
+                  type="button"
+                  className={`mobile-view-btn ${mobileColumnMode === "full" ? "active" : ""}`.trim()}
+                  onClick={() => setMobileColumnMode("full")}
+                  aria-pressed={mobileColumnMode === "full"}
+                >
+                  Full Stats
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {showMobileCards && (
+        <div className="projection-card-list">
+          {showInitialLoadSkeleton ? (
+            Array.from({ length: 8 }).map((_, idx) => (
+              <div className="projection-card" key={`loading-card-${idx}`}>
+                <div className="loading-shimmer" style={{ width: "60%", margin: 0 }} />
+                <div className="loading-shimmer" style={{ width: "90%", marginTop: 10 }} />
+              </div>
+            ))
+          ) : error && displayedPage.length === 0 ? (
+            <div className="projection-card-empty">Unable to load projections. {error}</div>
+          ) : displayedPage.length === 0 ? (
+            <div className="projection-card-empty">No results found for this page.</div>
+          ) : (
+            displayedPage.map((row, idx) => {
+              const rowWatch = isRowWatched(row);
+              const compareKey = stablePlayerKeyFromRow(row);
+              const isCompared = Boolean(compareRowsByKey[compareKey]);
+              return (
+                <article className="projection-card" key={projectionRowKey(row, offset + idx)}>
+                  <div className="projection-card-head">
+                    <h4>{row.Player || "Player"}</h4>
+                    <div className="projection-card-actions">
+                      <button
+                        type="button"
+                        className={`inline-btn ${rowWatch ? "open" : ""}`.trim()}
+                        onClick={() => toggleRowWatch(row)}
+                      >
+                        {rowWatch ? "Tracked" : "Track"}
+                      </button>
+                      <button
+                        type="button"
+                        className={`inline-btn ${isCompared ? "open" : ""}`.trim()}
+                        onClick={() => toggleCompareRow(row)}
+                        disabled={!isCompared && compareRows.length >= MAX_COMPARE_PLAYERS}
+                      >
+                        {isCompared ? "Compared" : "Compare"}
+                      </button>
+                    </div>
+                  </div>
+                  <p>{row.Team || "—"} · {row.Pos || "—"}</p>
+                  <dl>
+                    {cardColumns.map(col => (
+                      <React.Fragment key={`${projectionRowKey(row, offset + idx)}-${col}`}>
+                        <dt>{colLabels[col] || col}</dt>
+                        <dd>
+                          {(col === "DynastyValue" || col.startsWith("Value_"))
+                            ? fmt(row[col], 2)
+                            : rateCols.has(col)
+                              ? fmt(row[col], 3)
+                              : intCols.has(col)
+                                ? fmtInt(row[col], col !== "Year")
+                                : (typeof row[col] === "number" ? fmt(row[col]) : (row[col] ?? "—"))}
+                        </dd>
+                      </React.Fragment>
+                    ))}
+                  </dl>
+                </article>
+              );
+            })
+          )}
         </div>
       )}
       {showMobileSwipeHint && (
@@ -1312,83 +1703,110 @@ function ProjectionsExplorer({ meta, dataVersion }) {
           Refresh failed. Showing last loaded page. {error}
         </div>
       )}
-      {loading && page.length > 0 && !showInlineRefreshError && (
+      {loading && displayedPage.length > 0 && !showInlineRefreshError && (
         <div className="table-refresh-message" role="status" aria-live="polite">
           Refreshing results...
         </div>
       )}
 
+      {(!showMobileCards || totalRows > limit) && (
       <div className="table-wrapper">
-        <div className="table-scroll" ref={projectionTableScrollRef} onScroll={handleProjectionTableScroll}>
-          <table className="projections-table">
-            <thead>
-              <tr>
-                <th scope="col" className="index-col" style={{width:40}}>#</th>
-                {cols.map(c => (
-                  <th
-                    key={c}
-                    scope="col"
-                    className={`${sortCol === c ? "sorted" : ""}${c === "Player" ? " player-col" : ""}`.trim()}
-                    onClick={() => handleSort(c)}
-                    onKeyDown={event => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        handleSort(c);
-                      }
-                    }}
-                    tabIndex={0}
-                    aria-sort={sortCol === c ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
-                  >
-                    {colLabels[c] || c}
-                    {sortCol === c && <span className="sort-arrow">{sortDir === "asc" ? "▲" : "▼"}</span>}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {showInitialLoadSkeleton ? (
-                Array.from({length: 15}).map((_,i) => (
-                  <tr key={i}>
-                    <td className="index-col"><div className="loading-shimmer" style={{width: 24}}/></td>
-                    {cols.map((c,j) => <td key={j}><div className="loading-shimmer" style={{width: c==="Player"?120:50}}/></td>)}
-                  </tr>
-                ))
-              ) : error && page.length === 0 ? (
+        {!showMobileCards && (
+          <div className="table-scroll" ref={projectionTableScrollRef} onScroll={handleProjectionTableScroll}>
+            <table className="projections-table">
+              <thead>
                 <tr>
-                  <td colSpan={cols.length + 1} style={{textAlign:"center",padding:"40px",color:"var(--red)"}}>
-                    Unable to load projections. {error}
-                  </td>
-                </tr>
-              ) : page.length === 0 ? (
-                <tr><td colSpan={cols.length + 1} style={{textAlign:"center",padding:"40px",color:"var(--text-muted)"}}>No results found</td></tr>
-              ) : (
-                page.map((row, i) => (
-                  <tr key={projectionRowKey(row, offset + i)}>
-                    <td className="num index-col" style={{color:"var(--text-muted)"}}>{offset + i + 1}</td>
-                    {cols.map(c => {
-                      const val = row[c];
-                      if (c === "Player") return <td key={c} className="player-name">{val}</td>;
-                      if (c === "Pos") return <td key={c} className="pos">{val}</td>;
-                      if (c === "Team") return <td key={c} className="team">{val}</td>;
-                      if (c === "DynastyValue" || c.startsWith("Value_")) {
-                        if ((val == null || val === "") && c === "DynastyValue" && row.DynastyMatchStatus === "no_unique_match") {
-                          return <td key={c} className="num" style={{color:"var(--text-muted)"}}>No unique match</td>;
+                  <th scope="col" className="index-col" style={{width:40}}>#</th>
+                  {cols.map(c => (
+                    <th
+                      key={c}
+                      scope="col"
+                      className={`${sortCol === c ? "sorted" : ""}${c === "Player" ? " player-col" : ""}`.trim()}
+                      onClick={() => handleSort(c)}
+                      onKeyDown={event => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          handleSort(c);
                         }
-                        const n = Number(val);
-                        const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
-                        return <td key={c} className={`num ${cls}`}>{fmt(val, 2)}</td>;
-                      }
-                      if (rateCols.has(c)) return <td key={c} className="num">{fmt(val, 3)}</td>;
-                      if (intCols.has(c)) return <td key={c} className="num">{fmtInt(val, c !== "Year")}</td>;
-                      if (typeof val === "number") return <td key={c} className="num">{fmt(val)}</td>;
-                      return <td key={c}>{val ?? "—"}</td>;
-                    })}
+                      }}
+                      tabIndex={0}
+                      aria-sort={sortCol === c ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+                    >
+                      {colLabels[c] || c}
+                      {sortCol === c && <span className="sort-arrow">{sortDir === "asc" ? "▲" : "▼"}</span>}
+                    </th>
+                  ))}
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {showInitialLoadSkeleton ? (
+                  Array.from({length: 15}).map((_,i) => (
+                    <tr key={i}>
+                      <td className="index-col"><div className="loading-shimmer" style={{width: 24}}/></td>
+                      {cols.map((c,j) => <td key={j}><div className="loading-shimmer" style={{width: c==="Player"?120:50}}/></td>)}
+                      <td><div className="loading-shimmer" style={{width: 90}}/></td>
+                    </tr>
+                  ))
+                ) : error && displayedPage.length === 0 ? (
+                  <tr>
+                    <td colSpan={cols.length + 2} style={{textAlign:"center",padding:"40px",color:"var(--red)"}}>
+                      Unable to load projections. {error}
+                    </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : displayedPage.length === 0 ? (
+                  <tr><td colSpan={cols.length + 2} style={{textAlign:"center",padding:"40px",color:"var(--text-muted)"}}>No results found</td></tr>
+                ) : (
+                  displayedPage.map((row, i) => {
+                    const rowWatch = isRowWatched(row);
+                    const compareKey = stablePlayerKeyFromRow(row);
+                    const isCompared = Boolean(compareRowsByKey[compareKey]);
+                    return (
+                      <tr key={projectionRowKey(row, offset + i)}>
+                        <td className="num index-col" style={{color:"var(--text-muted)"}}>{offset + i + 1}</td>
+                        {cols.map(c => {
+                          const val = row[c];
+                          if (c === "Player") return <td key={c} className="player-name">{val}</td>;
+                          if (c === "Pos") return <td key={c} className="pos">{val}</td>;
+                          if (c === "Team") return <td key={c} className="team">{val}</td>;
+                          if (c === "DynastyValue" || c.startsWith("Value_")) {
+                            if ((val == null || val === "") && c === "DynastyValue" && row.DynastyMatchStatus === "no_unique_match") {
+                              return <td key={c} className="num" style={{color:"var(--text-muted)"}}>No unique match</td>;
+                            }
+                            const n = Number(val);
+                            const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
+                            return <td key={c} className={`num ${cls}`}>{fmt(val, 2)}</td>;
+                          }
+                          if (rateCols.has(c)) return <td key={c} className="num">{fmt(val, 3)}</td>;
+                          if (intCols.has(c)) return <td key={c} className="num">{fmtInt(val, c !== "Year")}</td>;
+                          if (typeof val === "number") return <td key={c} className="num">{fmt(val)}</td>;
+                          return <td key={c}>{val ?? "—"}</td>;
+                        })}
+                        <td className="row-actions-cell">
+                          <button
+                            type="button"
+                            className={`inline-btn ${rowWatch ? "open" : ""}`.trim()}
+                            onClick={() => toggleRowWatch(row)}
+                          >
+                            {rowWatch ? "Tracked" : "Track"}
+                          </button>
+                          <button
+                            type="button"
+                            className={`inline-btn ${isCompared ? "open" : ""}`.trim()}
+                            onClick={() => toggleCompareRow(row)}
+                            disabled={!isCompared && compareRows.length >= MAX_COMPARE_PLAYERS}
+                          >
+                            {isCompared ? "Compared" : "Compare"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
         {totalRows > limit && (
           <div className="pagination">
             <button disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - limit))}>← Previous</button>
@@ -1399,6 +1817,7 @@ function ProjectionsExplorer({ meta, dataVersion }) {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
@@ -1424,6 +1843,9 @@ function DynastyCalculator({ meta }) {
   const [selectedExplainYear, setSelectedExplainYear] = useState("");
   const [hiddenRankCols, setHiddenRankCols] = useState({});
   const [pinRankKeyColumns, setPinRankKeyColumns] = useState(true);
+  const [watchlist, setWatchlist] = useState(() => readPlayerWatchlist());
+  const [rankWatchlistOnly, setRankWatchlistOnly] = useState(false);
+  const [rankCompareRowsByKey, setRankCompareRowsByKey] = useState({});
   const calcRequestSeqRef = useRef(0);
   const calcAbortControllerRef = useRef(null);
   const rankTableScrollRef = useRef(null);
@@ -1454,6 +1876,16 @@ function DynastyCalculator({ meta }) {
   useEffect(() => {
     writeCalculatorPresets(presets);
   }, [presets]);
+
+  useEffect(() => {
+    writePlayerWatchlist(watchlist);
+  }, [watchlist]);
+
+  useEffect(() => {
+    if (rankWatchlistOnly && Object.keys(watchlist).length === 0) {
+      setRankWatchlistOnly(false);
+    }
+  }, [rankWatchlistOnly, watchlist]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1504,6 +1936,56 @@ function DynastyCalculator({ meta }) {
         ? { ...curr, ...pointsSlotDefaults, ...pointsScoringDefaults }
         : { ...curr, ...rotoSlotDefaults }
     ));
+  }
+
+  function buildQuickStartSettings(mode) {
+    const availableStartYear = availableYears.length > 0
+      ? availableYears[0]
+      : Number(meta?.years?.[0] ?? 2026);
+    const currentStartYear = Number(settings.start_year);
+    const startYear = availableYears.includes(currentStartYear) ? currentStartYear : availableStartYear;
+    const guardrails = meta?.calculator_guardrails || {};
+    const defaultIr = Number(guardrails.default_ir_slots);
+    const defaultMinors = Number(guardrails.default_minors_slots);
+    const commonBase = {
+      ...settings,
+      teams: 12,
+      horizon: 20,
+      discount: 0.85,
+      bench: 6,
+      minors: Number.isInteger(defaultMinors) && defaultMinors >= 0 ? defaultMinors : 0,
+      ir: Number.isInteger(defaultIr) && defaultIr >= 0 ? defaultIr : 0,
+      ip_min: 0,
+      ip_max: "",
+      two_way: "sum",
+      start_year: startYear,
+      recent_projections: 3,
+      sims: 300,
+    };
+
+    if (mode === "points") {
+      return {
+        ...commonBase,
+        scoring_mode: "points",
+        ...pointsSlotDefaults,
+        ...pointsScoringDefaults,
+      };
+    }
+
+    return {
+      ...commonBase,
+      scoring_mode: "roto",
+      ...rotoSlotDefaults,
+    };
+  }
+
+  function applyQuickStartAndRun(mode) {
+    const nextSettings = buildQuickStartSettings(mode);
+    setSettings(nextSettings);
+    setSortCol("DynastyValue");
+    setSortDir("desc");
+    setStatus(`Applied quick start (${mode === "points" ? "12-team points" : "12-team 5x5 roto"}).`);
+    run(nextSettings);
   }
 
   function savePreset() {
@@ -1592,8 +2074,8 @@ function DynastyCalculator({ meta }) {
     }
   }
 
-  function run() {
-    const payload = buildCalculatorPayload(settings, availableYears, meta);
+  function run(runSettings = settings) {
+    const payload = buildCalculatorPayload(runSettings, availableYears, meta);
     if (payload.error || !payload.payload) {
       setStatus(`Error: ${payload.error || "Invalid settings"}`);
       return;
@@ -1625,6 +2107,9 @@ function DynastyCalculator({ meta }) {
         if (!createResp.ok) {
           throw new Error(formatApiError(createResp.status, createParsed.payload, createParsed.rawText));
         }
+        const initialJobPayload = createParsed.payload && typeof createParsed.payload === "object"
+          ? createParsed.payload
+          : {};
 
         const jobId = String(createParsed.payload?.job_id || "").trim();
         if (!jobId) {
@@ -1643,6 +2128,12 @@ function DynastyCalculator({ meta }) {
             throw new Error("Calculation timed out before completion.");
           }
 
+          const elapsedSecondsFromIso = isoText => {
+            const parsedMs = Date.parse(String(isoText || ""));
+            if (!Number.isFinite(parsedMs)) return null;
+            return Math.max(0, Math.round((Date.now() - parsedMs) / 1000));
+          };
+
           const statusResp = await fetch(`${API}/api/calculate/jobs/${encodeURIComponent(jobId)}`, {
             signal: controller.signal,
           });
@@ -1653,12 +2144,29 @@ function DynastyCalculator({ meta }) {
 
           const jobStatus = String(statusParsed.payload?.status || "").toLowerCase();
           if (jobStatus === "queued") {
-            setStatus(`${runningStatusLabel} (queued)`);
+            const queuePosition = Number(statusParsed.payload?.queue_position);
+            const queuedJobs = Number(statusParsed.payload?.queued_jobs);
+            const queueLabel = Number.isFinite(queuePosition) && queuePosition > 0
+              ? `queue ${queuePosition}${Number.isFinite(queuedJobs) && queuedJobs > 0 ? `/${queuedJobs}` : ""}`
+              : "queued";
+            const queueElapsed = elapsedSecondsFromIso(
+              statusParsed.payload?.created_at || initialJobPayload.created_at
+            );
+            setStatus(
+              `${runningStatusLabel} (${queueLabel}${queueElapsed != null ? ` · ${queueElapsed}s` : ""})`
+            );
             await sleepWithAbort(1200, controller.signal);
             continue;
           }
           if (jobStatus === "running") {
-            setStatus(runningStatusLabel);
+            const runningElapsed = elapsedSecondsFromIso(
+              statusParsed.payload?.started_at ||
+              statusParsed.payload?.created_at ||
+              initialJobPayload.created_at
+            );
+            setStatus(
+              `${runningStatusLabel}${runningElapsed != null ? ` (${runningElapsed}s elapsed)` : ""}`
+            );
             await sleepWithAbort(1200, controller.signal);
             continue;
           }
@@ -1723,6 +2231,11 @@ function DynastyCalculator({ meta }) {
     });
   }, [results, sortCol, sortDir]);
 
+  function isRowWatched(row) {
+    const key = stablePlayerKeyFromRow(row);
+    return Boolean(watchlist[key]);
+  }
+
   const rankedFiltered = useMemo(() => {
     const q = debouncedRankSearch.trim().toLowerCase();
     const posNeedle = posFilter.trim().toUpperCase();
@@ -1731,9 +2244,10 @@ function DynastyCalculator({ meta }) {
       .filter(({ row }) => {
         if (q && !(row.Player || "").toLowerCase().includes(q)) return false;
         if (posNeedle && !(row.Pos || "").toUpperCase().includes(posNeedle)) return false;
+        if (rankWatchlistOnly && !isRowWatched(row)) return false;
         return true;
       });
-  }, [sortedAll, debouncedRankSearch, posFilter]);
+  }, [sortedAll, debouncedRankSearch, posFilter, rankWatchlistOnly, watchlist]);
 
   function handleSort(col) {
     if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -1757,6 +2271,55 @@ function DynastyCalculator({ meta }) {
   function clearRankFilters() {
     setSearchInput("");
     setPosFilter("");
+    setRankWatchlistOnly(false);
+  }
+
+  function toggleRowWatch(row) {
+    const nextEntry = playerWatchEntryFromRow(row);
+    setWatchlist(current => {
+      const next = { ...current };
+      if (next[nextEntry.key]) {
+        delete next[nextEntry.key];
+      } else {
+        next[nextEntry.key] = nextEntry;
+      }
+      return next;
+    });
+  }
+
+  function clearWatchlist() {
+    setWatchlist({});
+  }
+
+  function exportWatchlistCsv() {
+    const csv = buildWatchlistCsv(watchlist);
+    downloadBlob("player-watchlist.csv", csv, "text/csv;charset=utf-8");
+  }
+
+  function toggleRankCompareRow(row) {
+    const key = stablePlayerKeyFromRow(row);
+    setRankCompareRowsByKey(current => {
+      if (current[key]) {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      }
+      if (Object.keys(current).length >= MAX_COMPARE_PLAYERS) return current;
+      return { ...current, [key]: row };
+    });
+  }
+
+  function removeRankCompareRow(key) {
+    setRankCompareRowsByKey(current => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
+  function clearRankCompareRows() {
+    setRankCompareRowsByKey({});
   }
 
   // Determine columns to show
@@ -1809,7 +2372,13 @@ function DynastyCalculator({ meta }) {
   const reservePerTeam = benchPerTeam + minorsPerTeam;
   const totalPlayersPerTeam = hittersPerTeam + pitchersPerTeam + reservePerTeam;
   const pointRulesCount = POINTS_SCORING_FIELDS.length;
-  const hasRankFilters = Boolean(searchInput.trim() || posFilter.trim());
+  const watchlistCount = Object.keys(watchlist).length;
+  const rankCompareRows = useMemo(
+    () => Object.values(rankCompareRowsByKey || {}).filter(Boolean),
+    [rankCompareRowsByKey]
+  );
+  const compareYearCols = yearCols.slice(0, 6);
+  const hasRankFilters = Boolean(searchInput.trim() || posFilter.trim() || rankWatchlistOnly);
   const rankSearchIsDebouncing = searchInput !== debouncedRankSearch;
   const statusIsError = Boolean(validationError) || String(status || "").startsWith("Error");
 
@@ -1837,6 +2406,20 @@ function DynastyCalculator({ meta }) {
   }, [selectedExplainKey]);
 
   useEffect(() => {
+    setRankCompareRowsByKey(current => {
+      const byKey = {};
+      sortedAll.forEach(row => {
+        byKey[stablePlayerKeyFromRow(row)] = row;
+      });
+      const next = {};
+      Object.keys(current).forEach(key => {
+        if (byKey[key]) next[key] = byKey[key];
+      });
+      return next;
+    });
+  }, [sortedAll]);
+
+  useEffect(() => {
     setHiddenRankCols(current => {
       const next = {};
       displayCols.forEach(col => {
@@ -1860,7 +2443,7 @@ function DynastyCalculator({ meta }) {
     if (tableEl) tableEl.scrollTop = 0;
     rankScrollPendingTopRef.current = 0;
     setRankScrollTop(0);
-  }, [debouncedRankSearch, posFilter, sortCol, sortDir, results, visibleRankCols.length]);
+  }, [debouncedRankSearch, posFilter, rankWatchlistOnly, sortCol, sortDir, results, visibleRankCols.length]);
 
   return (
     <div className="fade-up fade-up-1">
@@ -1891,6 +2474,29 @@ function DynastyCalculator({ meta }) {
           </div>
 
           <div className="calc-section">
+            <p className="calc-section-title">Quick Start</p>
+            <p className="calc-note">Apply common league settings and run immediately.</p>
+            <div className="calc-inline-actions">
+              <button
+                type="button"
+                className="calc-secondary-btn"
+                onClick={() => applyQuickStartAndRun("roto")}
+                disabled={loading}
+              >
+                Run 12-Team 5x5 Roto
+              </button>
+              <button
+                type="button"
+                className="calc-secondary-btn"
+                onClick={() => applyQuickStartAndRun("points")}
+                disabled={loading}
+              >
+                Run 12-Team Points
+              </button>
+            </div>
+          </div>
+
+          <div className="calc-section">
             <p className="calc-section-title">Format</p>
 
             <div className="form-row">
@@ -1912,7 +2518,18 @@ function DynastyCalculator({ meta }) {
                 <input type="number" value={settings.horizon} onChange={e => update("horizon", e.target.value)} min="1" max="20" />
               </div>
               <div className="form-group">
-                <label>Discount</label>
+                <label>
+                  Discount
+                  <span
+                    className="field-help"
+                    tabIndex={0}
+                    role="note"
+                    aria-label="Discount help"
+                    title="Applies a yearly value multiplier. Example: 0.85 means each future season is worth 85% of the previous season."
+                  >
+                    ?
+                  </span>
+                </label>
                 <input type="number" value={settings.discount} onChange={e => update("discount", e.target.value)} min="0.5" max="1" step="0.01" />
               </div>
             </div>
@@ -1929,7 +2546,18 @@ function DynastyCalculator({ meta }) {
                 </select>
               </div>
               <div className="form-group">
-                <label>Two-Way Value</label>
+                <label>
+                  Two-Way Value
+                  <span
+                    className="field-help"
+                    tabIndex={0}
+                    role="note"
+                    aria-label="Two-Way Value help"
+                    title="Sum H + P combines both sides for two-way players. Best of H/P keeps whichever side grades higher."
+                  >
+                    ?
+                  </span>
+                </label>
                 <select value={settings.two_way} onChange={e => update("two_way", e.target.value)}>
                   <option value="sum">Sum H + P</option>
                   <option value="max">Best of H/P</option>
@@ -1952,7 +2580,18 @@ function DynastyCalculator({ meta }) {
                 />
               </div>
               <div className="form-group">
-                <label>Recent Proj.</label>
+                <label>
+                  Recent Proj.
+                  <span
+                    className="field-help"
+                    tabIndex={0}
+                    role="note"
+                    aria-label="Recent projections help"
+                    title="Number of newest projection sets averaged per player-year (1-10). Higher values smooth volatility."
+                  >
+                    ?
+                  </span>
+                </label>
                 <input type="number" value={settings.recent_projections} onChange={e => update("recent_projections", e.target.value)} min="1" max="10" />
               </div>
             </div>
@@ -2210,6 +2849,14 @@ function DynastyCalculator({ meta }) {
                 <button type="button" className="inline-btn" onClick={clearRankFilters} disabled={!hasRankFilters}>
                   Reset Filters
                 </button>
+                <button
+                  type="button"
+                  className={`inline-btn ${rankWatchlistOnly ? "open" : ""}`.trim()}
+                  onClick={() => setRankWatchlistOnly(value => !value)}
+                  disabled={watchlistCount === 0}
+                >
+                  {rankWatchlistOnly ? "All Ranked Players" : "Watchlist Only"}
+                </button>
                 {ColumnChooserControl && (
                   <ColumnChooserControl
                     columns={displayCols}
@@ -2222,9 +2869,50 @@ function DynastyCalculator({ meta }) {
                 <button type="button" className="inline-btn" onClick={() => setPinRankKeyColumns(v => !v)}>
                   {pinRankKeyColumns ? "Unpin Key Columns" : "Pin Key Columns"}
                 </button>
+                <button type="button" className="inline-btn" onClick={exportWatchlistCsv} disabled={watchlistCount === 0}>
+                  Export Watchlist CSV
+                </button>
+                <button type="button" className="inline-btn" onClick={clearWatchlist} disabled={watchlistCount === 0}>
+                  Clear Watchlist
+                </button>
+                <button type="button" className="inline-btn" onClick={clearRankCompareRows} disabled={rankCompareRows.length === 0}>
+                  Clear Compare
+                </button>
                 <button type="button" className="inline-btn" onClick={() => exportRankings("csv")}>Export CSV</button>
                 <button type="button" className="inline-btn" onClick={() => exportRankings("xlsx")}>Export XLSX</button>
               </div>
+              {rankCompareRows.length > 0 && (
+                <div className="comparison-panel" role="region" aria-label="Ranked player comparison">
+                  <div className="comparison-header">
+                    <strong>Ranked Player Comparison</strong>
+                    <span>{rankCompareRows.length}/{MAX_COMPARE_PLAYERS} selected</span>
+                  </div>
+                  <div className="comparison-grid">
+                    {rankCompareRows.map(row => {
+                      const key = stablePlayerKeyFromRow(row);
+                      return (
+                        <article className="comparison-card" key={`rank-compare-${key}`}>
+                          <div className="comparison-card-head">
+                            <h4>{row.Player || "Player"}</h4>
+                            <button type="button" className="inline-btn" onClick={() => removeRankCompareRow(key)}>Remove</button>
+                          </div>
+                          <p>{row.Team || "—"} · {row.Pos || "—"} · Age {fmt(row.Age, 0)}</p>
+                          <dl>
+                            <dt>Dynasty Value</dt>
+                            <dd>{fmt(row.DynastyValue, 2)}</dd>
+                            {compareYearCols.map(col => (
+                              <React.Fragment key={`${key}-${col}`}>
+                                <dt>{col.replace("Value_", "")}</dt>
+                                <dd>{fmt(row[col], 2)}</dd>
+                              </React.Fragment>
+                            ))}
+                          </dl>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <p className="calc-results-hint">Click or press Enter on a row to inspect its value breakdown.</p>
               <div className="table-wrapper">
                 <div
@@ -2260,17 +2948,21 @@ function DynastyCalculator({ meta }) {
                             {sortCol === c && <span className="sort-arrow">{sortDir === "asc" ? "▲" : "▼"}</span>}
                           </th>
                         ))}
+                        <th scope="col">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {virtualTopPad > 0 && (
                         <tr aria-hidden="true">
-                          <td colSpan={visibleRankCols.length + 1} style={{height: virtualTopPad, padding: 0, border: "none"}} />
+                          <td colSpan={visibleRankCols.length + 2} style={{height: virtualTopPad, padding: 0, border: "none"}} />
                         </tr>
                       )}
                       {virtualRows.map(({ row, rank }, i) => {
                         const explainKey = calculationRowExplainKey(row);
                         const isSelected = selectedExplainKey === explainKey;
+                        const watchKey = stablePlayerKeyFromRow(row);
+                        const isWatched = Boolean(watchlist[watchKey]);
+                        const isCompared = Boolean(rankCompareRowsByKey[watchKey]);
                         return (
                           <tr
                             key={virtualStartIndex + i}
@@ -2304,12 +2996,35 @@ function DynastyCalculator({ meta }) {
                               if (typeof val === "number") return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, Number.isInteger(val) ? 0 : 1)}</td>;
                               return <td key={c} className={pinClass}>{val ?? "—"}</td>;
                             })}
+                            <td className="row-actions-cell">
+                              <button
+                                type="button"
+                                className={`inline-btn ${isWatched ? "open" : ""}`.trim()}
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  toggleRowWatch(row);
+                                }}
+                              >
+                                {isWatched ? "Tracked" : "Track"}
+                              </button>
+                              <button
+                                type="button"
+                                className={`inline-btn ${isCompared ? "open" : ""}`.trim()}
+                                disabled={!isCompared && rankCompareRows.length >= MAX_COMPARE_PLAYERS}
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  toggleRankCompareRow(row);
+                                }}
+                              >
+                                {isCompared ? "Compared" : "Compare"}
+                              </button>
+                            </td>
                           </tr>
                         );
                       })}
                       {virtualBottomPad > 0 && (
                         <tr aria-hidden="true">
-                          <td colSpan={visibleRankCols.length + 1} style={{height: virtualBottomPad, padding: 0, border: "none"}} />
+                          <td colSpan={visibleRankCols.length + 2} style={{height: virtualBottomPad, padding: 0, border: "none"}} />
                         </tr>
                       )}
                     </tbody>
