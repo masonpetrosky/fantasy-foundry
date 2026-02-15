@@ -98,8 +98,12 @@ Without these env vars, the site continues to work with local-only browser stora
 
 ### Running Tests
 ```bash
-# Default suite (unit/integration; browser E2E tests are opt-in)
+# Backend unit/integration suite
 pytest -q
+
+# Frontend unit tests
+cd frontend
+npm test
 ```
 
 ### CI Parity Check (Frontend Dist Freshness)
