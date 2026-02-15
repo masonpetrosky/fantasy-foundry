@@ -2832,8 +2832,16 @@ def _sort_projection_rows(rows: list[dict], sort_col: str | None, sort_dir: str 
         if compare_col == "OldestProjectionDate":
             av_ts = pd.to_datetime(av, errors="coerce")
             bv_ts = pd.to_datetime(bv, errors="coerce")
-            av_num = float(av_ts.value) if not pd.isna(av_ts) else float("-inf")
-            bv_num = float(bv_ts.value) if not pd.isna(bv_ts) else float("-inf")
+            av_missing = pd.isna(av_ts)
+            bv_missing = pd.isna(bv_ts)
+            if av_missing and bv_missing:
+                return 0
+            if av_missing:
+                return 1
+            if bv_missing:
+                return -1
+            av_num = float(av_ts.value)
+            bv_num = float(bv_ts.value)
             if av_num == bv_num:
                 return 0
             cmp = -1 if av_num < bv_num else 1

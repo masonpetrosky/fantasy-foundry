@@ -638,6 +638,63 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(len(payload["data"]), 1)
         self.assertEqual(payload["data"][0]["Player"], "Bravo")
 
+    def test_oldest_projection_date_sort_keeps_missing_dates_last(self) -> None:
+        bat_rows = [
+            {
+                "Player": "Missing Date",
+                "Team": "NYY",
+                "Year": 2026,
+                "Pos": "OF",
+                "OldestProjectionDate": None,
+            },
+            {
+                "Player": "Older",
+                "Team": "BOS",
+                "Year": 2026,
+                "Pos": "OF",
+                "OldestProjectionDate": "2025-12-20",
+            },
+            {
+                "Player": "Newer",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "OldestProjectionDate": "2026-01-05",
+            },
+        ]
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(
+            app_module, "PIT_DATA", []
+        ), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            asc_response = self.client.get(
+                "/api/projections/all",
+                params={
+                    "include_dynasty": "false",
+                    "sort_col": "OldestProjectionDate",
+                    "sort_dir": "asc",
+                },
+            )
+            desc_response = self.client.get(
+                "/api/projections/all",
+                params={
+                    "include_dynasty": "false",
+                    "sort_col": "OldestProjectionDate",
+                    "sort_dir": "desc",
+                },
+            )
+
+        self.assertEqual(asc_response.status_code, 200)
+        self.assertEqual(desc_response.status_code, 200)
+
+        asc_players = [row["Player"] for row in asc_response.json()["data"]]
+        desc_players = [row["Player"] for row in desc_response.json()["data"]]
+        self.assertEqual(asc_players, ["Older", "Newer", "Missing Date"])
+        self.assertEqual(desc_players, ["Newer", "Older", "Missing Date"])
+
     def test_invalid_sort_col_returns_422(self) -> None:
         with patch.object(
             app_module,
