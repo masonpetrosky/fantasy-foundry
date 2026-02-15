@@ -98,6 +98,7 @@ Without these env vars, the site continues to work with local-only browser stora
 
 ### Running Tests
 ```bash
+# Default suite (unit/integration; browser E2E tests are opt-in)
 pytest -q
 ```
 
@@ -120,9 +121,8 @@ pip install -r requirements-dev.txt
 # Install Playwright Chromium once
 python -m playwright install chromium
 
-# Run browser integration tests
-python -m unittest tests/test_e2e_projections_pagination.py
-python -m unittest tests/test_e2e_calculator_smoke.py
+# Run browser integration tests (opt-in under pytest)
+FF_RUN_E2E=1 pytest -q tests/test_e2e_projections_pagination.py tests/test_e2e_calculator_smoke.py
 ```
 
 `test_e2e_projections_pagination.py` launches the app locally, switches the projections view to `All Years (Year-by-year)`, and verifies:

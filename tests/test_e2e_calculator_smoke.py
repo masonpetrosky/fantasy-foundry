@@ -7,12 +7,16 @@ import unittest
 from pathlib import Path
 from urllib.request import urlopen
 
+import pytest
+
 try:
     from playwright.sync_api import Error as PlaywrightError
     from playwright.sync_api import sync_playwright
 except ImportError:  # pragma: no cover - exercised only when dependency is missing
     PlaywrightError = Exception  # type: ignore[assignment]
     sync_playwright = None
+
+pytestmark = pytest.mark.e2e
 
 
 class CalculatorSmokeE2ETests(unittest.TestCase):

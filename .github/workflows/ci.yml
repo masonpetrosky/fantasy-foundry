@@ -6,11 +6,17 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: "Run browser E2E tests (Playwright)"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
-  checks:
+  frontend-dist:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -38,6 +44,14 @@ jobs:
             exit 1
           )
 
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -48,5 +62,45 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt pytest
 
-      - name: Run Test Suite
+      - name: Run Unit + Integration Test Suite
         run: pytest -q
+
+  e2e-tests:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build Frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Backend + E2E Test Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt pytest
+
+      - name: Install Playwright Chromium + OS Dependencies
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run Browser E2E Tests
+        run: FF_RUN_E2E=1 pytest -q tests/test_e2e_projections_pagination.py tests/test_e2e_calculator_smoke.py
