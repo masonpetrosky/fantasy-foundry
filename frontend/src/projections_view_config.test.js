@@ -28,12 +28,13 @@ describe("projectionTable defaults", () => {
       "IP",
       "W",
       "K",
-      "SVH",
+      "SV",
       "ERA",
       "WHIP",
       "Value_2026",
       "Value_2027",
     ]);
+    expect(cols.indexOf("SVH")).toBeGreaterThan(cols.indexOf("ER"));
     expect(cols.indexOf("Value_2026")).toBeGreaterThan(cols.indexOf("WHIP"));
     expect(cols.indexOf("Value_2026")).toBeLessThan(cols.indexOf("OBP"));
   });

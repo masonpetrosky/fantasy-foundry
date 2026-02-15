@@ -47,13 +47,17 @@ const BUILD_STORAGE_KEY = "ff:lastBuildId";
 const BUILD_QUERY_PARAM = "build";
 const CALC_PRESETS_STORAGE_KEY = "ff:calc-presets:v1";
 const CALC_LINK_QUERY_PARAM = "calc";
-const PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY = "ff:proj-mobile-layout-mode:v1";
+const PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY = "ff:proj-mobile-layout-mode:v2";
 const PROJECTION_TABLE_HIDDEN_COLS_STORAGE_KEY = "ff:proj-table-hidden-cols:v1";
 const PROJECTION_CARD_HIDDEN_COLS_STORAGE_KEY = "ff:proj-card-hidden-cols:v1";
 const PLAYER_WATCHLIST_STORAGE_KEY = "ff:player-watchlist:v1";
 const CLOUD_SYNC_DEBOUNCE_MS = 900;
 const CLOUD_PREFERENCES_VERSION = 1;
 const MAX_COMPARE_PLAYERS = 4;
+const PRIMARY_NAV_ITEMS = [
+  { key: "projections", label: "Projections" },
+  { key: "calculator", label: "Dynasty Calculator" },
+];
 const INDEX_BUILD_ID = (() => {
   const metaEl = document.querySelector('meta[name="ff-build-id"]');
   const value = String(metaEl?.getAttribute("content") || "").trim();
@@ -1243,24 +1247,35 @@ function App() {
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <header>
         <div className="nav-inner">
-          <a className="logo" href="#">Dynasty Projections <span>2026–2045</span></a>
-          <nav aria-label="Primary">
-            <button
-              type="button"
-              className={section === "projections" ? "active" : ""}
-              onClick={() => setSection("projections")}
-              aria-pressed={section === "projections"}
-            >
-              Projections
-            </button>
-            <button
-              type="button"
-              className={section === "calculator" ? "active" : ""}
-              onClick={() => setSection("calculator")}
-              aria-pressed={section === "calculator"}
-            >
-              Dynasty Calculator
-            </button>
+          <a
+            className="brand"
+            href="#"
+            onClick={event => {
+              event.preventDefault();
+              setSection("projections");
+            }}
+            aria-label="Fantasy Foundry home"
+          >
+            <span className="brand-mark" aria-hidden="true">FF</span>
+            <span className="brand-text">
+              <span className="brand-title">Fantasy Foundry</span>
+              <span className="brand-tagline">Dynasty Baseball Intelligence</span>
+            </span>
+          </a>
+          <nav className="primary-nav" aria-label="Primary">
+            <div className="primary-nav-scroll">
+              {PRIMARY_NAV_ITEMS.map(item => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`primary-nav-btn ${section === item.key ? "active" : ""}`.trim()}
+                  onClick={() => setSection(item.key)}
+                  aria-pressed={section === item.key}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </nav>
         </div>
       </header>
@@ -1392,7 +1407,8 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
   ));
   const [mobileLayoutMode, setMobileLayoutMode] = useState(() => {
     const saved = String(safeReadStorage(PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY) || "").trim().toLowerCase();
-    return saved === "cards" ? "cards" : "table";
+    if (saved === "cards" || saved === "table") return saved;
+    return window.matchMedia("(max-width: 768px)").matches ? "cards" : "table";
   });
   const [projectionTableHiddenColsByTab, setProjectionTableHiddenColsByTab] = useState(() => (
     readHiddenColumnOverridesByTab(PROJECTION_TABLE_HIDDEN_COLS_STORAGE_KEY)
@@ -2015,15 +2031,41 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
     });
     return labels;
   }, [dynastyYearCols]);
-  const rateCols = new Set(["AVG","OBP","OPS","ERA","WHIP"]);
-  const intCols = new Set(["Year","Years","Age","ProjectionsUsed"]);
+  const threeDecimalCols = new Set(["AVG", "OBP", "OPS"]);
+  const twoDecimalCols = new Set(["ERA", "WHIP"]);
+  const wholeNumberCols = new Set([
+    "AB",
+    "R",
+    "HR",
+    "RBI",
+    "SB",
+    "IP",
+    "W",
+    "K",
+    "SVH",
+    "QS",
+    "G",
+    "H",
+    "2B",
+    "3B",
+    "BB",
+    "SO",
+    "GS",
+    "L",
+    "PitBB",
+    "SV",
+    "PitH",
+    "PitHR",
+    "ER",
+  ]);
+  const intCols = new Set(["Year", "Years", "Age", "ProjectionsUsed"]);
   const posFilterLabel = posFilters.length === 0
     ? "All Positions"
     : posFilters.length <= 2
       ? posFilters.join(", ")
       : `${posFilters.length} Positions`;
   const displayedPage = page;
-  const showMobileCards = isMobileViewport && mobileLayoutMode === "cards";
+  const showCards = mobileLayoutMode === "cards";
   const showInitialLoadSkeleton = loading && displayedPage.length === 0;
   const showInlineRefreshError = Boolean(error) && displayedPage.length > 0;
   const searchIsDebouncing = search !== debouncedSearch;
@@ -2032,7 +2074,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
   const freshnessDatedRows = Number(freshness.rows_with_projection_date);
   const freshnessCoveragePct = Number(freshness.date_coverage_pct);
   const dataVersionShort = resolvedDataVersion ? resolvedDataVersion.slice(0, 8) : "";
-  const showMobileSwipeHint = !showMobileCards && isMobileViewport && (canScrollLeft || canScrollRight);
+  const showMobileSwipeHint = !showCards && isMobileViewport && (canScrollLeft || canScrollRight);
   const swipeHintText = !canScrollLeft && canScrollRight
     ? "Swipe left for more columns →"
     : canScrollLeft && canScrollRight
@@ -2041,8 +2083,8 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
   const comparisonColumns = tab === "bat"
     ? [seasonCol, "DynastyValue", "AB", "R", "HR", "RBI", "SB", "AVG"]
     : tab === "pitch"
-      ? [seasonCol, "DynastyValue", "IP", "W", "K", "SVH", "ERA", "WHIP"]
-      : [seasonCol, "DynastyValue", "AB", "R", "HR", "RBI", "SB", "IP", "W", "K", "SVH", "ERA", "WHIP"];
+      ? [seasonCol, "DynastyValue", "IP", "W", "K", "SV", "ERA", "WHIP"]
+      : [seasonCol, "DynastyValue", "AB", "R", "HR", "RBI", "SB", "IP", "W", "K", "SV", "ERA", "WHIP"];
 
   function togglePosFilter(pos) {
     setPosFilters(curr => (
@@ -2222,9 +2264,13 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
                         <dd>
                           {(col === "DynastyValue" || col.startsWith("Value_"))
                             ? fmt(row[col], 2)
-                            : rateCols.has(col)
-                              ? fmt(row[col], 3)
-                              : intCols.has(col)
+                            : twoDecimalCols.has(col)
+                              ? fmt(row[col], 2)
+                              : threeDecimalCols.has(col)
+                                ? fmt(row[col], 3)
+                                : wholeNumberCols.has(col)
+                                  ? fmtInt(row[col], true)
+                                  : intCols.has(col)
                                 ? fmtInt(row[col], col !== "Year")
                                 : (typeof row[col] === "number" ? fmt(row[col]) : (row[col] ?? "—"))}
                         </dd>
@@ -2271,31 +2317,30 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
       <div style={{marginBottom: "12px", color: "var(--text-muted)", fontSize: "0.82rem"}}>
         Dynasty Value already combines hitting and pitching contributions for two-way players.
       </div>
-      {isMobileViewport && (
-        <div className="mobile-table-controls" role="group" aria-label="Projection table mobile view">
-          <div className="mobile-control-row">
+      <div className="projection-layout-controls" role="group" aria-label="Projection layout controls">
+          <div className="projection-layout-row">
             <span className="label">Layout</span>
-            <div className="mobile-view-toggle">
+            <div className="projection-view-toggle">
               <button
                 type="button"
-                className={`mobile-view-btn ${mobileLayoutMode === "table" ? "active" : ""}`.trim()}
-                onClick={() => setMobileLayoutMode("table")}
-                aria-pressed={mobileLayoutMode === "table"}
-              >
-                Table
-              </button>
-              <button
-                type="button"
-                className={`mobile-view-btn ${mobileLayoutMode === "cards" ? "active" : ""}`.trim()}
+                className={`projection-view-btn ${mobileLayoutMode === "cards" ? "active" : ""}`.trim()}
                 onClick={() => setMobileLayoutMode("cards")}
                 aria-pressed={mobileLayoutMode === "cards"}
               >
                 Cards
               </button>
+              <button
+                type="button"
+                className={`projection-view-btn ${mobileLayoutMode === "table" ? "active" : ""}`.trim()}
+                onClick={() => setMobileLayoutMode("table")}
+                aria-pressed={mobileLayoutMode === "table"}
+              >
+                Table
+              </button>
             </div>
           </div>
           {mobileLayoutMode === "cards" && ColumnChooserControl && (
-            <div className="mobile-control-row">
+            <div className="projection-layout-row">
               <span className="label">Cards</span>
               <ColumnChooserControl
                 buttonLabel="Card Stats"
@@ -2308,9 +2353,8 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
               />
             </div>
           )}
-        </div>
-      )}
-      {showMobileCards && (
+      </div>
+      {showCards && (
         <div className="projection-card-list">
           {showInitialLoadSkeleton ? (
             Array.from({ length: 8 }).map((_, idx) => (
@@ -2351,21 +2395,25 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
                       </button>
                     </div>
                   </div>
-                  <p>{row.Team || "—"} · {row.Pos || "—"}</p>
+                  <p className="projection-card-meta">{row.Team || "—"} · {row.Pos || "—"}</p>
                   <dl>
                     {cardCols.map(col => (
-                      <React.Fragment key={`${projectionRowKey(row, offset + idx)}-${col}`}>
+                      <div className="projection-card-stat" key={`${projectionRowKey(row, offset + idx)}-${col}`}>
                         <dt>{colLabels[col] || col}</dt>
                         <dd>
                           {(col === "DynastyValue" || col.startsWith("Value_"))
                             ? fmt(row[col], 2)
-                            : rateCols.has(col)
-                              ? fmt(row[col], 3)
-                              : intCols.has(col)
+                            : twoDecimalCols.has(col)
+                              ? fmt(row[col], 2)
+                              : threeDecimalCols.has(col)
+                                ? fmt(row[col], 3)
+                                : wholeNumberCols.has(col)
+                                  ? fmtInt(row[col], true)
+                                  : intCols.has(col)
                                 ? fmtInt(row[col], col !== "Year")
                                 : (typeof row[col] === "number" ? fmt(row[col]) : (row[col] ?? "—"))}
                         </dd>
-                      </React.Fragment>
+                      </div>
                     ))}
                   </dl>
                 </article>
@@ -2390,9 +2438,9 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
         </div>
       )}
 
-      {(!showMobileCards || totalRows > limit) && (
+      {(!showCards || totalRows > limit) && (
       <div className="table-wrapper">
-        {!showMobileCards && (
+        {!showCards && (
           <div className="table-scroll" ref={projectionTableScrollRef} onScroll={handleProjectionTableScroll}>
             <table className="projections-table">
               <thead>
@@ -2458,7 +2506,9 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
                             const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
                             return <td key={c} className={`num ${cls}`}>{fmt(val, 2)}</td>;
                           }
-                          if (rateCols.has(c)) return <td key={c} className="num">{fmt(val, 3)}</td>;
+                          if (twoDecimalCols.has(c)) return <td key={c} className="num">{fmt(val, 2)}</td>;
+                          if (threeDecimalCols.has(c)) return <td key={c} className="num">{fmt(val, 3)}</td>;
+                          if (wholeNumberCols.has(c)) return <td key={c} className="num">{fmtInt(val, true)}</td>;
                           if (intCols.has(c)) return <td key={c} className="num">{fmtInt(val, c !== "Year")}</td>;
                           if (typeof val === "number") return <td key={c} className="num">{fmt(val)}</td>;
                           return <td key={c}>{val ?? "—"}</td>;

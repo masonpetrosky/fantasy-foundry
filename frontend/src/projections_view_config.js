@@ -1,6 +1,6 @@
 export const PROJECTION_TABS = ["all", "bat", "pitch"];
 export const PROJECTION_HITTER_CORE_STATS = ["AB", "R", "HR", "RBI", "SB", "AVG"];
-export const PROJECTION_PITCHER_CORE_STATS = ["IP", "W", "K", "SVH", "ERA", "WHIP"];
+export const PROJECTION_PITCHER_CORE_STATS = ["IP", "W", "K", "SV", "ERA", "WHIP"];
 
 export function uniqueColumnOrder(columns) {
   const seen = new Set();
@@ -61,10 +61,10 @@ export function projectionTableColumnCatalog(tab, seasonCol, dynastyYearCols) {
       "GS",
       "L",
       "BB",
-      "SV",
       "H",
       "HR",
       "ER",
+      "SVH",
       "ProjectionsUsed",
       "OldestProjectionDate",
       seasonCol,
@@ -87,10 +87,10 @@ export function projectionTableColumnCatalog(tab, seasonCol, dynastyYearCols) {
     "GS",
     "L",
     "PitBB",
-    "SV",
     "PitH",
     "PitHR",
     "ER",
+    "SVH",
     "ProjectionsUsed",
     "OldestProjectionDate",
     seasonCol,
@@ -128,10 +128,10 @@ export function projectionCardColumnCatalog(tab, seasonCol, dynastyYearCols) {
       "GS",
       "L",
       "BB",
-      "SV",
       "H",
       "HR",
       "ER",
+      "SVH",
       "ProjectionsUsed",
       "OldestProjectionDate",
     ]);
@@ -155,10 +155,10 @@ export function projectionCardColumnCatalog(tab, seasonCol, dynastyYearCols) {
     "GS",
     "L",
     "PitBB",
-    "SV",
     "PitH",
     "PitHR",
     "ER",
+    "SVH",
     "ProjectionsUsed",
     "OldestProjectionDate",
   ]);
