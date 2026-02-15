@@ -2306,15 +2306,25 @@ async def attach_build_header(request, call_next):
 # ---------------------------------------------------------------------------
 # API: Metadata
 # ---------------------------------------------------------------------------
-@app.get("/api/meta")
-def get_meta():
-    _refresh_data_if_needed()
+def _meta_payload() -> dict[str, Any]:
     payload = dict(META)
     payload["calculator_guardrails"] = _calculator_guardrails_payload()
     payload["projection_freshness"] = dict(PROJECTION_FRESHNESS)
     with CALCULATOR_PREWARM_LOCK:
         payload["calculator_prewarm"] = dict(CALCULATOR_PREWARM_STATE)
     return payload
+
+
+@app.get("/api/meta")
+def get_meta(request: Request):
+    _refresh_data_if_needed()
+    payload = _meta_payload()
+    headers = dict(API_NO_CACHE_HEADERS)
+    etag = _payload_etag(payload)
+    headers["ETag"] = etag
+    if _etag_matches(request.headers.get("if-none-match"), etag):
+        return Response(status_code=304, headers=headers)
+    return JSONResponse(payload, headers=headers)
 
 
 # ---------------------------------------------------------------------------
