@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { createClient } from "@supabase/supabase-js";
 import { ColumnChooserControl, ExplainabilityCard } from "./ui_components.jsx";
 import { normalizeCalculatorRunSettingsInput } from "./calculator_submit.js";
 import { parseDownloadFilename } from "./download_filename.js";
+import { AUTH_SYNC_ENABLED, SUPABASE_PREFS_TABLE, loadSupabaseClient } from "./supabase_client.js";
 
 
 // ---------------------------------------------------------------------------
@@ -42,18 +42,6 @@ const PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY = "ff:proj-mobile-layout-mode:v1
 const PLAYER_WATCHLIST_STORAGE_KEY = "ff:player-watchlist:v1";
 const CLOUD_SYNC_DEBOUNCE_MS = 900;
 const CLOUD_PREFERENCES_VERSION = 1;
-const SUPABASE_URL = String(import.meta.env.VITE_SUPABASE_URL || "").trim();
-const SUPABASE_ANON_KEY = String(import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
-const SUPABASE_PREFS_TABLE = String(import.meta.env.VITE_SUPABASE_PREFS_TABLE || "user_preferences").trim() || "user_preferences";
-const AUTH_SYNC_ENABLED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-const SUPABASE_CLIENT = AUTH_SYNC_ENABLED
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-      },
-    })
-  : null;
 const MAX_COMPARE_PLAYERS = 4;
 const INDEX_BUILD_ID = (() => {
   const metaEl = document.querySelector('meta[name="ff-build-id"]');
@@ -973,39 +961,60 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!SUPABASE_CLIENT) return undefined;
+    if (!AUTH_SYNC_ENABLED) return undefined;
     let mounted = true;
+    let unsubscribe = null;
 
-    SUPABASE_CLIENT.auth.getSession()
-      .then(({ data, error }) => {
+    const setupAuth = async () => {
+      let client = null;
+      try {
+        client = await loadSupabaseClient();
+      } catch (error) {
         if (!mounted) return;
-        if (error) {
-          setAuthStatus(`Account setup error: ${formatAuthError(error, "Unable to restore session.")}`);
-        } else if (!data?.session) {
-          setAuthStatus("Sign in to sync your presets and watchlist across devices.");
-        }
-        setAuthUser(data?.session?.user || null);
-      })
-      .finally(() => {
-        if (mounted) setAuthReady(true);
-      });
-
-    const { data } = SUPABASE_CLIENT.auth.onAuthStateChange((_event, session) => {
-      setAuthUser(session?.user || null);
-      setCloudReadyForSave(false);
-      if (!session?.user) {
-        setCloudStatus("");
+        setAuthStatus(`Account setup error: ${formatAuthError(error, "Unable to initialize account sync.")}`);
+        setAuthReady(true);
+        return;
       }
+
+      if (!mounted || !client) {
+        if (mounted) setAuthReady(true);
+        return;
+      }
+
+      const { data: authState } = client.auth.onAuthStateChange((_event, session) => {
+        setAuthUser(session?.user || null);
+        setCloudReadyForSave(false);
+        if (!session?.user) {
+          setCloudStatus("");
+        }
+      });
+      unsubscribe = () => authState?.subscription?.unsubscribe();
+
+      const { data, error } = await client.auth.getSession();
+      if (!mounted) return;
+      if (error) {
+        setAuthStatus(`Account setup error: ${formatAuthError(error, "Unable to restore session.")}`);
+      } else if (!data?.session) {
+        setAuthStatus("Sign in to sync your presets and watchlist across devices.");
+      }
+      setAuthUser(data?.session?.user || null);
+      setAuthReady(true);
+    };
+
+    setupAuth().catch(error => {
+      if (!mounted) return;
+      setAuthStatus(`Account setup error: ${formatAuthError(error, "Unable to initialize account sync.")}`);
+      setAuthReady(true);
     });
 
     return () => {
       mounted = false;
-      data?.subscription?.unsubscribe();
+      if (typeof unsubscribe === "function") unsubscribe();
     };
   }, []);
 
   useEffect(() => {
-    if (!SUPABASE_CLIENT || !authReady) return undefined;
+    if (!AUTH_SYNC_ENABLED || !authReady) return undefined;
     if (!authUser?.id) {
       setCloudReadyForSave(false);
       return undefined;
@@ -1016,7 +1025,17 @@ function App() {
     setCloudReadyForSave(false);
 
     const loadCloudPreferences = async () => {
-      const { data, error } = await SUPABASE_CLIENT
+      let client = null;
+      try {
+        client = await loadSupabaseClient();
+      } catch (error) {
+        if (cancelled) return;
+        setCloudStatus(`Cloud sync error: ${formatAuthError(error, "Unable to initialize account settings.")}`);
+        return;
+      }
+      if (!client || cancelled) return;
+
+      const { data, error } = await client
         .from(SUPABASE_PREFS_TABLE)
         .select("preferences")
         .eq("user_id", authUser.id)
@@ -1042,7 +1061,7 @@ function App() {
         playerWatchlist: watchlistRef.current,
       });
 
-      const { error: upsertError } = await SUPABASE_CLIENT
+      const { error: upsertError } = await client
         .from(SUPABASE_PREFS_TABLE)
         .upsert(
           {
@@ -1073,14 +1092,23 @@ function App() {
   }, [authReady, authUser?.id]);
 
   useEffect(() => {
-    if (!SUPABASE_CLIENT || !authUser?.id || !cloudReadyForSave) return undefined;
+    if (!AUTH_SYNC_ENABLED || !authUser?.id || !cloudReadyForSave) return undefined;
 
     const timer = window.setTimeout(async () => {
+      let client = null;
+      try {
+        client = await loadSupabaseClient();
+      } catch (error) {
+        setCloudStatus(`Cloud save error: ${formatAuthError(error, "Unable to initialize cloud sync.")}`);
+        return;
+      }
+      if (!client) return;
+
       const payload = buildCloudPreferencesPayload({
         calculatorPresets: presets,
         playerWatchlist: watchlist,
       });
-      const { error } = await SUPABASE_CLIENT
+      const { error } = await client
         .from(SUPABASE_PREFS_TABLE)
         .upsert(
           {
@@ -1102,7 +1130,7 @@ function App() {
   }, [authUser?.id, cloudReadyForSave, presets, watchlist]);
 
   const signIn = useCallback(async (email, password) => {
-    if (!SUPABASE_CLIENT) return;
+    if (!AUTH_SYNC_ENABLED) return;
     const normalizedEmail = String(email || "").trim();
     const normalizedPassword = String(password || "");
     if (!normalizedEmail || !normalizedPassword) {
@@ -1110,19 +1138,25 @@ function App() {
       return;
     }
     setAuthStatus("");
-    const { error } = await SUPABASE_CLIENT.auth.signInWithPassword({
-      email: normalizedEmail,
-      password: normalizedPassword,
-    });
-    if (error) {
-      setAuthStatus(`Sign in failed: ${formatAuthError(error, "Invalid login.")}`);
-      return;
+    try {
+      const client = await loadSupabaseClient();
+      if (!client) return;
+      const { error } = await client.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: normalizedPassword,
+      });
+      if (error) {
+        setAuthStatus(`Sign in failed: ${formatAuthError(error, "Invalid login.")}`);
+        return;
+      }
+      setAuthStatus("Signed in.");
+    } catch (error) {
+      setAuthStatus(`Sign in failed: ${formatAuthError(error, "Unable to reach account service.")}`);
     }
-    setAuthStatus("Signed in.");
   }, []);
 
   const signUp = useCallback(async (email, password) => {
-    if (!SUPABASE_CLIENT) return;
+    if (!AUTH_SYNC_ENABLED) return;
     const normalizedEmail = String(email || "").trim();
     const normalizedPassword = String(password || "");
     if (!normalizedEmail || !normalizedPassword) {
@@ -1130,30 +1164,42 @@ function App() {
       return;
     }
     setAuthStatus("");
-    const { data, error } = await SUPABASE_CLIENT.auth.signUp({
-      email: normalizedEmail,
-      password: normalizedPassword,
-    });
-    if (error) {
-      setAuthStatus(`Sign up failed: ${formatAuthError(error, "Unable to create account.")}`);
-      return;
+    try {
+      const client = await loadSupabaseClient();
+      if (!client) return;
+      const { data, error } = await client.auth.signUp({
+        email: normalizedEmail,
+        password: normalizedPassword,
+      });
+      if (error) {
+        setAuthStatus(`Sign up failed: ${formatAuthError(error, "Unable to create account.")}`);
+        return;
+      }
+      if (data?.session) {
+        setAuthStatus("Account created. You are signed in.");
+        return;
+      }
+      setAuthStatus("Account created. Check your email to confirm your login.");
+    } catch (error) {
+      setAuthStatus(`Sign up failed: ${formatAuthError(error, "Unable to reach account service.")}`);
     }
-    if (data?.session) {
-      setAuthStatus("Account created. You are signed in.");
-      return;
-    }
-    setAuthStatus("Account created. Check your email to confirm your login.");
   }, []);
 
   const signOut = useCallback(async () => {
-    if (!SUPABASE_CLIENT) return;
-    const { error } = await SUPABASE_CLIENT.auth.signOut();
-    if (error) {
-      setAuthStatus(`Sign out failed: ${formatAuthError(error, "Unable to sign out.")}`);
-      return;
+    if (!AUTH_SYNC_ENABLED) return;
+    try {
+      const client = await loadSupabaseClient();
+      if (!client) return;
+      const { error } = await client.auth.signOut();
+      if (error) {
+        setAuthStatus(`Sign out failed: ${formatAuthError(error, "Unable to sign out.")}`);
+        return;
+      }
+      setAuthStatus("Signed out.");
+      setCloudStatus("");
+    } catch (error) {
+      setAuthStatus(`Sign out failed: ${formatAuthError(error, "Unable to reach account service.")}`);
     }
-    setAuthStatus("Signed out.");
-    setCloudStatus("");
   }, []);
 
   return (
