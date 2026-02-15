@@ -14,9 +14,10 @@ A web application for browsing 20-year MLB dynasty baseball projections (2026–
 - **Dual scoring workflows** — Switch between roto-focused and points-focused setups, including editable custom points scoring rules
 - **Explainability panel** — Inspect per-year value contributions and detailed stat-to-points breakdowns in points mode
 - **Preset + sharing workflow** — Save named calculator presets locally and share full settings through URL links
+- **Optional account sync** — Sign up/sign in to sync presets and watchlist across devices via Supabase Auth + Postgres
 - **Data export** — Export projections and calculator rankings to CSV/XLSX
 - **Efficient large-result loading** — Projection responses are gzip-compressed by the API, and the UI cancels stale in-flight requests during rapid filter changes
-- **Free & ad-free** — No accounts, no paywalls
+- **Free & ad-free** — No paywalls
 
 ## Architecture
 
@@ -37,6 +38,8 @@ dynasty-site/
 │   ├── pitch.json                      # Pre-processed pitcher data
 │   └── meta.json                       # Filter options metadata
 ├── Dockerfile
+├── supabase/
+│   └── user_preferences.sql             # Auth/RLS table setup for cloud-synced user prefs
 ├── requirements.txt
 └── README.md
 ```
@@ -67,6 +70,31 @@ npm run dev
 
 Vite serves the UI at http://localhost:5173 and proxies API calls to `localhost:8000` via existing frontend API-base detection.
 FastAPI serves `frontend/dist` in normal app mode, so rebuild (`npm run build`) after frontend source changes.
+
+### Optional: Account Login + Cloud Sync (Supabase)
+
+The app now supports optional user accounts that sync calculator presets and watchlists across visits/devices.
+
+1. Create a Supabase project.
+2. In Supabase SQL Editor, run `supabase/user_preferences.sql`.
+3. Configure frontend env vars (copy from `frontend/.env.example`):
+
+```bash
+cd frontend
+cp .env.example .env
+# then set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
+```
+
+`VITE_*` variables are compiled into frontend assets at build time, so set them before `npm run build` (or before Docker build in deployment).
+
+4. Rebuild frontend assets:
+
+```bash
+cd frontend
+npm run build
+```
+
+Without these env vars, the site continues to work with local-only browser storage.
 
 ### Running Tests
 ```bash

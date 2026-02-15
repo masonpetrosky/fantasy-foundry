@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="ff-build-id" content="__APP_BUILD_ID__">
-<title>Dynasty Baseball Projections — 2026–2045</title>
+<title>Fantasy Foundry</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -142,6 +143,89 @@ nav a.active,
 nav button.active {
   color: var(--text-primary);
   background: var(--bg-tertiary);
+}
+
+.account-card {
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.account-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.account-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.account-user {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.account-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.account-field {
+  display: grid;
+  gap: 6px;
+}
+
+.account-field span {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.account-field input {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-family: inherit;
+  font-size: 0.86rem;
+}
+
+.account-field input::placeholder {
+  color: var(--text-muted);
+}
+
+.account-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.account-note,
+.account-status {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.account-status.ok {
+  color: var(--green);
+}
+
+.account-status.error {
+  color: var(--red);
 }
 
 /* ====== HERO ====== */
@@ -1300,6 +1384,10 @@ footer a { color: var(--accent-dim); text-decoration: none; }
 }
 
 @media (max-width: 900px) {
+  .account-form {
+    grid-template-columns: 1fr;
+  }
+
   .calc-layout {
     grid-template-columns: 1fr;
     gap: 16px;

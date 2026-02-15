@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
+import { createClient } from "@supabase/supabase-js";
 import { ColumnChooserControl, ExplainabilityCard } from "./ui_components.jsx";
 
 
@@ -37,6 +38,20 @@ const CALC_LINK_QUERY_PARAM = "calc";
 const PROJECTION_MOBILE_COLUMN_MODE_STORAGE_KEY = "ff:proj-mobile-column-mode:v1";
 const PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY = "ff:proj-mobile-layout-mode:v1";
 const PLAYER_WATCHLIST_STORAGE_KEY = "ff:player-watchlist:v1";
+const CLOUD_SYNC_DEBOUNCE_MS = 900;
+const CLOUD_PREFERENCES_VERSION = 1;
+const SUPABASE_URL = String(import.meta.env.VITE_SUPABASE_URL || "").trim();
+const SUPABASE_ANON_KEY = String(import.meta.env.VITE_SUPABASE_ANON_KEY || "").trim();
+const SUPABASE_PREFS_TABLE = String(import.meta.env.VITE_SUPABASE_PREFS_TABLE || "user_preferences").trim() || "user_preferences";
+const AUTH_SYNC_ENABLED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+const SUPABASE_CLIENT = AUTH_SYNC_ENABLED
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+    })
+  : null;
 const MAX_COMPARE_PLAYERS = 4;
 const INDEX_BUILD_ID = (() => {
   const metaEl = document.querySelector('meta[name="ff-build-id"]');
@@ -124,19 +139,31 @@ function filenameFromDisposition(disposition, fallbackName) {
   return match && match[1] ? match[1] : fallbackName;
 }
 
+function normalizeCalculatorPresets(presets) {
+  if (!presets || typeof presets !== "object" || Array.isArray(presets)) return {};
+  const sanitized = {};
+  Object.entries(presets).forEach(([rawName, rawPreset]) => {
+    const name = String(rawName || "").trim();
+    if (!name) return;
+    if (!rawPreset || typeof rawPreset !== "object" || Array.isArray(rawPreset)) return;
+    sanitized[name] = { ...rawPreset };
+  });
+  return sanitized;
+}
+
 function readCalculatorPresets() {
   const raw = safeReadStorage(CALC_PRESETS_STORAGE_KEY);
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
+    return normalizeCalculatorPresets(parsed);
   } catch {
     return {};
   }
 }
 
 function writeCalculatorPresets(presets) {
-  safeWriteStorage(CALC_PRESETS_STORAGE_KEY, JSON.stringify(presets || {}));
+  safeWriteStorage(CALC_PRESETS_STORAGE_KEY, JSON.stringify(normalizeCalculatorPresets(presets)));
 }
 
 function stablePlayerKeyFromRow(row) {
@@ -156,32 +183,62 @@ function playerWatchEntryFromRow(row) {
   };
 }
 
+function normalizePlayerWatchlistEntries(rawEntries) {
+  if (!rawEntries || typeof rawEntries !== "object" || Array.isArray(rawEntries)) return {};
+  const entries = {};
+  Object.entries(rawEntries).forEach(([rawKey, value]) => {
+    const key = String(rawKey || "").trim();
+    if (!key) return;
+    if (!value || typeof value !== "object") return;
+    entries[key] = {
+      key,
+      player: String(value.player || "").trim() || "Unknown Player",
+      team: String(value.team || "").trim(),
+      pos: String(value.pos || "").trim(),
+    };
+  });
+  return entries;
+}
+
 function readPlayerWatchlist() {
   const raw = safeReadStorage(PLAYER_WATCHLIST_STORAGE_KEY);
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    const entries = {};
-    Object.entries(parsed).forEach(([rawKey, value]) => {
-      const key = String(rawKey || "").trim();
-      if (!key) return;
-      if (!value || typeof value !== "object") return;
-      entries[key] = {
-        key,
-        player: String(value.player || "").trim() || "Unknown Player",
-        team: String(value.team || "").trim(),
-        pos: String(value.pos || "").trim(),
-      };
-    });
-    return entries;
+    return normalizePlayerWatchlistEntries(parsed);
   } catch {
     return {};
   }
 }
 
 function writePlayerWatchlist(watchlist) {
-  safeWriteStorage(PLAYER_WATCHLIST_STORAGE_KEY, JSON.stringify(watchlist || {}));
+  safeWriteStorage(PLAYER_WATCHLIST_STORAGE_KEY, JSON.stringify(normalizePlayerWatchlistEntries(watchlist)));
+}
+
+function normalizeCloudPreferences(rawPreferences) {
+  if (!rawPreferences || typeof rawPreferences !== "object" || Array.isArray(rawPreferences)) {
+    return {
+      calculatorPresets: {},
+      playerWatchlist: {},
+    };
+  }
+  return {
+    calculatorPresets: normalizeCalculatorPresets(rawPreferences.calculator_presets),
+    playerWatchlist: normalizePlayerWatchlistEntries(rawPreferences.player_watchlist),
+  };
+}
+
+function buildCloudPreferencesPayload({ calculatorPresets, playerWatchlist }) {
+  return {
+    version: CLOUD_PREFERENCES_VERSION,
+    calculator_presets: normalizeCalculatorPresets(calculatorPresets),
+    player_watchlist: normalizePlayerWatchlistEntries(playerWatchlist),
+  };
+}
+
+function formatAuthError(error, fallbackMessage) {
+  const message = String(error?.message || "").trim();
+  return message || fallbackMessage;
 }
 
 function csvEscape(value) {
@@ -458,6 +515,139 @@ function useDebouncedValue(value, delayMs) {
   return debounced;
 }
 
+function AccountPanel({
+  authEnabled,
+  authReady,
+  authUser,
+  authStatus,
+  cloudStatus,
+  onSignIn,
+  onSignUp,
+  onSignOut,
+}) {
+  const [mode, setMode] = useState("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const statusText = String(authUser ? cloudStatus : authStatus || "").trim();
+  const statusLower = statusText.toLowerCase();
+  const statusTone = statusLower.includes("error") || statusLower.includes("failed")
+    ? "error"
+    : statusLower.includes("saved") || statusLower.includes("loaded") || statusLower.includes("enabled") || statusLower.includes("signed in")
+      ? "ok"
+      : "";
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (!authEnabled || !authReady || submitting) return;
+    const normalizedEmail = String(email || "").trim();
+    const normalizedPassword = String(password || "");
+    if (!normalizedEmail || !normalizedPassword) return;
+
+    setSubmitting(true);
+    try {
+      if (mode === "signup") {
+        await onSignUp(normalizedEmail, normalizedPassword);
+      } else {
+        await onSignIn(normalizedEmail, normalizedPassword);
+      }
+      setPassword("");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleSignOut() {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      await onSignOut();
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!authEnabled) {
+    return (
+      <section className="account-card" aria-live="polite">
+        <div className="account-head">
+          <h3>Account Sync</h3>
+        </div>
+        <p className="account-note">
+          Account login is currently disabled for this deployment. Configure Supabase to enable saved cross-device settings.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="account-card" aria-live="polite">
+      <div className="account-head">
+        <h3>Account Sync</h3>
+        {authUser && <span className="account-user">{authUser.email || "Signed in"}</span>}
+      </div>
+
+      {!authReady && (
+        <p className="account-note">Checking existing session...</p>
+      )}
+
+      {authReady && !authUser && (
+        <form className="account-form" onSubmit={handleSubmit}>
+          <label className="account-field">
+            <span>Email</span>
+            <input
+              type="email"
+              value={email}
+              onChange={event => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              required
+            />
+          </label>
+          <label className="account-field">
+            <span>Password</span>
+            <input
+              type="password"
+              value={password}
+              onChange={event => setPassword(event.target.value)}
+              placeholder="At least 8 characters"
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+              minLength={8}
+              required
+            />
+          </label>
+          <div className="account-actions">
+            <button type="submit" className="inline-btn" disabled={submitting}>
+              {submitting ? "Working..." : mode === "signup" ? "Create Account" : "Sign In"}
+            </button>
+            <button
+              type="button"
+              className="inline-btn"
+              onClick={() => setMode(current => (current === "signup" ? "signin" : "signup"))}
+              disabled={submitting}
+            >
+              {mode === "signup" ? "Use Existing Login" : "Create New Login"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {authReady && authUser && (
+        <div className="account-actions">
+          <button type="button" className="inline-btn" onClick={handleSignOut} disabled={submitting}>
+            {submitting ? "Signing Out..." : "Sign Out"}
+          </button>
+        </div>
+      )}
+
+      {statusText && (
+        <p className={`account-status ${statusTone}`.trim()}>{statusText}</p>
+      )}
+    </section>
+  );
+}
+
 function projectionCacheGet(cacheMapRef, cacheOrderRef, cacheKey) {
   const cached = cacheMapRef.current.get(cacheKey);
   if (!cached) return null;
@@ -653,6 +843,31 @@ function App() {
   const [metaError, setMetaError] = useState("");
   const [buildLabel, setBuildLabel] = useState("");
   const [dataVersion, setDataVersion] = useState("");
+  const [presets, setPresets] = useState(() => readCalculatorPresets());
+  const [watchlist, setWatchlist] = useState(() => readPlayerWatchlist());
+  const [authReady, setAuthReady] = useState(!AUTH_SYNC_ENABLED);
+  const [authUser, setAuthUser] = useState(null);
+  const [authStatus, setAuthStatus] = useState("");
+  const [cloudStatus, setCloudStatus] = useState("");
+  const [cloudReadyForSave, setCloudReadyForSave] = useState(false);
+  const presetsRef = useRef(presets);
+  const watchlistRef = useRef(watchlist);
+
+  useEffect(() => {
+    presetsRef.current = presets;
+  }, [presets]);
+
+  useEffect(() => {
+    watchlistRef.current = watchlist;
+  }, [watchlist]);
+
+  useEffect(() => {
+    writeCalculatorPresets(presets);
+  }, [presets]);
+
+  useEffect(() => {
+    writePlayerWatchlist(watchlist);
+  }, [watchlist]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -757,6 +972,190 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!SUPABASE_CLIENT) return undefined;
+    let mounted = true;
+
+    SUPABASE_CLIENT.auth.getSession()
+      .then(({ data, error }) => {
+        if (!mounted) return;
+        if (error) {
+          setAuthStatus(`Account setup error: ${formatAuthError(error, "Unable to restore session.")}`);
+        } else if (!data?.session) {
+          setAuthStatus("Sign in to sync your presets and watchlist across devices.");
+        }
+        setAuthUser(data?.session?.user || null);
+      })
+      .finally(() => {
+        if (mounted) setAuthReady(true);
+      });
+
+    const { data } = SUPABASE_CLIENT.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user || null);
+      setCloudReadyForSave(false);
+      if (!session?.user) {
+        setCloudStatus("");
+      }
+    });
+
+    return () => {
+      mounted = false;
+      data?.subscription?.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!SUPABASE_CLIENT || !authReady) return undefined;
+    if (!authUser?.id) {
+      setCloudReadyForSave(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setCloudStatus("Syncing account settings...");
+    setCloudReadyForSave(false);
+
+    const loadCloudPreferences = async () => {
+      const { data, error } = await SUPABASE_CLIENT
+        .from(SUPABASE_PREFS_TABLE)
+        .select("preferences")
+        .eq("user_id", authUser.id)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (error) {
+        setCloudStatus(`Cloud sync error: ${formatAuthError(error, "Unable to load account settings.")}`);
+        return;
+      }
+
+      if (data?.preferences) {
+        const normalized = normalizeCloudPreferences(data.preferences);
+        setPresets(normalized.calculatorPresets);
+        setWatchlist(normalized.playerWatchlist);
+        setCloudStatus("Loaded saved account settings.");
+        setCloudReadyForSave(true);
+        return;
+      }
+
+      const seedPayload = buildCloudPreferencesPayload({
+        calculatorPresets: presetsRef.current,
+        playerWatchlist: watchlistRef.current,
+      });
+
+      const { error: upsertError } = await SUPABASE_CLIENT
+        .from(SUPABASE_PREFS_TABLE)
+        .upsert(
+          {
+            user_id: authUser.id,
+            preferences: seedPayload,
+          },
+          { onConflict: "user_id" }
+        );
+
+      if (cancelled) return;
+      if (upsertError) {
+        setCloudStatus(`Cloud sync error: ${formatAuthError(upsertError, "Unable to initialize account settings.")}`);
+        return;
+      }
+
+      setCloudStatus("Cloud sync enabled.");
+      setCloudReadyForSave(true);
+    };
+
+    loadCloudPreferences().catch(error => {
+      if (cancelled) return;
+      setCloudStatus(`Cloud sync error: ${formatAuthError(error, "Unexpected sync failure.")}`);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, authUser?.id]);
+
+  useEffect(() => {
+    if (!SUPABASE_CLIENT || !authUser?.id || !cloudReadyForSave) return undefined;
+
+    const timer = window.setTimeout(async () => {
+      const payload = buildCloudPreferencesPayload({
+        calculatorPresets: presets,
+        playerWatchlist: watchlist,
+      });
+      const { error } = await SUPABASE_CLIENT
+        .from(SUPABASE_PREFS_TABLE)
+        .upsert(
+          {
+            user_id: authUser.id,
+            preferences: payload,
+          },
+          { onConflict: "user_id" }
+        );
+      if (error) {
+        setCloudStatus(`Cloud save error: ${formatAuthError(error, "Unable to save settings.")}`);
+        return;
+      }
+      setCloudStatus("Saved account settings.");
+    }, CLOUD_SYNC_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [authUser?.id, cloudReadyForSave, presets, watchlist]);
+
+  const signIn = useCallback(async (email, password) => {
+    if (!SUPABASE_CLIENT) return;
+    const normalizedEmail = String(email || "").trim();
+    const normalizedPassword = String(password || "");
+    if (!normalizedEmail || !normalizedPassword) {
+      setAuthStatus("Sign in failed: email and password are required.");
+      return;
+    }
+    setAuthStatus("");
+    const { error } = await SUPABASE_CLIENT.auth.signInWithPassword({
+      email: normalizedEmail,
+      password: normalizedPassword,
+    });
+    if (error) {
+      setAuthStatus(`Sign in failed: ${formatAuthError(error, "Invalid login.")}`);
+      return;
+    }
+    setAuthStatus("Signed in.");
+  }, []);
+
+  const signUp = useCallback(async (email, password) => {
+    if (!SUPABASE_CLIENT) return;
+    const normalizedEmail = String(email || "").trim();
+    const normalizedPassword = String(password || "");
+    if (!normalizedEmail || !normalizedPassword) {
+      setAuthStatus("Sign up failed: email and password are required.");
+      return;
+    }
+    setAuthStatus("");
+    const { data, error } = await SUPABASE_CLIENT.auth.signUp({
+      email: normalizedEmail,
+      password: normalizedPassword,
+    });
+    if (error) {
+      setAuthStatus(`Sign up failed: ${formatAuthError(error, "Unable to create account.")}`);
+      return;
+    }
+    if (data?.session) {
+      setAuthStatus("Account created. You are signed in.");
+      return;
+    }
+    setAuthStatus("Account created. Check your email to confirm your login.");
+  }, []);
+
+  const signOut = useCallback(async () => {
+    if (!SUPABASE_CLIENT) return;
+    const { error } = await SUPABASE_CLIENT.auth.signOut();
+    if (error) {
+      setAuthStatus(`Sign out failed: ${formatAuthError(error, "Unable to sign out.")}`);
+      return;
+    }
+    setAuthStatus("Signed out.");
+    setCloudStatus("");
+  }, []);
+
   return (
     <>
       <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -807,6 +1206,16 @@ function App() {
         </div>
 
         <div className="container">
+          <AccountPanel
+            authEnabled={AUTH_SYNC_ENABLED}
+            authReady={authReady}
+            authUser={authUser}
+            authStatus={authStatus}
+            cloudStatus={cloudStatus}
+            onSignIn={signIn}
+            onSignUp={signUp}
+            onSignOut={signOut}
+          />
           <div className="methodology-card" style={{ marginBottom: "20px" }}>
             <h2 style={{ marginBottom: "10px" }}>Default League Configuration</h2>
             <p>This site defaults to a 12-team, 5x5 roto setup for rankings.</p>
@@ -836,8 +1245,23 @@ function App() {
               Unable to load API data. Check that the backend is running and reachable. ({metaError})
             </p>
           )}
-          {section === "projections" && meta && <ProjectionsExplorer meta={meta} dataVersion={dataVersion} />}
-          {section === "calculator" && meta && <DynastyCalculator meta={meta} />}
+          {section === "projections" && meta && (
+            <ProjectionsExplorer
+              meta={meta}
+              dataVersion={dataVersion}
+              watchlist={watchlist}
+              setWatchlist={setWatchlist}
+            />
+          )}
+          {section === "calculator" && meta && (
+            <DynastyCalculator
+              meta={meta}
+              presets={presets}
+              setPresets={setPresets}
+              watchlist={watchlist}
+              setWatchlist={setWatchlist}
+            />
+          )}
         </div>
 
         <section id="methodology" className="methodology-section" aria-labelledby="methodology-heading">
@@ -877,7 +1301,7 @@ function App() {
 // ---------------------------------------------------------------------------
 // Projections Explorer
 // ---------------------------------------------------------------------------
-function ProjectionsExplorer({ meta, dataVersion }) {
+function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
   const [tab, setTab] = useState(DEFAULT_PROJECTIONS_TAB); // all | bat | pitch
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, PROJECTION_SEARCH_DEBOUNCE_MS);
@@ -892,7 +1316,6 @@ function ProjectionsExplorer({ meta, dataVersion }) {
     const saved = String(safeReadStorage(PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY) || "").trim().toLowerCase();
     return saved === "cards" ? "cards" : "table";
   });
-  const [watchlist, setWatchlist] = useState(() => readPlayerWatchlist());
   const [watchlistOnly, setWatchlistOnly] = useState(false);
   const [compareRowsByKey, setCompareRowsByKey] = useState({});
   const [teamFilter, setTeamFilter] = useState("");
@@ -1127,10 +1550,6 @@ function ProjectionsExplorer({ meta, dataVersion }) {
   useEffect(() => {
     safeWriteStorage(PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY, mobileLayoutMode);
   }, [mobileLayoutMode]);
-
-  useEffect(() => {
-    writePlayerWatchlist(watchlist);
-  }, [watchlist]);
 
   useEffect(() => {
     if (watchlistOnly && Object.keys(watchlist).length === 0) {
@@ -1826,7 +2245,7 @@ function ProjectionsExplorer({ meta, dataVersion }) {
 // ---------------------------------------------------------------------------
 // Dynasty Value Calculator
 // ---------------------------------------------------------------------------
-function DynastyCalculator({ meta }) {
+function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist }) {
   const [settings, setSettings] = useState(() => buildDefaultCalculatorSettings(meta));
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1838,12 +2257,10 @@ function DynastyCalculator({ meta }) {
   const [posFilter, setPosFilter] = useState("");
   const [presetName, setPresetName] = useState("");
   const [selectedPresetName, setSelectedPresetName] = useState("");
-  const [presets, setPresets] = useState(() => readCalculatorPresets());
   const [selectedExplainKey, setSelectedExplainKey] = useState("");
   const [selectedExplainYear, setSelectedExplainYear] = useState("");
   const [hiddenRankCols, setHiddenRankCols] = useState({});
   const [pinRankKeyColumns, setPinRankKeyColumns] = useState(true);
-  const [watchlist, setWatchlist] = useState(() => readPlayerWatchlist());
   const [rankWatchlistOnly, setRankWatchlistOnly] = useState(false);
   const [rankCompareRowsByKey, setRankCompareRowsByKey] = useState({});
   const calcRequestSeqRef = useRef(0);
@@ -1872,14 +2289,6 @@ function DynastyCalculator({ meta }) {
       setSettings(prev => ({ ...prev, start_year: availableYears[0] }));
     }
   }, [availableYears, settings.start_year]);
-
-  useEffect(() => {
-    writeCalculatorPresets(presets);
-  }, [presets]);
-
-  useEffect(() => {
-    writePlayerWatchlist(watchlist);
-  }, [watchlist]);
 
   useEffect(() => {
     if (rankWatchlistOnly && Object.keys(watchlist).length === 0) {
