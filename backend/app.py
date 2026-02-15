@@ -1813,7 +1813,7 @@ def _default_calculation_cache_params() -> dict[str, int | float | str | None]:
         "teams": 12,
         "sims": 300,
         "horizon": horizon,
-        "discount": 0.85,
+        "discount": 0.94,
         "hit_c": COMMON_HITTER_SLOT_DEFAULTS["C"],
         "hit_1b": COMMON_HITTER_SLOT_DEFAULTS["1B"],
         "hit_2b": COMMON_HITTER_SLOT_DEFAULTS["2B"],
@@ -3432,7 +3432,7 @@ class CalculateRequest(BaseModel):
     teams: int = Field(default=12, ge=2, le=30)
     sims: int = Field(default=300, ge=1, le=5000)
     horizon: int = Field(default=20, ge=1, le=20)
-    discount: float = Field(default=0.85, gt=0.0, le=1.0)
+    discount: float = Field(default=0.94, gt=0.0, le=1.0)
     hit_c: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["C"], ge=0, le=15)
     hit_1b: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["1B"], ge=0, le=15)
     hit_2b: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["2B"], ge=0, le=15)

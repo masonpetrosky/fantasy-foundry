@@ -419,7 +419,7 @@ function buildDefaultCalculatorSettings(meta) {
     teams: 12,
     sims: 300,
     horizon: 20,
-    discount: 0.85,
+    discount: 0.94,
     ...resolveRotoSlotDefaults(meta),
     bench: 6,
     minors: Number.isInteger(defaultMinors) && defaultMinors >= 0 ? defaultMinors : 0,
@@ -2475,7 +2475,7 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
       ...settings,
       teams: 12,
       horizon: 20,
-      discount: 0.85,
+      discount: 0.94,
       bench: 6,
       minors: Number.isInteger(defaultMinors) && defaultMinors >= 0 ? defaultMinors : 0,
       ir: Number.isInteger(defaultIr) && defaultIr >= 0 ? defaultIr : 0,
@@ -3085,7 +3085,7 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
                     tabIndex={0}
                     role="note"
                     aria-label="Discount help"
-                    title="Applies a yearly value multiplier. Example: 0.85 means each future season is worth 85% of the previous season."
+                    title="Applies a yearly value multiplier. Example: 0.94 means each future season is worth 94% of the previous season."
                   >
                     ?
                   </span>

@@ -3484,7 +3484,7 @@ def main() -> None:
     common.add_argument("--teams", type=positive_int_arg, default=12)
     common.add_argument("--sims", type=positive_int_arg, default=200, help="Monte Carlo sims for SGP denominators.")
     common.add_argument("--horizon", type=positive_int_arg, default=10, help="Dynasty horizon years.")
-    common.add_argument("--discount", type=discount_arg, default=0.85, help="Annual discount factor in (0, 1].")
+    common.add_argument("--discount", type=discount_arg, default=0.94, help="Annual discount factor in (0, 1].")
     common.add_argument("--seed", type=int, default=0, help="Global random seed offset for deterministic simulations.")
     common.add_argument("--bench", type=non_negative_int_arg, default=6)
     common.add_argument("--minors", type=non_negative_int_arg, default=0)
@@ -3513,7 +3513,7 @@ def main() -> None:
     league.add_argument("--start-year", type=int, default=None, help="First valuation year (default: min Year in file).")
     league.add_argument("--sims", type=positive_int_arg, default=200, help="Monte Carlo sims for SGP denominators.")
     league.add_argument("--horizon", type=positive_int_arg, default=10, help="Dynasty horizon years.")
-    league.add_argument("--discount", type=discount_arg, default=0.85, help="Annual discount factor in (0, 1].")
+    league.add_argument("--discount", type=discount_arg, default=0.94, help="Annual discount factor in (0, 1].")
     league.add_argument("--seed", type=int, default=0, help="Global random seed offset for deterministic simulations.")
     league.add_argument(
         "--dynamic-replacement-baselines",

@@ -73,7 +73,7 @@ class CommonDynastyRotoSettings:
     replacement_pitchers_n: int = 100
 
     # Dynasty parameters
-    discount: float = 0.85
+    discount: float = 0.94
     horizon_years: int = 10
     # If True, compute replacement baselines from start_year once and reuse
     # for all future valuation years. This avoids late-horizon value inflation
@@ -136,7 +136,7 @@ class LeagueSettings:
     replacement_pitchers_n: int = 100
 
     # Dynasty parameters
-    discount: float = 0.85
+    discount: float = 0.94
     horizon_years: int = 10
     # If True, compute replacement baselines from start_year once and reuse
     # for all future valuation years. This avoids late-horizon value inflation
