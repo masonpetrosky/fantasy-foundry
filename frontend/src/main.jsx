@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { createRoot } from "react-dom/client";
 import { createClient } from "@supabase/supabase-js";
 import { ColumnChooserControl, ExplainabilityCard } from "./ui_components.jsx";
+import { normalizeCalculatorRunSettingsInput } from "./calculator_submit.js";
 
 
 // ---------------------------------------------------------------------------
@@ -789,6 +790,25 @@ function buildCalculatorPayload(settings, availableYears, meta) {
     }
   }
 
+  const payload = {
+    ...settings,
+    teams,
+    sims,
+    horizon,
+    discount,
+    ...parsedSlots,
+    bench,
+    minors,
+    ir,
+    scoring_mode: scoringMode,
+    ip_min: ipMin,
+    ip_max: ipMax,
+    two_way: twoWay,
+    start_year: startYear,
+    recent_projections: recentProjections,
+    ...parsedPointsScoring,
+  };
+
   const guardrails = meta?.calculator_guardrails || {};
   const playableByYear = guardrails?.playable_by_year;
   if (playableByYear && typeof playableByYear === "object") {
@@ -798,40 +818,25 @@ function buildCalculatorPayload(settings, availableYears, meta) {
       const availablePitchers = Number(pool.pitchers);
       const requiredHitters = teams * hittersPerTeam;
       const requiredPitchers = teams * pitchersPerTeam;
+      const warnings = [];
 
       if (Number.isFinite(availableHitters) && requiredHitters > availableHitters) {
-        return {
-          error: `Roster likely unfillable for ${startYear}: requires ${requiredHitters} hitters but only ${availableHitters} have projected AB > 0.`,
-        };
+        warnings.push(
+          `Roster likely unfillable for ${startYear}: requires ${requiredHitters} hitters but only ${availableHitters} have projected AB > 0.`
+        );
       }
       if (Number.isFinite(availablePitchers) && requiredPitchers > availablePitchers) {
-        return {
-          error: `Roster likely unfillable for ${startYear}: requires ${requiredPitchers} pitchers but only ${availablePitchers} have projected IP > 0.`,
-        };
+        warnings.push(
+          `Roster likely unfillable for ${startYear}: requires ${requiredPitchers} pitchers but only ${availablePitchers} have projected IP > 0.`
+        );
+      }
+      if (warnings.length > 0) {
+        return { payload, warning: warnings.join(" ") };
       }
     }
   }
 
-  return {
-    payload: {
-      ...settings,
-      teams,
-      sims,
-      horizon,
-      discount,
-      ...parsedSlots,
-      bench,
-      minors,
-      ir,
-      scoring_mode: scoringMode,
-      ip_min: ipMin,
-      ip_max: ipMax,
-      two_way: twoWay,
-      start_year: startYear,
-      recent_projections: recentProjections,
-      ...parsedPointsScoring,
-    },
-  };
+  return { payload };
 }
 
 // ---------------------------------------------------------------------------
@@ -2277,10 +2282,12 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
   const rotoSlotDefaults = useMemo(() => resolveRotoSlotDefaults(meta), [meta]);
   const pointsSlotDefaults = useMemo(() => resolvePointsSlotDefaults(meta), [meta]);
   const pointsScoringDefaults = useMemo(() => resolvePointsScoringDefaults(meta), [meta]);
-  const validationError = useMemo(
-    () => buildCalculatorPayload(settings, availableYears, meta).error || "",
+  const validationResult = useMemo(
+    () => buildCalculatorPayload(settings, availableYears, meta),
     [settings, availableYears, meta]
   );
+  const validationError = validationResult.error || "";
+  const validationWarning = validationResult.warning || "";
 
   useEffect(() => {
     if (availableYears.length === 0) return;
@@ -2484,7 +2491,8 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
   }
 
   function run(runSettings = settings) {
-    const payload = buildCalculatorPayload(runSettings, availableYears, meta);
+    const normalizedSettings = normalizeCalculatorRunSettingsInput(runSettings, settings);
+    const payload = buildCalculatorPayload(normalizedSettings, availableYears, meta);
     if (payload.error || !payload.payload) {
       setStatus(`Error: ${payload.error || "Invalid settings"}`);
       return;
@@ -3221,7 +3229,7 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
           </div>
 
           <div className="calc-section">
-            <button className="calc-btn" onClick={run} disabled={loading || Boolean(validationError)}>
+            <button className="calc-btn" onClick={() => run()} disabled={loading || Boolean(validationError)}>
               {loading ? "Computing..." : "Generate Rankings"}
             </button>
             <div
@@ -3229,7 +3237,11 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
               role={statusIsError ? "alert" : "status"}
               aria-live="polite"
             >
-              {loading ? status : validationError ? `Fix settings: ${validationError}` : status}
+              {loading
+                ? status
+                : validationError
+                  ? `Fix settings: ${validationError}`
+                  : status || (validationWarning ? `Warning: ${validationWarning}` : "")}
             </div>
           </div>
         </div>
