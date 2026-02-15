@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createClient } from "@supabase/supabase-js";
 import { ColumnChooserControl, ExplainabilityCard } from "./ui_components.jsx";
 import { normalizeCalculatorRunSettingsInput } from "./calculator_submit.js";
+import { parseDownloadFilename } from "./download_filename.js";
 
 
 // ---------------------------------------------------------------------------
@@ -132,12 +133,6 @@ function triggerBlobDownload(filename, blob) {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
-}
-
-function filenameFromDisposition(disposition, fallbackName) {
-  const text = String(disposition || "");
-  const match = text.match(/filename=\"?([^\";]+)\"?/i);
-  return match && match[1] ? match[1] : fallbackName;
 }
 
 function normalizeCalculatorPresets(presets) {
@@ -1332,6 +1327,8 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
   const [totalRows, setTotalRows] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [exportError, setExportError] = useState("");
+  const [exportingFormat, setExportingFormat] = useState("");
   const [offset, setOffset] = useState(0);
   const [sortCol, setSortCol] = useState(DEFAULT_PROJECTIONS_SORT_COL);
   const [sortDir, setSortDir] = useState(DEFAULT_PROJECTIONS_SORT_DIR);
@@ -1723,7 +1720,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
     }
   }
 
-  function exportCurrentProjections(format) {
+  async function exportCurrentProjections(format) {
     const endpointTab = tab === "all" ? "all" : tab;
     const params = new URLSearchParams();
     if (search) params.set("player", search);
@@ -1741,7 +1738,27 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
     params.set("sort_dir", sortDir);
     params.set("format", format);
     const href = `${API}/api/projections/export/${endpointTab}?${params.toString()}`;
-    window.open(href, "_blank", "noopener,noreferrer");
+
+    try {
+      setExportingFormat(format);
+      setExportError("");
+      const response = await fetch(href, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
+      if (!response.ok) {
+        const parsed = await readResponsePayload(response);
+        throw new Error(formatApiError(response.status, parsed.payload, parsed.rawText));
+      }
+      const blob = await response.blob();
+      const fallback = `projections-${endpointTab}.${format}`;
+      const filename = parseDownloadFilename(response.headers.get("content-disposition"), fallback);
+      triggerBlobDownload(filename, blob);
+    } catch (err) {
+      setExportError(err?.message || "Failed to export projections");
+    } finally {
+      setExportingFormat("");
+    }
   }
 
   const seasonCol = careerTotalsView ? "Years" : "Year";
@@ -1917,9 +1934,28 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
         >
           {watchlistOnly ? "All Players View" : "Watchlist View"}
         </button>
-        <button type="button" className="inline-btn" onClick={() => exportCurrentProjections("csv")}>Export CSV</button>
-        <button type="button" className="inline-btn" onClick={() => exportCurrentProjections("xlsx")}>Export XLSX</button>
+        <button
+          type="button"
+          className="inline-btn"
+          onClick={() => exportCurrentProjections("csv")}
+          disabled={Boolean(exportingFormat)}
+        >
+          {exportingFormat === "csv" ? "Exporting CSV..." : "Export CSV"}
+        </button>
+        <button
+          type="button"
+          className="inline-btn"
+          onClick={() => exportCurrentProjections("xlsx")}
+          disabled={Boolean(exportingFormat)}
+        >
+          {exportingFormat === "xlsx" ? "Exporting XLSX..." : "Export XLSX"}
+        </button>
       </div>
+      {exportError && (
+        <div className="table-refresh-message error" role="status" aria-live="polite">
+          Export failed. {exportError}
+        </div>
+      )}
       <div className="collection-toolbar" role="group" aria-label="Watchlist and comparison actions">
         <span className="collection-toolbar-label">Watchlist: {watchlistCount}</span>
         <span className="collection-toolbar-label">View: {watchlistOnly ? "Watchlist" : "All Players"}</span>
@@ -2482,7 +2518,7 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
       }
       const blob = await response.blob();
       const fallback = `dynasty-rankings.${format}`;
-      const filename = filenameFromDisposition(response.headers.get("content-disposition"), fallback);
+      const filename = parseDownloadFilename(response.headers.get("content-disposition"), fallback);
       triggerBlobDownload(filename, blob);
       setStatus(`Exported ${filename}`);
     } catch (err) {
