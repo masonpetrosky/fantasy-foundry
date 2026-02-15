@@ -840,6 +840,7 @@ function App() {
   const [cloudReadyForSave, setCloudReadyForSave] = useState(false);
   const presetsRef = useRef(presets);
   const watchlistRef = useRef(watchlist);
+  const versionEtagRef = useRef("");
 
   useEffect(() => {
     presetsRef.current = presets;
@@ -888,64 +889,71 @@ function App() {
       timer = window.setTimeout(runVersionCheck, VERSION_POLL_INTERVAL_MS);
     };
 
-    const runVersionCheck = () => {
+    const runVersionCheck = async () => {
       if (cancelled) return;
       if (activeController) activeController.abort();
       const controller = new AbortController();
       activeController = controller;
+      const headers = { "Cache-Control": "no-cache" };
+      if (versionEtagRef.current) {
+        headers["If-None-Match"] = versionEtagRef.current;
+      }
 
-      fetch(`${API}/api/version`, {
-        signal: controller.signal,
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache" },
-      })
-        .then(r => {
-          if (!r.ok) throw new Error(`Server returned ${r.status} while loading /api/version`);
-          return r.json();
-        })
-        .then(res => {
-          if (cancelled) return;
-
-          const buildId = String(res?.build_id || "").trim();
-          const resolvedDataVersion = String(res?.data_version || buildId || "").trim();
-          if (resolvedDataVersion) {
-            setDataVersion(resolvedDataVersion);
-          }
-          if (!buildId) return;
-
-          setBuildLabel(buildId.slice(0, 12));
-
-          const previousBuildId = safeReadStorage(BUILD_STORAGE_KEY);
-          const url = new URL(window.location.href);
-          const urlBuildId = String(url.searchParams.get(BUILD_QUERY_PARAM) || "").trim();
-
-          // If the currently loaded HTML build is stale (or we previously saw a
-          // different build), force one cache-busting navigation to the latest build.
-          const pageIsStale = Boolean(INDEX_BUILD_ID && INDEX_BUILD_ID !== buildId);
-          const seenBuildChange = Boolean(previousBuildId && previousBuildId !== buildId);
-          if ((pageIsStale || seenBuildChange) && urlBuildId !== buildId) {
-            url.searchParams.set(BUILD_QUERY_PARAM, buildId);
-            window.location.replace(url.toString());
-            return;
-          }
-
-          if (urlBuildId && urlBuildId !== buildId) {
-            url.searchParams.set(BUILD_QUERY_PARAM, buildId);
-            window.history.replaceState({}, "", url.toString());
-          }
-
-          safeWriteStorage(BUILD_STORAGE_KEY, buildId);
-        })
-        .catch(err => {
-          if (err?.name === "AbortError" || cancelled) return;
-          console.warn("Version check failed:", err);
-        })
-        .finally(() => {
-          if (activeController === controller) {
-            activeController = null;
-          }
-          scheduleNextPoll();
+      try {
+        const response = await fetch(`${API}/api/version`, {
+          signal: controller.signal,
+          cache: "no-store",
+          headers,
         });
+        if (response.status === 304) return;
+        if (!response.ok) throw new Error(`Server returned ${response.status} while loading /api/version`);
+
+        const etag = String(response.headers.get("etag") || "").trim();
+        if (etag) {
+          versionEtagRef.current = etag;
+        }
+
+        const res = await response.json();
+        if (cancelled) return;
+
+        const buildId = String(res?.build_id || "").trim();
+        const resolvedDataVersion = String(res?.data_version || buildId || "").trim();
+        if (resolvedDataVersion) {
+          setDataVersion(resolvedDataVersion);
+        }
+        if (!buildId) return;
+
+        setBuildLabel(buildId.slice(0, 12));
+
+        const previousBuildId = safeReadStorage(BUILD_STORAGE_KEY);
+        const url = new URL(window.location.href);
+        const urlBuildId = String(url.searchParams.get(BUILD_QUERY_PARAM) || "").trim();
+
+        // If the currently loaded HTML build is stale (or we previously saw a
+        // different build), force one cache-busting navigation to the latest build.
+        const pageIsStale = Boolean(INDEX_BUILD_ID && INDEX_BUILD_ID !== buildId);
+        const seenBuildChange = Boolean(previousBuildId && previousBuildId !== buildId);
+        if ((pageIsStale || seenBuildChange) && urlBuildId !== buildId) {
+          url.searchParams.set(BUILD_QUERY_PARAM, buildId);
+          window.location.replace(url.toString());
+          return;
+        }
+
+        if (urlBuildId && urlBuildId !== buildId) {
+          url.searchParams.set(BUILD_QUERY_PARAM, buildId);
+          window.history.replaceState({}, "", url.toString());
+        }
+
+        safeWriteStorage(BUILD_STORAGE_KEY, buildId);
+      } catch (err) {
+        if (err?.name === "AbortError" || cancelled) return;
+        console.warn("Version check failed:", err);
+      } finally {
+        if (activeController === controller) {
+          activeController = null;
+        }
+        scheduleNextPoll();
+      }
     };
 
     runVersionCheck();

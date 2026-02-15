@@ -150,6 +150,40 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
             "public, max-age=31536000, immutable",
         )
 
+    def test_version_endpoint_supports_etag_conditional_requests(self) -> None:
+        with patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            first = self.client.get("/api/version")
+
+            self.assertEqual(first.status_code, 200)
+            etag = first.headers.get("etag")
+            self.assertTrue(etag)
+
+            second = self.client.get(
+                "/api/version",
+                headers={"If-None-Match": etag},
+            )
+
+        self.assertEqual(second.status_code, 304)
+        self.assertEqual(second.text, "")
+        self.assertEqual(second.headers.get("etag"), etag)
+
+    def test_version_endpoint_returns_200_for_mismatched_etag(self) -> None:
+        with patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/version",
+                headers={"If-None-Match": '"stale-version"'},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.headers.get("etag"))
+
     def test_bat_limit_must_be_positive(self) -> None:
         response = self.client.get("/api/projections/bat", params={"limit": 0})
         self.assertEqual(response.status_code, 422)

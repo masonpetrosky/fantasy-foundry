@@ -35,7 +35,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 try:  # pragma: no cover - optional dependency
@@ -3139,18 +3139,54 @@ def _get_all_projection_rows(
     return tuple(sorted_rows)
 
 
+def _version_payload() -> dict[str, Any]:
+    return {
+        "build_id": APP_BUILD_ID,
+        "commit_sha": DEPLOY_COMMIT_SHA or None,
+        "built_at": APP_BUILD_AT,
+        "data_version": _current_data_version(),
+        "projection_freshness": dict(PROJECTION_FRESHNESS),
+    }
+
+
+def _payload_etag(payload: dict[str, Any]) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+    return f'"{digest}"'
+
+
+def _etag_matches(if_none_match: str | None, current_etag: str) -> bool:
+    token = str(if_none_match or "").strip()
+    if not token:
+        return False
+    if token == "*":
+        return True
+
+    current = current_etag[2:].strip() if current_etag.startswith("W/") else current_etag.strip()
+    for raw_candidate in token.split(","):
+        candidate = raw_candidate.strip()
+        if not candidate:
+            continue
+        if candidate == "*":
+            return True
+        candidate = candidate[2:].strip() if candidate.startswith("W/") else candidate
+        if candidate == current:
+            return True
+    return False
+
+
 @app.get("/api/version")
-def get_version():
+def get_version(request: Request):
     _refresh_data_if_needed()
+    payload = _version_payload()
+    headers = dict(API_NO_CACHE_HEADERS)
+    etag = _payload_etag(payload)
+    headers["ETag"] = etag
+    if _etag_matches(request.headers.get("if-none-match"), etag):
+        return Response(status_code=304, headers=headers)
     return JSONResponse(
-        {
-            "build_id": APP_BUILD_ID,
-            "commit_sha": DEPLOY_COMMIT_SHA or None,
-            "built_at": APP_BUILD_AT,
-            "data_version": _current_data_version(),
-            "projection_freshness": dict(PROJECTION_FRESHNESS),
-        },
-        headers=dict(API_NO_CACHE_HEADERS),
+        payload,
+        headers=headers,
     )
 
 
