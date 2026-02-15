@@ -4,6 +4,16 @@ import { ColumnChooserControl, ExplainabilityCard } from "./ui_components.jsx";
 import { normalizeCalculatorRunSettingsInput } from "./calculator_submit.js";
 import { parseDownloadFilename } from "./download_filename.js";
 import { AUTH_SYNC_ENABLED, SUPABASE_PREFS_TABLE, loadSupabaseClient } from "./supabase_client.js";
+import {
+  PROJECTION_TABS,
+  PROJECTION_HITTER_CORE_STATS,
+  PROJECTION_PITCHER_CORE_STATS,
+  uniqueColumnOrder,
+  normalizeHiddenColumnOverridesByTab,
+  projectionTableColumnCatalog,
+  projectionCardColumnCatalog,
+  projectionTableColumnHiddenByDefault,
+} from "./projections_view_config.js";
 
 
 // ---------------------------------------------------------------------------
@@ -37,8 +47,9 @@ const BUILD_STORAGE_KEY = "ff:lastBuildId";
 const BUILD_QUERY_PARAM = "build";
 const CALC_PRESETS_STORAGE_KEY = "ff:calc-presets:v1";
 const CALC_LINK_QUERY_PARAM = "calc";
-const PROJECTION_MOBILE_COLUMN_MODE_STORAGE_KEY = "ff:proj-mobile-column-mode:v1";
 const PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY = "ff:proj-mobile-layout-mode:v1";
+const PROJECTION_TABLE_HIDDEN_COLS_STORAGE_KEY = "ff:proj-table-hidden-cols:v1";
+const PROJECTION_CARD_HIDDEN_COLS_STORAGE_KEY = "ff:proj-card-hidden-cols:v1";
 const PLAYER_WATCHLIST_STORAGE_KEY = "ff:player-watchlist:v1";
 const CLOUD_SYNC_DEBOUNCE_MS = 900;
 const CLOUD_PREFERENCES_VERSION = 1;
@@ -197,6 +208,23 @@ function readPlayerWatchlist() {
 
 function writePlayerWatchlist(watchlist) {
   safeWriteStorage(PLAYER_WATCHLIST_STORAGE_KEY, JSON.stringify(normalizePlayerWatchlistEntries(watchlist)));
+}
+
+function readHiddenColumnOverridesByTab(storageKey) {
+  const raw = safeReadStorage(storageKey);
+  if (!raw) return normalizeHiddenColumnOverridesByTab(null);
+  try {
+    return normalizeHiddenColumnOverridesByTab(JSON.parse(raw));
+  } catch {
+    return normalizeHiddenColumnOverridesByTab(null);
+  }
+}
+
+function writeHiddenColumnOverridesByTab(storageKey, overridesByTab) {
+  safeWriteStorage(
+    storageKey,
+    JSON.stringify(normalizeHiddenColumnOverridesByTab(overridesByTab))
+  );
 }
 
 function normalizeCloudPreferences(rawPreferences) {
@@ -1362,14 +1390,16 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
   const [isMobileViewport, setIsMobileViewport] = useState(() => (
     window.matchMedia("(max-width: 768px)").matches
   ));
-  const [mobileColumnMode, setMobileColumnMode] = useState(() => {
-    const saved = String(safeReadStorage(PROJECTION_MOBILE_COLUMN_MODE_STORAGE_KEY) || "").trim().toLowerCase();
-    return saved === "full" ? "full" : "compact";
-  });
   const [mobileLayoutMode, setMobileLayoutMode] = useState(() => {
     const saved = String(safeReadStorage(PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY) || "").trim().toLowerCase();
     return saved === "cards" ? "cards" : "table";
   });
+  const [projectionTableHiddenColsByTab, setProjectionTableHiddenColsByTab] = useState(() => (
+    readHiddenColumnOverridesByTab(PROJECTION_TABLE_HIDDEN_COLS_STORAGE_KEY)
+  ));
+  const [projectionCardHiddenColsByTab, setProjectionCardHiddenColsByTab] = useState(() => (
+    readHiddenColumnOverridesByTab(PROJECTION_CARD_HIDDEN_COLS_STORAGE_KEY)
+  ));
   const [watchlistOnly, setWatchlistOnly] = useState(false);
   const [compareRowsByKey, setCompareRowsByKey] = useState({});
   const [teamFilter, setTeamFilter] = useState("");
@@ -1600,12 +1630,16 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
   }, []);
 
   useEffect(() => {
-    safeWriteStorage(PROJECTION_MOBILE_COLUMN_MODE_STORAGE_KEY, mobileColumnMode);
-  }, [mobileColumnMode]);
-
-  useEffect(() => {
     safeWriteStorage(PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY, mobileLayoutMode);
   }, [mobileLayoutMode]);
+
+  useEffect(() => {
+    writeHiddenColumnOverridesByTab(PROJECTION_TABLE_HIDDEN_COLS_STORAGE_KEY, projectionTableHiddenColsByTab);
+  }, [projectionTableHiddenColsByTab]);
+
+  useEffect(() => {
+    writeHiddenColumnOverridesByTab(PROJECTION_CARD_HIDDEN_COLS_STORAGE_KEY, projectionCardHiddenColsByTab);
+  }, [projectionCardHiddenColsByTab]);
 
   useEffect(() => {
     if (watchlistOnly && Object.keys(watchlist).length === 0) {
@@ -1770,7 +1804,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
       setSortDir(d => d === "asc" ? "desc" : "asc");
     } else {
       setSortCol(col);
-      setSortDir(col === "Player" || col === "Team" || col === "Pos" || col === "Type" || col === "Years" ? "asc" : "desc");
+      setSortDir(col === "Player" || col === "Team" || col === "Pos" || col === "Type" || col === "Year" || col === "Years" ? "asc" : "desc");
     }
   }
 
@@ -1817,19 +1851,154 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
 
   const seasonCol = careerTotalsView ? "Years" : "Year";
   const dynastyYearCols = selectedDynastyYears.map(year => `Value_${year}`);
-  const compactDynastyCols = selectedDynastyYears.length === 1 ? [`Value_${selectedDynastyYears[0]}`] : [];
-  const compactModeActive = isMobileViewport && mobileColumnMode === "compact";
-  const compactBaseCols = ["Player", "Team", "Pos", seasonCol, "DynastyValue", ...compactDynastyCols];
-  // Lead with player identity + dynasty value context, then projection freshness and box-score detail.
-  const batColsFull = ["Player","Team","Pos","Age",seasonCol,"DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","R","HR","RBI","SB","OBP","OPS","AVG","G","AB","H","2B","3B","BB","SO"];
-  const pitColsFull = ["Player","Team","Pos","Age",seasonCol,"DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","W","QS","K","SVH","ERA","WHIP","G","GS","IP","L","BB","SV","H","HR","ER"];
-  const allColsFull = ["Player","Team","Pos","Type","Age",seasonCol,"DynastyValue",...dynastyYearCols,"ProjectionsUsed","OldestProjectionDate","R","HR","RBI","SB","OBP","OPS","AVG","W","QS","K","SVH","ERA","WHIP","G","AB","H","2B","3B","BB","SO","GS","IP","L","PitBB","SV","PitH","PitHR","ER"];
-  const batColsCompact = [...compactBaseCols, "R", "HR", "RBI", "SB", "AVG"];
-  const pitColsCompact = [...compactBaseCols, "W", "K", "SV", "ERA", "WHIP"];
-  const allColsCompact = ["Player", "Team", "Pos", "Type", seasonCol, "DynastyValue", ...compactDynastyCols, "R", "HR", "RBI", "SB", "AVG", "W", "K", "SV", "ERA", "WHIP"];
-  const cols = compactModeActive
-    ? (tab === "bat" ? batColsCompact : tab === "pitch" ? pitColsCompact : allColsCompact)
-    : (tab === "bat" ? batColsFull : tab === "pitch" ? pitColsFull : allColsFull);
+  const tableColumnCatalog = useMemo(
+    () => projectionTableColumnCatalog(tab, seasonCol, dynastyYearCols),
+    [tab, seasonCol, dynastyYearCols]
+  );
+  const activeProjectionTableHiddenCols = projectionTableHiddenColsByTab[tab] || {};
+  const requiredProjectionTableCols = useMemo(() => new Set(["Player"]), []);
+  const isProjectionTableColHidden = useCallback((col, hiddenOverrides = activeProjectionTableHiddenCols) => {
+    if (Object.prototype.hasOwnProperty.call(hiddenOverrides, col)) {
+      return Boolean(hiddenOverrides[col]);
+    }
+    return projectionTableColumnHiddenByDefault(tab, col);
+  }, [tab, activeProjectionTableHiddenCols]);
+  const resolvedProjectionTableHiddenCols = useMemo(() => {
+    const hidden = {};
+    tableColumnCatalog.forEach(col => {
+      if (isProjectionTableColHidden(col)) hidden[col] = true;
+    });
+    return hidden;
+  }, [tableColumnCatalog, isProjectionTableColHidden]);
+  const cols = useMemo(
+    () => tableColumnCatalog.filter(col => !isProjectionTableColHidden(col)),
+    [tableColumnCatalog, isProjectionTableColHidden]
+  );
+
+  const cardColumnCatalog = useMemo(
+    () => projectionCardColumnCatalog(tab, seasonCol, dynastyYearCols),
+    [tab, seasonCol, dynastyYearCols]
+  );
+  const projectionCardCoreUnionCols = useMemo(() => (
+    tab === "bat"
+      ? [...PROJECTION_HITTER_CORE_STATS]
+      : tab === "pitch"
+        ? [...PROJECTION_PITCHER_CORE_STATS]
+        : [...PROJECTION_HITTER_CORE_STATS, ...PROJECTION_PITCHER_CORE_STATS]
+  ), [tab]);
+  const projectionCardCoreUnionSet = useMemo(
+    () => new Set(projectionCardCoreUnionCols),
+    [projectionCardCoreUnionCols]
+  );
+  const activeProjectionCardHiddenCols = projectionCardHiddenColsByTab[tab] || {};
+  const isProjectionCardOptionalColHidden = useCallback((col, hiddenOverrides = activeProjectionCardHiddenCols) => {
+    if (projectionCardCoreUnionSet.has(col)) return false;
+    if (Object.prototype.hasOwnProperty.call(hiddenOverrides, col)) {
+      return Boolean(hiddenOverrides[col]);
+    }
+    return true;
+  }, [activeProjectionCardHiddenCols, projectionCardCoreUnionSet]);
+  const cardOptionalCols = useMemo(
+    () => cardColumnCatalog.filter(col => !projectionCardCoreUnionSet.has(col)),
+    [cardColumnCatalog, projectionCardCoreUnionSet]
+  );
+  const visibleCardOptionalCols = useMemo(
+    () => cardOptionalCols.filter(col => !isProjectionCardOptionalColHidden(col)),
+    [cardOptionalCols, isProjectionCardOptionalColHidden]
+  );
+  const requiredProjectionCardCols = useMemo(
+    () => new Set(projectionCardCoreUnionCols),
+    [projectionCardCoreUnionCols]
+  );
+  const resolvedProjectionCardHiddenCols = useMemo(() => {
+    const hidden = {};
+    cardColumnCatalog.forEach(col => {
+      if (isProjectionCardOptionalColHidden(col)) hidden[col] = true;
+    });
+    return hidden;
+  }, [cardColumnCatalog, isProjectionCardOptionalColHidden]);
+  const projectionCardCoreColumnsForRow = useCallback(row => {
+    if (tab === "bat") return PROJECTION_HITTER_CORE_STATS;
+    if (tab === "pitch") return PROJECTION_PITCHER_CORE_STATS;
+    const side = String(row?.Type || "").trim().toUpperCase();
+    if (side === "P") return PROJECTION_PITCHER_CORE_STATS;
+    if (side === "H") return PROJECTION_HITTER_CORE_STATS;
+    return [...PROJECTION_HITTER_CORE_STATS, ...PROJECTION_PITCHER_CORE_STATS];
+  }, [tab]);
+  const projectionCardColumnsForRow = useCallback(row => (
+    uniqueColumnOrder([
+      ...projectionCardCoreColumnsForRow(row),
+      ...visibleCardOptionalCols,
+    ])
+  ), [projectionCardCoreColumnsForRow, visibleCardOptionalCols]);
+
+  function setProjectionTableColumnHidden(col, hidden) {
+    setProjectionTableHiddenColsByTab(current => {
+      const next = normalizeHiddenColumnOverridesByTab(current);
+      const nextTab = { ...(next[tab] || {}) };
+      const defaultHidden = projectionTableColumnHiddenByDefault(tab, col);
+      if (hidden === defaultHidden) {
+        delete nextTab[col];
+      } else {
+        nextTab[col] = hidden;
+      }
+      next[tab] = nextTab;
+      return next;
+    });
+  }
+
+  function toggleProjectionTableColumn(col) {
+    if (requiredProjectionTableCols.has(col)) return;
+    const currentlyHidden = isProjectionTableColHidden(col);
+    setProjectionTableColumnHidden(col, !currentlyHidden);
+  }
+
+  function showAllProjectionTableColumns() {
+    setProjectionTableHiddenColsByTab(current => {
+      const next = normalizeHiddenColumnOverridesByTab(current);
+      const nextTab = { ...(next[tab] || {}) };
+      tableColumnCatalog.forEach(col => {
+        if (requiredProjectionTableCols.has(col)) return;
+        nextTab[col] = false;
+      });
+      next[tab] = nextTab;
+      return next;
+    });
+  }
+
+  function setProjectionCardOptionalColumnHidden(col, hidden) {
+    if (projectionCardCoreUnionSet.has(col)) return;
+    setProjectionCardHiddenColsByTab(current => {
+      const next = normalizeHiddenColumnOverridesByTab(current);
+      const nextTab = { ...(next[tab] || {}) };
+      if (hidden) {
+        delete nextTab[col];
+      } else {
+        nextTab[col] = false;
+      }
+      next[tab] = nextTab;
+      return next;
+    });
+  }
+
+  function toggleProjectionCardColumn(col) {
+    if (requiredProjectionCardCols.has(col)) return;
+    const currentlyHidden = isProjectionCardOptionalColHidden(col);
+    setProjectionCardOptionalColumnHidden(col, !currentlyHidden);
+  }
+
+  function showAllProjectionCardColumns() {
+    setProjectionCardHiddenColsByTab(current => {
+      const next = normalizeHiddenColumnOverridesByTab(current);
+      const nextTab = { ...(next[tab] || {}) };
+      cardOptionalCols.forEach(col => {
+        nextTab[col] = false;
+      });
+      next[tab] = nextTab;
+      return next;
+    });
+  }
+
   const colLabels = useMemo(() => {
     const labels = {
       Type: "Side",
@@ -1847,7 +2016,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
     return labels;
   }, [dynastyYearCols]);
   const rateCols = new Set(["AVG","OBP","OPS","ERA","WHIP"]);
-  const intCols = new Set(careerTotalsView ? ["Age","ProjectionsUsed"] : ["Year","Age","ProjectionsUsed"]);
+  const intCols = new Set(["Year","Years","Age","ProjectionsUsed"]);
   const posFilterLabel = posFilters.length === 0
     ? "All Positions"
     : posFilters.length <= 2
@@ -1870,15 +2039,10 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
       ? "← Swipe both directions for more columns →"
       : "← Swipe right to return";
   const comparisonColumns = tab === "bat"
-    ? [seasonCol, "DynastyValue", "R", "HR", "RBI", "SB", "AVG", "OBP"]
+    ? [seasonCol, "DynastyValue", "AB", "R", "HR", "RBI", "SB", "AVG"]
     : tab === "pitch"
-      ? [seasonCol, "DynastyValue", "W", "K", "SV", "ERA", "WHIP", "IP"]
-      : [seasonCol, "DynastyValue", "R", "HR", "RBI", "SB", "W", "K", "SV", "ERA", "WHIP"];
-  const cardColumns = tab === "bat"
-    ? ["DynastyValue", seasonCol, "R", "HR", "RBI", "SB", "AVG"]
-    : tab === "pitch"
-      ? ["DynastyValue", seasonCol, "W", "K", "SV", "ERA", "WHIP"]
-      : ["DynastyValue", seasonCol, "R", "HR", "RBI", "SB", "W", "K", "SV", "ERA", "WHIP"];
+      ? [seasonCol, "DynastyValue", "IP", "W", "K", "SVH", "ERA", "WHIP"]
+      : [seasonCol, "DynastyValue", "AB", "R", "HR", "RBI", "SB", "IP", "W", "K", "SVH", "ERA", "WHIP"];
 
   function togglePosFilter(pos) {
     setPosFilters(curr => (
@@ -1908,7 +2072,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
     if (!el) return;
     el.scrollLeft = 0;
     updateProjectionHorizontalAffordance();
-  }, [tab, mobileColumnMode, mobileLayoutMode, isMobileViewport, updateProjectionHorizontalAffordance]);
+  }, [tab, mobileLayoutMode, isMobileViewport, updateProjectionHorizontalAffordance]);
 
   return (
     <div className="fade-up fade-up-1">
@@ -1976,6 +2140,17 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
             </div>
           )}
         </div>
+        {ColumnChooserControl && (
+          <ColumnChooserControl
+            buttonLabel="Table Columns"
+            columns={tableColumnCatalog}
+            hiddenCols={resolvedProjectionTableHiddenCols}
+            requiredCols={requiredProjectionTableCols}
+            onToggleColumn={toggleProjectionTableColumn}
+            onShowAllColumns={showAllProjectionTableColumns}
+            columnLabels={colLabels}
+          />
+        )}
         <span className={`result-count ${loading || searchIsDebouncing ? "loading" : ""}`.trim()} aria-live="polite" aria-atomic="true">
           {watchlistOnly ? `${totalRows.toLocaleString()} watchlist rows` : `${totalRows.toLocaleString()} rows`}
           {searchIsDebouncing ? " · typing..." : loading ? " · refreshing..." : ""}
@@ -2119,27 +2294,18 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
               </button>
             </div>
           </div>
-          {mobileLayoutMode === "table" && (
+          {mobileLayoutMode === "cards" && ColumnChooserControl && (
             <div className="mobile-control-row">
-              <span className="label">Density</span>
-              <div className="mobile-view-toggle">
-                <button
-                  type="button"
-                  className={`mobile-view-btn ${mobileColumnMode === "compact" ? "active" : ""}`.trim()}
-                  onClick={() => setMobileColumnMode("compact")}
-                  aria-pressed={mobileColumnMode === "compact"}
-                >
-                  Compact
-                </button>
-                <button
-                  type="button"
-                  className={`mobile-view-btn ${mobileColumnMode === "full" ? "active" : ""}`.trim()}
-                  onClick={() => setMobileColumnMode("full")}
-                  aria-pressed={mobileColumnMode === "full"}
-                >
-                  Full Stats
-                </button>
-              </div>
+              <span className="label">Cards</span>
+              <ColumnChooserControl
+                buttonLabel="Card Stats"
+                columns={cardColumnCatalog}
+                hiddenCols={resolvedProjectionCardHiddenCols}
+                requiredCols={requiredProjectionCardCols}
+                onToggleColumn={toggleProjectionCardColumn}
+                onShowAllColumns={showAllProjectionCardColumns}
+                columnLabels={colLabels}
+              />
             </div>
           )}
         </div>
@@ -2162,6 +2328,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
               const rowWatch = isRowWatched(row);
               const compareKey = stablePlayerKeyFromRow(row);
               const isCompared = Boolean(compareRowsByKey[compareKey]);
+              const cardCols = projectionCardColumnsForRow(row);
               return (
                 <article className="projection-card" key={projectionRowKey(row, offset + idx)}>
                   <div className="projection-card-head">
@@ -2186,7 +2353,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
                   </div>
                   <p>{row.Team || "—"} · {row.Pos || "—"}</p>
                   <dl>
-                    {cardColumns.map(col => (
+                    {cardCols.map(col => (
                       <React.Fragment key={`${projectionRowKey(row, offset + idx)}-${col}`}>
                         <dt>{colLabels[col] || col}</dt>
                         <dd>

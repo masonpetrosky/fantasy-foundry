@@ -6,6 +6,8 @@ export function ColumnChooserControl({
   requiredCols,
   onToggleColumn,
   onShowAllColumns,
+  buttonLabel = "Columns",
+  columnLabels,
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
@@ -41,7 +43,7 @@ export function ColumnChooserControl({
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        Columns ({visibleCount}/{columns.length})
+        {buttonLabel} ({visibleCount}/{columns.length})
       </button>
       {open && (
         <div className="multi-select-menu" role="listbox" aria-multiselectable="true">
@@ -65,7 +67,7 @@ export function ColumnChooserControl({
                   disabled={isRequired}
                   onChange={() => onToggleColumn(col)}
                 />
-                <span>{col.replace("Value_", "")}{isRequired ? " (Required)" : ""}</span>
+                <span>{(columnLabels && columnLabels[col]) || col.replace("Value_", "")}{isRequired ? " (Required)" : ""}</span>
               </label>
             );
           })}
