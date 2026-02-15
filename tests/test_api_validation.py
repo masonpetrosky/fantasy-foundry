@@ -3,7 +3,7 @@ import types
 import sys
 import time
 import re
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pandas as pd
 from fastapi import HTTPException
@@ -1924,11 +1924,6 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(second.status_code, 429)
 
     def test_active_job_cap_enforced_per_ip(self) -> None:
-        queued_payload = {"total": 0, "settings": {}, "data": [], "explanations": {}}
-
-        def never_finishes(*args, **kwargs):
-            return queued_payload
-
         with patch.object(app_module, "CALCULATOR_MAX_ACTIVE_JOBS_PER_IP", 1), patch.object(
             app_module.CALCULATOR_JOB_EXECUTOR,
             "submit",
@@ -1944,6 +1939,68 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(first_payload.get("queued_jobs"), 1)
         self.assertEqual(first_payload.get("running_jobs"), 0)
         self.assertEqual(second.status_code, 429)
+
+    def test_cancel_queued_job_marks_job_cancelled(self) -> None:
+        fake_future = Mock()
+        fake_future.cancel.return_value = True
+
+        with patch.object(
+            app_module.CALCULATOR_JOB_EXECUTOR,
+            "submit",
+            return_value=fake_future,
+        ):
+            create = self.client.post("/api/calculate/jobs", json={})
+
+        self.assertEqual(create.status_code, 202)
+        job_id = create.json()["job_id"]
+
+        cancel_resp = self.client.delete(f"/api/calculate/jobs/{job_id}")
+        self.assertEqual(cancel_resp.status_code, 200)
+        payload = cancel_resp.json()
+        self.assertEqual(payload.get("status"), app_module.CALC_JOB_CANCELLED_STATUS)
+        self.assertEqual(payload.get("error", {}).get("status_code"), 499)
+        fake_future.cancel.assert_called_once()
+
+        status_resp = self.client.get(f"/api/calculate/jobs/{job_id}")
+        self.assertEqual(status_resp.status_code, 200)
+        self.assertEqual(status_resp.json().get("status"), app_module.CALC_JOB_CANCELLED_STATUS)
+
+    def test_cancel_running_job_marks_job_cancelled(self) -> None:
+        with patch.object(
+            app_module.CALCULATOR_JOB_EXECUTOR,
+            "submit",
+            return_value=None,
+        ):
+            create = self.client.post("/api/calculate/jobs", json={})
+
+        self.assertEqual(create.status_code, 202)
+        job_id = create.json()["job_id"]
+        with app_module.CALCULATOR_JOB_LOCK:
+            job = app_module.CALCULATOR_JOBS[job_id]
+            job["status"] = "running"
+            job["started_at"] = app_module._iso_now()
+            client_ip = str(job.get("client_ip") or "")
+
+        cancel_resp = self.client.delete(f"/api/calculate/jobs/{job_id}")
+        self.assertEqual(cancel_resp.status_code, 200)
+        payload = cancel_resp.json()
+        self.assertEqual(payload.get("status"), app_module.CALC_JOB_CANCELLED_STATUS)
+        self.assertEqual(payload.get("error", {}).get("status_code"), 499)
+
+        with app_module.CALCULATOR_JOB_LOCK:
+            self.assertEqual(app_module._active_jobs_for_ip(client_ip), 0)
+
+    def test_cleanup_expires_cancelled_jobs(self) -> None:
+        created_ts = time.time() - app_module.CALCULATOR_JOB_TTL_SECONDS - 5.0
+        with app_module.CALCULATOR_JOB_LOCK:
+            app_module.CALCULATOR_JOBS.clear()
+            app_module.CALCULATOR_JOBS["cancelled-job"] = {
+                "job_id": "cancelled-job",
+                "status": app_module.CALC_JOB_CANCELLED_STATUS,
+                "created_ts": created_ts,
+            }
+            app_module._cleanup_calculation_jobs(time.time())
+            self.assertNotIn("cancelled-job", app_module.CALCULATOR_JOBS)
 
     def test_calculation_job_lifecycle_success(self) -> None:
         fake_result = {"total": 1, "settings": {}, "data": [{"Player": "Jane Roe"}]}

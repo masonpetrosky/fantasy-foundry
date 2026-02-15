@@ -180,6 +180,9 @@ All three support Dockerfiles out of the box:
 | GET | `/api/projections/export/{dataset}` | Export filtered projections as CSV/XLSX (`dataset`: `all`, `bat`, `pitch`; query param: `format`) |
 | POST | `/api/calculate` | Run dynasty value calculator (JSON body with league settings) |
 | POST | `/api/calculate/export` | Export calculator output as CSV/XLSX (`format`, optional `include_explanations`) |
+| POST | `/api/calculate/jobs` | Create async calculator job (returns `job_id` and queue status) |
+| GET | `/api/calculate/jobs/{job_id}` | Poll async calculator job status/result |
+| DELETE | `/api/calculate/jobs/{job_id}` | Cancel queued/running async calculator job |
 
 `years` accepts comma-separated years and inclusive ranges, for example `2026,2028-2030`.
 If both `year` and `years` are provided, results use the intersection.

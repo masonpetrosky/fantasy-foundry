@@ -2360,6 +2360,7 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
   const [rankCompareRowsByKey, setRankCompareRowsByKey] = useState({});
   const calcRequestSeqRef = useRef(0);
   const calcAbortControllerRef = useRef(null);
+  const calcActiveJobIdRef = useRef("");
   const rankTableScrollRef = useRef(null);
   const rankScrollRafRef = useRef(0);
   const rankScrollPendingTopRef = useRef(0);
@@ -2406,6 +2407,11 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
   useEffect(() => {
     return () => {
       calcRequestSeqRef.current += 1;
+      const activeJobId = String(calcActiveJobIdRef.current || "").trim();
+      if (activeJobId) {
+        void cancelCalculationJob(activeJobId);
+        calcActiveJobIdRef.current = "";
+      }
       if (calcAbortControllerRef.current) {
         calcAbortControllerRef.current.abort();
         calcAbortControllerRef.current = null;
@@ -2416,6 +2422,18 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
       }
     };
   }, []);
+
+  async function cancelCalculationJob(jobId) {
+    const normalizedJobId = String(jobId || "").trim();
+    if (!normalizedJobId) return;
+    try {
+      await fetch(`${API}/api/calculate/jobs/${encodeURIComponent(normalizedJobId)}`, {
+        method: "DELETE",
+      });
+    } catch {
+      // Best-effort cancel path; ignore network errors.
+    }
+  }
 
   function update(key, val) {
     setSettings(s => ({ ...s, [key]: val }));
@@ -2590,6 +2608,11 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
 
     const requestSeq = calcRequestSeqRef.current + 1;
     calcRequestSeqRef.current = requestSeq;
+    const previousJobId = String(calcActiveJobIdRef.current || "").trim();
+    if (previousJobId) {
+      void cancelCalculationJob(previousJobId);
+      calcActiveJobIdRef.current = "";
+    }
     if (calcAbortControllerRef.current) {
       calcAbortControllerRef.current.abort();
     }
@@ -2603,6 +2626,7 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
       : "Running Monte Carlo simulations...";
 
     (async () => {
+      let jobId = "";
       try {
         const createResp = await fetch(`${API}/api/calculate/jobs`, {
           method: "POST",
@@ -2618,10 +2642,11 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
           ? createParsed.payload
           : {};
 
-        const jobId = String(createParsed.payload?.job_id || "").trim();
+        jobId = String(createParsed.payload?.job_id || "").trim();
         if (!jobId) {
           throw new Error("Server did not return a calculation job id.");
         }
+        calcActiveJobIdRef.current = jobId;
 
         const timeoutSeconds = Number(meta?.calculator_guardrails?.job_timeout_seconds);
         const maxWaitMs = Number.isFinite(timeoutSeconds) && timeoutSeconds > 0
@@ -2630,7 +2655,15 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
         const deadline = Date.now() + maxWaitMs;
 
         while (true) {
-          if (requestSeq !== calcRequestSeqRef.current || controller.signal.aborted) return;
+          if (requestSeq !== calcRequestSeqRef.current || controller.signal.aborted) {
+            if (jobId) {
+              void cancelCalculationJob(jobId);
+              if (calcActiveJobIdRef.current === jobId) {
+                calcActiveJobIdRef.current = "";
+              }
+            }
+            return;
+          }
           if (Date.now() > deadline) {
             throw new Error("Calculation timed out before completion.");
           }
@@ -2683,15 +2716,29 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
               throw new Error("Calculation completed without a usable result payload.");
             }
             if (requestSeq !== calcRequestSeqRef.current || controller.signal.aborted) return;
+            if (calcActiveJobIdRef.current === jobId) {
+              calcActiveJobIdRef.current = "";
+            }
             setResults(result);
             setLoading(false);
             setStatus(`Done - ${result.total} players ranked`);
+            return;
+          }
+          if (jobStatus === "cancelled" || jobStatus === "canceled") {
+            if (calcActiveJobIdRef.current === jobId) {
+              calcActiveJobIdRef.current = "";
+            }
+            setLoading(false);
+            setStatus("Calculation cancelled.");
             return;
           }
           if (jobStatus === "failed") {
             const error = statusParsed.payload?.error;
             const detail = typeof error?.detail === "string" ? error.detail : "";
             const errorStatus = Number(error?.status_code);
+            if (calcActiveJobIdRef.current === jobId) {
+              calcActiveJobIdRef.current = "";
+            }
             if (detail && Number.isFinite(errorStatus)) {
               throw new Error(formatApiError(errorStatus, { detail }));
             }
@@ -2704,6 +2751,12 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
           throw new Error("Unexpected calculation job status.");
         }
       } catch (err) {
+        if (jobId) {
+          void cancelCalculationJob(jobId);
+          if (calcActiveJobIdRef.current === jobId) {
+            calcActiveJobIdRef.current = "";
+          }
+        }
         if (requestSeq !== calcRequestSeqRef.current) return;
         if (err?.name === "AbortError") return;
         setLoading(false);

@@ -7,6 +7,7 @@ Endpoints:
   GET  /api/projections/bat  → hitter projections (filterable)
   GET  /api/projections/pitch → pitcher projections (filterable)
   POST /api/calculate        → run dynasty value calculator with custom settings
+  DELETE /api/calculate/jobs/{job_id} → cancel an async calculator job
 """
 
 from __future__ import annotations
@@ -177,6 +178,8 @@ REDIS_URL = os.getenv("FF_REDIS_URL", "").strip()
 REDIS_RESULT_PREFIX = "ff:calc:result:"
 REDIS_JOB_PREFIX = "ff:calc:job:"
 CALC_LOGGER = logging.getLogger("fantasy_foundry.calculate")
+CALC_JOB_CANCELLED_STATUS = "cancelled"
+CALC_JOB_CANCELLED_ERROR = {"status_code": 499, "detail": "Calculation job cancelled by client."}
 
 
 def _pick_first_existing_col(df: pd.DataFrame, candidates: list[str] | tuple[str, ...]) -> str | None:
@@ -1854,6 +1857,16 @@ def _iso_now() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
 
 
+def _mark_job_cancelled_locked(job: dict, *, now: str | None = None) -> None:
+    timestamp = now or _iso_now()
+    job["status"] = CALC_JOB_CANCELLED_STATUS
+    job["cancel_requested"] = True
+    job["result"] = None
+    job["error"] = dict(CALC_JOB_CANCELLED_ERROR)
+    job["completed_at"] = job.get("completed_at") or timestamp
+    job["updated_at"] = timestamp
+
+
 def _cleanup_calculation_jobs(now_ts: float | None = None) -> None:
     current = time.time() if now_ts is None else now_ts
     expired_ids: list[str] = []
@@ -1863,9 +1876,9 @@ def _cleanup_calculation_jobs(now_ts: float | None = None) -> None:
         status = str(job.get("status") or "").lower()
         created_ts = float(job.get("created_ts") or current)
         age = current - created_ts
-        if status in {"completed", "failed"} and age > CALCULATOR_JOB_TTL_SECONDS:
+        if status in {"completed", "failed", CALC_JOB_CANCELLED_STATUS} and age > CALCULATOR_JOB_TTL_SECONDS:
             expired_ids.append(job_id)
-        elif status in {"completed", "failed"}:
+        elif status in {"completed", "failed", CALC_JOB_CANCELLED_STATUS}:
             completed.append((job_id, created_ts))
 
     for job_id in expired_ids:
@@ -1881,19 +1894,20 @@ def _cleanup_calculation_jobs(now_ts: float | None = None) -> None:
 
 
 def _calculation_job_public_payload(job: dict) -> dict:
+    status = str(job.get("status") or "").lower()
     payload = {
         "job_id": job["job_id"],
-        "status": job["status"],
+        "status": status,
         "created_at": job["created_at"],
         "started_at": job.get("started_at"),
         "completed_at": job.get("completed_at"),
         "settings": job.get("settings"),
     }
-    if job["status"] == "completed":
+    if status == "completed":
         payload["result"] = job.get("result")
-    elif job["status"] == "failed":
+    elif status in {"failed", CALC_JOB_CANCELLED_STATUS}:
         payload["error"] = job.get("error")
-    elif str(job.get("status") or "").lower() == "queued":
+    elif status == "queued":
         queued_jobs = [
             candidate
             for candidate in CALCULATOR_JOBS.values()
@@ -3206,7 +3220,7 @@ def get_health():
 
     with CALCULATOR_JOB_LOCK:
         _cleanup_calculation_jobs()
-        job_status_counts = {"queued": 0, "running": 0, "completed": 0, "failed": 0}
+        job_status_counts = {"queued": 0, "running": 0, "completed": 0, "failed": 0, CALC_JOB_CANCELLED_STATUS: 0}
         for job in CALCULATOR_JOBS.values():
             status = str(job.get("status") or "").strip().lower()
             if status in job_status_counts:
@@ -3699,9 +3713,15 @@ def _run_calculation_job(job_id: str, req_payload: dict) -> None:
         job = CALCULATOR_JOBS.get(job_id)
         if job is None:
             return
+        if str(job.get("status") or "").lower() == CALC_JOB_CANCELLED_STATUS or bool(job.get("cancel_requested")):
+            _mark_job_cancelled_locked(job)
+            _cache_calculation_job_snapshot(job)
+            return
         job["status"] = "running"
         job["started_at"] = _iso_now()
         job["updated_at"] = job["started_at"]
+        job["error"] = None
+        _cache_calculation_job_snapshot(job)
 
     try:
         req = CalculateRequest(**req_payload)
@@ -3709,6 +3729,10 @@ def _run_calculation_job(job_id: str, req_payload: dict) -> None:
         with CALCULATOR_JOB_LOCK:
             job = CALCULATOR_JOBS.get(job_id)
             if job is None:
+                return
+            if str(job.get("status") or "").lower() == CALC_JOB_CANCELLED_STATUS or bool(job.get("cancel_requested")):
+                _mark_job_cancelled_locked(job)
+                _cache_calculation_job_snapshot(job)
                 return
             now = _iso_now()
             job["status"] = "completed"
@@ -3722,6 +3746,10 @@ def _run_calculation_job(job_id: str, req_payload: dict) -> None:
             job = CALCULATOR_JOBS.get(job_id)
             if job is None:
                 return
+            if str(job.get("status") or "").lower() == CALC_JOB_CANCELLED_STATUS or bool(job.get("cancel_requested")):
+                _mark_job_cancelled_locked(job)
+                _cache_calculation_job_snapshot(job)
+                return
             now = _iso_now()
             job["status"] = "failed"
             job["error"] = {"status_code": exc.status_code, "detail": exc.detail}
@@ -3734,6 +3762,10 @@ def _run_calculation_job(job_id: str, req_payload: dict) -> None:
         with CALCULATOR_JOB_LOCK:
             job = CALCULATOR_JOBS.get(job_id)
             if job is None:
+                return
+            if str(job.get("status") or "").lower() == CALC_JOB_CANCELLED_STATUS or bool(job.get("cancel_requested")):
+                _mark_job_cancelled_locked(job)
+                _cache_calculation_job_snapshot(job)
                 return
             now = _iso_now()
             job["status"] = "failed"
@@ -3792,6 +3824,8 @@ def create_calculate_dynasty_job(req: CalculateRequest, request: Request):
         "settings": payload,
         "result": cached_result,
         "error": None,
+        "cancel_requested": False,
+        "future": None,
     }
 
     with CALCULATOR_JOB_LOCK:
@@ -3813,11 +3847,15 @@ def create_calculate_dynasty_job(req: CalculateRequest, request: Request):
 
     if cached_result is None:
         try:
-            CALCULATOR_JOB_EXECUTOR.submit(_run_calculation_job, job_id, payload)
+            future = CALCULATOR_JOB_EXECUTOR.submit(_run_calculation_job, job_id, payload)
         except RuntimeError as exc:
             with CALCULATOR_JOB_LOCK:
                 CALCULATOR_JOBS.pop(job_id, None)
             raise HTTPException(status_code=503, detail="Calculation worker is unavailable.") from exc
+        with CALCULATOR_JOB_LOCK:
+            live_job = CALCULATOR_JOBS.get(job_id)
+            if live_job is not None:
+                live_job["future"] = future
         CALC_LOGGER.info("calculator job queued job_id=%s settings=%s", job_id, json.dumps(payload, sort_keys=True))
     else:
         CALC_LOGGER.info("calculator job cache-hit job_id=%s settings=%s", job_id, json.dumps(payload, sort_keys=True))
@@ -3836,6 +3874,35 @@ def get_calculate_dynasty_job(job_id: str, request: Request):
             if cached_job is not None:
                 return cached_job
             raise HTTPException(status_code=404, detail="Calculation job not found or expired.")
+        return _calculation_job_public_payload(job)
+
+
+@app.delete("/api/calculate/jobs/{job_id}")
+def cancel_calculate_dynasty_job(job_id: str, request: Request):
+    _enforce_rate_limit(request, action="calc-job-status", limit_per_minute=CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE)
+    with CALCULATOR_JOB_LOCK:
+        _cleanup_calculation_jobs()
+        job = CALCULATOR_JOBS.get(job_id)
+        if job is None:
+            cached_job = _cached_calculation_job_snapshot(job_id)
+            if cached_job is not None:
+                return cached_job
+            raise HTTPException(status_code=404, detail="Calculation job not found or expired.")
+
+        status = str(job.get("status") or "").lower()
+        if status not in {"queued", "running"}:
+            return _calculation_job_public_payload(job)
+
+        job["cancel_requested"] = True
+        future = job.get("future")
+        cancel_future = getattr(future, "cancel", None)
+        if callable(cancel_future):
+            try:
+                cancel_future()
+            except Exception:
+                pass
+        _mark_job_cancelled_locked(job)
+        _cache_calculation_job_snapshot(job)
         return _calculation_job_public_payload(job)
 
 
