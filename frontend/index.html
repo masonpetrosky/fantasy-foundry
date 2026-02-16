@@ -8,7 +8,8 @@
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Merriweather:wght@400;700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/typography-table.css?v=__APP_BUILD_ID__">
 <style>
 :root {
   --bg-primary: #0c1117;
@@ -28,20 +29,6 @@
   --red: #f87171;
   --blue: #60a5fa;
 
-  --ff-sans: 'DM Sans', -apple-system, sans-serif;
-  --ff-serif: 'DM Serif Display', serif;
-  --ff-mono: 'IBM Plex Mono', monospace;
-
-  --fs-xs: 0.78rem;
-  --fs-sm: 0.82rem;
-  --fs-md: 0.875rem;
-  --fs-lg: 0.95rem;
-  --fs-xl: 1.1rem;
-
-  --lh-tight: 1.15;
-  --lh-snug: 1.25;
-  --lh-base: 1.5;
-  --lh-relaxed: 1.6;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -49,10 +36,8 @@
 html { scroll-behavior: smooth; }
 
 body {
-  font-family: var(--ff-sans);
   background: var(--bg-primary);
   color: var(--text-primary);
-  line-height: var(--lh-relaxed);
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
@@ -153,7 +138,7 @@ header {
   font-size: 1.2rem;
   color: var(--accent);
   letter-spacing: 0.01em;
-  line-height: var(--lh-snug);
+  line-height: 1.28;
   white-space: nowrap;
 }
 
@@ -313,11 +298,11 @@ header {
 
 .hero h1 {
   font-family: var(--ff-serif);
-  font-size: 3.5rem;
+  font-size: 3.35rem;
   font-weight: 400;
-  line-height: var(--lh-tight);
+  line-height: 1.18;
   margin-bottom: 16px;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.005em;
 }
 
 .hero h1 em {
@@ -329,11 +314,11 @@ header {
 
 .hero p {
   color: var(--text-secondary);
-  font-size: 1.15rem;
+  font-size: 1.17rem;
   max-width: 650px;
   margin: 0 auto 40px;
-  font-weight: 300;
-  line-height: var(--lh-base);
+  font-weight: 400;
+  line-height: var(--lh-relaxed);
 }
 
 .hero-stats {
@@ -788,7 +773,6 @@ table {
   width: max-content;
   min-width: 100%;
   border-collapse: collapse;
-  font-size: 0.85rem;
 }
 
 thead {
@@ -801,9 +785,7 @@ thead th {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   font-weight: 600;
-  font-size: var(--fs-xs);
   letter-spacing: 0.02em;
-  padding: 12px 14px;
   text-align: left;
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
@@ -831,7 +813,6 @@ tbody tr {
 tbody tr:hover { background: var(--bg-hover); }
 
 tbody td {
-  padding: 10px 14px;
   white-space: nowrap;
 }
 
@@ -863,13 +844,13 @@ tr:hover td.player-name { background: var(--bg-hover); }
 .rankings-table thead th.rank-pin-player,
 .rankings-table td.rank-pin-player {
   position: sticky;
-  left: 40px;
+  left: 48px;
 }
 
 .rankings-table thead th.rank-pin-value,
 .rankings-table td.rank-pin-value {
   position: sticky;
-  left: 230px;
+  left: 238px;
 }
 
 .rankings-table td.rank-pin-rank,
@@ -894,7 +875,6 @@ tr:hover td.player-name { background: var(--bg-hover); }
 
 td.num {
   font-family: var(--ff-mono);
-  font-size: var(--fs-sm);
   text-align: right;
 }
 
@@ -1030,7 +1010,8 @@ td.value-negative { color: var(--red); }
 
 .calc-sidebar h3 {
   font-family: var(--ff-serif);
-  font-size: 1.1rem;
+  font-size: 1.12rem;
+  line-height: 1.3;
   margin-bottom: 6px;
   color: var(--accent);
 }
@@ -1431,8 +1412,9 @@ td.value-negative { color: var(--red); }
 
 .methodology-card h2 {
   font-family: var(--ff-serif);
-  font-size: 1.6rem;
+  font-size: 1.68rem;
   font-weight: 400;
+  line-height: 1.28;
   color: var(--accent);
   margin-bottom: 12px;
 }
@@ -1440,6 +1422,7 @@ td.value-negative { color: var(--red); }
 .methodology-card p {
   color: var(--text-secondary);
   margin-bottom: 12px;
+  line-height: var(--lh-relaxed);
 }
 
 .methodology-card ol {
@@ -1510,7 +1493,7 @@ footer a { color: var(--accent-dim); text-decoration: none; }
 @media (max-width: 1024px) {
   .nav-inner { padding: 0 24px; }
   .hero { padding: 64px 24px 50px; }
-  .hero h1 { font-size: 3rem; }
+  .hero h1 { font-size: 2.9rem; }
   .container { padding: 0 24px 72px; }
   .methodology-section { padding: 0 24px 32px; }
 }
@@ -1592,7 +1575,7 @@ footer a { color: var(--accent-dim); text-decoration: none; }
     top: -80px;
   }
 
-  .hero h1 { font-size: 2.1rem; }
+  .hero h1 { font-size: 2.2rem; }
 
   .hero p {
     font-size: 1rem;
@@ -1634,8 +1617,6 @@ footer a { color: var(--accent-dim); text-decoration: none; }
 
   .multi-select-menu { min-width: 100%; }
   .table-scroll { max-height: 68vh; }
-  thead th { padding: 10px 12px; }
-  tbody td { padding: 9px 12px; }
 
   .projection-layout-controls {
     display: flex;
@@ -1776,7 +1757,7 @@ footer a { color: var(--accent-dim); text-decoration: none; }
     padding: 7px 10px;
   }
 
-  .hero h1 { font-size: 1.7rem; }
+  .hero h1 { font-size: 1.82rem; }
   .hero h1 br { display: none; }
 
   .hero-stat {
@@ -1788,7 +1769,7 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   .section-tab { font-size: 0.8rem; }
   .calc-sidebar { padding: 16px; }
   .methodology-card { padding: 18px; }
-  .methodology-card h2 { font-size: 1.35rem; }
+  .methodology-card h2 { font-size: 1.42rem; }
 }
 </style>
 </head>

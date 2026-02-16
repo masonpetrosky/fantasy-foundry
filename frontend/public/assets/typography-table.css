@@ -1,0 +1,76 @@
+:root {
+  --ff-sans: 'Source Sans 3', 'Segoe UI', sans-serif;
+  --ff-serif: 'Merriweather', Georgia, serif;
+  --ff-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace;
+
+  --fs-xs: 0.79rem;
+  --fs-sm: 0.86rem;
+  --fs-md: 0.92rem;
+  --fs-lg: 1rem;
+  --fs-xl: 1.13rem;
+
+  --lh-tight: 1.2;
+  --lh-snug: 1.32;
+  --lh-base: 1.58;
+  --lh-relaxed: 1.64;
+}
+
+body {
+  font-family: var(--ff-sans);
+  font-size: var(--fs-md);
+  line-height: var(--lh-base);
+}
+
+table {
+  font-size: 0.85rem;
+}
+
+thead th {
+  font-size: var(--fs-xs);
+  padding: 12px 14px;
+}
+
+tbody td {
+  padding: 10px 14px;
+}
+
+td.num {
+  font-size: var(--fs-sm);
+}
+
+@media (max-width: 1280px) {
+  table {
+    font-size: 0.83rem;
+  }
+
+  thead th {
+    font-size: 0.75rem;
+    padding: 10px 12px;
+  }
+
+  tbody td {
+    padding: 8px 12px;
+  }
+
+  td.player-name {
+    min-width: 148px;
+  }
+
+  .rankings-table td.player-name {
+    min-width: 180px;
+  }
+
+  td.num {
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 768px) {
+  thead th {
+    padding: 10px 12px;
+  }
+
+  tbody td {
+    padding: 9px 12px;
+  }
+}
