@@ -1491,17 +1491,23 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const limit = 100;
-  const careerTotalsView = yearFilter === CAREER_TOTALS_FILTER_VALUE;
+  const availableProjectionYears = useMemo(() => (meta.years || []).map(String), [meta.years]);
+  const resolvedYearFilter = useMemo(() => {
+    const value = String(yearFilter || "").trim();
+    if (value === CAREER_TOTALS_FILTER_VALUE) return CAREER_TOTALS_FILTER_VALUE;
+    if (availableProjectionYears.includes(value)) return value;
+    return CAREER_TOTALS_FILTER_VALUE;
+  }, [availableProjectionYears, yearFilter]);
+  const careerTotalsView = resolvedYearFilter === CAREER_TOTALS_FILTER_VALUE;
   const resolvedDataVersion = String(dataVersion || "").trim();
   const watchlistKeysFilter = useMemo(
     () => Object.keys(watchlist).sort().join(","),
     [watchlist]
   );
   const selectedDynastyYears = useMemo(() => {
-    if (careerTotalsView) return (meta.years || []).map(String);
-    if (yearFilter) return [String(yearFilter)];
-    return (meta.years || []).map(String);
-  }, [careerTotalsView, meta.years, yearFilter]);
+    if (careerTotalsView) return availableProjectionYears;
+    return [resolvedYearFilter];
+  }, [availableProjectionYears, careerTotalsView, resolvedYearFilter]);
 
   const updateProjectionHorizontalAffordance = useCallback(() => {
     const el = projectionTableScrollRef.current;
@@ -1577,8 +1583,8 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
     }
     if (careerTotalsView) {
       baseParams.set("career_totals", "true");
-    } else if (yearFilter) {
-      baseParams.set("year", yearFilter);
+    } else {
+      baseParams.set("year", resolvedYearFilter);
     }
     if (posFilters.length > 0) baseParams.set("pos", posFilters.join(","));
     if (selectedDynastyYears.length > 0) baseParams.set("dynasty_years", selectedDynastyYears.join(","));
@@ -1659,7 +1665,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
     teamFilter,
     watchlistOnly,
     watchlistKeysFilter,
-    yearFilter,
+    resolvedYearFilter,
     posFilters,
     selectedDynastyYears,
     offset,
@@ -1754,22 +1760,13 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
 
   useEffect(() => {
     setOffset(0);
-  }, [tab, search, teamFilter, watchlistOnly, watchlistKeysFilter, yearFilter, posFilters, sortCol, sortDir]);
+  }, [tab, search, teamFilter, watchlistOnly, watchlistKeysFilter, resolvedYearFilter, posFilters, sortCol, sortDir]);
 
   useEffect(() => {
-    const availableYears = (meta.years || []).map(String);
-    if (availableYears.length === 0) {
-      if (yearFilter !== CAREER_TOTALS_FILTER_VALUE) setYearFilter(CAREER_TOTALS_FILTER_VALUE);
-      return;
+    if (yearFilter !== resolvedYearFilter) {
+      setYearFilter(resolvedYearFilter);
     }
-    // Keep career/default and "all years year-by-year" as valid non-year modes.
-    if (yearFilter === CAREER_TOTALS_FILTER_VALUE || yearFilter === "") {
-      return;
-    }
-    if (!availableYears.includes(String(yearFilter))) {
-      setYearFilter(CAREER_TOTALS_FILTER_VALUE);
-    }
-  }, [meta.years, yearFilter]);
+  }, [resolvedYearFilter, yearFilter]);
 
   const positionOptions = useMemo(() => {
     const rawPositions = tab === "all"
@@ -1882,8 +1879,8 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
     if (watchlistOnly && watchlistKeysFilter) params.set("player_keys", watchlistKeysFilter);
     if (careerTotalsView) {
       params.set("career_totals", "true");
-    } else if (yearFilter) {
-      params.set("year", yearFilter);
+    } else {
+      params.set("year", resolvedYearFilter);
     }
     if (posFilters.length > 0) params.set("pos", posFilters.join(","));
     if (selectedDynastyYears.length > 0) params.set("dynasty_years", selectedDynastyYears.join(","));
@@ -2184,9 +2181,8 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
           onChange={e => setSearch(e.target.value)}
         />
         <label className="sr-only" htmlFor="projections-year-filter">Projection year view</label>
-        <select id="projections-year-filter" value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
+        <select id="projections-year-filter" value={resolvedYearFilter} onChange={e => setYearFilter(e.target.value)}>
           <option value={CAREER_TOTALS_FILTER_VALUE}>Rest of Career Totals</option>
-          <option value="">All Years (Year-by-year)</option>
           {meta.years.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
         <label className="sr-only" htmlFor="projections-team-filter">Team filter</label>

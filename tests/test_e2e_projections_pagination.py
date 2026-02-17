@@ -22,7 +22,7 @@ pytestmark = pytest.mark.e2e
 
 
 class ProjectionsPaginationE2ETests(unittest.TestCase):
-    """Browser-level validation that projections loading is not capped at 5,000 rows."""
+    """Browser-level validation of projections filter and pagination behavior."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -117,10 +117,11 @@ class ProjectionsPaginationE2ETests(unittest.TestCase):
                 server.kill()
                 server.wait(timeout=5)
 
-    def test_all_years_loads_more_than_5000_rows_via_pagination(self) -> None:
+    def test_invalid_empty_year_selection_falls_back_to_career_totals(self) -> None:
         page = self.browser.new_page()
         try:
             projection_request_urls: list[str] = []
+            career_totals_value = "__career_totals__"
 
             def on_request(request) -> None:
                 if "/api/projections/all" in request.url:
@@ -129,19 +130,18 @@ class ProjectionsPaginationE2ETests(unittest.TestCase):
             page.on("request", on_request)
             page.goto(self.base_url, wait_until="domcontentloaded", timeout=60000)
 
-            year_select = page.locator(".filter-bar select").first
-            projection_request_urls.clear()
-            year_select.select_option(value="")
-
             page.wait_for_function(
                 """
                 () => {
+                  const yearSelect = document.getElementById('projections-year-filter');
+                  if (!yearSelect) return false;
+                  if (yearSelect.value !== '__career_totals__') return false;
                   const el = document.querySelector('.filter-bar .result-count');
                   if (!el) return false;
                   const match = (el.textContent || '').match(/[\\d,]+/);
                   if (!match) return false;
                   const value = parseInt(match[0].replaceAll(',', ''), 10);
-                  return Number.isFinite(value) && value > 5000;
+                  return Number.isFinite(value) && value > 100;
                 }
                 """,
                 timeout=90000,
@@ -151,22 +151,60 @@ class ProjectionsPaginationE2ETests(unittest.TestCase):
             match = re.search(r"[\d,]+", count_text)
             self.assertIsNotNone(match, f"Expected numeric row count in text: {count_text!r}")
             loaded_count = int(match.group(0).replace(",", ""))
-            self.assertGreater(
-                loaded_count,
-                5000,
-                f"Expected UI to load more than 5000 rows, got {loaded_count}",
-            )
+            self.assertGreater(loaded_count, 100, f"Expected at least 100 rows, got {loaded_count}")
 
             offsets_seen = set()
+            career_totals_requests = 0
             for url in projection_request_urls:
                 parsed = urlparse(url)
                 query = parse_qs(parsed.query)
                 offset = query.get("offset", [None])[0]
                 if offset is not None:
                     offsets_seen.add(offset)
+                if query.get("career_totals", [None])[0] == "true":
+                    career_totals_requests += 1
 
             self.assertIn("0", offsets_seen)
+            self.assertTrue(
+                any(offset != "0" for offset in offsets_seen),
+                f"Expected paginated projections requests, got offsets: {sorted(offsets_seen)}",
+            )
             self.assertTrue(offsets_seen, "Expected at least one projections request with an offset query param")
+            self.assertGreater(career_totals_requests, 0, "Expected at least one career_totals=true projections request")
+
+            page.evaluate(
+                """
+                () => {
+                  const yearSelect = document.getElementById("projections-year-filter");
+                  if (!yearSelect) throw new Error("Projection year filter is missing");
+                  yearSelect.value = "";
+                  yearSelect.dispatchEvent(new Event("change", { bubbles: true }));
+                }
+                """
+            )
+            page.wait_for_function(
+                """
+                (expectedValue) => {
+                  const yearSelect = document.getElementById('projections-year-filter');
+                  return !!yearSelect && yearSelect.value === expectedValue;
+                }
+                """,
+                career_totals_value,
+                timeout=10000,
+            )
+
+            fallback_count_text = page.locator(".filter-bar .result-count").first.inner_text()
+            fallback_match = re.search(r"[\d,]+", fallback_count_text)
+            self.assertIsNotNone(
+                fallback_match,
+                f"Expected numeric row count after invalid empty year selection: {fallback_count_text!r}",
+            )
+            fallback_count = int(fallback_match.group(0).replace(",", ""))
+            self.assertEqual(
+                fallback_count,
+                loaded_count,
+                "Invalid empty year selection should not switch away from career totals mode",
+            )
         finally:
             page.close()
 

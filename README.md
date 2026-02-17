@@ -129,8 +129,9 @@ python -m playwright install chromium
 FF_RUN_E2E=1 pytest -q tests/test_e2e_projections_pagination.py tests/test_e2e_calculator_smoke.py
 ```
 
-`test_e2e_projections_pagination.py` launches the app locally, switches the projections view to `All Years (Year-by-year)`, and verifies:
-- the UI reports more than 5,000 projection rows
+`test_e2e_projections_pagination.py` launches the app locally and verifies:
+- the projections view loads in `Rest of Career Totals` mode
+- forcing an invalid empty year selection keeps the view in `Rest of Career Totals` mode
 - the browser issued paginated API requests against `/api/projections/all`
 
 `test_e2e_calculator_smoke.py` launches the app locally and validates a lightweight calculator UX smoke flow on desktop and mobile:
