@@ -734,49 +734,94 @@ def zscore(s: pd.Series) -> pd.Series:
         return x * 0.0
     return (x - mu) / sd
 
-def initial_hitter_weight(df: pd.DataFrame) -> pd.Series:
+def _active_common_hit_categories(lg: CommonDynastyRotoSettings) -> List[str]:
+    configured = getattr(lg, "hitter_categories", None)
+    if not configured:
+        return list(HIT_CATS)
+    wanted = {str(cat).strip().upper() for cat in configured if str(cat).strip()}
+    selected = [cat for cat in HIT_CATS if cat.upper() in wanted]
+    return selected or list(HIT_CATS)
+
+
+def _active_common_pitch_categories(lg: CommonDynastyRotoSettings) -> List[str]:
+    configured = getattr(lg, "pitcher_categories", None)
+    if not configured:
+        return list(PIT_CATS)
+    wanted = {str(cat).strip().upper() for cat in configured if str(cat).strip()}
+    selected = [cat for cat in PIT_CATS if cat.upper() in wanted]
+    return selected or list(PIT_CATS)
+
+
+def initial_hitter_weight(df: pd.DataFrame, categories: Optional[List[str]] = None) -> pd.Series:
     """
     Rough first-pass weight to select/assign starters with positional scarcity.
     Uses 5x5 categories with AVG translated into hit surplus over average.
     """
     df = df.copy()
-    h = df["H"].astype(float)
-    ab = df["AB"].astype(float)
-    avg = np.divide(h, ab, out=np.zeros_like(ab, dtype=float), where=ab > 0)
-    mean_avg = float(np.nanmean(avg)) if len(avg) else 0.0
-    # Convert AVG into counting impact so playing time is represented.
-    df["AVG_surplus_H"] = (avg - mean_avg) * ab
+    selected = {str(cat).strip().upper() for cat in (categories or list(HIT_CATS))}
+    components: List[pd.Series] = []
 
-    w = (
-        zscore(df["R"]) +
-        zscore(df["RBI"]) +
-        zscore(df["HR"]) +
-        zscore(df["SB"]) +
-        zscore(df["AVG_surplus_H"])
-    )
+    if "R" in selected:
+        components.append(zscore(df["R"]))
+    if "RBI" in selected:
+        components.append(zscore(df["RBI"]))
+    if "HR" in selected:
+        components.append(zscore(df["HR"]))
+    if "SB" in selected:
+        components.append(zscore(df["SB"]))
+
+    if "AVG" in selected:
+        h = df["H"].astype(float)
+        ab = df["AB"].astype(float)
+        avg = np.divide(h, ab, out=np.zeros_like(ab, dtype=float), where=ab > 0)
+        mean_avg = float(np.nanmean(avg)) if len(avg) else 0.0
+        # Convert AVG into counting impact so playing time is represented.
+        df["AVG_surplus_H"] = (avg - mean_avg) * ab
+        components.append(zscore(df["AVG_surplus_H"]))
+
+    if not components:
+        return pd.Series(np.zeros(len(df), dtype=float), index=df.index)
+
+    w = components[0].copy()
+    for component in components[1:]:
+        w = w + component
     return w
 
-def initial_pitcher_weight(df: pd.DataFrame) -> pd.Series:
+
+def initial_pitcher_weight(df: pd.DataFrame, categories: Optional[List[str]] = None) -> pd.Series:
     """
     Rough first-pass weight for pitchers:
     counting stats + "runs prevented" (ERA) + "baserunners prevented" (WHIP),
     both scaled by IP to reflect volume.
     """
     df = df.copy()
-    ip_sum = float(df["IP"].sum())
-    mean_era = float(9.0 * df["ER"].sum() / ip_sum) if ip_sum > 0 else float(df["ERA"].mean())
-    mean_whip = float((df["H"].sum() + df["BB"].sum()) / ip_sum) if ip_sum > 0 else float(df["WHIP"].mean())
+    selected = {str(cat).strip().upper() for cat in (categories or list(PIT_CATS))}
+    components: List[pd.Series] = []
 
-    df["ERA_surplus_ER"] = (mean_era - df["ERA"]) * df["IP"] / 9.0
-    df["WHIP_surplus"] = (mean_whip - df["WHIP"]) * df["IP"]
+    if "W" in selected:
+        components.append(zscore(df["W"]))
+    if "K" in selected:
+        components.append(zscore(df["K"]))
+    if "SV" in selected:
+        components.append(zscore(df["SV"]))
 
-    w = (
-        zscore(df["W"]) +
-        zscore(df["K"]) +
-        zscore(df["SV"]) +
-        zscore(df["ERA_surplus_ER"]) +
-        zscore(df["WHIP_surplus"])
-    )
+    if "ERA" in selected or "WHIP" in selected:
+        ip_sum = float(df["IP"].sum())
+        mean_era = float(9.0 * df["ER"].sum() / ip_sum) if ip_sum > 0 else float(df["ERA"].mean())
+        mean_whip = float((df["H"].sum() + df["BB"].sum()) / ip_sum) if ip_sum > 0 else float(df["WHIP"].mean())
+        if "ERA" in selected:
+            df["ERA_surplus_ER"] = (mean_era - df["ERA"]) * df["IP"] / 9.0
+            components.append(zscore(df["ERA_surplus_ER"]))
+        if "WHIP" in selected:
+            df["WHIP_surplus"] = (mean_whip - df["WHIP"]) * df["IP"]
+            components.append(zscore(df["WHIP_surplus"]))
+
+    if not components:
+        return pd.Series(np.zeros(len(df), dtype=float), index=df.index)
+
+    w = components[0].copy()
+    for component in components[1:]:
+        w = w + component
     return w
 
 
@@ -888,13 +933,21 @@ def _mean_adjacent_rank_gap(values: np.ndarray, *, ascending: bool) -> float:
     return float(np.mean(np.abs(np.diff(sorted_arr))))
 
 
-def simulate_sgp_hit(assigned_hit: pd.DataFrame, lg: CommonDynastyRotoSettings, rng: np.random.Generator) -> Dict[str, float]:
+def simulate_sgp_hit(
+    assigned_hit: pd.DataFrame,
+    lg: CommonDynastyRotoSettings,
+    rng: np.random.Generator,
+    categories: Optional[List[str]] = None,
+) -> Dict[str, float]:
     """
     Estimates how many of each stat ~= 1 roto point (SGP denominator),
     by simulating random allocations of the "starter pool" to 12 teams.
     """
     per_team = lg.hitter_slots
-    diffs = {c: [] for c in HIT_CATS}
+    active_categories = [c for c in HIT_CATS if c in set(categories or HIT_CATS)]
+    if not active_categories:
+        return {}
+    diffs = {c: [] for c in active_categories}
 
     groups = {slot: assigned_hit[assigned_hit["AssignedSlot"] == slot] for slot in per_team.keys()}
     idx_ab = HIT_COMPONENT_COLS.index("AB")
@@ -929,19 +982,23 @@ def simulate_sgp_hit(assigned_hit: pd.DataFrame, lg: CommonDynastyRotoSettings, 
         AVG = np.divide(H, AB, out=np.zeros_like(H), where=AB > 0)
 
         vals = {"R": R, "RBI": RBI, "HR": HR, "SB": SB, "AVG": AVG}
-        for c in HIT_CATS:
+        for c in active_categories:
             x = vals[c].astype(float)
             diffs[c].append(_mean_adjacent_rank_gap(x, ascending=False))
 
-    return {c: (float(np.mean(diffs[c])) if diffs[c] else 0.0) for c in HIT_CATS}
+    return {c: (float(np.mean(diffs[c])) if diffs[c] else 0.0) for c in active_categories}
 
 def simulate_sgp_pit(
     assigned_pit: pd.DataFrame,
     lg: CommonDynastyRotoSettings,
     rng: np.random.Generator,
     rep_rates: Optional[Dict[str, float]] = None,
+    categories: Optional[List[str]] = None,
 ) -> Dict[str, float]:
-    diffs = {c: [] for c in PIT_CATS}
+    active_categories = [c for c in PIT_CATS if c in set(categories or PIT_CATS)]
+    if not active_categories:
+        return {}
+    diffs = {c: [] for c in active_categories}
     per_team = lg.pitcher_slots
     groups = {slot: assigned_pit[assigned_pit["AssignedSlot"] == slot] for slot in per_team.keys()}
     idx_ip = PIT_COMPONENT_COLS.index("IP")
@@ -997,11 +1054,11 @@ def simulate_sgp_pit(
             vals["ERA"].append(float(bounded["ERA"]))
             vals["WHIP"].append(float(bounded["WHIP"]))
 
-        for c in PIT_CATS:
+        for c in active_categories:
             x = np.array(vals[c], dtype=float)
             diffs[c].append(_mean_adjacent_rank_gap(x, ascending=(c in {"ERA", "WHIP"})))
 
-    return {c: (float(np.mean(diffs[c])) if diffs[c] else 0.0) for c in PIT_CATS}
+    return {c: (float(np.mean(diffs[c])) if diffs[c] else 0.0) for c in active_categories}
 
 
 # ----------------------------
@@ -1011,6 +1068,8 @@ def simulate_sgp_pit(
 def compute_year_context(year: int, bat: pd.DataFrame, pit: pd.DataFrame, lg: CommonDynastyRotoSettings, rng_seed: Optional[int] = None) -> dict:
     bat_y = bat[bat["Year"] == year].copy()
     pit_y = pit[pit["Year"] == year].copy()
+    hit_categories = _active_common_hit_categories(lg)
+    pit_categories = _active_common_pitch_categories(lg)
 
     # Clean numeric NaNs
     for c in HIT_COMPONENT_COLS:
@@ -1036,8 +1095,8 @@ def compute_year_context(year: int, bat: pd.DataFrame, pit: pd.DataFrame, lg: Co
         )
 
     # Initial weights to define the league baseline pool/positional scarcity
-    bat_play["weight"] = initial_hitter_weight(bat_play)
-    pit_play["weight"] = initial_pitcher_weight(pit_play)
+    bat_play["weight"] = initial_hitter_weight(bat_play, categories=hit_categories)
+    pit_play["weight"] = initial_pitcher_weight(pit_play, categories=pit_categories)
 
     league_hit_slots = expand_slot_counts(lg.hitter_slots, lg.n_teams)
     league_pit_slots = expand_slot_counts(lg.pitcher_slots, lg.n_teams)
@@ -1090,8 +1149,8 @@ def compute_year_context(year: int, bat: pd.DataFrame, pit: pd.DataFrame, lg: Co
     seed = year if rng_seed is None else int(rng_seed)
     rng_hit = np.random.default_rng(seed)
     rng_pit = np.random.default_rng(seed + 1)
-    sgp_hit = simulate_sgp_hit(assigned_hit, lg, rng_hit)
-    sgp_pit = simulate_sgp_pit(assigned_pit, lg, rng_pit, rep_rates=rep_rates)
+    sgp_hit = simulate_sgp_hit(assigned_hit, lg, rng_hit, categories=hit_categories)
+    sgp_pit = simulate_sgp_pit(assigned_pit, lg, rng_pit, rep_rates=rep_rates, categories=pit_categories)
 
     return {
         "year": year,
@@ -1108,6 +1167,8 @@ def compute_year_context(year: int, bat: pd.DataFrame, pit: pd.DataFrame, lg: Co
         "rep_rates": rep_rates,
         "sgp_hit": sgp_hit,
         "sgp_pit": sgp_pit,
+        "hit_categories": hit_categories,
+        "pit_categories": pit_categories,
     }
 
 def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -1126,6 +1187,8 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
 
     sgp_hit = ctx["sgp_hit"]
     sgp_pit = ctx["sgp_pit"]
+    hit_categories = ctx.get("hit_categories") or _active_common_hit_categories(lg)
+    pit_categories = ctx.get("pit_categories") or _active_common_pitch_categories(lg)
 
     # --- Hitters: best eligible slot vs average starter at that slot ---
     hit_rows = []
@@ -1161,7 +1224,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
             }
 
             val = 0.0
-            for c in HIT_CATS:
+            for c in hit_categories:
                 denom = float(sgp_hit[c])
                 val += (delta[c] / denom) if denom else 0.0
 
@@ -1217,7 +1280,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
             }
 
             val = 0.0
-            for c in PIT_CATS:
+            for c in pit_categories:
                 denom = float(sgp_pit[c])
                 val += (delta[c] / denom) if denom else 0.0
 
@@ -1257,8 +1320,10 @@ def compute_replacement_baselines(
     for c in PIT_COMPONENT_COLS:
         pit_y[c] = pit_y[c].fillna(0.0)
 
-    bat_y["weight"] = initial_hitter_weight(bat_y)
-    pit_y["weight"] = initial_pitcher_weight(pit_y)
+    hit_categories = ctx.get("hit_categories") or _active_common_hit_categories(lg)
+    pit_categories = ctx.get("pit_categories") or _active_common_pitch_categories(lg)
+    bat_y["weight"] = initial_hitter_weight(bat_y, categories=hit_categories)
+    pit_y["weight"] = initial_pitcher_weight(pit_y, categories=pit_categories)
 
     fa_hit = bat_y[(~bat_y["Player"].isin(rostered_players)) & (bat_y["AB"] > 0)].copy()
     fa_pit = pit_y[(~pit_y["Player"].isin(rostered_players)) & (pit_y["IP"] > 0)].copy()
@@ -1318,6 +1383,8 @@ def compute_year_player_values_vs_replacement(
 
     sgp_hit = ctx["sgp_hit"]
     sgp_pit = ctx["sgp_pit"]
+    hit_categories = ctx.get("hit_categories") or _active_common_hit_categories(lg)
+    pit_categories = ctx.get("pit_categories") or _active_common_pitch_categories(lg)
 
     hit_rows = []
     for row in bat_y.to_dict(orient="records"):
@@ -1360,7 +1427,7 @@ def compute_year_player_values_vs_replacement(
             }
 
             val = 0.0
-            for c in HIT_CATS:
+            for c in hit_categories:
                 denom = float(sgp_hit[c])
                 val += (delta[c] / denom) if denom else 0.0
 
@@ -1416,7 +1483,7 @@ def compute_year_player_values_vs_replacement(
             }
 
             val = 0.0
-            for c in PIT_CATS:
+            for c in pit_categories:
                 denom = float(sgp_pit[c])
                 val += (delta[c] / denom) if denom else 0.0
 

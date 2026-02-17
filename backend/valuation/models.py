@@ -84,6 +84,10 @@ class CommonDynastyRotoSettings:
     # (Most leagues effectively work like this for valuation purposes)
     two_way: str = "max"
 
+    # Active roto categories (common mode defaults to standard 5x5).
+    hitter_categories: tuple[str, ...] = tuple(HIT_CATS)
+    pitcher_categories: tuple[str, ...] = tuple(PIT_CATS)
+
     # Minor eligibility (best-effort inference, since projections file usually
     # lacks career AB/IP):
     minor_ab_max: int = 130

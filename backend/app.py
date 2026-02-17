@@ -159,6 +159,20 @@ DEFAULT_POINTS_SCORING = {
     "pts_pit_er": -2.0,
     "pts_pit_bb": -1.0,
 }
+ROTO_HITTER_CATEGORY_FIELDS: tuple[tuple[str, str], ...] = (
+    ("roto_hit_r", "R"),
+    ("roto_hit_rbi", "RBI"),
+    ("roto_hit_hr", "HR"),
+    ("roto_hit_sb", "SB"),
+    ("roto_hit_avg", "AVG"),
+)
+ROTO_PITCHER_CATEGORY_FIELDS: tuple[tuple[str, str], ...] = (
+    ("roto_pit_w", "W"),
+    ("roto_pit_k", "K"),
+    ("roto_pit_sv", "SV"),
+    ("roto_pit_era", "ERA"),
+    ("roto_pit_whip", "WHIP"),
+)
 COMMON_DEFAULT_IR_SLOTS = 0
 COMMON_DEFAULT_MINOR_SLOTS = 0
 COMMON_HITTER_STARTER_SLOTS_PER_TEAM = sum(COMMON_HITTER_SLOT_DEFAULTS.values())
@@ -779,9 +793,36 @@ def _calculate_common_dynasty_frame_cached(
     two_way: str,
     start_year: int,
     recent_projections: int,
+    roto_hit_r: bool = True,
+    roto_hit_rbi: bool = True,
+    roto_hit_hr: bool = True,
+    roto_hit_sb: bool = True,
+    roto_hit_avg: bool = True,
+    roto_pit_w: bool = True,
+    roto_pit_k: bool = True,
+    roto_pit_sv: bool = True,
+    roto_pit_era: bool = True,
+    roto_pit_whip: bool = True,
 ) -> pd.DataFrame:
     _ensure_backend_module_path()
     from dynasty_roto_values import CommonDynastyRotoSettings, calculate_common_dynasty_values
+
+    hitter_categories = [
+        stat_col
+        for enabled, (_field_key, stat_col) in zip(
+            [roto_hit_r, roto_hit_rbi, roto_hit_hr, roto_hit_sb, roto_hit_avg],
+            ROTO_HITTER_CATEGORY_FIELDS,
+        )
+        if bool(enabled)
+    ]
+    pitcher_categories = [
+        stat_col
+        for enabled, (_field_key, stat_col) in zip(
+            [roto_pit_w, roto_pit_k, roto_pit_sv, roto_pit_era, roto_pit_whip],
+            ROTO_PITCHER_CATEGORY_FIELDS,
+        )
+        if bool(enabled)
+    ]
 
     lg = CommonDynastyRotoSettings(
         n_teams=teams,
@@ -810,6 +851,8 @@ def _calculate_common_dynasty_frame_cached(
         ip_min=ip_min,
         ip_max=ip_max,
         two_way=two_way,
+        hitter_categories=tuple(hitter_categories),
+        pitcher_categories=tuple(pitcher_categories),
     )
 
     out = calculate_common_dynasty_values(
@@ -853,6 +896,68 @@ def _projection_identity_key(row: dict | pd.Series) -> str:
     if player_key:
         return player_key
     return _normalize_player_key(row.get("Player"))
+
+
+def _coerce_bool(value: object, *, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value != 0
+    text = str(value or "").strip().lower()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
+
+
+def _selected_roto_categories(settings: dict[str, Any]) -> tuple[list[str], list[str]]:
+    hitter = [
+        stat_col
+        for field_key, stat_col in ROTO_HITTER_CATEGORY_FIELDS
+        if _coerce_bool(settings.get(field_key), default=True)
+    ]
+    pitcher = [
+        stat_col
+        for field_key, stat_col in ROTO_PITCHER_CATEGORY_FIELDS
+        if _coerce_bool(settings.get(field_key), default=True)
+    ]
+    return hitter, pitcher
+
+
+@lru_cache(maxsize=64)
+def _start_year_roto_stats_by_entity(
+    *,
+    start_year: int,
+    recent_projections: int,
+) -> dict[str, dict[str, float]]:
+    if recent_projections == 3:
+        bat_rows = BAT_DATA
+        pit_rows = PIT_DATA
+    else:
+        bat_rows = _average_recent_projection_rows(BAT_DATA_RAW, max_entries=recent_projections, is_hitter=True)
+        pit_rows = _average_recent_projection_rows(PIT_DATA_RAW, max_entries=recent_projections, is_hitter=False)
+
+    stats_by_entity: dict[str, dict[str, float]] = {}
+
+    def _merge_rows(rows: list[dict], stat_cols: tuple[str, ...] | list[str]) -> None:
+        for row in rows:
+            year = _coerce_record_year(row.get("Year"))
+            if year != int(start_year):
+                continue
+            entity_key = _projection_identity_key(row)
+            if not entity_key:
+                continue
+            entry = stats_by_entity.setdefault(entity_key, {})
+            for stat_col in stat_cols:
+                stat_value = _coerce_numeric(row.get(stat_col))
+                if stat_value is None:
+                    continue
+                entry[stat_col] = float(stat_value)
+
+    _merge_rows(bat_rows, tuple(stat_col for _field_key, stat_col in ROTO_HITTER_CATEGORY_FIELDS))
+    _merge_rows(pit_rows, tuple(stat_col for _field_key, stat_col in ROTO_PITCHER_CATEGORY_FIELDS))
+    return stats_by_entity
 
 
 def _build_projection_confidence_context(*, start_year: int, recent_projections: int) -> dict[str, dict[str, object]]:
@@ -1834,6 +1939,16 @@ def _default_calculation_cache_params() -> dict[str, int | float | str | None]:
         "two_way": "sum",
         "start_year": start_year,
         "recent_projections": 3,
+        "roto_hit_r": True,
+        "roto_hit_rbi": True,
+        "roto_hit_hr": True,
+        "roto_hit_sb": True,
+        "roto_hit_avg": True,
+        "roto_pit_w": True,
+        "roto_pit_k": True,
+        "roto_pit_sv": True,
+        "roto_pit_era": True,
+        "roto_pit_whip": True,
     }
 
 
@@ -1846,6 +1961,8 @@ def _calculator_guardrails_payload() -> dict:
         "default_points_hitter_slots": POINTS_HITTER_SLOT_DEFAULTS.copy(),
         "default_points_pitcher_slots": POINTS_PITCHER_SLOT_DEFAULTS.copy(),
         "default_points_scoring": DEFAULT_POINTS_SCORING.copy(),
+        "default_roto_hitter_categories": [label for _key, label in ROTO_HITTER_CATEGORY_FIELDS],
+        "default_roto_pitcher_categories": [label for _key, label in ROTO_PITCHER_CATEGORY_FIELDS],
         "default_minors_slots": COMMON_DEFAULT_MINOR_SLOTS,
         "default_ir_slots": COMMON_DEFAULT_IR_SLOTS,
         "playable_by_year": _playable_pool_counts_by_year(),
@@ -1970,6 +2087,16 @@ def _prewarm_default_calculation_caches() -> None:
             two_way=str(params["two_way"]),
             start_year=int(params["start_year"]),
             recent_projections=int(params["recent_projections"]),
+            roto_hit_r=bool(params["roto_hit_r"]),
+            roto_hit_rbi=bool(params["roto_hit_rbi"]),
+            roto_hit_hr=bool(params["roto_hit_hr"]),
+            roto_hit_sb=bool(params["roto_hit_sb"]),
+            roto_hit_avg=bool(params["roto_hit_avg"]),
+            roto_pit_w=bool(params["roto_pit_w"]),
+            roto_pit_k=bool(params["roto_pit_k"]),
+            roto_pit_sv=bool(params["roto_pit_sv"]),
+            roto_pit_era=bool(params["roto_pit_era"]),
+            roto_pit_whip=bool(params["roto_pit_whip"]),
         )
         _get_default_dynasty_lookup()
 
@@ -2029,6 +2156,16 @@ def _get_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set
             two_way=str(params["two_way"]),
             start_year=int(params["start_year"]),
             recent_projections=int(params["recent_projections"]),
+            roto_hit_r=bool(params["roto_hit_r"]),
+            roto_hit_rbi=bool(params["roto_hit_rbi"]),
+            roto_hit_hr=bool(params["roto_hit_hr"]),
+            roto_hit_sb=bool(params["roto_hit_sb"]),
+            roto_hit_avg=bool(params["roto_hit_avg"]),
+            roto_pit_w=bool(params["roto_pit_w"]),
+            roto_pit_k=bool(params["roto_pit_k"]),
+            roto_pit_sv=bool(params["roto_pit_sv"]),
+            roto_pit_era=bool(params["roto_pit_era"]),
+            roto_pit_whip=bool(params["roto_pit_whip"]),
         ).copy(deep=True)
 
         year_cols = sorted(
@@ -2273,6 +2410,7 @@ def _refresh_data_if_needed() -> None:
         _playable_pool_counts_by_year.cache_clear()
         _get_default_dynasty_lookup.cache_clear()
         _player_identity_by_name.cache_clear()
+        _start_year_roto_stats_by_entity.cache_clear()
         with CALC_RESULT_CACHE_LOCK:
             CALC_RESULT_CACHE.clear()
             CALC_RESULT_CACHE_ORDER.clear()
@@ -3452,6 +3590,16 @@ class CalculateRequest(BaseModel):
     ip_max: Optional[float] = Field(default=None, ge=0.0)
     start_year: int = Field(default=2026, ge=1900)
     recent_projections: int = Field(default=3, ge=1, le=10)
+    roto_hit_r: bool = True
+    roto_hit_rbi: bool = True
+    roto_hit_hr: bool = True
+    roto_hit_sb: bool = True
+    roto_hit_avg: bool = True
+    roto_pit_w: bool = True
+    roto_pit_k: bool = True
+    roto_pit_sv: bool = True
+    roto_pit_era: bool = True
+    roto_pit_whip: bool = True
     pts_hit_1b: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_1b"], ge=-50.0, le=50.0)
     pts_hit_2b: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_2b"], ge=-50.0, le=50.0)
     pts_hit_3b: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_3b"], ge=-50.0, le=50.0)
@@ -3491,6 +3639,11 @@ class CalculateRequest(BaseModel):
             raise ValueError("At least one hitter slot must be greater than 0.")
         if total_pitcher_slots <= 0:
             raise ValueError("At least one pitcher slot must be greater than 0.")
+        if self.scoring_mode == "roto":
+            if not any((self.roto_hit_r, self.roto_hit_rbi, self.roto_hit_hr, self.roto_hit_sb, self.roto_hit_avg)):
+                raise ValueError("Roto scoring must include at least one hitting category.")
+            if not any((self.roto_pit_w, self.roto_pit_k, self.roto_pit_sv, self.roto_pit_era, self.roto_pit_whip)):
+                raise ValueError("Roto scoring must include at least one pitching category.")
         if self.scoring_mode == "points":
             has_non_zero_rule = any(
                 abs(value) > 1e-9
@@ -3617,6 +3770,16 @@ def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
                     two_way=req.two_way,
                     start_year=req.start_year,
                     recent_projections=req.recent_projections,
+                    roto_hit_r=req.roto_hit_r,
+                    roto_hit_rbi=req.roto_hit_rbi,
+                    roto_hit_hr=req.roto_hit_hr,
+                    roto_hit_sb=req.roto_hit_sb,
+                    roto_hit_avg=req.roto_hit_avg,
+                    roto_pit_w=req.roto_pit_w,
+                    roto_pit_k=req.roto_pit_k,
+                    roto_pit_sv=req.roto_pit_sv,
+                    roto_pit_era=req.roto_pit_era,
+                    roto_pit_whip=req.roto_pit_whip,
                 ).copy(deep=True)
         except ValueError as calc_error:
             message = str(calc_error)
@@ -3651,12 +3814,30 @@ def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
         out["DynastyMatchStatus"] = out[PLAYER_ENTITY_KEY_COL].map(
             lambda value: "matched" if value else "no_unique_match"
         )
+        selected_roto_stat_cols: list[str] = []
+        if req.scoring_mode == "roto":
+            selected_hit_cats, selected_pit_cats = _selected_roto_categories(settings)
+            selected_roto_stat_cols = selected_hit_cats + selected_pit_cats
+            if selected_roto_stat_cols:
+                stats_by_entity = _start_year_roto_stats_by_entity(
+                    start_year=req.start_year,
+                    recent_projections=req.recent_projections,
+                )
+                identity_keys = out.apply(_projection_identity_key, axis=1)
+                for stat_col in selected_roto_stat_cols:
+                    stat_lookup = {
+                        key: values.get(stat_col)
+                        for key, values in stats_by_entity.items()
+                        if stat_col in values
+                    }
+                    out[stat_col] = identity_keys.map(stat_lookup)
         explanations = _build_calculation_explanations(out, settings=settings)
 
         # Select output columns
         year_cols = [c for c in out.columns if c.startswith("Value_")]
         cols = [
             "Player", PLAYER_KEY_COL, PLAYER_ENTITY_KEY_COL, "DynastyMatchStatus", "Team", "Pos", "Age",
+        ] + selected_roto_stat_cols + [
             "DynastyValue", "RawDynastyValue",
             "minor_eligible",
         ] + year_cols
@@ -3665,8 +3846,9 @@ def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
         df = out[available_cols].copy()
 
         # Round for JSON
+        three_decimal_cols = {"AVG", "OBP", "OPS"}
         for c in df.select_dtypes(include="float").columns:
-            df[c] = df[c].round(2)
+            df[c] = df[c].round(3 if c in three_decimal_cols else 2)
 
         records = df.to_dict(orient="records")
         records = _clean_records_for_json(records)

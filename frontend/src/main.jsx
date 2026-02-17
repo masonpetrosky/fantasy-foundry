@@ -375,6 +375,45 @@ const POINTS_SCORING_FIELDS = [
 ];
 const POINTS_BATTING_FIELDS = POINTS_SCORING_FIELDS.filter(field => field.group === "bat");
 const POINTS_PITCHING_FIELDS = POINTS_SCORING_FIELDS.filter(field => field.group === "pit");
+const ROTO_HITTER_CATEGORY_FIELDS = [
+  { key: "roto_hit_r", label: "R", statCol: "R", defaultValue: true },
+  { key: "roto_hit_rbi", label: "RBI", statCol: "RBI", defaultValue: true },
+  { key: "roto_hit_hr", label: "HR", statCol: "HR", defaultValue: true },
+  { key: "roto_hit_sb", label: "SB", statCol: "SB", defaultValue: true },
+  { key: "roto_hit_avg", label: "AVG", statCol: "AVG", defaultValue: true },
+];
+const ROTO_PITCHER_CATEGORY_FIELDS = [
+  { key: "roto_pit_w", label: "W", statCol: "W", defaultValue: true },
+  { key: "roto_pit_k", label: "K", statCol: "K", defaultValue: true },
+  { key: "roto_pit_sv", label: "SV", statCol: "SV", defaultValue: true },
+  { key: "roto_pit_era", label: "ERA", statCol: "ERA", defaultValue: true },
+  { key: "roto_pit_whip", label: "WHIP", statCol: "WHIP", defaultValue: true },
+];
+const ROTO_CATEGORY_FIELDS = [...ROTO_HITTER_CATEGORY_FIELDS, ...ROTO_PITCHER_CATEGORY_FIELDS];
+const ROTO_RATE_STAT_COLS = new Set(["AVG", "ERA", "WHIP"]);
+const ROTO_COUNTING_STAT_COLS = new Set(["R", "RBI", "HR", "SB", "W", "K", "SV"]);
+
+function coerceBooleanSetting(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value !== 0;
+  const text = String(value ?? "").trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(text)) return true;
+  if (["0", "false", "no", "n", "off"].includes(text)) return false;
+  return fallback;
+}
+
+function resolveRotoCategoryDefaults() {
+  return Object.fromEntries(
+    ROTO_CATEGORY_FIELDS.map(field => [field.key, field.defaultValue])
+  );
+}
+
+function resolveRotoSelectedStatColumns(settings) {
+  const source = settings && typeof settings === "object" ? settings : {};
+  return ROTO_CATEGORY_FIELDS
+    .filter(field => coerceBooleanSetting(source[field.key], field.defaultValue))
+    .map(field => field.statCol);
+}
 
 function resolveRotoSlotDefaults(meta) {
   const guardrails = meta?.calculator_guardrails || {};
@@ -461,6 +500,7 @@ function buildDefaultCalculatorSettings(meta) {
     two_way: "sum",
     start_year: Number(meta?.years?.[0] ?? 2026),
     recent_projections: 3,
+    ...resolveRotoCategoryDefaults(),
     ...resolvePointsScoringDefaults(meta),
   };
 }
@@ -790,6 +830,21 @@ function buildCalculatorPayload(settings, availableYears, meta) {
     return { error: "Two-Way mode must be either 'sum' or 'max'." };
   }
 
+  const parsedRotoCategories = {};
+  for (const field of ROTO_CATEGORY_FIELDS) {
+    parsedRotoCategories[field.key] = coerceBooleanSetting(settings[field.key], field.defaultValue);
+  }
+  if (scoringMode === "roto") {
+    const selectedHitCategories = ROTO_HITTER_CATEGORY_FIELDS.filter(field => parsedRotoCategories[field.key]).length;
+    const selectedPitchCategories = ROTO_PITCHER_CATEGORY_FIELDS.filter(field => parsedRotoCategories[field.key]).length;
+    if (selectedHitCategories <= 0) {
+      return { error: "Roto scoring must include at least one hitting category." };
+    }
+    if (selectedPitchCategories <= 0) {
+      return { error: "Roto scoring must include at least one pitching category." };
+    }
+  }
+
   const parsedPointsScoring = {};
   for (const field of POINTS_SCORING_FIELDS) {
     const value = Number(settings[field.key]);
@@ -821,6 +876,7 @@ function buildCalculatorPayload(settings, availableYears, meta) {
     two_way: twoWay,
     start_year: startYear,
     recent_projections: recentProjections,
+    ...parsedRotoCategories,
     ...parsedPointsScoring,
   };
 
@@ -1367,25 +1423,17 @@ function App() {
             <h2 style={{ marginBottom: "10px" }}>Default League Configuration</h2>
             <p>This site defaults to a 12-team, 5x5 roto setup for rankings.</p>
             <p>
-              Hitting categories: <code>R</code>, <code>RBI</code>, <code>HR</code>, <code>SB</code>, <code>AVG</code>
+              Hitting categories: R, RBI, HR, SB, AVG
               {" · "}
-              Pitching categories: <code>W</code>, <code>K</code>, <code>SV</code>, <code>ERA</code>, <code>WHIP</code>.
+              Pitching categories: W, K, SV, ERA, WHIP.
             </p>
             <p>
-              Roster defaults: 22 starters (13 hitters: <code>C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT</code>; 9 pitchers as <code>9 P</code>),
+              Roster defaults: 22 starters (13 hitters: C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT; 9 pitchers as 9 P),
               plus 6 bench, 0 MiLB, and 0 IL slots.
             </p>
             <p className="methodology-note" style={{ marginBottom: 0 }}>
               Need custom rankings? Open the <strong>Dynasty Calculator</strong> tab and adjust league settings before you run values.
             </p>
-            {meta?.projection_freshness && (
-              <p className="methodology-note" style={{ marginBottom: 0, marginTop: 10 }}>
-                Projection freshness: latest source date{" "}
-                <code>{meta.projection_freshness.newest_projection_date || "unknown"}</code>
-                {" · "}
-                coverage {fmt(meta.projection_freshness.date_coverage_pct, 1)}%
-              </p>
-            )}
           </div>
           {metaError && (
             <p style={{marginBottom: "16px", color: "var(--red)"}}>
@@ -2116,11 +2164,6 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
   const showInitialLoadSkeleton = loading && displayedPage.length === 0;
   const showInlineRefreshError = Boolean(error) && displayedPage.length > 0;
   const searchIsDebouncing = search !== debouncedSearch;
-  const freshness = meta?.projection_freshness || {};
-  const freshnessLatestDate = String(freshness.newest_projection_date || "").trim();
-  const freshnessDatedRows = Number(freshness.rows_with_projection_date);
-  const freshnessCoveragePct = Number(freshness.date_coverage_pct);
-  const dataVersionShort = resolvedDataVersion ? resolvedDataVersion.slice(0, 8) : "";
   const showMobileSwipeHint = !showCards && isMobileViewport && (canScrollLeft || canScrollRight);
   const swipeHintText = !canScrollLeft && canScrollRight
     ? "Swipe left for more columns →"
@@ -2352,14 +2395,6 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
           {watchlistCount > 40 && <p className="calc-note">Showing first 40 watchlist entries.</p>}
         </div>
       )}
-      <div className="data-freshness-banner" role="note">
-        Data freshness:{" "}
-        {freshnessLatestDate ? `latest source date ${freshnessLatestDate}` : "projection dates unavailable"}
-        {Number.isFinite(freshnessDatedRows) && freshnessDatedRows > 0 ? ` · ${freshnessDatedRows.toLocaleString()} dated rows` : ""}
-        {Number.isFinite(freshnessCoveragePct) ? ` (${freshnessCoveragePct.toFixed(1)}% coverage)` : ""}
-        {dataVersionShort ? ` · Data v${dataVersionShort}` : ""}
-        {watchlistOnly ? " · Watchlist query active" : ""}
-      </div>
       <div style={{marginBottom: "12px", color: "var(--text-muted)", fontSize: "0.82rem"}}>
         Dynasty Value already combines hitting and pitching contributions for two-way players.
       </div>
@@ -2634,6 +2669,7 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
     [meta.years]
   );
   const rotoSlotDefaults = useMemo(() => resolveRotoSlotDefaults(meta), [meta]);
+  const rotoCategoryDefaults = useMemo(() => resolveRotoCategoryDefaults(), []);
   const pointsSlotDefaults = useMemo(() => resolvePointsSlotDefaults(meta), [meta]);
   const pointsScoringDefaults = useMemo(() => resolvePointsScoringDefaults(meta), [meta]);
   const validationResult = useMemo(
@@ -2717,6 +2753,10 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
     setSettings(curr => ({ ...curr, ...pointsScoringDefaults }));
   }
 
+  function resetRotoCategoryDefaults() {
+    setSettings(curr => ({ ...curr, ...rotoCategoryDefaults }));
+  }
+
   function reapplySetupDefaults() {
     setSettings(curr => (
       curr.scoring_mode === "points"
@@ -2763,6 +2803,7 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
       ...commonBase,
       scoring_mode: "roto",
       ...rotoSlotDefaults,
+      ...rotoCategoryDefaults,
     };
   }
 
@@ -3157,8 +3198,28 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
         return a.localeCompare(b);
       })
     : [];
-  const displayCols = [...baseCols, ...yearCols];
   const isPointsMode = settings.scoring_mode === "points";
+  const selectedRotoHitCategoryCount = ROTO_HITTER_CATEGORY_FIELDS.filter(
+    field => coerceBooleanSetting(settings[field.key], field.defaultValue)
+  ).length;
+  const selectedRotoPitchCategoryCount = ROTO_PITCHER_CATEGORY_FIELDS.filter(
+    field => coerceBooleanSetting(settings[field.key], field.defaultValue)
+  ).length;
+  const resultSettings = (results && results.settings && typeof results.settings === "object")
+    ? results.settings
+    : settings;
+  const resultScoringMode = String(resultSettings.scoring_mode || settings.scoring_mode || "roto")
+    .trim()
+    .toLowerCase() || "roto";
+  const selectedRotoStatColsForResults = useMemo(() => {
+    if (resultScoringMode !== "roto") return [];
+    const requested = resolveRotoSelectedStatColumns(resultSettings);
+    const firstResultRow = results?.data?.[0];
+    if (!firstResultRow || typeof firstResultRow !== "object") return [];
+    const available = new Set(Object.keys(firstResultRow));
+    return requested.filter(col => available.has(col));
+  }, [resultScoringMode, resultSettings, results]);
+  const displayCols = [...baseCols, ...selectedRotoStatColsForResults, ...yearCols];
   const requiredRankCols = useMemo(() => new Set(["Player", "DynastyValue"]), []);
   const visibleRankCols = useMemo(
     () => displayCols.filter(col => !hiddenRankCols[col]),
@@ -3567,6 +3628,46 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
             </div>
           </div>
 
+          {!isPointsMode && (
+            <div className="calc-section">
+              <p className="calc-section-title">Roto Categories</p>
+              <p className="calc-note">
+                Choose which categories count toward value in roto mode ({selectedRotoHitCategoryCount} hitting, {selectedRotoPitchCategoryCount} pitching).
+              </p>
+
+              <p className="calc-subheading">Hitting</p>
+              <div className="calc-checkbox-grid">
+                {ROTO_HITTER_CATEGORY_FIELDS.map(field => (
+                  <label className="calc-checkbox-option" key={field.key}>
+                    <input
+                      type="checkbox"
+                      checked={coerceBooleanSetting(settings[field.key], field.defaultValue)}
+                      onChange={e => update(field.key, e.target.checked)}
+                    />
+                    <span>{field.label}</span>
+                  </label>
+                ))}
+              </div>
+
+              <p className="calc-subheading">Pitching</p>
+              <div className="calc-checkbox-grid">
+                {ROTO_PITCHER_CATEGORY_FIELDS.map(field => (
+                  <label className="calc-checkbox-option" key={field.key}>
+                    <input
+                      type="checkbox"
+                      checked={coerceBooleanSetting(settings[field.key], field.defaultValue)}
+                      onChange={e => update(field.key, e.target.checked)}
+                    />
+                    <span>{field.label}</span>
+                  </label>
+                ))}
+              </div>
+              <button type="button" className="calc-secondary-btn" onClick={resetRotoCategoryDefaults}>
+                Reset 5x5 Categories
+              </button>
+            </div>
+          )}
+
           {isPointsMode && (
             <div className="calc-section">
               <p className="calc-section-title">Points Scoring Rules</p>
@@ -3819,6 +3920,13 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
                                 const n = Number(val);
                                 const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
                                 return <td key={c} className={`num ${cls} ${pinClass}`.trim()}>{fmt(val, 2)}</td>;
+                              }
+                              if (ROTO_COUNTING_STAT_COLS.has(c)) {
+                                return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, 0)}</td>;
+                              }
+                              if (ROTO_RATE_STAT_COLS.has(c)) {
+                                const decimals = c === "AVG" ? 3 : 2;
+                                return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, decimals)}</td>;
                               }
                               if (typeof val === "number") return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, Number.isInteger(val) ? 0 : 1)}</td>;
                               return <td key={c} className={pinClass}>{val ?? "—"}</td>;

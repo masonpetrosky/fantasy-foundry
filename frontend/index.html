@@ -1191,6 +1191,38 @@ td.value-negative { color: var(--red); }
   gap: 12px;
 }
 
+.calc-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.calc-checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.calc-checkbox-option:hover {
+  border-color: var(--accent-dim);
+  background: var(--bg-tertiary);
+}
+
+.calc-checkbox-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent-dim);
+}
+
 .calc-inline-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
