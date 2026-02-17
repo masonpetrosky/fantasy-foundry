@@ -142,6 +142,13 @@ PLAYER_KEY_COL = "PlayerKey"
 PLAYER_ENTITY_KEY_COL = "PlayerEntityKey"
 PLAYER_KEY_PATTERN = re.compile(r"[^a-z0-9]+")
 
+# Bench-stash penalty curve defaults:
+# - first stash round per team should still carry a small cost
+# - later rounds are progressively more punitive
+BENCH_STASH_MIN_PENALTY = 0.10
+BENCH_STASH_MAX_PENALTY = 0.85
+BENCH_STASH_PENALTY_GAMMA = 1.35
+
 
 def positive_int_arg(value: Union[str, int]) -> int:
     """argparse type: integer >= 1."""
@@ -1530,29 +1537,111 @@ def dynasty_keep_or_drop_value(values: List[float], years: List[int], discount: 
 
     return float(f_next)
 
-def infer_minor_eligible(bat: pd.DataFrame, pit: pd.DataFrame, lg: CommonDynastyRotoSettings, start_year: int) -> pd.DataFrame:
+def _infer_minor_eligibility_by_year(
+    bat_df: pd.DataFrame,
+    pit_df: pd.DataFrame,
+    *,
+    years: Optional[List[int]],
+    hitter_usage_max: int,
+    pitcher_usage_max: int,
+    hitter_age_max: int,
+    pitcher_age_max: int,
+) -> pd.DataFrame:
+    """Infer year-level minor eligibility from projected MLB usage and age.
+
+    The rule is intentionally monotonic: once a player is inferred to lose minor
+    eligibility, they cannot regain it in later years.
     """
-    Best-effort inference from projections only (since career AB/IP often not present):
-      - hitter: projected AB <= 130 and Age <= 25
-      - pitcher: projected IP <= 50 and Age <= 26
-    """
-    bat_y = bat[bat["Year"] == start_year][["Player", "AB", "Age"]].copy()
-    pit_y = pit[pit["Year"] == start_year][["Player", "IP", "Age"]].copy()
 
-    bat_y = bat_y.groupby("Player", as_index=False).agg({"AB": "max", "Age": "min"})
-    pit_y = pit_y.groupby("Player", as_index=False).agg({"IP": "max", "Age": "min"})
+    def _per_side(df: pd.DataFrame, usage_col: str) -> pd.DataFrame:
+        if df.empty or "Player" not in df.columns or "Year" not in df.columns:
+            return pd.DataFrame(columns=["Player", "Year", usage_col, "Age"])
 
-    m = pd.merge(bat_y, pit_y, on="Player", how="outer", suffixes=("_hit", "_pit"))
-    m["Age"] = m["Age_hit"].combine_first(m["Age_pit"])
-    m["AB"] = m["AB"].fillna(0.0)
-    m["IP"] = m["IP"].fillna(0.0)
+        cols = ["Player", "Year", usage_col]
+        if "Age" in df.columns:
+            cols.append("Age")
+        side = df[cols].copy()
+        side["Year"] = pd.to_numeric(side["Year"], errors="coerce")
+        side = side.dropna(subset=["Player", "Year"])
+        if side.empty:
+            return pd.DataFrame(columns=["Player", "Year", usage_col, "Age"])
 
-    m["minor_eligible"] = (
-        ((m["AB"] > 0) & (m["AB"] <= lg.minor_ab_max) & (m["Age"] <= lg.minor_age_max_hit))
-        | ((m["IP"] > 0) & (m["IP"] <= lg.minor_ip_max) & (m["Age"] <= lg.minor_age_max_pit))
+        side["Year"] = side["Year"].astype(int)
+        side[usage_col] = pd.to_numeric(side[usage_col], errors="coerce").fillna(0.0).clip(lower=0.0)
+        if "Age" not in side.columns:
+            side["Age"] = np.nan
+        else:
+            side["Age"] = pd.to_numeric(side["Age"], errors="coerce")
+
+        return side.groupby(["Player", "Year"], as_index=False).agg({usage_col: "max", "Age": "min"})
+
+    bat_year = _per_side(bat_df, "AB")
+    pit_year = _per_side(pit_df, "IP")
+    merged = bat_year.merge(pit_year, on=["Player", "Year"], how="outer", suffixes=("_hit", "_pit"))
+    if merged.empty:
+        return pd.DataFrame(columns=["Player", "Year", "minor_eligible"])
+
+    years_set = {int(y) for y in years} if years else None
+    if years_set is not None:
+        merged = merged[merged["Year"].isin(years_set)].copy()
+    if merged.empty:
+        return pd.DataFrame(columns=["Player", "Year", "minor_eligible"])
+
+    merged["AB"] = pd.to_numeric(merged["AB"], errors="coerce").fillna(0.0).clip(lower=0.0)
+    merged["IP"] = pd.to_numeric(merged["IP"], errors="coerce").fillna(0.0).clip(lower=0.0)
+    age_hit = pd.to_numeric(merged["Age_hit"], errors="coerce")
+    age_pit = pd.to_numeric(merged["Age_pit"], errors="coerce")
+    merged["Age"] = age_hit.combine_first(age_pit)
+    merged = merged.sort_values(["Player", "Year"]).reset_index(drop=True)
+
+    merged["cum_AB"] = merged.groupby("Player", sort=False)["AB"].cumsum()
+    merged["cum_IP"] = merged.groupby("Player", sort=False)["IP"].cumsum()
+
+    raw_minor = (
+        ((merged["cum_AB"] > 0.0) & (merged["cum_AB"] <= float(hitter_usage_max)) & (merged["Age"] <= float(hitter_age_max)))
+        | ((merged["cum_IP"] > 0.0) & (merged["cum_IP"] <= float(pitcher_usage_max)) & (merged["Age"] <= float(pitcher_age_max)))
     )
+    merged["minor_eligible_raw"] = _fillna_bool(raw_minor.astype("boolean"), default=False)
 
-    return m[["Player", "minor_eligible"]]
+    def _enforce_once_lost(series: pd.Series) -> pd.Series:
+        had_eligibility = False
+        lost_eligibility = False
+        out: List[bool] = []
+        for value in series.tolist():
+            eligible_now = bool(value)
+            if lost_eligibility:
+                out.append(False)
+                continue
+            if had_eligibility and not eligible_now:
+                lost_eligibility = True
+                out.append(False)
+                continue
+            if eligible_now:
+                had_eligibility = True
+            out.append(eligible_now)
+        return pd.Series(out, index=series.index, dtype=bool)
+
+    merged["minor_eligible"] = (
+        merged.groupby("Player", sort=False)["minor_eligible_raw"].apply(_enforce_once_lost).reset_index(level=0, drop=True)
+    )
+    return merged[["Player", "Year", "minor_eligible"]]
+
+
+def infer_minor_eligible(bat: pd.DataFrame, pit: pd.DataFrame, lg: CommonDynastyRotoSettings, start_year: int) -> pd.DataFrame:
+    """Best-effort start-year minor eligibility inference from projections."""
+    inferred = _infer_minor_eligibility_by_year(
+        bat,
+        pit,
+        years=[start_year],
+        hitter_usage_max=lg.minor_ab_max,
+        pitcher_usage_max=lg.minor_ip_max,
+        hitter_age_max=lg.minor_age_max_hit,
+        pitcher_age_max=lg.minor_age_max_pit,
+    )
+    out = inferred[inferred["Year"] == int(start_year)][["Player", "minor_eligible"]].copy()
+    if out.empty:
+        return pd.DataFrame(columns=["Player", "minor_eligible"])
+    return out.groupby("Player", as_index=False)["minor_eligible"].max()
 
 
 def _non_vacant_player_names(df: Optional[pd.DataFrame]) -> Set[str]:
@@ -1643,6 +1732,60 @@ def _estimate_bench_negative_penalty(start_ctx: dict, lg: object) -> float:
     return float(np.clip(uncovered_open_slots, 0.0, 1.0))
 
 
+def _bench_stash_round_penalty(
+    round_number: int,
+    *,
+    bench_slots: int,
+    min_penalty: float = BENCH_STASH_MIN_PENALTY,
+    max_penalty: float = BENCH_STASH_MAX_PENALTY,
+    gamma: float = BENCH_STASH_PENALTY_GAMMA,
+) -> float:
+    """Penalty factor for a stash round (1-based), clipped to [0, 1]."""
+    total_bench_slots = int(max(bench_slots, 0))
+    if total_bench_slots <= 0:
+        return 1.0
+
+    round_num = max(int(round_number), 1)
+    if round_num > total_bench_slots:
+        return 1.0
+
+    lo = float(np.clip(min_penalty, 0.0, 1.0))
+    hi = float(np.clip(max_penalty, lo, 1.0))
+    shape = float(max(gamma, 1e-9))
+
+    if total_bench_slots == 1:
+        return hi
+
+    x = float(round_num - 1) / float(total_bench_slots - 1)
+    penalty = lo + (hi - lo) * (x ** shape)
+    return float(np.clip(penalty, 0.0, 1.0))
+
+
+def _build_bench_stash_penalty_map(
+    stash_sorted: pd.DataFrame,
+    *,
+    bench_stash_players: Set[str],
+    n_teams: int,
+    bench_slots: int,
+) -> Dict[str, float]:
+    """Assign player-specific bench penalties by stash round across teams."""
+    if stash_sorted.empty or not bench_stash_players:
+        return {}
+
+    team_count = int(max(n_teams, 1))
+    penalty_map: Dict[str, float] = {}
+    stash_rank = 0
+
+    for player in stash_sorted.get("Player", pd.Series(dtype=object)).dropna().astype(str).tolist():
+        if player not in bench_stash_players or player in penalty_map:
+            continue
+        round_number = 1 + (stash_rank // team_count)
+        penalty_map[player] = _bench_stash_round_penalty(round_number, bench_slots=bench_slots)
+        stash_rank += 1
+
+    return penalty_map
+
+
 def _apply_negative_value_stash_rules(
     value: float,
     *,
@@ -1691,43 +1834,102 @@ def _normalize_minor_eligibility(series: pd.Series) -> pd.Series:
     return series.apply(_coerce)
 
 
+def minor_eligibility_by_year_from_input(
+    bat: pd.DataFrame,
+    pit: pd.DataFrame,
+) -> Optional[pd.DataFrame]:
+    """Parse explicit minor-eligibility flags from input at Player/Year granularity."""
+    candidates = {"minor", "minor_eligible", "minors_eligible", "minor_eligibility", "minors_eligibility", "minoreligible"}
+
+    def _extract(df: pd.DataFrame) -> Optional[pd.DataFrame]:
+        if df.empty or "Player" not in df.columns or "Year" not in df.columns:
+            return None
+
+        col_map = {c: c.strip().lower().replace(" ", "_") for c in df.columns}
+        matched = [c for c, norm in col_map.items() if norm in candidates or ("minor" in norm and "elig" in norm)]
+        if not matched:
+            return None
+
+        col = matched[0]
+        subset = df[["Player", "Year", col]].copy()
+        subset["Year"] = pd.to_numeric(subset["Year"], errors="coerce")
+        subset["minor_eligible"] = _normalize_minor_eligibility(subset[col])
+        subset = subset.drop(columns=[col]).dropna(subset=["Player", "Year", "minor_eligible"])
+        if subset.empty:
+            return None
+
+        subset["Year"] = subset["Year"].astype(int)
+        subset["minor_score"] = subset["minor_eligible"].map({True: 2, False: 1}).astype(int)
+        grouped = subset.groupby(["Player", "Year"], as_index=False)["minor_score"].max()
+        grouped["minor_eligible"] = grouped["minor_score"] >= 2
+        return grouped[["Player", "Year", "minor_eligible"]]
+
+    parts = [part for part in (_extract(bat), _extract(pit)) if part is not None]
+    if not parts:
+        return None
+
+    merged = pd.concat(parts, ignore_index=True)
+    merged["minor_score"] = merged["minor_eligible"].map({True: 2, False: 1}).astype(int)
+    merged = merged.groupby(["Player", "Year"], as_index=False)["minor_score"].max()
+    merged["minor_eligible"] = merged["minor_score"] >= 2
+    return merged[["Player", "Year", "minor_eligible"]]
+
+
 def minor_eligibility_from_input(
     bat: pd.DataFrame,
     pit: pd.DataFrame,
     start_year: int,
 ) -> Optional[pd.DataFrame]:
-    candidates = {"minor", "minor_eligible", "minors_eligible", "minor_eligibility", "minors_eligibility", "minoreligible"}
-
-    def _extract(df: pd.DataFrame) -> Optional[pd.DataFrame]:
-        if df.empty:
-            return None
-        col_map = {c: c.strip().lower().replace(" ", "_") for c in df.columns}
-        matched = [c for c, norm in col_map.items() if norm in candidates or ("minor" in norm and "elig" in norm)]
-        if not matched:
-            return None
-        col = matched[0]
-        use_df = df
-        if "Year" in df.columns:
-            use_df = df[df["Year"] == start_year]
-        subset = use_df[["Player", col]].copy()
-        subset["minor_eligible"] = _normalize_minor_eligibility(subset[col])
-        subset = subset.drop(columns=[col])
-        subset = subset.dropna(subset=["Player"]).groupby("Player", as_index=False)["minor_eligible"].max()
-        return subset
-
-    bat_minor = _extract(bat)
-    pit_minor = _extract(pit)
-
-    if bat_minor is None and pit_minor is None:
+    """Backward-compatible start-year view of explicit minor eligibility."""
+    by_year = minor_eligibility_by_year_from_input(bat, pit)
+    if by_year is None or by_year.empty:
         return None
-    if bat_minor is None:
-        return pit_minor
-    if pit_minor is None:
-        return bat_minor
 
-    merged = bat_minor.merge(pit_minor, on="Player", how="outer", suffixes=("_bat", "_pit"))
-    merged["minor_eligible"] = merged["minor_eligible_bat"].combine_first(merged["minor_eligible_pit"])
-    return merged[["Player", "minor_eligible"]]
+    subset = by_year[by_year["Year"] == int(start_year)][["Player", "minor_eligible"]].copy()
+    if subset.empty:
+        return None
+    return subset.groupby("Player", as_index=False)["minor_eligible"].max()
+
+
+def _resolve_minor_eligibility_by_year(
+    bat_df: pd.DataFrame,
+    pit_df: pd.DataFrame,
+    *,
+    years: List[int],
+    hitter_usage_max: int,
+    pitcher_usage_max: int,
+    hitter_age_max: int,
+    pitcher_age_max: int,
+) -> pd.DataFrame:
+    """Build Player/Year minor eligibility using input flags first, inference fallback."""
+    years_set = {int(y) for y in years}
+
+    inferred = _infer_minor_eligibility_by_year(
+        bat_df,
+        pit_df,
+        years=years,
+        hitter_usage_max=hitter_usage_max,
+        pitcher_usage_max=pitcher_usage_max,
+        hitter_age_max=hitter_age_max,
+        pitcher_age_max=pitcher_age_max,
+    )
+    explicit = minor_eligibility_by_year_from_input(bat_df, pit_df)
+
+    if explicit is None or explicit.empty:
+        out = inferred.copy()
+    else:
+        merged = inferred.merge(explicit, on=["Player", "Year"], how="outer", suffixes=("_infer", "_input"))
+        merged["minor_eligible"] = merged["minor_eligible_input"].combine_first(merged["minor_eligible_infer"])
+        out = merged[["Player", "Year", "minor_eligible"]].copy()
+
+    if out.empty:
+        return pd.DataFrame(columns=["Player", "Year", "minor_eligible"])
+
+    out = out[out["Year"].isin(years_set)].copy()
+    if out.empty:
+        return pd.DataFrame(columns=["Player", "Year", "minor_eligible"])
+    out["minor_eligible"] = _fillna_bool(out["minor_eligible"])
+    return out.groupby(["Player", "Year"], as_index=False)["minor_eligible"].max()
 
 def calculate_common_dynasty_values(
     excel_path: str,
@@ -1828,17 +2030,24 @@ def calculate_common_dynasty_values(
     # Projection metadata: how many projections were averaged (<= recent_projections) and the oldest date used
     proj_meta = projection_meta_for_start_year(bat, pit, start_year)
 
-    # Minor eligibility source precedence:
-    # 1) explicit eligibility column in projections (authoritative when present)
-    # 2) inference fallback only when explicit data is unavailable
+    years_set = {int(y) for y in years}
     if lg.minor_slots and lg.minor_slots > 0:
-        input_elig = minor_eligibility_from_input(bat, pit, start_year)
-        if input_elig is not None:
-            elig_df = input_elig.copy()
+        elig_year_df = _resolve_minor_eligibility_by_year(
+            bat,
+            pit,
+            years=years,
+            hitter_usage_max=lg.minor_ab_max,
+            pitcher_usage_max=lg.minor_ip_max,
+            hitter_age_max=lg.minor_age_max_hit,
+            pitcher_age_max=lg.minor_age_max_pit,
+        )
+        start_minor = elig_year_df[elig_year_df["Year"] == int(start_year)][["Player", "minor_eligible"]].copy()
+        if start_minor.empty:
+            elig_df = pd.DataFrame(columns=["Player", "minor_eligible"])
         else:
-            elig_df = infer_minor_eligible(bat, pit, lg, start_year)
-        elig_df["minor_eligible"] = _fillna_bool(elig_df["minor_eligible"])
+            elig_df = start_minor.groupby("Player", as_index=False)["minor_eligible"].max()
     else:
+        elig_year_df = pd.DataFrame(columns=["Player", "Year", "minor_eligible"])
         elig_df = pd.DataFrame(columns=["Player", "minor_eligible"])
 
     active_per_team = sum(lg.hitter_slots.values()) + sum(lg.pitcher_slots.values())
@@ -1863,7 +2072,6 @@ def calculate_common_dynasty_values(
         _non_vacant_player_names(start_ctx.get("assigned_hit"))
         | _non_vacant_player_names(start_ctx.get("assigned_pit"))
     )
-    bench_negative_penalty = _estimate_bench_negative_penalty(start_ctx, lg)
 
     all_year_avg = pd.concat(year_tables_avg, ignore_index=True)
     wide_avg = all_year_avg.pivot_table(index="Player", columns="Year", values="YearValue", aggfunc="max").reset_index()
@@ -1871,13 +2079,21 @@ def calculate_common_dynasty_values(
         if y not in wide_avg.columns:
             wide_avg[y] = 0.0
 
-    elig_map = dict(zip(elig_df["Player"], elig_df["minor_eligible"].astype(bool))) if not elig_df.empty else {}
+    minor_eligibility_by_year = (
+        {
+            (str(row.Player), int(row.Year)): bool(row.minor_eligible)
+            for row in elig_year_df.itertuples(index=False)
+            if int(row.Year) in years_set
+        }
+        if not elig_year_df.empty
+        else {}
+    )
     bench_stash_players = _players_with_playing_time(bat, pit, years)
 
-    def _stash_row(row: pd.Series) -> float:
-        player = row["Player"]
-        can_stash = bool(lg.minor_slots and lg.minor_slots > 0 and bool(elig_map.get(player, False)))
-        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and str(player) in bench_stash_players)
+    def _stash_row(row: pd.Series, bench_penalty_by_player: Dict[str, float]) -> float:
+        player = str(row["Player"])
+        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and player in bench_stash_players)
+        bench_penalty = float(bench_penalty_by_player.get(player, 1.0))
         vals: List[float] = []
         for y in years:
             v = row.get(y)
@@ -1886,14 +2102,27 @@ def calculate_common_dynasty_values(
             v = float(v)
             v = _apply_negative_value_stash_rules(
                 v,
-                can_minor_stash=can_stash,
+                can_minor_stash=bool(
+                    lg.minor_slots
+                    and lg.minor_slots > 0
+                    and bool(minor_eligibility_by_year.get((player, int(y)), False))
+                ),
                 can_bench_stash=can_bench_stash,
-                bench_negative_penalty=bench_negative_penalty,
+                bench_negative_penalty=bench_penalty,
             )
             vals.append(v)
         return dynasty_keep_or_drop_value(vals, years, lg.discount)
 
-    wide_avg["StashScore"] = wide_avg.apply(_stash_row, axis=1)
+    provisional_bench_penalty = {player: 0.0 for player in bench_stash_players}
+    wide_avg["StashScore"] = wide_avg.apply(lambda row: _stash_row(row, provisional_bench_penalty), axis=1)
+    provisional_stash_sorted = wide_avg[["Player", "StashScore"]].sort_values("StashScore", ascending=False).reset_index(drop=True)
+    bench_penalty_by_player = _build_bench_stash_penalty_map(
+        provisional_stash_sorted,
+        bench_stash_players=bench_stash_players,
+        n_teams=lg.n_teams,
+        bench_slots=lg.bench_slots,
+    )
+    wide_avg["StashScore"] = wide_avg.apply(lambda row: _stash_row(row, bench_penalty_by_player), axis=1)
     stash = wide_avg[["Player", "StashScore"]].copy()
     stash = stash.merge(elig_df, on="Player", how="left")
     stash["minor_eligible"] = _fillna_bool(stash["minor_eligible"])
@@ -1993,8 +2222,8 @@ def calculate_common_dynasty_values(
     raw_vals: List[float] = []
     for _, r in out.iterrows():
         player = str(r.get("Player") or "")
-        can_stash = bool(lg.minor_slots and lg.minor_slots > 0 and bool(r.get("minor_eligible", False)))
         can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and player in bench_stash_players)
+        bench_penalty = float(bench_penalty_by_player.get(player, 1.0))
 
         vals: List[float] = []
         for y in years:
@@ -2004,9 +2233,13 @@ def calculate_common_dynasty_values(
             v = float(v)
             v = _apply_negative_value_stash_rules(
                 v,
-                can_minor_stash=can_stash,
+                can_minor_stash=bool(
+                    lg.minor_slots
+                    and lg.minor_slots > 0
+                    and bool(minor_eligibility_by_year.get((player, int(y)), False))
+                ),
                 can_bench_stash=can_bench_stash,
-                bench_negative_penalty=bench_negative_penalty,
+                bench_negative_penalty=bench_penalty,
             )
             vals.append(v)
 
@@ -3100,28 +3333,20 @@ def _xlsx_format_detail_sheet(
 # ----------------------------
 
 def league_infer_minor_eligible_start(bat_df: pd.DataFrame, pit_df: pd.DataFrame, lg: LeagueSettings, start_year: int) -> pd.DataFrame:
-    """
-    Best-effort minor eligibility inference if career AB/IP not provided:
-      - hitter: projected AB <= 130 AND Age <= infer_minor_age_max_hit
-      - pitcher: projected IP <= 50 AND Age <= infer_minor_age_max_pit
-    """
-    bat_y = bat_df[bat_df["Year"] == start_year][["Player", "AB", "Age"]].copy()
-    pit_y = pit_df[pit_df["Year"] == start_year][["Player", "IP", "Age"]].copy()
-
-    bat_y = bat_y.groupby("Player", as_index=False).agg({"AB": "max", "Age": "min"})
-    pit_y = pit_y.groupby("Player", as_index=False).agg({"IP": "max", "Age": "min"})
-
-    m = pd.merge(bat_y, pit_y, on="Player", how="outer", suffixes=("_hit", "_pit"))
-    m["Age"] = m["Age_hit"].combine_first(m["Age_pit"])
-    m["AB"] = m["AB"].fillna(0.0)
-    m["IP"] = m["IP"].fillna(0.0)
-
-    m["minor_eligible"] = (
-        ((m["AB"] > 0) & (m["AB"] <= lg.minor_hitters_career_ab_max) & (m["Age"] <= lg.infer_minor_age_max_hit))
-        | ((m["IP"] > 0) & (m["IP"] <= lg.minor_pitchers_career_ip_max) & (m["Age"] <= lg.infer_minor_age_max_pit))
+    """Best-effort start-year minor eligibility inference from projections."""
+    inferred = _infer_minor_eligibility_by_year(
+        bat_df,
+        pit_df,
+        years=[start_year],
+        hitter_usage_max=lg.minor_hitters_career_ab_max,
+        pitcher_usage_max=lg.minor_pitchers_career_ip_max,
+        hitter_age_max=lg.infer_minor_age_max_hit,
+        pitcher_age_max=lg.infer_minor_age_max_pit,
     )
-
-    return m[["Player", "minor_eligible"]]
+    out = inferred[inferred["Year"] == int(start_year)][["Player", "minor_eligible"]].copy()
+    if out.empty:
+        return pd.DataFrame(columns=["Player", "minor_eligible"])
+    return out.groupby("Player", as_index=False)["minor_eligible"].max()
 
 def calculate_league_dynasty_values(
     excel_path: str,
@@ -3204,14 +3429,21 @@ def calculate_league_dynasty_values(
     # Projection metadata: how many projections were averaged (<=3) and the oldest date used
     proj_meta = projection_meta_for_start_year(bat_df, pit_df, start_year)
 
-    # --- Minor eligibility (for roster selection + output/centering) ---
-    # Explicit eligibility from input is authoritative when present; only infer as fallback.
-    input_elig = minor_eligibility_from_input(bat_df, pit_df, start_year)
-    if input_elig is not None:
-        elig_df = input_elig.copy()
+    years_set = {int(y) for y in years}
+    elig_year_df = _resolve_minor_eligibility_by_year(
+        bat_df,
+        pit_df,
+        years=years,
+        hitter_usage_max=lg.minor_hitters_career_ab_max,
+        pitcher_usage_max=lg.minor_pitchers_career_ip_max,
+        hitter_age_max=lg.infer_minor_age_max_hit,
+        pitcher_age_max=lg.infer_minor_age_max_pit,
+    )
+    start_minor = elig_year_df[elig_year_df["Year"] == int(start_year)][["Player", "minor_eligible"]].copy()
+    if start_minor.empty:
+        elig_df = pd.DataFrame(columns=["Player", "minor_eligible"])
     else:
-        elig_df = league_infer_minor_eligible_start(bat_df, pit_df, lg, start_year)
-    elig_df["minor_eligible"] = _fillna_bool(elig_df["minor_eligible"])
+        elig_df = start_minor.groupby("Player", as_index=False)["minor_eligible"].max()
 
     # Roster depth (league-wide)
     active_per_team = sum(lg.hitter_slots.values()) + sum(lg.pitcher_slots.values())  # should be 23
@@ -3236,13 +3468,19 @@ def calculate_league_dynasty_values(
         year_tables_avg.append(combined)
 
     all_year_avg = pd.concat(year_tables_avg, ignore_index=True)
-    start_ctx = year_contexts.get(start_year, {})
-    bench_negative_penalty = _estimate_bench_negative_penalty(start_ctx, lg)
 
     # Stash score: optimal keep/drop value on the avg-starter YearValue stream.
     # Minor-eligible players can be stashed in minors (negative years treated as 0)
     # when the league has minors slots.
-    elig_map = dict(zip(elig_df["Player"], elig_df["minor_eligible"].astype(bool)))
+    minor_eligibility_by_year = (
+        {
+            (str(row.Player), int(row.Year)): bool(row.minor_eligible)
+            for row in elig_year_df.itertuples(index=False)
+            if int(row.Year) in years_set
+        }
+        if not elig_year_df.empty
+        else {}
+    )
     bench_stash_players = _players_with_playing_time(bat_df, pit_df, years)
 
     wide_avg = all_year_avg.pivot_table(index="Player", columns="Year", values="YearValue", aggfunc="max").reset_index()
@@ -3252,10 +3490,10 @@ def calculate_league_dynasty_values(
         if y not in wide_avg.columns:
             wide_avg[y] = 0.0
 
-    def _stash_row(row: pd.Series) -> float:
-        player = row["Player"]
-        can_stash = bool(lg.minor_slots and lg.minor_slots > 0 and bool(elig_map.get(player, False)))
-        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and str(player) in bench_stash_players)
+    def _stash_row(row: pd.Series, bench_penalty_by_player: Dict[str, float]) -> float:
+        player = str(row["Player"])
+        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and player in bench_stash_players)
+        bench_penalty = float(bench_penalty_by_player.get(player, 1.0))
 
         vals: List[float] = []
         for y in years:
@@ -3265,15 +3503,28 @@ def calculate_league_dynasty_values(
             v = float(v)
             v = _apply_negative_value_stash_rules(
                 v,
-                can_minor_stash=can_stash,
+                can_minor_stash=bool(
+                    lg.minor_slots
+                    and lg.minor_slots > 0
+                    and bool(minor_eligibility_by_year.get((player, int(y)), False))
+                ),
                 can_bench_stash=can_bench_stash,
-                bench_negative_penalty=bench_negative_penalty,
+                bench_negative_penalty=bench_penalty,
             )
             vals.append(v)
 
         return dynasty_keep_or_drop_value(vals, years, lg.discount)
 
-    wide_avg["StashScore"] = wide_avg.apply(_stash_row, axis=1)
+    provisional_bench_penalty = {player: 0.0 for player in bench_stash_players}
+    wide_avg["StashScore"] = wide_avg.apply(lambda row: _stash_row(row, provisional_bench_penalty), axis=1)
+    provisional_stash_sorted = wide_avg[["Player", "StashScore"]].sort_values("StashScore", ascending=False).reset_index(drop=True)
+    bench_penalty_by_player = _build_bench_stash_penalty_map(
+        provisional_stash_sorted,
+        bench_stash_players=bench_stash_players,
+        n_teams=lg.n_teams,
+        bench_slots=lg.bench_slots,
+    )
+    wide_avg["StashScore"] = wide_avg.apply(lambda row: _stash_row(row, bench_penalty_by_player), axis=1)
     stash = wide_avg[["Player", "StashScore"]].copy()
 
     stash = stash.merge(elig_df, on="Player", how="left")
@@ -3372,9 +3623,9 @@ def calculate_league_dynasty_values(
     #   permanently for 0 at any year boundary.
     raw_vals: List[float] = []
     for _, r in out.iterrows():
-        player = r.get("Player")
-        can_stash = bool(lg.minor_slots and lg.minor_slots > 0 and bool(elig_map.get(player, False)))
-        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and str(player) in bench_stash_players)
+        player = str(r.get("Player") or "")
+        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and player in bench_stash_players)
+        bench_penalty = float(bench_penalty_by_player.get(player, 1.0))
 
         vals: List[float] = []
         for y in years:
@@ -3385,9 +3636,13 @@ def calculate_league_dynasty_values(
             v = float(v)
             v = _apply_negative_value_stash_rules(
                 v,
-                can_minor_stash=can_stash,
+                can_minor_stash=bool(
+                    lg.minor_slots
+                    and lg.minor_slots > 0
+                    and bool(minor_eligibility_by_year.get((player, int(y)), False))
+                ),
                 can_bench_stash=can_bench_stash,
-                bench_negative_penalty=bench_negative_penalty,
+                bench_negative_penalty=bench_penalty,
             )
             vals.append(v)
 

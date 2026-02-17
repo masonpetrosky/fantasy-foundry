@@ -7,7 +7,10 @@ from backend.dynasty_roto_values import (
     CommonDynastyRotoSettings,
     PIT_COMPONENT_COLS,
     _apply_negative_value_stash_rules,
+    _bench_stash_round_penalty,
+    _build_bench_stash_penalty_map,
     _estimate_bench_negative_penalty,
+    _infer_minor_eligibility_by_year,
     _players_with_playing_time,
     assign_players_to_slots_with_vacancy_fill,
     compute_year_context,
@@ -311,6 +314,73 @@ class BenchStashPenaltyTests(unittest.TestCase):
             ),
             2.0,
         )
+
+    def test_bench_stash_round_penalty_grows_and_caps(self) -> None:
+        round_one = _bench_stash_round_penalty(1, bench_slots=6)
+        round_three = _bench_stash_round_penalty(3, bench_slots=6)
+        round_six = _bench_stash_round_penalty(6, bench_slots=6)
+        round_seven = _bench_stash_round_penalty(7, bench_slots=6)
+
+        self.assertGreater(round_one, 0.0)
+        self.assertLess(round_one, round_three)
+        self.assertLess(round_three, round_six)
+        self.assertLess(round_six, 1.0)
+        self.assertEqual(round_seven, 1.0)
+
+    def test_build_bench_stash_penalty_map_groups_players_into_team_rounds(self) -> None:
+        stash_sorted = pd.DataFrame(
+            [
+                {"Player": "A", "StashScore": 10.0},
+                {"Player": "B", "StashScore": 9.0},
+                {"Player": "C", "StashScore": 8.0},
+                {"Player": "D", "StashScore": 7.0},
+                {"Player": "E", "StashScore": 6.0},
+                {"Player": "F", "StashScore": 5.0},
+                {"Player": "G", "StashScore": 4.0},
+            ]
+        )
+        penalties = _build_bench_stash_penalty_map(
+            stash_sorted,
+            bench_stash_players={"A", "B", "C", "D", "E", "F", "G"},
+            n_teams=2,
+            bench_slots=3,
+        )
+
+        self.assertAlmostEqual(penalties["A"], penalties["B"], places=9)
+        self.assertAlmostEqual(penalties["C"], penalties["D"], places=9)
+        self.assertAlmostEqual(penalties["E"], penalties["F"], places=9)
+        self.assertLess(penalties["A"], penalties["C"])
+        self.assertLess(penalties["C"], penalties["E"])
+        self.assertEqual(penalties["G"], 1.0)
+
+    def test_infer_minor_eligibility_by_year_drops_after_cumulative_usage_crosses_limit(self) -> None:
+        bat = pd.DataFrame(
+            [
+                {"Player": "Prospect", "Year": 2026, "AB": 60.0, "Age": 22.0},
+                {"Player": "Prospect", "Year": 2027, "AB": 80.0, "Age": 23.0},
+                {"Player": "Prospect", "Year": 2028, "AB": 20.0, "Age": 24.0},
+                {"Player": "Steady", "Year": 2026, "AB": 30.0, "Age": 21.0},
+                {"Player": "Steady", "Year": 2027, "AB": 30.0, "Age": 22.0},
+            ]
+        )
+        pit = pd.DataFrame(columns=["Player", "Year", "IP", "Age"])
+
+        inferred = _infer_minor_eligibility_by_year(
+            bat,
+            pit,
+            years=[2026, 2027, 2028],
+            hitter_usage_max=130,
+            pitcher_usage_max=50,
+            hitter_age_max=25,
+            pitcher_age_max=26,
+        )
+        by_key = {(row.Player, int(row.Year)): bool(row.minor_eligible) for row in inferred.itertuples(index=False)}
+
+        self.assertTrue(by_key[("Prospect", 2026)])
+        self.assertFalse(by_key[("Prospect", 2027)])
+        self.assertFalse(by_key[("Prospect", 2028)])
+        self.assertTrue(by_key[("Steady", 2026)])
+        self.assertTrue(by_key[("Steady", 2027)])
 
 
 if __name__ == "__main__":
