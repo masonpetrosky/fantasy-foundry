@@ -12,6 +12,7 @@ import {
   normalizeHiddenColumnOverridesByTab,
   projectionTableColumnCatalog,
   projectionCardColumnCatalog,
+  projectionCardOptionalColumnHiddenByDefault,
   projectionTableColumnHiddenByDefault,
 } from "./projections_view_config.js";
 
@@ -2017,7 +2018,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
     if (Object.prototype.hasOwnProperty.call(hiddenOverrides, col)) {
       return Boolean(hiddenOverrides[col]);
     }
-    return true;
+    return projectionCardOptionalColumnHiddenByDefault(col);
   }, [activeProjectionCardHiddenCols, projectionCardCoreUnionSet]);
   const cardOptionalCols = useMemo(
     () => cardColumnCatalog.filter(col => !projectionCardCoreUnionSet.has(col)),
@@ -2092,10 +2093,11 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
     setProjectionCardHiddenColsByTab(current => {
       const next = normalizeHiddenColumnOverridesByTab(current);
       const nextTab = { ...(next[tab] || {}) };
-      if (hidden) {
+      const defaultHidden = projectionCardOptionalColumnHiddenByDefault(col);
+      if (hidden === defaultHidden) {
         delete nextTab[col];
       } else {
-        nextTab[col] = false;
+        nextTab[col] = hidden;
       }
       next[tab] = nextTab;
       return next;
@@ -2125,6 +2127,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
       Type: "Side",
       ProjectionsUsed: "Proj Count",
       OldestProjectionDate: "Oldest Proj Date",
+      Rank: "Rank",
       DynastyValue: "Dynasty Value",
       Years: "Years",
       PitH: "P H",
@@ -2163,7 +2166,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
     "PitHR",
     "ER",
   ]);
-  const intCols = new Set(["Year", "Years", "Age", "ProjectionsUsed"]);
+  const intCols = new Set(["Rank", "Year", "Years", "Age", "ProjectionsUsed"]);
   const posFilterLabel = posFilters.length === 0
     ? "All Positions"
     : posFilters.length <= 2
@@ -2463,7 +2466,8 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
               const rowWatch = isRowWatched(row);
               const compareKey = stablePlayerKeyFromRow(row);
               const isCompared = Boolean(compareRowsByKey[compareKey]);
-              const cardCols = projectionCardColumnsForRow(row);
+              const rowWithRank = { ...row, Rank: offset + idx + 1 };
+              const cardCols = projectionCardColumnsForRow(rowWithRank);
               return (
                 <article className="projection-card" key={projectionRowKey(row, offset + idx)}>
                   <div className="projection-card-head">
@@ -2493,16 +2497,16 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
                         <dt>{colLabels[col] || col}</dt>
                         <dd>
                           {(col === "DynastyValue" || col.startsWith("Value_"))
-                            ? fmt(row[col], 2)
+                            ? fmt(rowWithRank[col], 2)
                             : twoDecimalCols.has(col)
-                              ? fmt(row[col], 2)
+                              ? fmt(rowWithRank[col], 2)
                               : threeDecimalCols.has(col)
-                                ? fmt(row[col], 3)
+                                ? fmt(rowWithRank[col], 3)
                                 : wholeNumberCols.has(col)
-                                  ? fmtInt(row[col], true)
+                                  ? fmtInt(rowWithRank[col], true)
                                   : intCols.has(col)
-                                ? fmtInt(row[col], col !== "Year")
-                                : (typeof row[col] === "number" ? fmt(row[col]) : (row[col] ?? "—"))}
+                                ? fmtInt(rowWithRank[col], col !== "Year")
+                                : (typeof rowWithRank[col] === "number" ? fmt(rowWithRank[col]) : (rowWithRank[col] ?? "—"))}
                         </dd>
                       </div>
                     ))}

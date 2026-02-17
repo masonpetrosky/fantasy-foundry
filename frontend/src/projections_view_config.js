@@ -1,6 +1,6 @@
 export const PROJECTION_TABS = ["all", "bat", "pitch"];
-export const PROJECTION_HITTER_CORE_STATS = ["AB", "R", "HR", "RBI", "SB", "AVG"];
-export const PROJECTION_PITCHER_CORE_STATS = ["IP", "W", "K", "SV", "ERA", "WHIP"];
+export const PROJECTION_HITTER_CORE_STATS = ["AB", "R", "HR", "RBI", "SB", "AVG", "OPS"];
+export const PROJECTION_PITCHER_CORE_STATS = ["IP", "W", "K", "SV", "ERA", "WHIP", "QS"];
 
 export function uniqueColumnOrder(columns) {
   const seen = new Set();
@@ -102,11 +102,11 @@ export function projectionCardColumnCatalog(tab, seasonCol, dynastyYearCols) {
   if (tab === "bat") {
     return uniqueColumnOrder([
       ...PROJECTION_HITTER_CORE_STATS,
+      "Rank",
       "DynastyValue",
       ...(dynastyYearCols || []),
       seasonCol,
       "OBP",
-      "OPS",
       "G",
       "H",
       "2B",
@@ -120,10 +120,10 @@ export function projectionCardColumnCatalog(tab, seasonCol, dynastyYearCols) {
   if (tab === "pitch") {
     return uniqueColumnOrder([
       ...PROJECTION_PITCHER_CORE_STATS,
+      "Rank",
       "DynastyValue",
       ...(dynastyYearCols || []),
       seasonCol,
-      "QS",
       "G",
       "GS",
       "L",
@@ -139,13 +139,12 @@ export function projectionCardColumnCatalog(tab, seasonCol, dynastyYearCols) {
   return uniqueColumnOrder([
     ...PROJECTION_HITTER_CORE_STATS,
     ...PROJECTION_PITCHER_CORE_STATS,
+    "Rank",
     "DynastyValue",
     ...(dynastyYearCols || []),
     seasonCol,
     "Type",
     "OBP",
-    "OPS",
-    "QS",
     "G",
     "H",
     "2B",
@@ -191,12 +190,17 @@ export function resolveProjectionCardCoreColumnsForRow(tab, row) {
   return [...PROJECTION_HITTER_CORE_STATS, ...PROJECTION_PITCHER_CORE_STATS];
 }
 
+export function projectionCardOptionalColumnHiddenByDefault(col) {
+  if (col === "Rank" || col === "DynastyValue") return false;
+  return true;
+}
+
 export function isProjectionCardOptionalColumnHidden(col, coreUnionSet, hiddenOverrides = {}) {
   if (coreUnionSet.has(col)) return false;
   if (Object.prototype.hasOwnProperty.call(hiddenOverrides, col)) {
     return Boolean(hiddenOverrides[col]);
   }
-  return true;
+  return projectionCardOptionalColumnHiddenByDefault(col);
 }
 
 export function resolveProjectionCardColumns(tab, seasonCol, dynastyYearCols, row, hiddenOverrides = {}) {
