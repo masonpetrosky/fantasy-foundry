@@ -1256,7 +1256,9 @@ function App() {
             }}
             aria-label="Fantasy Foundry home"
           >
-            <span className="brand-mark" aria-hidden="true">FF</span>
+            <span className="brand-mark" aria-hidden="true">
+              <img src="/assets/favicon.svg" alt="" />
+            </span>
             <span className="brand-text">
               <span className="brand-title">Fantasy Foundry</span>
               <span className="brand-tagline">Dynasty Baseball Intelligence</span>
