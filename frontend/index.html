@@ -197,6 +197,47 @@ header {
   background: var(--bg-tertiary);
 }
 
+.account-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.account-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-menu-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(212, 168, 83, 0.35);
+  padding: 1px 7px;
+  font-size: 0.66rem;
+  line-height: 1.3;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.account-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(440px, calc(100vw - 28px));
+  z-index: 130;
+}
+
+.account-popover .account-card {
+  margin-bottom: 0;
+  box-shadow: 0 14px 30px rgba(0,0,0,0.4);
+}
+
+.account-popover .account-form {
+  grid-template-columns: 1fr;
+}
+
 .account-card {
   margin-bottom: 20px;
   padding: 16px 18px;
@@ -1531,11 +1572,13 @@ footer a { color: var(--accent-dim); text-decoration: none; }
     padding: 10px 16px;
     gap: 10px;
     align-items: center;
+    flex-wrap: wrap;
   }
 
   .brand {
     min-width: 0;
     gap: 8px;
+    order: 1;
   }
 
   .brand-mark {
@@ -1553,8 +1596,10 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   }
 
   .primary-nav {
-    flex: 1 1 auto;
+    order: 3;
+    flex: 1 1 100%;
     min-width: 0;
+    margin-left: 0;
   }
 
   .primary-nav-scroll {
@@ -1565,6 +1610,15 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   .primary-nav-btn {
     font-size: 0.8rem;
     padding: 8px 12px;
+  }
+
+  .account-menu {
+    order: 2;
+    margin-left: auto;
+  }
+
+  .account-popover {
+    width: min(420px, calc(100vw - 20px));
   }
 
   .hero {
@@ -1757,6 +1811,15 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   .primary-nav-btn {
     font-size: var(--fs-xs);
     padding: 7px 10px;
+  }
+
+  .account-menu-btn {
+    padding: 7px 9px;
+    font-size: var(--fs-xs);
+  }
+
+  .account-menu-pill {
+    display: none;
   }
 
   .hero h1 { font-size: 1.82rem; }

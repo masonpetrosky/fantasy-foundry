@@ -870,9 +870,12 @@ function App() {
   const [authStatus, setAuthStatus] = useState("");
   const [cloudStatus, setCloudStatus] = useState("");
   const [cloudReadyForSave, setCloudReadyForSave] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const presetsRef = useRef(presets);
   const watchlistRef = useRef(watchlist);
   const versionEtagRef = useRef("");
+  const accountMenuRef = useRef(null);
+  const accountMenuLabel = !AUTH_SYNC_ENABLED || authUser ? "Account" : "Sign In";
 
   useEffect(() => {
     presetsRef.current = presets;
@@ -1169,6 +1172,35 @@ function App() {
     };
   }, [authUser?.id, cloudReadyForSave, presets, watchlist]);
 
+  useEffect(() => {
+    if (!accountMenuOpen) return undefined;
+
+    function handleOutsideClick(event) {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target)) {
+        setAccountMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setAccountMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [accountMenuOpen]);
+
+  useEffect(() => {
+    setAccountMenuOpen(false);
+  }, [section]);
+
   const signIn = useCallback(async (email, password) => {
     if (!AUTH_SYNC_ENABLED) return;
     const normalizedEmail = String(email || "").trim();
@@ -1279,6 +1311,32 @@ function App() {
               ))}
             </div>
           </nav>
+          <div className="account-menu" ref={accountMenuRef}>
+            <button
+              type="button"
+              className={`inline-btn account-menu-btn ${accountMenuOpen ? "open" : ""}`.trim()}
+              onClick={() => setAccountMenuOpen(open => !open)}
+              aria-expanded={accountMenuOpen}
+              aria-controls="header-account-panel"
+            >
+              <span>{accountMenuLabel}</span>
+              {authUser && <span className="account-menu-pill">Signed In</span>}
+            </button>
+            {accountMenuOpen && (
+              <div id="header-account-panel" className="account-popover" role="region" aria-label="Account">
+                <AccountPanel
+                  authEnabled={AUTH_SYNC_ENABLED}
+                  authReady={authReady}
+                  authUser={authUser}
+                  authStatus={authStatus}
+                  cloudStatus={cloudStatus}
+                  onSignIn={signIn}
+                  onSignUp={signUp}
+                  onSignOut={signOut}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -1305,16 +1363,6 @@ function App() {
         </div>
 
         <div className="container">
-          <AccountPanel
-            authEnabled={AUTH_SYNC_ENABLED}
-            authReady={authReady}
-            authUser={authUser}
-            authStatus={authStatus}
-            cloudStatus={cloudStatus}
-            onSignIn={signIn}
-            onSignUp={signUp}
-            onSignOut={signOut}
-          />
           <div className="methodology-card" style={{ marginBottom: "20px" }}>
             <h2 style={{ marginBottom: "10px" }}>Default League Configuration</h2>
             <p>This site defaults to a 12-team, 5x5 roto setup for rankings.</p>
