@@ -1,7 +1,7 @@
 :root {
-  --ff-sans: 'Source Sans 3', 'Segoe UI', sans-serif;
-  --ff-serif: 'Merriweather', Georgia, serif;
-  --ff-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace;
+  --ff-sans: 'Inter', 'Segoe UI', sans-serif;
+  --ff-serif: 'Inter', 'Segoe UI', sans-serif;
+  --ff-mono: 'Inter', 'Segoe UI', sans-serif;
 
   --fs-xs: 0.79rem;
   --fs-sm: 0.86rem;
