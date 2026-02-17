@@ -2,5 +2,5 @@
   <rect width="64" height="64" rx="14" fill="#0c1117"/>
   <circle cx="32" cy="32" r="21" fill="#f8fafc" stroke="#d4a853" stroke-width="3"/>
   <path d="M14 20c4 2 7 6 8 12M14 44c4-2 7-6 8-12M50 20c-4 2-7 6-8 12M50 44c-4-2-7-6-8-12" fill="none" stroke="#ef4444" stroke-linecap="round" stroke-width="2"/>
-  <text x="32" y="37" fill="#0c1117" font-family="Inter, sans-serif" font-size="14" font-weight="700" text-anchor="middle">FF</text>
+  <text x="32" y="37" fill="#0c1117" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">FF</text>
 </svg>
