@@ -3,10 +3,15 @@ Preprocess the Excel projections file into JSON for fast API serving.
 
 Run this whenever you update 'Dynasty Baseball Projections.xlsx':
     python preprocess.py
+
+Optional:
+    python preprocess.py --skip-dynasty-cache
 """
 
+import argparse
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -14,6 +19,7 @@ import pandas as pd
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 EXCEL_PATH = DATA_DIR / "Dynasty Baseball Projections.xlsx"
+DYNASTY_LOOKUP_CACHE_PATH = DATA_DIR / "dynasty_lookup.json"
 HIT_RATE_COLS = {"AVG", "OPS"}
 PIT_RATE_COLS = {"ERA", "WHIP"}
 PLAYER_KEY_COL = "PlayerKey"
@@ -180,7 +186,44 @@ def round_float_columns(df: pd.DataFrame, *, rate_cols: set[str]) -> pd.DataFram
     return out
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Regenerate projection JSON files and optional dynasty lookup cache.",
+    )
+    parser.add_argument(
+        "--skip-dynasty-cache",
+        action="store_true",
+        help="Skip generation of data/dynasty_lookup.json (faster preprocess, slower first projections load).",
+    )
+    return parser.parse_args()
+
+
+def _build_dynasty_lookup_cache() -> tuple[int, int]:
+    import backend.app as backend_app
+
+    # Ensure app globals match the freshly-written JSON snapshots.
+    backend_app._refresh_data_if_needed()
+    backend_app._get_default_dynasty_lookup.cache_clear()
+
+    lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, year_cols = backend_app._get_default_dynasty_lookup()
+    payload = {
+        "format_version": 1,
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        "data_version": backend_app._current_data_version(),
+        "lookup_by_entity": lookup_by_entity,
+        "lookup_by_player_key": lookup_by_player_key,
+        "ambiguous_player_keys": sorted(str(key) for key in ambiguous_player_keys if str(key).strip()),
+        "year_cols": [str(col) for col in year_cols if isinstance(col, str)],
+    }
+
+    with DYNASTY_LOOKUP_CACHE_PATH.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, sort_keys=True)
+
+    return len(lookup_by_entity), len(lookup_by_player_key)
+
+
 def main():
+    args = _parse_args()
     print(f"Reading {EXCEL_PATH} ...")
     bat = pd.read_excel(EXCEL_PATH, sheet_name="Bat")
     pit = pd.read_excel(EXCEL_PATH, sheet_name="Pitch")
@@ -205,13 +248,31 @@ def main():
     with open(DATA_DIR / "meta.json", "w") as f:
         json.dump(meta, f, indent=2)
 
+    built_dynasty_cache = False
+    if args.skip_dynasty_cache:
+        print("  Dynasty lookup cache: skipped (--skip-dynasty-cache)")
+    else:
+        print("Building default dynasty lookup cache (this may take a while) ...")
+        try:
+            entity_count, player_key_count = _build_dynasty_lookup_cache()
+            built_dynasty_cache = True
+            print(
+                "  Dynasty lookup cache: "
+                f"{DYNASTY_LOOKUP_CACHE_PATH.name} ({entity_count} entity keys, {player_key_count} player-key fallbacks)"
+            )
+        except Exception as exc:
+            print(f"  Warning: failed to build dynasty lookup cache: {exc}")
+
     print(f"  Hitters:  {len(bat):,} rows, {meta['total_hitters']} unique players")
     print(f"  Pitchers: {len(pit):,} rows, {meta['total_pitchers']} unique players")
     if meta["years"]:
         print(f"  Years:    {meta['years'][0]}–{meta['years'][-1]}")
     else:
         print("  Years:    n/a")
-    print(f"  Output:   bat.json, pitch.json, meta.json")
+    output_files = ["bat.json", "pitch.json", "meta.json"]
+    if built_dynasty_cache:
+        output_files.append(DYNASTY_LOOKUP_CACHE_PATH.name)
+    print(f"  Output:   {', '.join(output_files)}")
     print("Done!")
 
 

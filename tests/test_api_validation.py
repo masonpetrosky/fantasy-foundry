@@ -3,6 +3,9 @@ import types
 import sys
 import time
 import re
+import json
+import tempfile
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pandas as pd
@@ -907,6 +910,50 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(by_team["Athletics"]["DynastyValue"], -4.42)
         self.assertEqual(by_team["Dodgers"]["DynastyMatchStatus"], "no_unique_match")
         self.assertIsNone(by_team["Dodgers"]["DynastyValue"])
+
+    def test_get_default_dynasty_lookup_prefers_precomputed_cache(self) -> None:
+        precomputed = (
+            {"entity-a": {"DynastyValue": 1.23, "Value_2026": 0.5}},
+            {"player-a": {"DynastyValue": 1.23, "Value_2026": 0.5}},
+            set(),
+            ["Value_2026"],
+        )
+
+        app_module._get_default_dynasty_lookup.cache_clear()
+        try:
+            with patch.object(
+                app_module,
+                "_load_precomputed_default_dynasty_lookup",
+                return_value=precomputed,
+            ), patch.object(app_module, "_calculate_common_dynasty_frame_cached") as calculate_mock:
+                actual = app_module._get_default_dynasty_lookup()
+        finally:
+            app_module._get_default_dynasty_lookup.cache_clear()
+
+        self.assertEqual(actual, precomputed)
+        calculate_mock.assert_not_called()
+
+    def test_load_precomputed_dynasty_lookup_cache_validates_data_version(self) -> None:
+        payload = {
+            "data_version": "stale-version",
+            "lookup_by_entity": {"entity-a": {"DynastyValue": 4.2}},
+            "lookup_by_player_key": {"player-a": {"DynastyValue": 4.2}},
+            "ambiguous_player_keys": [],
+            "year_cols": ["Value_2026"],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_path = Path(tmpdir) / "dynasty_lookup.json"
+            cache_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            with patch.object(app_module, "DYNASTY_LOOKUP_CACHE_PATH", cache_path), patch.object(
+                app_module,
+                "_current_data_version",
+                return_value="fresh-version",
+            ), patch.object(app_module.os, "getenv", return_value=""):
+                loaded = app_module._load_precomputed_default_dynasty_lookup()
+
+        self.assertIsNone(loaded)
 
     def test_large_projection_response_is_gzip_compressed(self) -> None:
         sample_rows = [

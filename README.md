@@ -36,7 +36,8 @@ dynasty-site/
 │   ├── Dynasty Baseball Projections.xlsx
 │   ├── bat.json                        # Pre-processed hitter data
 │   ├── pitch.json                      # Pre-processed pitcher data
-│   └── meta.json                       # Filter options metadata
+│   ├── meta.json                       # Filter options metadata
+│   └── dynasty_lookup.json             # Precomputed default dynasty lookup cache
 ├── Dockerfile
 ├── supabase/
 │   └── user_preferences.sql             # Auth/RLS table setup for cloud-synced user prefs
@@ -146,6 +147,14 @@ When you update the Excel file, re-run the preprocessing to regenerate the JSON 
 
 ```bash
 python preprocess.py
+```
+
+`preprocess.py` now also builds `data/dynasty_lookup.json` by default so the first projections request does not need to recompute default dynasty values at runtime.
+
+If you need a faster preprocess run and are okay with a slower first projections load, you can skip cache generation:
+
+```bash
+python preprocess.py --skip-dynasty-cache
 ```
 
 ## Deployment

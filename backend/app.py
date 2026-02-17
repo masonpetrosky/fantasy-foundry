@@ -53,6 +53,7 @@ FRONTEND_DIR = BASE_DIR / "frontend"
 FRONTEND_DIST_DIR = FRONTEND_DIR / "dist"
 FRONTEND_DIST_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
 EXCEL_PATH = DATA_DIR / "Dynasty Baseball Projections.xlsx"
+DYNASTY_LOOKUP_CACHE_PATH = DATA_DIR / "dynasty_lookup.json"
 BACKEND_MODULE_DIR = BASE_DIR / "backend"
 INDEX_PATH = FRONTEND_DIST_DIR / "index.html"
 DEPLOY_COMMIT_SHA = os.getenv("RAILWAY_GIT_COMMIT_SHA", "").strip()
@@ -574,6 +575,89 @@ def _data_signature_version(signature: tuple[tuple[str, int | None, int | None],
 
 def _current_data_version() -> str:
     return _data_signature_version(_DATA_SOURCE_SIGNATURE)
+
+
+def _coerce_serialized_dynasty_lookup_map(raw: object) -> dict[str, dict]:
+    if not isinstance(raw, dict):
+        return {}
+
+    cleaned: dict[str, dict] = {}
+    for raw_key, raw_values in raw.items():
+        key = str(raw_key or "").strip()
+        if not key or not isinstance(raw_values, dict):
+            continue
+
+        values: dict[str, object] = {}
+        for raw_col, raw_value in raw_values.items():
+            col = str(raw_col or "").strip()
+            if not col:
+                continue
+            if raw_value is None:
+                values[col] = None
+                continue
+            if isinstance(raw_value, bool):
+                values[col] = bool(raw_value)
+                continue
+            if isinstance(raw_value, (int, float, str)):
+                if isinstance(raw_value, float) and not math.isfinite(raw_value):
+                    values[col] = None
+                else:
+                    values[col] = raw_value
+                continue
+            values[col] = str(raw_value)
+
+        cleaned[key] = values
+
+    return cleaned
+
+
+def _load_precomputed_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]] | None:
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return None
+    if not DYNASTY_LOOKUP_CACHE_PATH.exists():
+        return None
+
+    try:
+        payload = json.loads(DYNASTY_LOOKUP_CACHE_PATH.read_text())
+    except Exception:
+        CALC_LOGGER.warning(
+            "failed to parse precomputed dynasty lookup cache at %s",
+            DYNASTY_LOOKUP_CACHE_PATH,
+            exc_info=True,
+        )
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    payload_data_version = str(payload.get("data_version") or "").strip()
+    current_data_version = _current_data_version()
+    if not payload_data_version or payload_data_version != current_data_version:
+        return None
+
+    lookup_by_entity = _coerce_serialized_dynasty_lookup_map(payload.get("lookup_by_entity"))
+    lookup_by_player_key = _coerce_serialized_dynasty_lookup_map(payload.get("lookup_by_player_key"))
+    if not lookup_by_entity and not lookup_by_player_key:
+        return None
+
+    raw_ambiguous = payload.get("ambiguous_player_keys")
+    ambiguous_player_keys = {
+        str(value or "").strip()
+        for value in raw_ambiguous
+        if str(value or "").strip()
+    } if isinstance(raw_ambiguous, list) else set()
+
+    raw_year_cols = payload.get("year_cols")
+    year_cols = sorted(
+        {
+            str(col).strip()
+            for col in raw_year_cols
+            if isinstance(col, str) and str(col).strip().startswith("Value_")
+        } if isinstance(raw_year_cols, list) else set(),
+        key=_value_col_sort_key,
+    )
+
+    return lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, year_cols
 
 
 def _reload_projection_data() -> None:
@@ -2123,6 +2207,10 @@ def _prewarm_default_calculation_caches() -> None:
 @lru_cache(maxsize=1)
 def _get_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]]:
     """Cached default dynasty values keyed by PlayerEntityKey first, then unique PlayerKey."""
+    precomputed_lookup = _load_precomputed_default_dynasty_lookup()
+    if precomputed_lookup is not None:
+        return precomputed_lookup
+
     try:
         params = _default_calculation_cache_params()
 
