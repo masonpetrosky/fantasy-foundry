@@ -9,8 +9,8 @@ from typing import Dict, Optional
 HIT_COMPONENT_COLS = ["AB", "H", "R", "HR", "RBI", "SB", "BB", "HBP", "SF", "2B", "3B"]
 PIT_COMPONENT_COLS = ["IP", "W", "QS", "K", "SV", "SVH", "ER", "H", "BB"]
 
-HIT_CATS = ["R", "RBI", "HR", "SB", "AVG"]
-PIT_CATS = ["W", "K", "SV", "ERA", "WHIP"]
+HIT_CATS = ["R", "RBI", "HR", "SB", "AVG", "OBP", "SLG", "OPS", "H", "BB", "2B", "TB"]
+PIT_CATS = ["W", "K", "SV", "ERA", "WHIP", "QS", "SVH"]
 
 LEAGUE_HIT_STAT_COLS = [
     "AB",

@@ -536,7 +536,7 @@ def projection_meta_for_start_year(
 # Helpers: recent-projection averaging + detail sheet formatting
 # ----------------------------
 
-DERIVED_HIT_RATE_COLS: Set[str] = {"AVG", "OBP", "OPS"}
+DERIVED_HIT_RATE_COLS: Set[str] = {"AVG", "OBP", "SLG", "OPS"}
 DERIVED_PIT_RATE_COLS: Set[str] = {"ERA", "WHIP"}
 
 
@@ -595,8 +595,7 @@ def reorder_detail_columns(
 def recompute_common_rates_hit(df: pd.DataFrame) -> pd.DataFrame:
     """Recompute rate stats after averaging counting components.
 
-    Common mode uses OBP/OPS as categories, while AVG remains useful for
-    display. Recompute all three from counting components when possible so
+    Recompute AVG/OBP/SLG/OPS (plus TB) from counting components when possible so
     aggregated rows stay internally consistent.
     """
     df = df.copy()
@@ -627,7 +626,9 @@ def recompute_common_rates_hit(df: pd.DataFrame) -> pd.DataFrame:
         obp = np.divide(h + bb + hbp, obp_den, out=np.zeros_like(obp_den), where=obp_den > 0)
         slg = np.divide(tb, ab, out=np.zeros_like(ab), where=ab > 0)
 
+        df["TB"] = tb
         df["OBP"] = obp
+        df["SLG"] = slg
         df["OPS"] = obp + slg
 
     return df
@@ -755,29 +756,54 @@ def _active_common_pitch_categories(lg: CommonDynastyRotoSettings) -> List[str]:
 def initial_hitter_weight(df: pd.DataFrame, categories: Optional[List[str]] = None) -> pd.Series:
     """
     Rough first-pass weight to select/assign starters with positional scarcity.
-    Uses 5x5 categories with AVG translated into hit surplus over average.
+    Uses selected categories with rate stats translated into counting impact.
     """
     df = df.copy()
     selected = {str(cat).strip().upper() for cat in (categories or list(HIT_CATS))}
     components: List[pd.Series] = []
 
-    if "R" in selected:
-        components.append(zscore(df["R"]))
-    if "RBI" in selected:
-        components.append(zscore(df["RBI"]))
-    if "HR" in selected:
-        components.append(zscore(df["HR"]))
-    if "SB" in selected:
-        components.append(zscore(df["SB"]))
+    h = df["H"].astype(float)
+    ab = df["AB"].astype(float)
+    b2 = df["2B"].astype(float)
+    b3 = df["3B"].astype(float)
+    hr = df["HR"].astype(float)
+    bb = df["BB"].astype(float)
+    hbp = df["HBP"].astype(float)
+    sf = df["SF"].astype(float)
+
+    tb = h + b2 + 2.0 * b3 + 3.0 * hr
+    obp_den = ab + bb + hbp + sf
+    avg = np.divide(h, ab, out=np.zeros_like(ab, dtype=float), where=ab > 0)
+    obp = np.divide(h + bb + hbp, obp_den, out=np.zeros_like(obp_den, dtype=float), where=obp_den > 0)
+    slg = np.divide(tb, ab, out=np.zeros_like(ab, dtype=float), where=ab > 0)
+    ops = obp + slg
+
+    counting_sources: Dict[str, pd.Series] = {
+        "R": df["R"].astype(float),
+        "RBI": df["RBI"].astype(float),
+        "HR": hr,
+        "SB": df["SB"].astype(float),
+        "H": h,
+        "BB": bb,
+        "2B": b2,
+        "TB": pd.Series(tb, index=df.index),
+    }
+    for cat, series in counting_sources.items():
+        if cat in selected:
+            components.append(zscore(series))
 
     if "AVG" in selected:
-        h = df["H"].astype(float)
-        ab = df["AB"].astype(float)
-        avg = np.divide(h, ab, out=np.zeros_like(ab, dtype=float), where=ab > 0)
         mean_avg = float(np.nanmean(avg)) if len(avg) else 0.0
-        # Convert AVG into counting impact so playing time is represented.
-        df["AVG_surplus_H"] = (avg - mean_avg) * ab
-        components.append(zscore(df["AVG_surplus_H"]))
+        components.append(zscore(pd.Series((avg - mean_avg) * ab, index=df.index)))
+    if "OBP" in selected:
+        mean_obp = float(np.nanmean(obp)) if len(obp) else 0.0
+        components.append(zscore(pd.Series((obp - mean_obp) * obp_den, index=df.index)))
+    if "SLG" in selected:
+        mean_slg = float(np.nanmean(slg)) if len(slg) else 0.0
+        components.append(zscore(pd.Series((slg - mean_slg) * ab, index=df.index)))
+    if "OPS" in selected:
+        mean_ops = float(np.nanmean(ops)) if len(ops) else 0.0
+        components.append(zscore(pd.Series((ops - mean_ops) * ab, index=df.index)))
 
     if not components:
         return pd.Series(np.zeros(len(df), dtype=float), index=df.index)
@@ -798,12 +824,9 @@ def initial_pitcher_weight(df: pd.DataFrame, categories: Optional[List[str]] = N
     selected = {str(cat).strip().upper() for cat in (categories or list(PIT_CATS))}
     components: List[pd.Series] = []
 
-    if "W" in selected:
-        components.append(zscore(df["W"]))
-    if "K" in selected:
-        components.append(zscore(df["K"]))
-    if "SV" in selected:
-        components.append(zscore(df["SV"]))
+    for cat in ("W", "K", "SV", "QS", "SVH"):
+        if cat in selected:
+            components.append(zscore(df[cat]))
 
     if "ERA" in selected or "WHIP" in selected:
         ip_sum = float(df["IP"].sum())
@@ -846,6 +869,51 @@ def team_era(ER: float, IP: float) -> float:
 
 def team_whip(H: float, BB: float, IP: float) -> float:
     return float((H + BB) / IP) if IP > 0 else float("nan")
+
+
+COMMON_REVERSED_PITCH_CATS: Set[str] = {"ERA", "WHIP"}
+
+
+def common_hit_category_totals(totals: Dict[str, float]) -> Dict[str, float]:
+    h = float(totals.get("H", 0.0))
+    ab = float(totals.get("AB", 0.0))
+    b2 = float(totals.get("2B", 0.0))
+    b3 = float(totals.get("3B", 0.0))
+    hr = float(totals.get("HR", 0.0))
+    bb = float(totals.get("BB", 0.0))
+    hbp = float(totals.get("HBP", 0.0))
+    sf = float(totals.get("SF", 0.0))
+
+    tb = h + b2 + 2.0 * b3 + 3.0 * hr
+    obp = team_obp(h, bb, hbp, ab, sf)
+    slg = float(tb / ab) if ab > 0 else 0.0
+
+    return {
+        "R": float(totals.get("R", 0.0)),
+        "RBI": float(totals.get("RBI", 0.0)),
+        "HR": hr,
+        "SB": float(totals.get("SB", 0.0)),
+        "AVG": team_avg(h, ab),
+        "OBP": obp,
+        "SLG": slg,
+        "OPS": obp + slg,
+        "H": h,
+        "BB": bb,
+        "2B": b2,
+        "TB": tb,
+    }
+
+
+def common_pitch_category_totals(totals: Dict[str, float]) -> Dict[str, float]:
+    return {
+        "W": float(totals.get("W", 0.0)),
+        "K": float(totals.get("K", 0.0)),
+        "SV": float(totals.get("SV", 0.0)),
+        "ERA": float(totals.get("ERA", 0.0)),
+        "WHIP": float(totals.get("WHIP", 0.0)),
+        "QS": float(totals.get("QS", 0.0)),
+        "SVH": float(totals.get("SVH", 0.0)),
+    }
 
 
 def common_replacement_pitcher_rates(
@@ -950,20 +1018,10 @@ def simulate_sgp_hit(
     diffs = {c: [] for c in active_categories}
 
     groups = {slot: assigned_hit[assigned_hit["AssignedSlot"] == slot] for slot in per_team.keys()}
-    idx_ab = HIT_COMPONENT_COLS.index("AB")
-    idx_h = HIT_COMPONENT_COLS.index("H")
-    idx_r = HIT_COMPONENT_COLS.index("R")
-    idx_hr = HIT_COMPONENT_COLS.index("HR")
-    idx_rbi = HIT_COMPONENT_COLS.index("RBI")
-    idx_sb = HIT_COMPONENT_COLS.index("SB")
+    component_idx = {col: HIT_COMPONENT_COLS.index(col) for col in HIT_COMPONENT_COLS}
 
     for _ in range(lg.sims_for_sgp):
-        AB = np.zeros(lg.n_teams)
-        H = np.zeros(lg.n_teams)
-        R = np.zeros(lg.n_teams)
-        HR = np.zeros(lg.n_teams)
-        RBI = np.zeros(lg.n_teams)
-        SB = np.zeros(lg.n_teams)
+        totals = {col: np.zeros(lg.n_teams) for col in HIT_COMPONENT_COLS}
 
         for slot, cnt in per_team.items():
             df_slot = groups[slot]
@@ -972,18 +1030,18 @@ def simulate_sgp_hit(
             arr = arr.reshape(lg.n_teams, cnt, len(HIT_COMPONENT_COLS))
             sums = arr.sum(axis=1)
 
-            AB += sums[:, idx_ab]
-            H += sums[:, idx_h]
-            R += sums[:, idx_r]
-            HR += sums[:, idx_hr]
-            RBI += sums[:, idx_rbi]
-            SB += sums[:, idx_sb]
+            for col, idx_col in component_idx.items():
+                totals[col] += sums[:, idx_col]
 
-        AVG = np.divide(H, AB, out=np.zeros_like(H), where=AB > 0)
+        vals = {c: [] for c in active_categories}
+        for t in range(lg.n_teams):
+            team_totals = {col: float(totals[col][t]) for col in HIT_COMPONENT_COLS}
+            team_cats = common_hit_category_totals(team_totals)
+            for cat in active_categories:
+                vals[cat].append(float(team_cats.get(cat, 0.0)))
 
-        vals = {"R": R, "RBI": RBI, "HR": HR, "SB": SB, "AVG": AVG}
         for c in active_categories:
-            x = vals[c].astype(float)
+            x = np.array(vals[c], dtype=float)
             diffs[c].append(_mean_adjacent_rank_gap(x, ascending=False))
 
     return {c: (float(np.mean(diffs[c])) if diffs[c] else 0.0) for c in active_categories}
@@ -1001,22 +1059,10 @@ def simulate_sgp_pit(
     diffs = {c: [] for c in active_categories}
     per_team = lg.pitcher_slots
     groups = {slot: assigned_pit[assigned_pit["AssignedSlot"] == slot] for slot in per_team.keys()}
-    idx_ip = PIT_COMPONENT_COLS.index("IP")
-    idx_w = PIT_COMPONENT_COLS.index("W")
-    idx_k = PIT_COMPONENT_COLS.index("K")
-    idx_sv = PIT_COMPONENT_COLS.index("SV")
-    idx_er = PIT_COMPONENT_COLS.index("ER")
-    idx_h = PIT_COMPONENT_COLS.index("H")
-    idx_bb = PIT_COMPONENT_COLS.index("BB")
+    component_idx = {col: PIT_COMPONENT_COLS.index(col) for col in PIT_COMPONENT_COLS}
 
     for _ in range(lg.sims_for_sgp):
-        IP = np.zeros(lg.n_teams)
-        W = np.zeros(lg.n_teams)
-        K = np.zeros(lg.n_teams)
-        SV = np.zeros(lg.n_teams)
-        ER = np.zeros(lg.n_teams)
-        H = np.zeros(lg.n_teams)
-        BB = np.zeros(lg.n_teams)
+        totals = {col: np.zeros(lg.n_teams) for col in PIT_COMPONENT_COLS}
 
         for slot, cnt in per_team.items():
             df_slot = groups[slot]
@@ -1025,38 +1071,23 @@ def simulate_sgp_pit(
             arr = arr.reshape(lg.n_teams, cnt, len(PIT_COMPONENT_COLS))
             sums = arr.sum(axis=1)
 
-            IP += sums[:, idx_ip]
-            W += sums[:, idx_w]
-            K += sums[:, idx_k]
-            SV += sums[:, idx_sv]
-            ER += sums[:, idx_er]
-            H += sums[:, idx_h]
-            BB += sums[:, idx_bb]
+            for col, idx_col in component_idx.items():
+                totals[col] += sums[:, idx_col]
 
-        vals = {c: [] for c in PIT_CATS}
+        vals = {c: [] for c in active_categories}
         for t in range(lg.n_teams):
             bounded = common_apply_pitching_bounds(
-                {
-                    "IP": float(IP[t]),
-                    "W": float(W[t]),
-                    "K": float(K[t]),
-                    "SV": float(SV[t]),
-                    "ER": float(ER[t]),
-                    "H": float(H[t]),
-                    "BB": float(BB[t]),
-                },
+                {col: float(totals[col][t]) for col in PIT_COMPONENT_COLS},
                 lg,
                 rep_rates,
             )
-            vals["W"].append(float(bounded["W"]))
-            vals["K"].append(float(bounded["K"]))
-            vals["SV"].append(float(bounded["SV"]))
-            vals["ERA"].append(float(bounded["ERA"]))
-            vals["WHIP"].append(float(bounded["WHIP"]))
+            team_cats = common_pitch_category_totals(bounded)
+            for cat in active_categories:
+                vals[cat].append(float(team_cats.get(cat, 0.0)))
 
         for c in active_categories:
             x = np.array(vals[c], dtype=float)
-            diffs[c].append(_mean_adjacent_rank_gap(x, ascending=(c in {"ERA", "WHIP"})))
+            diffs[c].append(_mean_adjacent_rank_gap(x, ascending=(c in COMMON_REVERSED_PITCH_CATS)))
 
     return {c: (float(np.mean(diffs[c])) if diffs[c] else 0.0) for c in active_categories}
 
@@ -1179,10 +1210,11 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
     baseline_hit = ctx["baseline_hit"]
     baseline_pit = ctx["baseline_pit"]
     base_hit_tot = ctx["base_hit_tot"]
-    base_avg = float(ctx["base_avg"])
+    base_hit_cats = common_hit_category_totals({col: float(base_hit_tot[col]) for col in HIT_COMPONENT_COLS})
 
     base_pit_tot = ctx["base_pit_tot"]
     base_pit_bounded = dict(ctx["base_pit_bounded"])
+    base_pit_cats = common_pitch_category_totals(base_pit_bounded)
     rep_rates = ctx.get("rep_rates")
 
     sgp_hit = ctx["sgp_hit"]
@@ -1210,17 +1242,10 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
             for col in HIT_COMPONENT_COLS:
                 new_tot[col] = new_tot[col] - b[col] + float(row.get(col, 0.0))
 
-            new_avg = team_avg(
-                float(new_tot["H"]),
-                float(new_tot["AB"]),
-            )
-
+            new_hit_cats = common_hit_category_totals({col: float(new_tot[col]) for col in HIT_COMPONENT_COLS})
             delta = {
-                "R": float(new_tot["R"] - base_hit_tot["R"]),
-                "RBI": float(new_tot["RBI"] - base_hit_tot["RBI"]),
-                "HR": float(new_tot["HR"] - base_hit_tot["HR"]),
-                "SB": float(new_tot["SB"] - base_hit_tot["SB"]),
-                "AVG": float(new_avg - base_avg),
+                cat: float(new_hit_cats.get(cat, 0.0) - base_hit_cats.get(cat, 0.0))
+                for cat in hit_categories
             }
 
             val = 0.0
@@ -1271,13 +1296,15 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                 rep_rates,
             )
 
-            delta = {
-                "W": float(new_tot_bounded["W"] - base_pit_bounded["W"]),
-                "K": float(new_tot_bounded["K"] - base_pit_bounded["K"]),
-                "SV": float(new_tot_bounded["SV"] - base_pit_bounded["SV"]),
-                "ERA": float(base_pit_bounded["ERA"] - new_tot_bounded["ERA"]),       # lower is better
-                "WHIP": float(base_pit_bounded["WHIP"] - new_tot_bounded["WHIP"]),    # lower is better
-            }
+            new_pit_cats = common_pitch_category_totals(new_tot_bounded)
+            delta: Dict[str, float] = {}
+            for cat in pit_categories:
+                new_val = float(new_pit_cats.get(cat, 0.0))
+                base_val = float(base_pit_cats.get(cat, 0.0))
+                if cat in COMMON_REVERSED_PITCH_CATS:
+                    delta[cat] = base_val - new_val
+                else:
+                    delta[cat] = new_val - base_val
 
             val = 0.0
             for c in pit_categories:
@@ -1409,21 +1436,11 @@ def compute_year_player_values_vs_replacement(
                 base_tot[col] = base_tot[col] - b_avg[col] + b_rep[col]
                 new_tot[col] = new_tot[col] - b_avg[col] + float(row.get(col, 0.0))
 
-            base_avg = team_avg(
-                float(base_tot["H"]),
-                float(base_tot["AB"]),
-            )
-            new_avg = team_avg(
-                float(new_tot["H"]),
-                float(new_tot["AB"]),
-            )
-
+            base_hit_cats = common_hit_category_totals({col: float(base_tot[col]) for col in HIT_COMPONENT_COLS})
+            new_hit_cats = common_hit_category_totals({col: float(new_tot[col]) for col in HIT_COMPONENT_COLS})
             delta = {
-                "R": float(new_tot["R"] - base_tot["R"]),
-                "RBI": float(new_tot["RBI"] - base_tot["RBI"]),
-                "HR": float(new_tot["HR"] - base_tot["HR"]),
-                "SB": float(new_tot["SB"] - base_tot["SB"]),
-                "AVG": float(new_avg - base_avg),
+                cat: float(new_hit_cats.get(cat, 0.0) - base_hit_cats.get(cat, 0.0))
+                for cat in hit_categories
             }
 
             val = 0.0
@@ -1474,13 +1491,16 @@ def compute_year_player_values_vs_replacement(
             base_bounded = common_apply_pitching_bounds(base_raw, lg, rep_rates)
             new_bounded = common_apply_pitching_bounds(new_raw, lg, rep_rates)
 
-            delta = {
-                "W": float(new_bounded["W"] - base_bounded["W"]),
-                "K": float(new_bounded["K"] - base_bounded["K"]),
-                "SV": float(new_bounded["SV"] - base_bounded["SV"]),
-                "ERA": float(base_bounded["ERA"] - new_bounded["ERA"]),
-                "WHIP": float(base_bounded["WHIP"] - new_bounded["WHIP"]),
-            }
+            base_pit_cats = common_pitch_category_totals(base_bounded)
+            new_pit_cats = common_pitch_category_totals(new_bounded)
+            delta: Dict[str, float] = {}
+            for cat in pit_categories:
+                new_val = float(new_pit_cats.get(cat, 0.0))
+                base_val = float(base_pit_cats.get(cat, 0.0))
+                if cat in COMMON_REVERSED_PITCH_CATS:
+                    delta[cat] = base_val - new_val
+                else:
+                    delta[cat] = new_val - base_val
 
             val = 0.0
             for c in pit_categories:

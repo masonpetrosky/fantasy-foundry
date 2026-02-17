@@ -381,6 +381,13 @@ const ROTO_HITTER_CATEGORY_FIELDS = [
   { key: "roto_hit_hr", label: "HR", statCol: "HR", defaultValue: true },
   { key: "roto_hit_sb", label: "SB", statCol: "SB", defaultValue: true },
   { key: "roto_hit_avg", label: "AVG", statCol: "AVG", defaultValue: true },
+  { key: "roto_hit_obp", label: "OBP", statCol: "OBP", defaultValue: false },
+  { key: "roto_hit_slg", label: "SLG", statCol: "SLG", defaultValue: false },
+  { key: "roto_hit_ops", label: "OPS", statCol: "OPS", defaultValue: false },
+  { key: "roto_hit_h", label: "H", statCol: "H", defaultValue: false },
+  { key: "roto_hit_bb", label: "BB", statCol: "BB", defaultValue: false },
+  { key: "roto_hit_2b", label: "2B", statCol: "2B", defaultValue: false },
+  { key: "roto_hit_tb", label: "TB", statCol: "TB", defaultValue: false },
 ];
 const ROTO_PITCHER_CATEGORY_FIELDS = [
   { key: "roto_pit_w", label: "W", statCol: "W", defaultValue: true },
@@ -388,10 +395,13 @@ const ROTO_PITCHER_CATEGORY_FIELDS = [
   { key: "roto_pit_sv", label: "SV", statCol: "SV", defaultValue: true },
   { key: "roto_pit_era", label: "ERA", statCol: "ERA", defaultValue: true },
   { key: "roto_pit_whip", label: "WHIP", statCol: "WHIP", defaultValue: true },
+  { key: "roto_pit_qs", label: "QS", statCol: "QS", defaultValue: false },
+  { key: "roto_pit_svh", label: "SVH", statCol: "SVH", defaultValue: false },
 ];
 const ROTO_CATEGORY_FIELDS = [...ROTO_HITTER_CATEGORY_FIELDS, ...ROTO_PITCHER_CATEGORY_FIELDS];
-const ROTO_RATE_STAT_COLS = new Set(["AVG", "ERA", "WHIP"]);
-const ROTO_COUNTING_STAT_COLS = new Set(["R", "RBI", "HR", "SB", "W", "K", "SV"]);
+const ROTO_RATE_STAT_COLS = new Set(["AVG", "OBP", "SLG", "OPS", "ERA", "WHIP"]);
+const ROTO_THREE_DECIMAL_RATE_COLS = new Set(["AVG", "OBP", "SLG", "OPS"]);
+const ROTO_COUNTING_STAT_COLS = new Set(["R", "RBI", "HR", "SB", "H", "BB", "2B", "TB", "W", "K", "SV", "QS", "SVH"]);
 
 function coerceBooleanSetting(value, fallback = false) {
   if (typeof value === "boolean") return value;
@@ -3925,7 +3935,7 @@ function DynastyCalculator({ meta, presets, setPresets, watchlist, setWatchlist 
                                 return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, 0)}</td>;
                               }
                               if (ROTO_RATE_STAT_COLS.has(c)) {
-                                const decimals = c === "AVG" ? 3 : 2;
+                                const decimals = ROTO_THREE_DECIMAL_RATE_COLS.has(c) ? 3 : 2;
                                 return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, decimals)}</td>;
                               }
                               if (typeof val === "number") return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, Number.isInteger(val) ? 0 : 1)}</td>;

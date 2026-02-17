@@ -94,7 +94,7 @@ def load_json(name: str):
 
 
 PROJECTION_DATE_COLS = ["ProjectionDate", "Date", "Updated", "LastUpdated", "Timestamp", "Created", "AsOf"]
-DERIVED_HIT_RATE_COLS = {"AVG", "OBP", "OPS"}
+DERIVED_HIT_RATE_COLS = {"AVG", "OBP", "SLG", "OPS"}
 DERIVED_PIT_RATE_COLS = {"ERA", "WHIP"}
 TEAM_COL_CANDIDATES = ("Team", "MLBTeam")
 YEAR_RANGE_TOKEN_RE = re.compile(r"^(\d{4})\s*-\s*(\d{4})$")
@@ -159,20 +159,36 @@ DEFAULT_POINTS_SCORING = {
     "pts_pit_er": -2.0,
     "pts_pit_bb": -1.0,
 }
-ROTO_HITTER_CATEGORY_FIELDS: tuple[tuple[str, str], ...] = (
-    ("roto_hit_r", "R"),
-    ("roto_hit_rbi", "RBI"),
-    ("roto_hit_hr", "HR"),
-    ("roto_hit_sb", "SB"),
-    ("roto_hit_avg", "AVG"),
+ROTO_HITTER_CATEGORY_FIELDS: tuple[tuple[str, str, bool], ...] = (
+    ("roto_hit_r", "R", True),
+    ("roto_hit_rbi", "RBI", True),
+    ("roto_hit_hr", "HR", True),
+    ("roto_hit_sb", "SB", True),
+    ("roto_hit_avg", "AVG", True),
+    ("roto_hit_obp", "OBP", False),
+    ("roto_hit_slg", "SLG", False),
+    ("roto_hit_ops", "OPS", False),
+    ("roto_hit_h", "H", False),
+    ("roto_hit_bb", "BB", False),
+    ("roto_hit_2b", "2B", False),
+    ("roto_hit_tb", "TB", False),
 )
-ROTO_PITCHER_CATEGORY_FIELDS: tuple[tuple[str, str], ...] = (
-    ("roto_pit_w", "W"),
-    ("roto_pit_k", "K"),
-    ("roto_pit_sv", "SV"),
-    ("roto_pit_era", "ERA"),
-    ("roto_pit_whip", "WHIP"),
+ROTO_PITCHER_CATEGORY_FIELDS: tuple[tuple[str, str, bool], ...] = (
+    ("roto_pit_w", "W", True),
+    ("roto_pit_k", "K", True),
+    ("roto_pit_sv", "SV", True),
+    ("roto_pit_era", "ERA", True),
+    ("roto_pit_whip", "WHIP", True),
+    ("roto_pit_qs", "QS", False),
+    ("roto_pit_svh", "SVH", False),
 )
+ROTO_CATEGORY_FIELD_DEFAULTS: dict[str, bool] = {
+    field_key: bool(default)
+    for field_key, _stat_col, default in (
+        *ROTO_HITTER_CATEGORY_FIELDS,
+        *ROTO_PITCHER_CATEGORY_FIELDS,
+    )
+}
 COMMON_DEFAULT_IR_SLOTS = 0
 COMMON_DEFAULT_MINOR_SLOTS = 0
 COMMON_HITTER_STARTER_SLOTS_PER_TEAM = sum(COMMON_HITTER_SLOT_DEFAULTS.values())
@@ -431,7 +447,9 @@ def _average_recent_projection_rows(
             obp_den = ab + bb + hbp + sf
             obp = ((h + bb + hbp) / obp_den).where(obp_den > 0, 0.0)
             slg = (tb / ab).where(ab > 0, 0.0)
+            out["TB"] = tb
             out["OBP"] = obp
+            out["SLG"] = slg
             out["OPS"] = obp + slg
     else:
         if "SVH" not in out.columns:
@@ -793,35 +811,20 @@ def _calculate_common_dynasty_frame_cached(
     two_way: str,
     start_year: int,
     recent_projections: int,
-    roto_hit_r: bool = True,
-    roto_hit_rbi: bool = True,
-    roto_hit_hr: bool = True,
-    roto_hit_sb: bool = True,
-    roto_hit_avg: bool = True,
-    roto_pit_w: bool = True,
-    roto_pit_k: bool = True,
-    roto_pit_sv: bool = True,
-    roto_pit_era: bool = True,
-    roto_pit_whip: bool = True,
+    **roto_category_settings: bool,
 ) -> pd.DataFrame:
     _ensure_backend_module_path()
     from dynasty_roto_values import CommonDynastyRotoSettings, calculate_common_dynasty_values
 
     hitter_categories = [
         stat_col
-        for enabled, (_field_key, stat_col) in zip(
-            [roto_hit_r, roto_hit_rbi, roto_hit_hr, roto_hit_sb, roto_hit_avg],
-            ROTO_HITTER_CATEGORY_FIELDS,
-        )
-        if bool(enabled)
+        for field_key, stat_col, default_value in ROTO_HITTER_CATEGORY_FIELDS
+        if _coerce_bool(roto_category_settings.get(field_key), default=bool(default_value))
     ]
     pitcher_categories = [
         stat_col
-        for enabled, (_field_key, stat_col) in zip(
-            [roto_pit_w, roto_pit_k, roto_pit_sv, roto_pit_era, roto_pit_whip],
-            ROTO_PITCHER_CATEGORY_FIELDS,
-        )
-        if bool(enabled)
+        for field_key, stat_col, default_value in ROTO_PITCHER_CATEGORY_FIELDS
+        if _coerce_bool(roto_category_settings.get(field_key), default=bool(default_value))
     ]
 
     lg = CommonDynastyRotoSettings(
@@ -911,16 +914,25 @@ def _coerce_bool(value: object, *, default: bool = False) -> bool:
     return default
 
 
+def _roto_category_settings_from_dict(source: dict[str, Any] | None) -> dict[str, bool]:
+    settings = source if isinstance(source, dict) else {}
+    return {
+        field_key: _coerce_bool(settings.get(field_key), default=default_value)
+        for field_key, default_value in ROTO_CATEGORY_FIELD_DEFAULTS.items()
+    }
+
+
 def _selected_roto_categories(settings: dict[str, Any]) -> tuple[list[str], list[str]]:
+    resolved_settings = _roto_category_settings_from_dict(settings)
     hitter = [
         stat_col
-        for field_key, stat_col in ROTO_HITTER_CATEGORY_FIELDS
-        if _coerce_bool(settings.get(field_key), default=True)
+        for field_key, stat_col, _default_value in ROTO_HITTER_CATEGORY_FIELDS
+        if resolved_settings.get(field_key, False)
     ]
     pitcher = [
         stat_col
-        for field_key, stat_col in ROTO_PITCHER_CATEGORY_FIELDS
-        if _coerce_bool(settings.get(field_key), default=True)
+        for field_key, stat_col, _default_value in ROTO_PITCHER_CATEGORY_FIELDS
+        if resolved_settings.get(field_key, False)
     ]
     return hitter, pitcher
 
@@ -955,8 +967,8 @@ def _start_year_roto_stats_by_entity(
                     continue
                 entry[stat_col] = float(stat_value)
 
-    _merge_rows(bat_rows, tuple(stat_col for _field_key, stat_col in ROTO_HITTER_CATEGORY_FIELDS))
-    _merge_rows(pit_rows, tuple(stat_col for _field_key, stat_col in ROTO_PITCHER_CATEGORY_FIELDS))
+    _merge_rows(bat_rows, tuple(stat_col for _field_key, stat_col, _default in ROTO_HITTER_CATEGORY_FIELDS))
+    _merge_rows(pit_rows, tuple(stat_col for _field_key, stat_col, _default in ROTO_PITCHER_CATEGORY_FIELDS))
     return stats_by_entity
 
 
@@ -1914,7 +1926,7 @@ def _default_calculation_cache_params() -> dict[str, int | float | str | None]:
     years = _coerce_meta_years(META)
     start_year = years[0] if years else 2026
     horizon = len(years) if years else 10
-    return {
+    params: dict[str, int | float | str | None] = {
         "teams": 12,
         "sims": 300,
         "horizon": horizon,
@@ -1939,17 +1951,9 @@ def _default_calculation_cache_params() -> dict[str, int | float | str | None]:
         "two_way": "sum",
         "start_year": start_year,
         "recent_projections": 3,
-        "roto_hit_r": True,
-        "roto_hit_rbi": True,
-        "roto_hit_hr": True,
-        "roto_hit_sb": True,
-        "roto_hit_avg": True,
-        "roto_pit_w": True,
-        "roto_pit_k": True,
-        "roto_pit_sv": True,
-        "roto_pit_era": True,
-        "roto_pit_whip": True,
     }
+    params.update(ROTO_CATEGORY_FIELD_DEFAULTS)
+    return params
 
 
 def _calculator_guardrails_payload() -> dict:
@@ -1961,8 +1965,8 @@ def _calculator_guardrails_payload() -> dict:
         "default_points_hitter_slots": POINTS_HITTER_SLOT_DEFAULTS.copy(),
         "default_points_pitcher_slots": POINTS_PITCHER_SLOT_DEFAULTS.copy(),
         "default_points_scoring": DEFAULT_POINTS_SCORING.copy(),
-        "default_roto_hitter_categories": [label for _key, label in ROTO_HITTER_CATEGORY_FIELDS],
-        "default_roto_pitcher_categories": [label for _key, label in ROTO_PITCHER_CATEGORY_FIELDS],
+        "default_roto_hitter_categories": [label for _key, label, _default in ROTO_HITTER_CATEGORY_FIELDS],
+        "default_roto_pitcher_categories": [label for _key, label, _default in ROTO_PITCHER_CATEGORY_FIELDS],
         "default_minors_slots": COMMON_DEFAULT_MINOR_SLOTS,
         "default_ir_slots": COMMON_DEFAULT_IR_SLOTS,
         "playable_by_year": _playable_pool_counts_by_year(),
@@ -2087,16 +2091,7 @@ def _prewarm_default_calculation_caches() -> None:
             two_way=str(params["two_way"]),
             start_year=int(params["start_year"]),
             recent_projections=int(params["recent_projections"]),
-            roto_hit_r=bool(params["roto_hit_r"]),
-            roto_hit_rbi=bool(params["roto_hit_rbi"]),
-            roto_hit_hr=bool(params["roto_hit_hr"]),
-            roto_hit_sb=bool(params["roto_hit_sb"]),
-            roto_hit_avg=bool(params["roto_hit_avg"]),
-            roto_pit_w=bool(params["roto_pit_w"]),
-            roto_pit_k=bool(params["roto_pit_k"]),
-            roto_pit_sv=bool(params["roto_pit_sv"]),
-            roto_pit_era=bool(params["roto_pit_era"]),
-            roto_pit_whip=bool(params["roto_pit_whip"]),
+            **_roto_category_settings_from_dict(params),
         )
         _get_default_dynasty_lookup()
 
@@ -2156,16 +2151,7 @@ def _get_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set
             two_way=str(params["two_way"]),
             start_year=int(params["start_year"]),
             recent_projections=int(params["recent_projections"]),
-            roto_hit_r=bool(params["roto_hit_r"]),
-            roto_hit_rbi=bool(params["roto_hit_rbi"]),
-            roto_hit_hr=bool(params["roto_hit_hr"]),
-            roto_hit_sb=bool(params["roto_hit_sb"]),
-            roto_hit_avg=bool(params["roto_hit_avg"]),
-            roto_pit_w=bool(params["roto_pit_w"]),
-            roto_pit_k=bool(params["roto_pit_k"]),
-            roto_pit_sv=bool(params["roto_pit_sv"]),
-            roto_pit_era=bool(params["roto_pit_era"]),
-            roto_pit_whip=bool(params["roto_pit_whip"]),
+            **_roto_category_settings_from_dict(params),
         ).copy(deep=True)
 
         year_cols = sorted(
@@ -3590,16 +3576,25 @@ class CalculateRequest(BaseModel):
     ip_max: Optional[float] = Field(default=None, ge=0.0)
     start_year: int = Field(default=2026, ge=1900)
     recent_projections: int = Field(default=3, ge=1, le=10)
-    roto_hit_r: bool = True
-    roto_hit_rbi: bool = True
-    roto_hit_hr: bool = True
-    roto_hit_sb: bool = True
-    roto_hit_avg: bool = True
-    roto_pit_w: bool = True
-    roto_pit_k: bool = True
-    roto_pit_sv: bool = True
-    roto_pit_era: bool = True
-    roto_pit_whip: bool = True
+    roto_hit_r: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_r"]
+    roto_hit_rbi: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_rbi"]
+    roto_hit_hr: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_hr"]
+    roto_hit_sb: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_sb"]
+    roto_hit_avg: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_avg"]
+    roto_hit_obp: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_obp"]
+    roto_hit_slg: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_slg"]
+    roto_hit_ops: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_ops"]
+    roto_hit_h: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_h"]
+    roto_hit_bb: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_bb"]
+    roto_hit_2b: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_2b"]
+    roto_hit_tb: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_tb"]
+    roto_pit_w: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_pit_w"]
+    roto_pit_k: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_pit_k"]
+    roto_pit_sv: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_pit_sv"]
+    roto_pit_era: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_pit_era"]
+    roto_pit_whip: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_pit_whip"]
+    roto_pit_qs: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_pit_qs"]
+    roto_pit_svh: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_pit_svh"]
     pts_hit_1b: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_1b"], ge=-50.0, le=50.0)
     pts_hit_2b: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_2b"], ge=-50.0, le=50.0)
     pts_hit_3b: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_3b"], ge=-50.0, le=50.0)
@@ -3640,9 +3635,9 @@ class CalculateRequest(BaseModel):
         if total_pitcher_slots <= 0:
             raise ValueError("At least one pitcher slot must be greater than 0.")
         if self.scoring_mode == "roto":
-            if not any((self.roto_hit_r, self.roto_hit_rbi, self.roto_hit_hr, self.roto_hit_sb, self.roto_hit_avg)):
+            if not any(bool(getattr(self, field_key, False)) for field_key, _stat_col, _default in ROTO_HITTER_CATEGORY_FIELDS):
                 raise ValueError("Roto scoring must include at least one hitting category.")
-            if not any((self.roto_pit_w, self.roto_pit_k, self.roto_pit_sv, self.roto_pit_era, self.roto_pit_whip)):
+            if not any(bool(getattr(self, field_key, False)) for field_key, _stat_col, _default in ROTO_PITCHER_CATEGORY_FIELDS):
                 raise ValueError("Roto scoring must include at least one pitching category.")
         if self.scoring_mode == "points":
             has_non_zero_rule = any(
@@ -3770,16 +3765,7 @@ def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
                     two_way=req.two_way,
                     start_year=req.start_year,
                     recent_projections=req.recent_projections,
-                    roto_hit_r=req.roto_hit_r,
-                    roto_hit_rbi=req.roto_hit_rbi,
-                    roto_hit_hr=req.roto_hit_hr,
-                    roto_hit_sb=req.roto_hit_sb,
-                    roto_hit_avg=req.roto_hit_avg,
-                    roto_pit_w=req.roto_pit_w,
-                    roto_pit_k=req.roto_pit_k,
-                    roto_pit_sv=req.roto_pit_sv,
-                    roto_pit_era=req.roto_pit_era,
-                    roto_pit_whip=req.roto_pit_whip,
+                    **_roto_category_settings_from_dict(settings),
                 ).copy(deep=True)
         except ValueError as calc_error:
             message = str(calc_error)
@@ -3846,7 +3832,7 @@ def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
         df = out[available_cols].copy()
 
         # Round for JSON
-        three_decimal_cols = {"AVG", "OBP", "OPS"}
+        three_decimal_cols = {"AVG", "OBP", "SLG", "OPS"}
         for c in df.select_dtypes(include="float").columns:
             df[c] = df[c].round(3 if c in three_decimal_cols else 2)
 

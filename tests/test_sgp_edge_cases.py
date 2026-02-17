@@ -79,8 +79,8 @@ class SGPEdgeCaseTests(unittest.TestCase):
         runtime_warnings = [w for w in caught if issubclass(w.category, RuntimeWarning)]
         self.assertEqual(runtime_warnings, [])
 
-        self.assertEqual(set(ctx["sgp_hit"].keys()), {"R", "RBI", "HR", "SB", "AVG"})
-        self.assertEqual(set(ctx["sgp_pit"].keys()), {"W", "K", "SV", "ERA", "WHIP"})
+        self.assertEqual(set(ctx["sgp_hit"].keys()), {"R", "RBI", "HR", "SB", "AVG", "OBP", "SLG", "OPS", "H", "BB", "2B", "TB"})
+        self.assertEqual(set(ctx["sgp_pit"].keys()), {"W", "K", "SV", "ERA", "WHIP", "QS", "SVH"})
         self.assertTrue(all(float(value) == 0.0 for value in ctx["sgp_hit"].values()))
         self.assertTrue(all(float(value) == 0.0 for value in ctx["sgp_pit"].values()))
 
