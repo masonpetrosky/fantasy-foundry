@@ -225,6 +225,24 @@ Identity fields are included end-to-end:
 - `PlayerEntityKey`: disambiguated key for same-name collisions
 - `DynastyMatchStatus`: `matched`, `no_unique_match`, or `missing` when dynasty values are attached
 
+## Glossary
+
+- **Dynasty league**: A long-term fantasy format where player value spans multiple future seasons instead of a single year.
+- **Projection horizon**: The future window used for valuation (this app supports 2026-2045 projections).
+- **Rest of Career Totals**: A single aggregated row per player across selected years (`career_totals=true`).
+- **Dynasty Value**: The app's long-horizon value metric, built from discounted per-year production and centered around replacement-level roster value.
+- **SGP (Standings Gain Points)**: A roto scoring conversion that estimates how much of each stat moves a team by one standings point.
+- **Replacement level**: The expected production from the best readily available unrostered players at each slot.
+- **Monte Carlo simulation**: Repeated randomized league outcomes used to estimate SGP/stat denominators and stabilize valuation.
+- **Roto mode**: Category-based valuation (e.g., AVG/HR/RBI for hitters; ERA/WHIP/K for pitchers).
+- **Points mode**: Rules-based valuation where each event is weighted by custom points settings.
+- **IP cap**: Maximum innings for pitching value calculations; extra innings above the cap do not add value.
+- **PlayerKey**: Normalized player identifier derived from name (can collide for same-name players).
+- **PlayerEntityKey**: Disambiguated player identifier (used to separate same-name players by context such as team).
+- **DynastyMatchStatus**: Join status for attaching dynasty values to projection rows: `matched`, `no_unique_match`, or `missing`.
+- **Two-way player**: A player with both hitter and pitcher projections that may be merged/handled specially in valuation views.
+- **Calculation job**: Async calculator run created via `/api/calculate/jobs` and polled by `job_id` until completion/failure/cancellation.
+
 ## Next Steps
 
 Some ideas for future development:
