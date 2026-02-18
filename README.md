@@ -177,6 +177,19 @@ All three support Dockerfiles out of the box:
 - Just connect your GitHub repo and deploy
 - Current production custom domain: https://fantasy-foundry.com
 
+### Optional: Proxy + Rate Limit Identity Settings
+
+The API rate limiter and async-job IP guardrails can be configured for proxy deployments:
+
+- `FF_TRUST_X_FORWARDED_FOR` (default: `0`)  
+  - `0`/`false`: use direct socket client IP (`request.client.host`) unless trusted proxy CIDRs are configured.
+  - `1`/`true`: trust `X-Forwarded-For` even without CIDR allow-list (only recommended behind a trusted proxy chain).
+- `FF_TRUSTED_PROXY_CIDRS` (default: empty)  
+  - Comma-separated IP/CIDR allow-list for trusted proxy hops (example: `10.0.0.0/8,172.16.0.0/12`).
+  - When set, `X-Forwarded-For` is only honored if the direct peer is in this allow-list.
+- `FF_RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS` (default: `60`)  
+  - Periodic cleanup interval for stale in-memory rate-limit buckets.
+
 ## API Endpoints
 
 | Method | Path | Description |

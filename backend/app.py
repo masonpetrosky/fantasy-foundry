@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import json
 import math
+import ipaddress
 import os
 import re
 import sys
@@ -205,12 +206,47 @@ CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE = max(1, int(os.getenv("FF_CALC_JOB_
 CALCULATOR_MAX_ACTIVE_JOBS_PER_IP = max(1, int(os.getenv("FF_CALC_MAX_ACTIVE_JOBS_PER_IP", "2")))
 CALC_RESULT_CACHE_TTL_SECONDS = max(30, int(os.getenv("FF_CALC_RESULT_CACHE_TTL_SECONDS", "1800")))
 CALC_RESULT_CACHE_MAX_ENTRIES = max(10, int(os.getenv("FF_CALC_RESULT_CACHE_MAX_ENTRIES", "256")))
+TRUST_X_FORWARDED_FOR = os.getenv("FF_TRUST_X_FORWARDED_FOR", "0").strip().lower() in {"1", "true", "yes", "on"}
+TRUSTED_PROXY_CIDRS_RAW = os.getenv("FF_TRUSTED_PROXY_CIDRS", "").strip()
 REDIS_URL = os.getenv("FF_REDIS_URL", "").strip()
 REDIS_RESULT_PREFIX = "ff:calc:result:"
 REDIS_JOB_PREFIX = "ff:calc:job:"
 CALC_LOGGER = logging.getLogger("fantasy_foundry.calculate")
 CALC_JOB_CANCELLED_STATUS = "cancelled"
 CALC_JOB_CANCELLED_ERROR = {"status_code": 499, "detail": "Calculation job cancelled by client."}
+try:
+    RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS = max(
+        5.0,
+        float(os.getenv("FF_RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS", "60")),
+    )
+except ValueError:
+    RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS = 60.0
+
+IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
+IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
+
+
+def _load_trusted_proxy_networks(raw: str) -> tuple[IPNetwork, ...]:
+    networks: list[IPNetwork] = []
+    for token in raw.split(","):
+        candidate = token.strip()
+        if not candidate:
+            continue
+        try:
+            if "/" in candidate:
+                network = ipaddress.ip_network(candidate, strict=False)
+            else:
+                addr = ipaddress.ip_address(candidate)
+                suffix = "32" if isinstance(addr, ipaddress.IPv4Address) else "128"
+                network = ipaddress.ip_network(f"{addr}/{suffix}", strict=False)
+        except ValueError:
+            CALC_LOGGER.warning("ignoring invalid FF_TRUSTED_PROXY_CIDRS token: %s", candidate)
+            continue
+        networks.append(network)
+    return tuple(networks)
+
+
+TRUSTED_PROXY_NETWORKS = _load_trusted_proxy_networks(TRUSTED_PROXY_CIDRS_RAW)
 
 
 def _pick_first_existing_col(df: pd.DataFrame, candidates: list[str] | tuple[str, ...]) -> str | None:
@@ -560,6 +596,7 @@ CALCULATOR_PREWARM_STATE = {
 }
 REQUEST_RATE_LIMIT_LOCK = Lock()
 REQUEST_RATE_LIMIT_BUCKETS: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+_REQUEST_RATE_LIMIT_LAST_SWEEP_TS = 0.0
 CALC_RESULT_CACHE_LOCK = Lock()
 CALC_RESULT_CACHE: dict[str, tuple[float, dict]] = {}
 CALC_RESULT_CACHE_ORDER: deque[str] = deque()
@@ -686,17 +723,79 @@ def _value_col_sort_key(col: str) -> tuple[int, int | str]:
     return (0, int(suffix)) if suffix.isdigit() else (1, suffix)
 
 
+def _parse_ip_text(raw: str | None) -> IPAddress | None:
+    text = str(raw or "").strip().strip('"').strip("'")
+    if not text:
+        return None
+    if text.lower().startswith("for="):
+        text = text[4:].strip().strip('"').strip("'")
+    if "%" in text:
+        text = text.split("%", 1)[0]
+    if text.startswith("[") and "]" in text:
+        text = text[1:text.find("]")]
+    elif text.count(":") == 1 and "." in text:
+        host, port = text.rsplit(":", 1)
+        if port.isdigit():
+            text = host
+    try:
+        return ipaddress.ip_address(text)
+    except ValueError:
+        return None
+
+
+def _trusted_proxy_ip(addr: IPAddress) -> bool:
+    if TRUSTED_PROXY_NETWORKS:
+        return any(addr in network for network in TRUSTED_PROXY_NETWORKS)
+    return TRUST_X_FORWARDED_FOR
+
+
+def _forwarded_for_chain(header_value: str | None) -> list[IPAddress]:
+    chain: list[IPAddress] = []
+    for token in str(header_value or "").split(","):
+        parsed = _parse_ip_text(token)
+        if parsed is not None:
+            chain.append(parsed)
+    return chain
+
+
 def _client_ip(request: Request | None) -> str:
     if request is None:
         return "unknown"
-    forwarded_for = str(request.headers.get("x-forwarded-for") or "").strip()
-    if forwarded_for:
-        first_hop = forwarded_for.split(",")[0].strip()
-        if first_hop:
-            return first_hop
-    if request.client and request.client.host:
-        return str(request.client.host)
-    return "unknown"
+    peer_host = str(request.client.host) if request.client and request.client.host else ""
+    peer_ip = _parse_ip_text(peer_host)
+    forwarded_chain = _forwarded_for_chain(request.headers.get("x-forwarded-for"))
+
+    if peer_ip is None:
+        if forwarded_chain and TRUST_X_FORWARDED_FOR and not TRUSTED_PROXY_NETWORKS:
+            return str(forwarded_chain[0])
+        return peer_host or "unknown"
+    if not forwarded_chain:
+        return str(peer_ip)
+    if not _trusted_proxy_ip(peer_ip):
+        return str(peer_ip)
+
+    # Walk from nearest to farthest hop and return the first untrusted client hop.
+    for hop in reversed(forwarded_chain):
+        if _trusted_proxy_ip(hop):
+            continue
+        return str(hop)
+    return str(forwarded_chain[0])
+
+
+def _prune_rate_limit_bucket(bucket: deque[float], *, window_start: float) -> None:
+    while bucket and bucket[0] < window_start:
+        bucket.popleft()
+
+
+def _cleanup_rate_limit_buckets_locked(*, now: float, window_start: float) -> None:
+    global _REQUEST_RATE_LIMIT_LAST_SWEEP_TS
+    if now - _REQUEST_RATE_LIMIT_LAST_SWEEP_TS < RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS:
+        return
+    for key, bucket in list(REQUEST_RATE_LIMIT_BUCKETS.items()):
+        _prune_rate_limit_bucket(bucket, window_start=window_start)
+        if not bucket:
+            REQUEST_RATE_LIMIT_BUCKETS.pop(key, None)
+    _REQUEST_RATE_LIMIT_LAST_SWEEP_TS = now
 
 
 def _enforce_rate_limit(request: Request, *, action: str, limit_per_minute: int) -> None:
@@ -707,9 +806,9 @@ def _enforce_rate_limit(request: Request, *, action: str, limit_per_minute: int)
     ip = _client_ip(request)
     bucket_key = (action, ip)
     with REQUEST_RATE_LIMIT_LOCK:
+        _cleanup_rate_limit_buckets_locked(now=now, window_start=window_start)
         bucket = REQUEST_RATE_LIMIT_BUCKETS[bucket_key]
-        while bucket and bucket[0] < window_start:
-            bucket.popleft()
+        _prune_rate_limit_bucket(bucket, window_start=window_start)
         if len(bucket) >= limit_per_minute:
             raise HTTPException(
                 status_code=429,
@@ -2055,6 +2154,18 @@ def _calculator_guardrails_payload() -> dict:
         "default_ir_slots": COMMON_DEFAULT_IR_SLOTS,
         "playable_by_year": _playable_pool_counts_by_year(),
         "job_timeout_seconds": CALCULATOR_REQUEST_TIMEOUT_SECONDS,
+        "rate_limit_identity_mode": (
+            "trusted_proxy_cidrs"
+            if TRUSTED_PROXY_NETWORKS
+            else ("trust_all_x_forwarded_for" if TRUST_X_FORWARDED_FOR else "remote_addr_only")
+        ),
+        "trust_x_forwarded_for": TRUST_X_FORWARDED_FOR,
+        "trusted_proxy_cidrs": [str(network) for network in TRUSTED_PROXY_NETWORKS],
+        "rate_limit_bucket_cleanup_interval_seconds": RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS,
+        "rate_limit_sync_per_minute": CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,
+        "rate_limit_job_create_per_minute": CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE,
+        "rate_limit_job_status_per_minute": CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE,
+        "max_active_jobs_per_ip": CALCULATOR_MAX_ACTIVE_JOBS_PER_IP,
     }
 
 

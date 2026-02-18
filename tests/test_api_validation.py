@@ -5,6 +5,8 @@ import time
 import re
 import json
 import tempfile
+import ipaddress
+from collections import deque
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -1269,6 +1271,7 @@ class CalculatorValidationTests(unittest.TestCase):
             app_module.CALC_RESULT_CACHE_ORDER.clear()
         with app_module.REQUEST_RATE_LIMIT_LOCK:
             app_module.REQUEST_RATE_LIMIT_BUCKETS.clear()
+            app_module._REQUEST_RATE_LIMIT_LAST_SWEEP_TS = 0.0
 
     def test_local_result_cache_reorders_on_get_for_lru_eviction(self) -> None:
         with patch.object(app_module, "_redis_client", return_value=None), patch.object(
@@ -1969,6 +1972,46 @@ class CalculatorValidationTests(unittest.TestCase):
             second = self.client.post("/api/calculate", json={})
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 429)
+
+    def test_client_ip_ignores_untrusted_forwarded_chain(self) -> None:
+        request = types.SimpleNamespace(
+            headers={"x-forwarded-for": "203.0.113.9, 10.9.1.2"},
+            client=types.SimpleNamespace(host="198.51.100.21"),
+        )
+        with patch.object(app_module, "TRUST_X_FORWARDED_FOR", False), patch.object(
+            app_module,
+            "TRUSTED_PROXY_NETWORKS",
+            (ipaddress.ip_network("10.0.0.0/8"),),
+        ):
+            resolved = app_module._client_ip(request)
+        self.assertEqual(resolved, "198.51.100.21")
+
+    def test_client_ip_uses_first_untrusted_forwarded_hop_for_trusted_proxy(self) -> None:
+        request = types.SimpleNamespace(
+            headers={"x-forwarded-for": "198.51.100.55, 172.16.10.9, 10.1.2.3"},
+            client=types.SimpleNamespace(host="10.200.0.10"),
+        )
+        with patch.object(app_module, "TRUST_X_FORWARDED_FOR", False), patch.object(
+            app_module,
+            "TRUSTED_PROXY_NETWORKS",
+            (ipaddress.ip_network("10.0.0.0/8"), ipaddress.ip_network("172.16.0.0/12")),
+        ):
+            resolved = app_module._client_ip(request)
+        self.assertEqual(resolved, "198.51.100.55")
+
+    def test_rate_limit_bucket_cleanup_evicts_stale_keys(self) -> None:
+        with app_module.REQUEST_RATE_LIMIT_LOCK:
+            app_module.REQUEST_RATE_LIMIT_BUCKETS.clear()
+            app_module.REQUEST_RATE_LIMIT_BUCKETS[("calc-sync", "old")] = deque([100.0])
+            app_module.REQUEST_RATE_LIMIT_BUCKETS[("calc-sync", "mixed")] = deque([939.0, 945.0])
+            app_module._REQUEST_RATE_LIMIT_LAST_SWEEP_TS = 0.0
+            app_module._cleanup_rate_limit_buckets_locked(now=1000.0, window_start=940.0)
+            snapshot = {key: list(value) for key, value in app_module.REQUEST_RATE_LIMIT_BUCKETS.items()}
+            last_sweep = app_module._REQUEST_RATE_LIMIT_LAST_SWEEP_TS
+
+        self.assertNotIn(("calc-sync", "old"), snapshot)
+        self.assertEqual(snapshot.get(("calc-sync", "mixed")), [945.0])
+        self.assertEqual(last_sweep, 1000.0)
 
     def test_active_job_cap_enforced_per_ip(self) -> None:
         with patch.object(app_module, "CALCULATOR_MAX_ACTIVE_JOBS_PER_IP", 1), patch.object(
