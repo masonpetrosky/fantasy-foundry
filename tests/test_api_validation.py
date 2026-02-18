@@ -1125,7 +1125,7 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(row["AB"], 1050.0)
         self.assertEqual(row["H"], 310.0)
         self.assertEqual(row["HR"], 52.0)
-        self.assertEqual(row["ProjectionsUsed"], 5)
+        self.assertEqual(row["ProjectionsUsed"], 3)
         self.assertEqual(row["OldestProjectionDate"], "2025-12-20")
         self.assertAlmostEqual(row["AVG"], 310.0 / 1050.0, places=6)
 
@@ -1251,7 +1251,7 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(row["PitHR"], 34.0)
         self.assertEqual(row["PitBB"], 87.0)
         self.assertEqual(row["K"], 350.0)
-        self.assertEqual(row["ProjectionsUsed"], 7)
+        self.assertEqual(row["ProjectionsUsed"], 2)
         self.assertEqual(row["OldestProjectionDate"], "2025-12-30")
 
 

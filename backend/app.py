@@ -2925,7 +2925,10 @@ def _aggregate_projection_career_rows(rows: list[dict], *, is_hitter: bool) -> l
         aggregated["YearEnd"] = year_end
         aggregated["Years"] = _format_year_span(year_start, year_end)
 
-        projection_count = _sum_projection_counts([row.get("ProjectionsUsed") for row in player_rows])
+        # In career totals mode, ProjectionsUsed should represent the number of
+        # projection queries behind each season snapshot (e.g., 1-3), not a sum
+        # across every projected year.
+        projection_count = _max_projection_count(*(row.get("ProjectionsUsed") for row in player_rows))
         if projection_count is not None:
             aggregated["ProjectionsUsed"] = projection_count
         aggregated["OldestProjectionDate"] = _oldest_projection_date(
@@ -3084,7 +3087,7 @@ def _aggregate_all_projection_career_rows(hit_rows: list[dict], pit_rows: list[d
         merged["YearEnd"] = year_end
         merged["Years"] = _format_year_span(year_start, year_end)
 
-        projection_total = _sum_projection_counts([(hit or {}).get("ProjectionsUsed"), (pit or {}).get("ProjectionsUsed")])
+        projection_total = _max_projection_count((hit or {}).get("ProjectionsUsed"), (pit or {}).get("ProjectionsUsed"))
         if projection_total is not None:
             merged["ProjectionsUsed"] = projection_total
         merged["OldestProjectionDate"] = _oldest_projection_date(
