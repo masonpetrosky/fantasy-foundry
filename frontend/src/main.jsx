@@ -1487,9 +1487,6 @@ function App() {
                 The backend runs simulation-based valuation to estimate multi-year dynasty value and produces ranked results.
               </li>
             </ol>
-            <p className="methodology-note">
-              Output is meant as directional guidance. Real outcomes depend on changing roles, health, and league context.
-            </p>
           </div>
         </section>
       </main>
