@@ -1643,41 +1643,7 @@ function MethodologySection() {
         <p className="methodology-note" style={{ marginBottom: 0 }}>
           Final values can be confidence-adjusted from <code>ProjectionsUsed</code>, projected playing time,
           and age/minor context. Use the <strong>Dynasty Calculator</strong> tab to run your exact league settings.
-        </p>
-      </article>
-
-      <article className="methodology-card" aria-labelledby="methodology-defaults-heading">
-        <h2 id="methodology-defaults-heading">Reproduce It Yourself</h2>
-        <ol>
-          <li>
-            Export projections and keep the exact run settings: teams, slots, scoring mode, categories,
-            start year, horizon, discount, two-way mode, and <code>recent_projections</code>.
-          </li>
-          <li>
-            Rebuild <code>Value_YEAR</code> for each player using the formulas above (roto or points),
-            then compute <code>RawDynastyValue</code> and centering.
-          </li>
-          <li>
-            Validate against API output by matching <code>Value_YEAR</code>, <code>RawDynastyValue</code>,
-            and <code>DynastyValue</code> columns.
-          </li>
-        </ol>
-        <p>
-          Implementation entry points:
           {" "}
-          <code>backend/app.py::_calculate_common_dynasty_frame_cached</code>,
-          {" "}
-          <code>backend/dynasty_roto_values.py::calculate_common_dynasty_values</code>,
-          {" "}
-          <code>backend/app.py::_calculate_points_dynasty_frame_cached</code>,
-          {" "}
-          <code>backend/dynasty_roto_values.py::compute_year_context</code>,
-          {" "}
-          <code>backend/dynasty_roto_values.py::compute_year_player_values_vs_replacement</code>,
-          {" "}
-          <code>backend/dynasty_roto_values.py::dynasty_keep_or_drop_value</code>.
-        </p>
-        <p style={{ marginBottom: 0 }}>
           Site baseline rankings default to 12-team 5x5 roto with 22 starters, 6 bench, 0 MiLB, and 0 IL.
         </p>
       </article>
