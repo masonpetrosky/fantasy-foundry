@@ -2640,6 +2640,16 @@ async def attach_build_header(request, call_next):
             response.headers.setdefault(header, value)
     return response
 
+
+@app.middleware("http")
+async def attach_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+    return response
+
 # ---------------------------------------------------------------------------
 # API: Metadata
 # ---------------------------------------------------------------------------
@@ -3579,6 +3589,47 @@ def get_health():
     }
 
 
+def _projection_response(
+    dataset: Literal["all", "bat", "pitch"],
+    *,
+    player: str | None,
+    team: str | None,
+    player_keys: str | None,
+    year: int | None,
+    years: str | None,
+    pos: str | None,
+    dynasty_years: str | None,
+    career_totals: bool,
+    include_dynasty: bool,
+    sort_col: str | None,
+    sort_dir: str,
+    limit: int,
+    offset: int,
+) -> dict[str, Any]:
+    _refresh_data_if_needed()
+    validated_sort_col = _validate_sort_col(sort_col, dataset=dataset)
+    filter_kwargs = dict(
+        player=player,
+        team=team,
+        player_keys=player_keys,
+        year=year,
+        years=years,
+        pos=pos,
+        include_dynasty=include_dynasty,
+        dynasty_years=dynasty_years,
+        career_totals=career_totals,
+        sort_col=validated_sort_col,
+        sort_dir=sort_dir,
+    )
+    if dataset == "all":
+        filtered = _get_all_projection_rows(**filter_kwargs)
+    else:
+        filtered = _get_projection_rows(dataset, **filter_kwargs)
+    total = len(filtered)
+    page = list(filtered[offset : offset + limit])
+    return {"total": total, "offset": offset, "limit": limit, "data": page}
+
+
 @app.get("/api/projections/all")
 def get_all_projections(
     player: Optional[str] = None,
@@ -3595,24 +3646,12 @@ def get_all_projections(
     limit: int = Query(default=200, ge=1, le=5000),
     offset: int = Query(default=0, ge=0),
 ):
-    _refresh_data_if_needed()
-    validated_sort_col = _validate_sort_col(sort_col, dataset="all")
-    filtered = _get_all_projection_rows(
-        player=player,
-        team=team,
-        player_keys=player_keys,
-        year=year,
-        years=years,
-        pos=pos,
-        include_dynasty=include_dynasty,
-        dynasty_years=dynasty_years,
-        career_totals=career_totals,
-        sort_col=validated_sort_col,
-        sort_dir=sort_dir,
+    return _projection_response(
+        "all", player=player, team=team, player_keys=player_keys, year=year,
+        years=years, pos=pos, dynasty_years=dynasty_years, career_totals=career_totals,
+        include_dynasty=include_dynasty, sort_col=sort_col, sort_dir=sort_dir,
+        limit=limit, offset=offset,
     )
-    total = len(filtered)
-    page = list(filtered[offset : offset + limit])
-    return {"total": total, "offset": offset, "limit": limit, "data": page}
 
 
 @app.get("/api/projections/bat")
@@ -3631,25 +3670,12 @@ def get_bat_projections(
     limit: int = Query(default=200, ge=1, le=5000),
     offset: int = Query(default=0, ge=0),
 ):
-    _refresh_data_if_needed()
-    validated_sort_col = _validate_sort_col(sort_col, dataset="bat")
-    filtered = _get_projection_rows(
-        "bat",
-        player=player,
-        team=team,
-        player_keys=player_keys,
-        year=year,
-        years=years,
-        pos=pos,
-        include_dynasty=include_dynasty,
-        dynasty_years=dynasty_years,
-        career_totals=career_totals,
-        sort_col=validated_sort_col,
-        sort_dir=sort_dir,
+    return _projection_response(
+        "bat", player=player, team=team, player_keys=player_keys, year=year,
+        years=years, pos=pos, dynasty_years=dynasty_years, career_totals=career_totals,
+        include_dynasty=include_dynasty, sort_col=sort_col, sort_dir=sort_dir,
+        limit=limit, offset=offset,
     )
-    total = len(filtered)
-    page = list(filtered[offset : offset + limit])
-    return {"total": total, "offset": offset, "limit": limit, "data": page}
 
 
 @app.get("/api/projections/pitch")
@@ -3668,25 +3694,12 @@ def get_pitch_projections(
     limit: int = Query(default=200, ge=1, le=5000),
     offset: int = Query(default=0, ge=0),
 ):
-    _refresh_data_if_needed()
-    validated_sort_col = _validate_sort_col(sort_col, dataset="pitch")
-    filtered = _get_projection_rows(
-        "pitch",
-        player=player,
-        team=team,
-        player_keys=player_keys,
-        year=year,
-        years=years,
-        pos=pos,
-        include_dynasty=include_dynasty,
-        dynasty_years=dynasty_years,
-        career_totals=career_totals,
-        sort_col=validated_sort_col,
-        sort_dir=sort_dir,
+    return _projection_response(
+        "pitch", player=player, team=team, player_keys=player_keys, year=year,
+        years=years, pos=pos, dynasty_years=dynasty_years, career_totals=career_totals,
+        include_dynasty=include_dynasty, sort_col=sort_col, sort_dir=sort_dir,
+        limit=limit, offset=offset,
     )
-    total = len(filtered)
-    page = list(filtered[offset : offset + limit])
-    return {"total": total, "offset": offset, "limit": limit, "data": page}
 
 
 @app.get("/api/projections/export/{dataset}")

@@ -80,7 +80,8 @@ body {
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+[tabindex]:focus-visible {
   outline: 2px solid rgba(212, 168, 83, 0.55);
   outline-offset: 2px;
 }
@@ -423,7 +424,7 @@ header {
   transition: all 0.2s;
 }
 
-.section-tab:hover { color: var(--text-primary); }
+.section-tab:hover { color: var(--text-primary); background: rgba(26, 35, 50, 0.4); }
 .section-tab.active { background: var(--bg-tertiary); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 
 /* ====== FILTER BAR ====== */
@@ -788,6 +789,12 @@ header {
   border-radius: 5px;
   min-height: 34px;
   touch-action: manipulation;
+  cursor: pointer;
+}
+
+.projection-view-btn:hover:not(.active) {
+  color: var(--text-primary);
+  background: rgba(26, 35, 50, 0.5);
 }
 
 .projection-view-btn.active {
@@ -812,7 +819,14 @@ header {
   max-height: 75vh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-color: var(--border) var(--bg-secondary);
 }
+
+.table-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.table-scroll::-webkit-scrollbar-track { background: var(--bg-secondary); border-radius: 4px; }
+.table-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.table-scroll::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+.table-scroll::-webkit-scrollbar-corner { background: var(--bg-secondary); }
 
 table {
   width: max-content;
@@ -1471,13 +1485,11 @@ td.value-negative { color: var(--red); }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 /* ====== FOOTER ====== */
-.methodology-section {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 32px 40px;
-  scroll-margin-top: 84px;
-  content-visibility: auto;
-  contain-intrinsic-size: 1px 420px;
+
+.methodology-stack {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
 }
 
 .methodology-card {
@@ -1507,6 +1519,11 @@ td.value-negative { color: var(--red); }
   color: var(--text-primary);
 }
 
+.methodology-card ul {
+  padding-left: 18px;
+  color: var(--text-primary);
+}
+
 .methodology-card li {
   margin-bottom: 10px;
 }
@@ -1519,8 +1536,12 @@ td.value-negative { color: var(--red); }
   margin-top: 8px;
 }
 
-.glossary-card {
-  margin-bottom: 20px;
+.app-methodology-note {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
 }
 
 .glossary-intro {
@@ -1549,6 +1570,31 @@ td.value-negative { color: var(--red); }
 }
 
 .glossary-item dd {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: var(--lh-relaxed);
+}
+
+.faq-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.faq-item {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  padding: 14px 16px;
+}
+
+.faq-item dt {
+  margin-bottom: 6px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.faq-item dd {
   margin: 0;
   color: var(--text-secondary);
   line-height: var(--lh-relaxed);
@@ -1607,7 +1653,6 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   .hero { padding: 64px 24px 50px; }
   .hero h1 { font-size: 2.9rem; }
   .container { padding: 0 24px 72px; }
-  .methodology-section { padding: 0 24px 32px; }
 }
 
 @media (max-width: 900px) {
@@ -1903,9 +1948,10 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   .methodology-card { padding: 18px; }
   .methodology-card h2 { font-size: 1.42rem; }
   .glossary-item { padding: 12px 14px; }
+  .faq-item { padding: 12px 14px; }
 }
 </style>
-  <script type="module" crossorigin src="/assets/index-BJjouhF2.js"></script>
+  <script type="module" crossorigin src="/assets/index-Cw_2kGL1.js"></script>
 </head>
 <body>
 

@@ -80,7 +80,8 @@ body {
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+[tabindex]:focus-visible {
   outline: 2px solid rgba(212, 168, 83, 0.55);
   outline-offset: 2px;
 }
@@ -423,7 +424,7 @@ header {
   transition: all 0.2s;
 }
 
-.section-tab:hover { color: var(--text-primary); }
+.section-tab:hover { color: var(--text-primary); background: rgba(26, 35, 50, 0.4); }
 .section-tab.active { background: var(--bg-tertiary); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 
 /* ====== FILTER BAR ====== */
@@ -788,6 +789,12 @@ header {
   border-radius: 5px;
   min-height: 34px;
   touch-action: manipulation;
+  cursor: pointer;
+}
+
+.projection-view-btn:hover:not(.active) {
+  color: var(--text-primary);
+  background: rgba(26, 35, 50, 0.5);
 }
 
 .projection-view-btn.active {
@@ -812,7 +819,14 @@ header {
   max-height: 75vh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-color: var(--border) var(--bg-secondary);
 }
+
+.table-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.table-scroll::-webkit-scrollbar-track { background: var(--bg-secondary); border-radius: 4px; }
+.table-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.table-scroll::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+.table-scroll::-webkit-scrollbar-corner { background: var(--bg-secondary); }
 
 table {
   width: max-content;

@@ -169,6 +169,25 @@ function fmtInt(val, useGrouping = true) {
   return Math.round(Number(val)).toLocaleString(undefined, { useGrouping });
 }
 
+const THREE_DECIMAL_COLS = new Set(["AVG", "OBP", "OPS"]);
+const TWO_DECIMAL_COLS = new Set(["ERA", "WHIP"]);
+const WHOLE_NUMBER_COLS = new Set([
+  "AB", "R", "HR", "RBI", "SB", "IP", "W", "K", "SVH", "QS",
+  "G", "H", "2B", "3B", "BB", "SO", "GS", "L", "PitBB", "SV",
+  "PitH", "PitHR", "ER",
+]);
+const INT_COLS = new Set(["Rank", "Year", "Years", "Age", "ProjectionsUsed"]);
+
+function formatCellValue(col, val) {
+  if (col === "DynastyValue" || col.startsWith("Value_")) return fmt(val, 2);
+  if (TWO_DECIMAL_COLS.has(col)) return fmt(val, 2);
+  if (THREE_DECIMAL_COLS.has(col)) return fmt(val, 3);
+  if (WHOLE_NUMBER_COLS.has(col)) return fmtInt(val, true);
+  if (INT_COLS.has(col)) return fmtInt(val, col !== "Year");
+  if (typeof val === "number") return fmt(val);
+  return val ?? "—";
+}
+
 function parsePosTokens(posValue) {
   return String(posValue || "")
     .toUpperCase()
@@ -1711,6 +1730,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
   const [totalRows, setTotalRows] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [retryTrigger, setRetryTrigger] = useState(0);
   const [exportError, setExportError] = useState("");
   const [exportingFormat, setExportingFormat] = useState("");
   const [offset, setOffset] = useState(0);
@@ -1908,6 +1928,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
     limit,
     resolvedDataVersion,
     prefetchProjectionPage,
+    retryTrigger,
   ]);
 
   useEffect(() => {
@@ -2314,34 +2335,10 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
     });
     return labels;
   }, [dynastyYearCols]);
-  const threeDecimalCols = new Set(["AVG", "OBP", "OPS"]);
-  const twoDecimalCols = new Set(["ERA", "WHIP"]);
-  const wholeNumberCols = new Set([
-    "AB",
-    "R",
-    "HR",
-    "RBI",
-    "SB",
-    "IP",
-    "W",
-    "K",
-    "SVH",
-    "QS",
-    "G",
-    "H",
-    "2B",
-    "3B",
-    "BB",
-    "SO",
-    "GS",
-    "L",
-    "PitBB",
-    "SV",
-    "PitH",
-    "PitHR",
-    "ER",
-  ]);
-  const intCols = new Set(["Rank", "Year", "Years", "Age", "ProjectionsUsed"]);
+  const threeDecimalCols = THREE_DECIMAL_COLS;
+  const twoDecimalCols = TWO_DECIMAL_COLS;
+  const wholeNumberCols = WHOLE_NUMBER_COLS;
+  const intCols = INT_COLS;
   const posFilterLabel = posFilters.length === 0
     ? "All Positions"
     : posFilters.length <= 2
@@ -2470,7 +2467,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
             columnLabels={colLabels}
           />
         )}
-        <span className={`result-count ${loading || searchIsDebouncing ? "loading" : ""}`.trim()} aria-live="polite" aria-atomic="true">
+        <span className={`result-count ${loading || searchIsDebouncing ? "loading" : ""}`.trim()} aria-live="polite" aria-atomic="true" aria-busy={loading || searchIsDebouncing}>
           {watchlistOnly ? `${totalRows.toLocaleString()} watchlist rows` : `${totalRows.toLocaleString()} rows`}
           {searchIsDebouncing ? " · typing..." : loading ? " · refreshing..." : ""}
         </span>
@@ -2538,19 +2535,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
                     {comparisonColumns.map(col => (
                       <React.Fragment key={`${compareKey}-${col}`}>
                         <dt>{colLabels[col] || col}</dt>
-                        <dd>
-                          {(col === "DynastyValue" || col.startsWith("Value_"))
-                            ? fmt(row[col], 2)
-                            : twoDecimalCols.has(col)
-                              ? fmt(row[col], 2)
-                              : threeDecimalCols.has(col)
-                                ? fmt(row[col], 3)
-                                : wholeNumberCols.has(col)
-                                  ? fmtInt(row[col], true)
-                                  : intCols.has(col)
-                                ? fmtInt(row[col], col !== "Year")
-                                : (typeof row[col] === "number" ? fmt(row[col]) : (row[col] ?? "—"))}
-                        </dd>
+                        <dd>{formatCellValue(col, row[col])}</dd>
                       </React.Fragment>
                     ))}
                   </dl>
@@ -2630,7 +2615,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
               </div>
             ))
           ) : error && displayedPage.length === 0 ? (
-            <div className="projection-card-empty">Unable to load projections. {error}</div>
+            <div className="projection-card-empty">Unable to load projections. {error}{" "}<button type="button" className="inline-btn" onClick={() => setRetryTrigger(n => n + 1)}>Retry</button></div>
           ) : displayedPage.length === 0 ? (
             <div className="projection-card-empty">No results found for this page.</div>
           ) : (
@@ -2667,19 +2652,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
                     {cardCols.map(col => (
                       <div className="projection-card-stat" key={`${projectionRowKey(row, offset + idx)}-${col}`}>
                         <dt>{colLabels[col] || col}</dt>
-                        <dd>
-                          {(col === "DynastyValue" || col.startsWith("Value_"))
-                            ? fmt(rowWithRank[col], 2)
-                            : twoDecimalCols.has(col)
-                              ? fmt(rowWithRank[col], 2)
-                              : threeDecimalCols.has(col)
-                                ? fmt(rowWithRank[col], 3)
-                                : wholeNumberCols.has(col)
-                                  ? fmtInt(rowWithRank[col], true)
-                                  : intCols.has(col)
-                                ? fmtInt(rowWithRank[col], col !== "Year")
-                                : (typeof rowWithRank[col] === "number" ? fmt(rowWithRank[col]) : (rowWithRank[col] ?? "—"))}
-                        </dd>
+                        <dd>{formatCellValue(col, rowWithRank[col])}</dd>
                       </div>
                     ))}
                   </dl>
@@ -2727,6 +2700,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
                       }}
                       tabIndex={0}
                       aria-sort={sortCol === c ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+                      aria-label={`Sort by ${colLabels[c] || c}`}
                     >
                       {colLabels[c] || c}
                       {sortCol === c && <span className="sort-arrow">{sortDir === "asc" ? "▲" : "▼"}</span>}
@@ -2747,7 +2721,7 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
                 ) : error && displayedPage.length === 0 ? (
                   <tr>
                     <td colSpan={cols.length + 2} style={{textAlign:"center",padding:"40px",color:"var(--red)"}}>
-                      Unable to load projections. {error}
+                      Unable to load projections. {error}{" "}<button type="button" className="inline-btn" onClick={() => setRetryTrigger(n => n + 1)}>Retry</button>
                     </td>
                   </tr>
                 ) : displayedPage.length === 0 ? (
@@ -2807,11 +2781,11 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
         )}
         {totalRows > limit && (
           <div className="pagination">
-            <button disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - limit))}>← Previous</button>
+            <button aria-label="Previous page" disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - limit))}>← Previous</button>
             <span className="page-info">
               {totalRows === 0 ? 0 : offset + 1}–{Math.min(offset + limit, totalRows)} of {totalRows}
             </span>
-            <button disabled={offset + limit >= totalRows || loading} onClick={() => setOffset(offset + limit)}>Next →</button>
+            <button aria-label="Next page" disabled={offset + limit >= totalRows || loading} onClick={() => setOffset(offset + limit)}>Next →</button>
           </div>
         )}
       </div>
