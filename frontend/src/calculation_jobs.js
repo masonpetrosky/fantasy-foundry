@@ -3,7 +3,7 @@ import { formatApiError, readResponsePayload, sleepWithAbort } from "./request_h
 export async function cancelCalculationJob(apiBase, jobId) {
   const normalizedApiBase = String(apiBase || "").trim();
   const normalizedJobId = String(jobId || "").trim();
-  if (!normalizedApiBase || !normalizedJobId) return;
+  if (!normalizedJobId) return;
   try {
     await fetch(`${normalizedApiBase}/api/calculate/jobs/${encodeURIComponent(normalizedJobId)}`, {
       method: "DELETE",
@@ -34,7 +34,7 @@ export async function runCalculationJob({
 }) {
   const normalizedApiBase = String(apiBase || "").trim();
   const body = payload && typeof payload === "object" ? payload : null;
-  if (!normalizedApiBase || !body) {
+  if (!body) {
     onError("Invalid calculation request.");
     return;
   }
