@@ -25,27 +25,26 @@ import hashlib
 import io
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from functools import cmp_to_key, lru_cache
+from functools import lru_cache
 from pathlib import Path
-from threading import Lock, Thread
-from typing import Any, Literal, Optional
+from threading import Lock
+from typing import Any, Literal
 from uuid import uuid4
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, Field, model_validator
 
+from backend.api.app_factory import create_app
 from backend.api.routes import (
     build_calculate_router,
     build_frontend_assets_router,
     build_projections_router,
     build_status_router,
 )
+from backend.services.calculator import CalculatorService, CalculatorServiceContext
+from backend.services.projections import ProjectionService, ProjectionServiceContext
 
 try:  # pragma: no cover - optional dependency
     import redis as redis_lib  # type: ignore
@@ -2594,9 +2593,8 @@ def _refresh_data_if_needed() -> None:
             traceback.print_exc()
             return
 
-        _cached_projection_rows.cache_clear()
-        _cached_all_projection_rows.cache_clear()
-        _projection_sortable_columns_for_dataset.cache_clear()
+        if "PROJECTION_SERVICE" in globals():
+            PROJECTION_SERVICE.clear_caches()
         _calculate_common_dynasty_frame_cached.cache_clear()
         _calculate_points_dynasty_frame_cached.cache_clear()
         _playable_pool_counts_by_year.cache_clear()
@@ -2608,54 +2606,103 @@ def _refresh_data_if_needed() -> None:
             CALC_RESULT_CACHE_ORDER.clear()
         _DATA_SOURCE_SIGNATURE = current_signature
 
+
+PROJECTION_SERVICE = ProjectionService(
+    ProjectionServiceContext(
+        refresh_data_if_needed=_refresh_data_if_needed,
+        get_bat_data=lambda: BAT_DATA,
+        get_pit_data=lambda: PIT_DATA,
+        get_meta=lambda: META,
+        normalize_player_key=_normalize_player_key,
+        resolve_projection_year_filter=_resolve_projection_year_filter,
+        parse_dynasty_years=_parse_dynasty_years,
+        attach_dynasty_values=_attach_dynasty_values,
+        coerce_meta_years=_coerce_meta_years,
+        tabular_export_response=_tabular_export_response,
+        player_key_col=PLAYER_KEY_COL,
+        player_entity_key_col=PLAYER_ENTITY_KEY_COL,
+        position_token_split_re=POSITION_TOKEN_SPLIT_RE,
+        position_display_order=POSITION_DISPLAY_ORDER,
+        projection_text_sort_cols=PROJECTION_TEXT_SORT_COLS,
+        all_tab_hitter_stat_cols=ALL_TAB_HITTER_STAT_COLS,
+        all_tab_pitch_stat_cols=ALL_TAB_PITCH_STAT_COLS,
+        projection_query_cache_maxsize=PROJECTION_QUERY_CACHE_MAXSIZE,
+        filter_records=lambda *args, **kwargs: filter_records(*args, **kwargs),
+    )
+)
+def _calculator_service_from_globals() -> CalculatorService:
+    return CalculatorService(
+        CalculatorServiceContext(
+            refresh_data_if_needed=_refresh_data_if_needed,
+            coerce_meta_years=_coerce_meta_years,
+            get_meta=lambda: META,
+            calc_result_cache_key=_calc_result_cache_key,
+            result_cache_get=_result_cache_get,
+            result_cache_set=_result_cache_set,
+            calculate_common_dynasty_frame_cached=_calculate_common_dynasty_frame_cached,
+            calculate_points_dynasty_frame_cached=_calculate_points_dynasty_frame_cached,
+            roto_category_settings_from_dict=_roto_category_settings_from_dict,
+            is_user_fixable_calculation_error=_is_user_fixable_calculation_error,
+            player_identity_by_name=_player_identity_by_name,
+            normalize_player_key=_normalize_player_key,
+            player_key_col=PLAYER_KEY_COL,
+            player_entity_key_col=PLAYER_ENTITY_KEY_COL,
+            selected_roto_categories=_selected_roto_categories,
+            start_year_roto_stats_by_entity=_start_year_roto_stats_by_entity,
+            projection_identity_key=_projection_identity_key,
+            build_calculation_explanations=_build_calculation_explanations,
+            clean_records_for_json=_clean_records_for_json,
+            flatten_explanations_for_export=_flatten_explanations_for_export,
+            tabular_export_response=_tabular_export_response,
+            calc_logger=CALC_LOGGER,
+            enforce_rate_limit=_enforce_rate_limit,
+            sync_rate_limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,
+            job_create_rate_limit_per_minute=CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE,
+            job_status_rate_limit_per_minute=CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE,
+            client_ip=_client_ip,
+            iso_now=_iso_now,
+            active_jobs_for_ip=_active_jobs_for_ip,
+            calculator_max_active_jobs_per_ip=CALCULATOR_MAX_ACTIVE_JOBS_PER_IP,
+            calculator_job_lock=CALCULATOR_JOB_LOCK,
+            calculator_jobs=CALCULATOR_JOBS,
+            cleanup_calculation_jobs=_cleanup_calculation_jobs,
+            cache_calculation_job_snapshot=_cache_calculation_job_snapshot,
+            cached_calculation_job_snapshot=_cached_calculation_job_snapshot,
+            calculation_job_public_payload=_calculation_job_public_payload,
+            mark_job_cancelled_locked=_mark_job_cancelled_locked,
+            calculator_job_executor=CALCULATOR_JOB_EXECUTOR,
+            calc_job_cancelled_status=CALC_JOB_CANCELLED_STATUS,
+        )
+    )
+
+
+CALCULATOR_SERVICE = _calculator_service_from_globals()
+
+# Backward-compatible module-level aliases used by tests and internal patches.
+CalculateRequest = CALCULATOR_SERVICE.calculate_request_model
+CalculateExportRequest = CALCULATOR_SERVICE.calculate_export_request_model
+_cached_projection_rows = PROJECTION_SERVICE._cached_projection_rows
+_cached_all_projection_rows = PROJECTION_SERVICE._cached_all_projection_rows
+_projection_sortable_columns_for_dataset = PROJECTION_SERVICE._projection_sortable_columns_for_dataset
+
+
+def filter_records(*args, **kwargs):
+    return PROJECTION_SERVICE.filter_records(*args, **kwargs)
+
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
-@asynccontextmanager
-async def app_lifespan(_: FastAPI):
-    if not os.getenv("PYTEST_CURRENT_TEST") and ENABLE_STARTUP_CALC_PREWARM:
-        Thread(target=_prewarm_default_calculation_caches, name="ff-calc-prewarm", daemon=True).start()
-    try:
-        yield
-    finally:
-        CALCULATOR_JOB_EXECUTOR.shutdown(wait=False, cancel_futures=True)
-
-
-app = FastAPI(title="Dynasty Baseball Projections", version="1.0.0", lifespan=app_lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+app = create_app(
+    title="Dynasty Baseball Projections",
+    version="1.0.0",
+    app_build_id=APP_BUILD_ID,
+    api_no_cache_headers=API_NO_CACHE_HEADERS,
+    refresh_data_if_needed=_refresh_data_if_needed,
+    current_data_version=_current_data_version,
+    enable_startup_calc_prewarm=ENABLE_STARTUP_CALC_PREWARM,
+    prewarm_default_calculation_caches=_prewarm_default_calculation_caches,
+    calculator_job_executor=CALCULATOR_JOB_EXECUTOR,
 )
-app.add_middleware(
-    GZipMiddleware,
-    minimum_size=1000,
-)
-
-
-@app.middleware("http")
-async def attach_build_header(request, call_next):
-    if request.url.path.startswith("/api/"):
-        _refresh_data_if_needed()
-    response = await call_next(request)
-    response.headers.setdefault("X-App-Build", APP_BUILD_ID)
-    response.headers.setdefault("X-Data-Version", _current_data_version())
-    if request.url.path.startswith("/api/"):
-        for header, value in API_NO_CACHE_HEADERS.items():
-            response.headers.setdefault(header, value)
-    return response
-
-
-@app.middleware("http")
-async def attach_security_headers(request, call_next):
-    response = await call_next(request)
-    response.headers.setdefault("X-Content-Type-Options", "nosniff")
-    response.headers.setdefault("X-Frame-Options", "DENY")
-    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
-    return response
 
 # ---------------------------------------------------------------------------
 # API: Metadata
@@ -2710,36 +2757,6 @@ def _position_tokens(value: object) -> set[str]:
     return {token for token in POSITION_TOKEN_SPLIT_RE.split(text) if token}
 
 
-def _normalize_player_keys_filter(value: str | None) -> str:
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    tokens = sorted({token.strip().lower() for token in re.split(r"[\s,]+", text) if token.strip()})
-    return ",".join(tokens)
-
-
-def _parse_player_keys_filter(value: str | None) -> set[str] | None:
-    normalized = _normalize_player_keys_filter(value)
-    if not normalized:
-        return None
-    return {token for token in normalized.split(",") if token}
-
-
-def _row_player_filter_keys(row: dict) -> set[str]:
-    keys: set[str] = set()
-    entity_key = str(row.get(PLAYER_ENTITY_KEY_COL) or "").strip().lower()
-    if entity_key:
-        keys.add(entity_key)
-    player_key = str(row.get(PLAYER_KEY_COL) or "").strip().lower()
-    if player_key:
-        keys.add(player_key)
-    return keys
-
-
-def _normalize_filter_value(value: str | None) -> str:
-    return (value or "").strip()
-
-
 def _position_sort_key(token: str) -> tuple[int, str]:
     order_map = {pos: idx for idx, pos in enumerate(POSITION_DISPLAY_ORDER)}
     return (order_map.get(token, len(order_map)), token)
@@ -2747,14 +2764,6 @@ def _position_sort_key(token: str) -> tuple[int, str]:
 
 def _row_team_value(row: dict) -> str:
     return str(row.get("Team") or row.get("MLBTeam") or "").strip()
-
-
-def _projection_merge_key(row: dict) -> tuple[str, object, str]:
-    player = str(row.get(PLAYER_ENTITY_KEY_COL) or row.get(PLAYER_KEY_COL) or row.get("Player", "")).strip()
-    parsed_year = _coerce_record_year(row.get("Year"))
-    merge_year: object = parsed_year if parsed_year is not None else str(row.get("Year", "")).strip()
-    team = _row_team_value(row).upper()
-    return player, merge_year, team
 
 
 def _merge_position_value(hit_pos: object, pit_pos: object) -> str | None:
@@ -2816,693 +2825,6 @@ def _coerce_numeric(value: object) -> float | None:
     if pd.isna(parsed):
         return None
     return parsed
-
-
-def _career_group_key(row: dict) -> str:
-    player_name = str(row.get("Player", "")).strip()
-    player_key = str(row.get(PLAYER_KEY_COL) or "").strip() or _normalize_player_key(player_name)
-    return str(row.get(PLAYER_ENTITY_KEY_COL) or "").strip() or player_key
-
-
-def _rows_year_bounds(rows: list[dict]) -> tuple[int | None, int | None]:
-    years: list[int] = []
-    for row in rows:
-        parsed = _coerce_record_year(row.get("Year"))
-        if parsed is not None:
-            years.append(parsed)
-    if not years:
-        return None, None
-    return min(years), max(years)
-
-
-def _format_year_span(start_year: int | None, end_year: int | None) -> str | None:
-    if start_year is None or end_year is None:
-        return None
-    return str(start_year) if start_year == end_year else f"{start_year}-{end_year}"
-
-
-def _sum_projection_counts(values: list[object]) -> int | None:
-    total = 0
-    found = False
-    for value in values:
-        parsed = _coerce_numeric(value)
-        if parsed is None:
-            continue
-        total += int(round(parsed))
-        found = True
-    return total if found else None
-
-
-def _weighted_rate(rows: list[dict], rate_col: str, weight_col: str) -> float | None:
-    weighted_total = 0.0
-    weight_total = 0.0
-    for row in rows:
-        rate = _coerce_numeric(row.get(rate_col))
-        weight = _coerce_numeric(row.get(weight_col))
-        if rate is None or weight is None or weight <= 0:
-            continue
-        weighted_total += rate * weight
-        weight_total += weight
-    if weight_total <= 0:
-        return None
-    return weighted_total / weight_total
-
-
-def _aggregate_projection_career_rows(rows: list[dict], *, is_hitter: bool) -> list[dict]:
-    if not rows:
-        return []
-
-    grouped: dict[str, list[dict]] = {}
-    for row in rows:
-        grouped.setdefault(_career_group_key(row), []).append(row)
-
-    excluded_from_sum = {
-        "Player",
-        "Team",
-        "MLBTeam",
-        "Pos",
-        "Type",
-        "Year",
-        "Age",
-        "ProjectionsUsed",
-        "OldestProjectionDate",
-        "DynastyValue",
-        "DynastyMatchStatus",
-        "Years",
-        "YearStart",
-        "YearEnd",
-        PLAYER_KEY_COL,
-        PLAYER_ENTITY_KEY_COL,
-    }
-
-    aggregated_rows: list[dict] = []
-    for entity_key, player_rows in grouped.items():
-        latest_row = player_rows[0]
-        latest_year = _coerce_record_year(latest_row.get("Year"))
-        for row in player_rows[1:]:
-            row_year = _coerce_record_year(row.get("Year"))
-            if row_year is None and latest_year is None:
-                latest_row = row
-                continue
-            if row_year is None:
-                continue
-            if latest_year is None or row_year >= latest_year:
-                latest_row = row
-                latest_year = row_year
-
-        aggregated = dict(latest_row)
-        player_name = str(latest_row.get("Player", "")).strip()
-        player_key = str(latest_row.get(PLAYER_KEY_COL) or "").strip() or _normalize_player_key(player_name)
-        aggregated[PLAYER_KEY_COL] = player_key
-        aggregated[PLAYER_ENTITY_KEY_COL] = entity_key or player_key
-
-        team_value = _row_team_value(latest_row)
-        if not team_value:
-            for row in player_rows:
-                team_value = _row_team_value(row)
-                if team_value:
-                    break
-        if team_value:
-            aggregated["Team"] = team_value
-
-        position_tokens: set[str] = set()
-        for row in player_rows:
-            position_tokens.update(_position_tokens(row.get("Pos")))
-        if position_tokens:
-            aggregated["Pos"] = "/".join(sorted(position_tokens, key=_position_sort_key))
-
-        ages = [age for age in (_coerce_numeric(row.get("Age")) for row in player_rows) if age is not None]
-        if ages:
-            aggregated["Age"] = int(round(min(ages)))
-
-        year_start, year_end = _rows_year_bounds(player_rows)
-        aggregated["Year"] = None
-        aggregated["YearStart"] = year_start
-        aggregated["YearEnd"] = year_end
-        aggregated["Years"] = _format_year_span(year_start, year_end)
-
-        # In career totals mode, ProjectionsUsed should represent the number of
-        # projection queries behind each season snapshot (e.g., 1-3), not a sum
-        # across every projected year.
-        projection_count = _max_projection_count(*(row.get("ProjectionsUsed") for row in player_rows))
-        if projection_count is not None:
-            aggregated["ProjectionsUsed"] = projection_count
-        aggregated["OldestProjectionDate"] = _oldest_projection_date(
-            *(row.get("OldestProjectionDate") for row in player_rows)
-        )
-
-        stat_totals: dict[str, float] = {}
-        for row in player_rows:
-            for key, value in row.items():
-                if key in excluded_from_sum or key.startswith("Value_"):
-                    continue
-                numeric = _coerce_numeric(value)
-                if numeric is None:
-                    continue
-                stat_totals[key] = stat_totals.get(key, 0.0) + numeric
-
-        for key, value in stat_totals.items():
-            aggregated[key] = value
-
-        if is_hitter:
-            h = _coerce_numeric(aggregated.get("H"))
-            ab = _coerce_numeric(aggregated.get("AB"))
-            if h is not None and ab is not None and ab > 0:
-                aggregated["AVG"] = h / ab
-            else:
-                weighted_avg = _weighted_rate(player_rows, "AVG", "AB")
-                if weighted_avg is not None:
-                    aggregated["AVG"] = weighted_avg
-
-            b2 = _coerce_numeric(aggregated.get("2B"))
-            b3 = _coerce_numeric(aggregated.get("3B"))
-            hr = _coerce_numeric(aggregated.get("HR"))
-            bb = _coerce_numeric(aggregated.get("BB"))
-            hbp = _coerce_numeric(aggregated.get("HBP"))
-            sf = _coerce_numeric(aggregated.get("SF"))
-            if (
-                h is not None
-                and b2 is not None
-                and b3 is not None
-                and hr is not None
-                and bb is not None
-                and hbp is not None
-                and ab is not None
-                and sf is not None
-                and ab > 0
-            ):
-                tb = h + b2 + 2.0 * b3 + 3.0 * hr
-                obp_den = ab + bb + hbp + sf
-                if obp_den > 0:
-                    obp = (h + bb + hbp) / obp_den
-                    slg = tb / ab
-                    aggregated["OBP"] = obp
-                    aggregated["OPS"] = obp + slg
-                else:
-                    weighted_obp = _weighted_rate(player_rows, "OBP", "AB")
-                    if weighted_obp is not None:
-                        aggregated["OBP"] = weighted_obp
-            else:
-                weighted_obp = _weighted_rate(player_rows, "OBP", "AB")
-                if weighted_obp is not None:
-                    aggregated["OBP"] = weighted_obp
-                weighted_ops = _weighted_rate(player_rows, "OPS", "AB")
-                if weighted_ops is not None:
-                    aggregated["OPS"] = weighted_ops
-        else:
-            svh = _coerce_numeric(aggregated.get("SVH"))
-            if svh is None:
-                sv = _coerce_numeric(aggregated.get("SV"))
-                hld = _coerce_numeric(aggregated.get("HLD"))
-                if sv is not None and hld is not None:
-                    aggregated["SVH"] = sv + hld
-                elif sv is not None:
-                    aggregated["SVH"] = sv
-
-            qs = _coerce_numeric(aggregated.get("QS"))
-            if qs is None:
-                qa3 = _coerce_numeric(aggregated.get("QA3"))
-                if qa3 is not None:
-                    aggregated["QS"] = qa3
-
-            er = _coerce_numeric(aggregated.get("ER"))
-            ip = _coerce_numeric(aggregated.get("IP"))
-            if er is not None and ip is not None and ip > 0:
-                aggregated["ERA"] = (9.0 * er) / ip
-            else:
-                weighted_era = _weighted_rate(player_rows, "ERA", "IP")
-                if weighted_era is not None:
-                    aggregated["ERA"] = weighted_era
-
-            h = _coerce_numeric(aggregated.get("H"))
-            bb = _coerce_numeric(aggregated.get("BB"))
-            if h is not None and bb is not None and ip is not None and ip > 0:
-                aggregated["WHIP"] = (h + bb) / ip
-            else:
-                weighted_whip = _weighted_rate(player_rows, "WHIP", "IP")
-                if weighted_whip is not None:
-                    aggregated["WHIP"] = weighted_whip
-
-        aggregated_rows.append(aggregated)
-
-    return aggregated_rows
-
-
-def _aggregate_all_projection_career_rows(hit_rows: list[dict], pit_rows: list[dict]) -> list[dict]:
-    if not hit_rows and not pit_rows:
-        return []
-
-    hit_aggregated = _aggregate_projection_career_rows(hit_rows, is_hitter=True)
-    pit_aggregated = _aggregate_projection_career_rows(pit_rows, is_hitter=False)
-
-    hit_by_key = {_career_group_key(row): row for row in hit_aggregated}
-    pit_by_key = {_career_group_key(row): row for row in pit_aggregated}
-
-    ordered_keys: list[str] = []
-    seen: set[str] = set()
-    for row in list(hit_rows) + list(pit_rows):
-        key = _career_group_key(row)
-        if key in seen:
-            continue
-        seen.add(key)
-        ordered_keys.append(key)
-    if not ordered_keys:
-        ordered_keys = list(dict.fromkeys(list(hit_by_key.keys()) + list(pit_by_key.keys())))
-
-    merged_rows: list[dict] = []
-    for key in ordered_keys:
-        hit = hit_by_key.get(key)
-        pit = pit_by_key.get(key)
-        if not hit and not pit:
-            continue
-
-        source = hit or pit or {}
-        merged = dict(source)
-
-        merged["Type"] = "H/P" if hit and pit else ("H" if hit else "P")
-        merged["Team"] = _row_team_value(hit or {}) or _row_team_value(pit or {})
-        merged["Pos"] = _merge_position_value((hit or {}).get("Pos"), (pit or {}).get("Pos"))
-        merged["Age"] = (hit or {}).get("Age")
-        if merged["Age"] is None:
-            merged["Age"] = (pit or {}).get("Age")
-
-        year_start_candidates = [
-            parsed
-            for value in ((hit or {}).get("YearStart"), (pit or {}).get("YearStart"), (hit or {}).get("Year"), (pit or {}).get("Year"))
-            if (parsed := _coerce_record_year(value)) is not None
-        ]
-        year_end_candidates = [
-            parsed
-            for value in ((hit or {}).get("YearEnd"), (pit or {}).get("YearEnd"), (hit or {}).get("Year"), (pit or {}).get("Year"))
-            if (parsed := _coerce_record_year(value)) is not None
-        ]
-        year_start = min(year_start_candidates) if year_start_candidates else None
-        year_end = max(year_end_candidates) if year_end_candidates else None
-        merged["Year"] = None
-        merged["YearStart"] = year_start
-        merged["YearEnd"] = year_end
-        merged["Years"] = _format_year_span(year_start, year_end)
-
-        projection_total = _max_projection_count((hit or {}).get("ProjectionsUsed"), (pit or {}).get("ProjectionsUsed"))
-        if projection_total is not None:
-            merged["ProjectionsUsed"] = projection_total
-        merged["OldestProjectionDate"] = _oldest_projection_date(
-            (hit or {}).get("OldestProjectionDate"),
-            (pit or {}).get("OldestProjectionDate"),
-        )
-
-        # In the all-rows view, unprefixed hitting fields always represent hitter stats.
-        for col in ALL_TAB_HITTER_STAT_COLS:
-            merged[col] = (hit or {}).get(col)
-
-        # Pitching fields are kept separately, including prefixed collision stats.
-        for col in ALL_TAB_PITCH_STAT_COLS:
-            merged[col] = (pit or {}).get(col)
-        merged["PitH"] = (pit or {}).get("H")
-        merged["PitHR"] = (pit or {}).get("HR")
-        merged["PitBB"] = (pit or {}).get("BB")
-
-        merged_rows.append(merged)
-
-    return merged_rows
-
-
-def _normalize_sort_dir(value: str | None) -> Literal["asc", "desc"]:
-    return "asc" if str(value or "").strip().lower() == "asc" else "desc"
-
-
-@lru_cache(maxsize=4)
-def _projection_sortable_columns_for_dataset(dataset: Literal["all", "bat", "pitch"]) -> frozenset[str]:
-    if dataset == "bat":
-        base_records = BAT_DATA
-    elif dataset == "pitch":
-        base_records = PIT_DATA
-    else:
-        base_records = list(BAT_DATA) + list(PIT_DATA)
-
-    cols: set[str] = {
-        "Player",
-        "Team",
-        "Pos",
-        "Year",
-        "Years",
-        "YearStart",
-        "YearEnd",
-        "Age",
-        "ProjectionsUsed",
-        "OldestProjectionDate",
-        "DynastyValue",
-        "DynastyMatchStatus",
-        PLAYER_KEY_COL,
-        PLAYER_ENTITY_KEY_COL,
-    }
-    if dataset == "all":
-        cols.update({"Type", "PitH", "PitHR", "PitBB"})
-
-    for record in base_records:
-        cols.update(record.keys())
-
-    for year in _coerce_meta_years(META):
-        cols.add(f"Value_{year}")
-
-    return frozenset(cols)
-
-
-def _validate_sort_col(sort_col: str | None, *, dataset: Literal["all", "bat", "pitch"]) -> str | None:
-    normalized = _normalize_filter_value(sort_col)
-    if not normalized:
-        return None
-    allowed = _projection_sortable_columns_for_dataset(dataset)
-    if normalized not in allowed:
-        sample = ", ".join(sorted(list(allowed))[:20])
-        raise HTTPException(
-            status_code=422,
-            detail=f"sort_col '{normalized}' is not supported for {dataset}. Example valid columns: {sample}",
-        )
-    return normalized
-
-
-def _sort_projection_rows(rows: list[dict], sort_col: str | None, sort_dir: str | None) -> list[dict]:
-    col = str(sort_col or "").strip()
-    if not col:
-        return rows
-
-    direction = _normalize_sort_dir(sort_dir)
-
-    text_cols = PROJECTION_TEXT_SORT_COLS | {PLAYER_KEY_COL, PLAYER_ENTITY_KEY_COL, "DynastyMatchStatus"}
-
-    def _cmp_for_col(a: dict, b: dict, compare_col: str, compare_dir: Literal["asc", "desc"]) -> int:
-        av = a.get(compare_col)
-        bv = b.get(compare_col)
-
-        if compare_col == "OldestProjectionDate":
-            av_ts = pd.to_datetime(av, errors="coerce")
-            bv_ts = pd.to_datetime(bv, errors="coerce")
-            av_missing = pd.isna(av_ts)
-            bv_missing = pd.isna(bv_ts)
-            if av_missing and bv_missing:
-                return 0
-            if av_missing:
-                return 1
-            if bv_missing:
-                return -1
-            av_num = float(av_ts.value)
-            bv_num = float(bv_ts.value)
-            if av_num == bv_num:
-                return 0
-            cmp = -1 if av_num < bv_num else 1
-            return cmp if compare_dir == "asc" else -cmp
-
-        if compare_col in text_cols:
-            av_text = str(av or "").strip()
-            bv_text = str(bv or "").strip()
-            if not av_text and not bv_text:
-                return 0
-            if not av_text:
-                return 1
-            if not bv_text:
-                return -1
-            av_norm = av_text.casefold()
-            bv_norm = bv_text.casefold()
-            if av_norm == bv_norm:
-                return 0
-            cmp = -1 if av_norm < bv_norm else 1
-            return cmp if compare_dir == "asc" else -cmp
-
-        try:
-            av_num = float(av)
-        except (TypeError, ValueError):
-            av_num = float("-inf")
-        try:
-            bv_num = float(bv)
-        except (TypeError, ValueError):
-            bv_num = float("-inf")
-        if pd.isna(av_num):
-            av_num = float("-inf")
-        if pd.isna(bv_num):
-            bv_num = float("-inf")
-        if av_num == bv_num:
-            return 0
-        cmp = -1 if av_num < bv_num else 1
-        return cmp if compare_dir == "asc" else -cmp
-
-    def _cmp(a: dict, b: dict) -> int:
-        primary = _cmp_for_col(a, b, col, direction)
-        if primary != 0:
-            return primary
-
-        # Deterministic tie-breakers keep page boundaries stable across requests.
-        for tie_col in (PLAYER_ENTITY_KEY_COL, "Player", "Year", "Team"):
-            tie_result = _cmp_for_col(a, b, tie_col, "asc")
-            if tie_result != 0:
-                return tie_result
-        return 0
-
-    return sorted(rows, key=cmp_to_key(_cmp))
-
-
-def _merge_all_projection_rows(hit_rows: list[dict], pit_rows: list[dict]) -> list[dict]:
-    grouped: dict[tuple[str, object, str], dict[str, dict | None]] = {}
-    ordered_keys: list[tuple[str, object, str]] = []
-
-    for side, rows in (("H", hit_rows), ("P", pit_rows)):
-        for row in rows:
-            key = _projection_merge_key(row)
-            if key not in grouped:
-                grouped[key] = {"hit": None, "pit": None}
-                ordered_keys.append(key)
-            if side == "H":
-                grouped[key]["hit"] = row
-            else:
-                grouped[key]["pit"] = row
-
-    merged_rows: list[dict] = []
-    for key in ordered_keys:
-        bucket = grouped[key]
-        hit = bucket.get("hit")
-        pit = bucket.get("pit")
-
-        source = hit or pit or {}
-        merged = dict(source)
-
-        merged["Type"] = "H/P" if hit and pit else ("H" if hit else "P")
-        merged["Team"] = _row_team_value(hit or {}) or _row_team_value(pit or {})
-        merged["Pos"] = _merge_position_value((hit or {}).get("Pos"), (pit or {}).get("Pos"))
-        merged["Age"] = (hit or {}).get("Age")
-        if merged["Age"] is None:
-            merged["Age"] = (pit or {}).get("Age")
-
-        max_used = _max_projection_count((hit or {}).get("ProjectionsUsed"), (pit or {}).get("ProjectionsUsed"))
-        if max_used is not None:
-            merged["ProjectionsUsed"] = max_used
-        merged["OldestProjectionDate"] = _oldest_projection_date(
-            (hit or {}).get("OldestProjectionDate"),
-            (pit or {}).get("OldestProjectionDate"),
-        )
-
-        # In the all-rows view, unprefixed hitting fields always represent hitter stats.
-        for col in ALL_TAB_HITTER_STAT_COLS:
-            merged[col] = (hit or {}).get(col)
-
-        # Pitching fields are kept separately, including prefixed collision stats.
-        for col in ALL_TAB_PITCH_STAT_COLS:
-            merged[col] = (pit or {}).get(col)
-        merged["PitH"] = (pit or {}).get("H")
-        merged["PitHR"] = (pit or {}).get("HR")
-        merged["PitBB"] = (pit or {}).get("BB")
-
-        merged_rows.append(merged)
-
-    return merged_rows
-
-
-def filter_records(
-    records,
-    player: str | None,
-    team: str | None,
-    years: set[int] | None,
-    pos: str | None,
-    player_keys: set[str] | None = None,
-):
-    out = records
-    if player:
-        q = player.strip().lower()
-        out = [r for r in out if q in str(r.get("Player", "")).lower()]
-    if team:
-        team_normalized = team.strip().lower()
-        out = [
-            r for r in out
-            if str(r.get("Team", "")).strip().lower() == team_normalized
-            or str(r.get("MLBTeam", "")).strip().lower() == team_normalized
-        ]
-    if years is not None:
-        out = [r for r in out if _coerce_record_year(r.get("Year")) in years]
-    if pos:
-        requested_positions = _position_tokens(pos)
-        if requested_positions:
-            out = [
-                r for r in out
-                if requested_positions.intersection(_position_tokens(r.get("Pos", "")))
-            ]
-    if player_keys:
-        out = [
-            r for r in out
-            if player_keys.intersection(_row_player_filter_keys(r))
-        ]
-    return out
-
-
-@lru_cache(maxsize=PROJECTION_QUERY_CACHE_MAXSIZE)
-def _cached_projection_rows(
-    dataset: Literal["bat", "pitch"],
-    player: str,
-    team: str,
-    player_keys: str,
-    year: int | None,
-    years: str,
-    pos: str,
-    include_dynasty: bool,
-    dynasty_years: str,
-    career_totals: bool,
-) -> tuple[dict, ...]:
-    valid_years = _coerce_meta_years(META)
-    requested_years = _resolve_projection_year_filter(year, years or None, valid_years=valid_years)
-    records = BAT_DATA if dataset == "bat" else PIT_DATA
-    filtered = filter_records(
-        records,
-        player or None,
-        team or None,
-        requested_years,
-        pos or None,
-        _parse_player_keys_filter(player_keys),
-    )
-    if career_totals:
-        filtered = _aggregate_projection_career_rows(filtered, is_hitter=(dataset == "bat"))
-    if include_dynasty:
-        filtered = _attach_dynasty_values(
-            filtered,
-            _parse_dynasty_years(dynasty_years or None, valid_years=valid_years),
-        )
-    return tuple(filtered)
-
-
-@lru_cache(maxsize=PROJECTION_QUERY_CACHE_MAXSIZE)
-def _cached_all_projection_rows(
-    player: str,
-    team: str,
-    player_keys: str,
-    year: int | None,
-    years: str,
-    pos: str,
-    include_dynasty: bool,
-    dynasty_years: str,
-    career_totals: bool,
-) -> tuple[dict, ...]:
-    valid_years = _coerce_meta_years(META)
-    requested_years = _resolve_projection_year_filter(year, years or None, valid_years=valid_years)
-    hit_filtered = filter_records(
-        BAT_DATA,
-        player or None,
-        team or None,
-        requested_years,
-        None,
-        _parse_player_keys_filter(player_keys),
-    )
-    pit_filtered = filter_records(
-        PIT_DATA,
-        player or None,
-        team or None,
-        requested_years,
-        None,
-        _parse_player_keys_filter(player_keys),
-    )
-    merged = (
-        _aggregate_all_projection_career_rows(hit_filtered, pit_filtered)
-        if career_totals
-        else _merge_all_projection_rows(hit_filtered, pit_filtered)
-    )
-    if pos:
-        requested_positions = _position_tokens(pos)
-        if requested_positions:
-            merged = [
-                row
-                for row in merged
-                if requested_positions.intersection(_position_tokens(row.get("Pos", "")))
-            ]
-    if include_dynasty:
-        merged = _attach_dynasty_values(
-            merged,
-            _parse_dynasty_years(dynasty_years or None, valid_years=valid_years),
-        )
-    return tuple(merged)
-
-
-def _get_projection_rows(
-    dataset: Literal["bat", "pitch"],
-    *,
-    player: str | None,
-    team: str | None,
-    player_keys: str | None,
-    year: int | None,
-    years: str | None,
-    pos: str | None,
-    include_dynasty: bool,
-    dynasty_years: str | None,
-    career_totals: bool,
-    sort_col: str | None,
-    sort_dir: str | None,
-) -> tuple[dict, ...]:
-    cached_rows = _cached_projection_rows(
-        dataset,
-        _normalize_filter_value(player),
-        _normalize_filter_value(team),
-        _normalize_player_keys_filter(player_keys),
-        year,
-        _normalize_filter_value(years),
-        _normalize_filter_value(pos),
-        include_dynasty,
-        _normalize_filter_value(dynasty_years),
-        career_totals,
-    )
-    sorted_rows = _sort_projection_rows(
-        list(cached_rows),
-        _normalize_filter_value(sort_col),
-        _normalize_sort_dir(sort_dir),
-    )
-    return tuple(sorted_rows)
-
-
-def _get_all_projection_rows(
-    *,
-    player: str | None,
-    team: str | None,
-    player_keys: str | None,
-    year: int | None,
-    years: str | None,
-    pos: str | None,
-    include_dynasty: bool,
-    dynasty_years: str | None,
-    career_totals: bool,
-    sort_col: str | None,
-    sort_dir: str | None,
-) -> tuple[dict, ...]:
-    cached_rows = _cached_all_projection_rows(
-        _normalize_filter_value(player),
-        _normalize_filter_value(team),
-        _normalize_player_keys_filter(player_keys),
-        year,
-        _normalize_filter_value(years),
-        _normalize_filter_value(pos),
-        include_dynasty,
-        _normalize_filter_value(dynasty_years),
-        career_totals,
-    )
-    sorted_rows = _sort_projection_rows(
-        list(cached_rows),
-        _normalize_filter_value(sort_col),
-        _normalize_sort_dir(sort_dir),
-    )
-    return tuple(sorted_rows)
 
 
 def _version_payload() -> dict[str, Any]:
@@ -3593,502 +2915,8 @@ def get_health():
     }
 
 
-def _projection_response(
-    dataset: Literal["all", "bat", "pitch"],
-    *,
-    player: str | None,
-    team: str | None,
-    player_keys: str | None,
-    year: int | None,
-    years: str | None,
-    pos: str | None,
-    dynasty_years: str | None,
-    career_totals: bool,
-    include_dynasty: bool,
-    sort_col: str | None,
-    sort_dir: str,
-    limit: int,
-    offset: int,
-) -> dict[str, Any]:
-    _refresh_data_if_needed()
-    validated_sort_col = _validate_sort_col(sort_col, dataset=dataset)
-    filter_kwargs = dict(
-        player=player,
-        team=team,
-        player_keys=player_keys,
-        year=year,
-        years=years,
-        pos=pos,
-        include_dynasty=include_dynasty,
-        dynasty_years=dynasty_years,
-        career_totals=career_totals,
-        sort_col=validated_sort_col,
-        sort_dir=sort_dir,
-    )
-    if dataset == "all":
-        filtered = _get_all_projection_rows(**filter_kwargs)
-    else:
-        filtered = _get_projection_rows(dataset, **filter_kwargs)
-    total = len(filtered)
-    page = list(filtered[offset : offset + limit])
-    return {"total": total, "offset": offset, "limit": limit, "data": page}
-
-
-def get_all_projections(
-    player: Optional[str] = None,
-    team: Optional[str] = None,
-    player_keys: Optional[str] = None,
-    year: Optional[int] = None,
-    years: Optional[str] = None,
-    pos: Optional[str] = None,
-    dynasty_years: Optional[str] = None,
-    career_totals: bool = False,
-    include_dynasty: bool = True,
-    sort_col: Optional[str] = None,
-    sort_dir: Literal["asc", "desc"] = "desc",
-    limit: int = 200,
-    offset: int = 0,
-):
-    return _projection_response(
-        "all", player=player, team=team, player_keys=player_keys, year=year,
-        years=years, pos=pos, dynasty_years=dynasty_years, career_totals=career_totals,
-        include_dynasty=include_dynasty, sort_col=sort_col, sort_dir=sort_dir,
-        limit=limit, offset=offset,
-    )
-
-
-def get_bat_projections(
-    player: Optional[str] = None,
-    team: Optional[str] = None,
-    player_keys: Optional[str] = None,
-    year: Optional[int] = None,
-    years: Optional[str] = None,
-    pos: Optional[str] = None,
-    dynasty_years: Optional[str] = None,
-    career_totals: bool = False,
-    include_dynasty: bool = True,
-    sort_col: Optional[str] = None,
-    sort_dir: Literal["asc", "desc"] = "desc",
-    limit: int = 200,
-    offset: int = 0,
-):
-    return _projection_response(
-        "bat", player=player, team=team, player_keys=player_keys, year=year,
-        years=years, pos=pos, dynasty_years=dynasty_years, career_totals=career_totals,
-        include_dynasty=include_dynasty, sort_col=sort_col, sort_dir=sort_dir,
-        limit=limit, offset=offset,
-    )
-
-
-def get_pitch_projections(
-    player: Optional[str] = None,
-    team: Optional[str] = None,
-    player_keys: Optional[str] = None,
-    year: Optional[int] = None,
-    years: Optional[str] = None,
-    pos: Optional[str] = None,
-    dynasty_years: Optional[str] = None,
-    career_totals: bool = False,
-    include_dynasty: bool = True,
-    sort_col: Optional[str] = None,
-    sort_dir: Literal["asc", "desc"] = "desc",
-    limit: int = 200,
-    offset: int = 0,
-):
-    return _projection_response(
-        "pitch", player=player, team=team, player_keys=player_keys, year=year,
-        years=years, pos=pos, dynasty_years=dynasty_years, career_totals=career_totals,
-        include_dynasty=include_dynasty, sort_col=sort_col, sort_dir=sort_dir,
-        limit=limit, offset=offset,
-    )
-
-
-def export_projections(
-    dataset: Literal["all", "bat", "pitch"],
-    file_format: Literal["csv", "xlsx"] = "csv",
-    player: Optional[str] = None,
-    team: Optional[str] = None,
-    player_keys: Optional[str] = None,
-    year: Optional[int] = None,
-    years: Optional[str] = None,
-    pos: Optional[str] = None,
-    dynasty_years: Optional[str] = None,
-    career_totals: bool = False,
-    include_dynasty: bool = True,
-    sort_col: Optional[str] = None,
-    sort_dir: Literal["asc", "desc"] = "desc",
-):
-    _refresh_data_if_needed()
-    validated_sort_col = _validate_sort_col(sort_col, dataset=dataset)
-    if dataset == "all":
-        rows = list(
-            _get_all_projection_rows(
-                player=player,
-                team=team,
-                player_keys=player_keys,
-                year=year,
-                years=years,
-                pos=pos,
-                include_dynasty=include_dynasty,
-                dynasty_years=dynasty_years,
-                career_totals=career_totals,
-                sort_col=validated_sort_col,
-                sort_dir=sort_dir,
-            )
-        )
-    else:
-        rows = list(
-            _get_projection_rows(
-                dataset,
-                player=player,
-                team=team,
-                player_keys=player_keys,
-                year=year,
-                years=years,
-                pos=pos,
-                include_dynasty=include_dynasty,
-                dynasty_years=dynasty_years,
-                career_totals=career_totals,
-                sort_col=validated_sort_col,
-                sort_dir=sort_dir,
-            )
-        )
-
-    return _tabular_export_response(
-        rows,
-        filename_base=f"projections-{dataset}",
-        file_format=file_format,
-    )
-
-
-# ---------------------------------------------------------------------------
-# API: Dynasty Value Calculator
-# ---------------------------------------------------------------------------
-class CalculateRequest(BaseModel):
-    mode: Literal["common"] = "common"
-    scoring_mode: Literal["roto", "points"] = "roto"
-    two_way: Literal["sum", "max"] = "sum"
-    teams: int = Field(default=12, ge=2, le=30)
-    sims: int = Field(default=300, ge=1, le=5000)
-    horizon: int = Field(default=20, ge=1, le=20)
-    discount: float = Field(default=0.94, gt=0.0, le=1.0)
-    hit_c: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["C"], ge=0, le=15)
-    hit_1b: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["1B"], ge=0, le=15)
-    hit_2b: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["2B"], ge=0, le=15)
-    hit_3b: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["3B"], ge=0, le=15)
-    hit_ss: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["SS"], ge=0, le=15)
-    hit_ci: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["CI"], ge=0, le=15)
-    hit_mi: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["MI"], ge=0, le=15)
-    hit_of: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["OF"], ge=0, le=15)
-    hit_ut: int = Field(default=COMMON_HITTER_SLOT_DEFAULTS["UT"], ge=0, le=15)
-    pit_p: int = Field(default=COMMON_PITCHER_SLOT_DEFAULTS["P"], ge=0, le=15)
-    pit_sp: int = Field(default=COMMON_PITCHER_SLOT_DEFAULTS["SP"], ge=0, le=15)
-    pit_rp: int = Field(default=COMMON_PITCHER_SLOT_DEFAULTS["RP"], ge=0, le=15)
-    bench: int = Field(default=6, ge=0, le=40)
-    minors: int = Field(default=COMMON_DEFAULT_MINOR_SLOTS, ge=0, le=60)
-    ir: int = Field(default=COMMON_DEFAULT_IR_SLOTS, ge=0, le=40)
-    ip_min: float = Field(default=0.0, ge=0.0)
-    ip_max: Optional[float] = Field(default=None, ge=0.0)
-    start_year: int = Field(default=2026, ge=1900)
-    recent_projections: int = Field(default=3, ge=1, le=10)
-    roto_hit_r: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_r"]
-    roto_hit_rbi: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_rbi"]
-    roto_hit_hr: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_hr"]
-    roto_hit_sb: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_sb"]
-    roto_hit_avg: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_avg"]
-    roto_hit_obp: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_obp"]
-    roto_hit_slg: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_slg"]
-    roto_hit_ops: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_ops"]
-    roto_hit_h: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_h"]
-    roto_hit_bb: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_bb"]
-    roto_hit_2b: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_2b"]
-    roto_hit_tb: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_hit_tb"]
-    roto_pit_w: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_pit_w"]
-    roto_pit_k: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_pit_k"]
-    roto_pit_sv: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_pit_sv"]
-    roto_pit_era: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_pit_era"]
-    roto_pit_whip: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_pit_whip"]
-    roto_pit_qs: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_pit_qs"]
-    roto_pit_svh: bool = ROTO_CATEGORY_FIELD_DEFAULTS["roto_pit_svh"]
-    pts_hit_1b: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_1b"], ge=-50.0, le=50.0)
-    pts_hit_2b: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_2b"], ge=-50.0, le=50.0)
-    pts_hit_3b: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_3b"], ge=-50.0, le=50.0)
-    pts_hit_hr: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_hr"], ge=-50.0, le=50.0)
-    pts_hit_r: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_r"], ge=-50.0, le=50.0)
-    pts_hit_rbi: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_rbi"], ge=-50.0, le=50.0)
-    pts_hit_sb: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_sb"], ge=-50.0, le=50.0)
-    pts_hit_bb: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_bb"], ge=-50.0, le=50.0)
-    pts_hit_so: float = Field(default=DEFAULT_POINTS_SCORING["pts_hit_so"], ge=-50.0, le=50.0)
-    pts_pit_ip: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_ip"], ge=-50.0, le=50.0)
-    pts_pit_w: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_w"], ge=-50.0, le=50.0)
-    pts_pit_l: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_l"], ge=-50.0, le=50.0)
-    pts_pit_k: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_k"], ge=-50.0, le=50.0)
-    pts_pit_sv: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_sv"], ge=-50.0, le=50.0)
-    pts_pit_svh: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_svh"], ge=-50.0, le=50.0)
-    pts_pit_h: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_h"], ge=-50.0, le=50.0)
-    pts_pit_er: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_er"], ge=-50.0, le=50.0)
-    pts_pit_bb: float = Field(default=DEFAULT_POINTS_SCORING["pts_pit_bb"], ge=-50.0, le=50.0)
-
-    @model_validator(mode="after")
-    def validate_ip_bounds(self) -> "CalculateRequest":
-        if self.ip_max is not None and self.ip_max < self.ip_min:
-            raise ValueError("ip_max must be greater than or equal to ip_min")
-        total_hitter_slots = (
-            self.hit_c
-            + self.hit_1b
-            + self.hit_2b
-            + self.hit_3b
-            + self.hit_ss
-            + self.hit_ci
-            + self.hit_mi
-            + self.hit_of
-            + self.hit_ut
-        )
-        total_pitcher_slots = self.pit_p + self.pit_sp + self.pit_rp
-        if total_hitter_slots <= 0:
-            raise ValueError("At least one hitter slot must be greater than 0.")
-        if total_pitcher_slots <= 0:
-            raise ValueError("At least one pitcher slot must be greater than 0.")
-        if self.scoring_mode == "roto":
-            if not any(bool(getattr(self, field_key, False)) for field_key, _stat_col, _default in ROTO_HITTER_CATEGORY_FIELDS):
-                raise ValueError("Roto scoring must include at least one hitting category.")
-            if not any(bool(getattr(self, field_key, False)) for field_key, _stat_col, _default in ROTO_PITCHER_CATEGORY_FIELDS):
-                raise ValueError("Roto scoring must include at least one pitching category.")
-        if self.scoring_mode == "points":
-            has_non_zero_rule = any(
-                abs(value) > 1e-9
-                for value in (
-                    self.pts_hit_1b,
-                    self.pts_hit_2b,
-                    self.pts_hit_3b,
-                    self.pts_hit_hr,
-                    self.pts_hit_r,
-                    self.pts_hit_rbi,
-                    self.pts_hit_sb,
-                    self.pts_hit_bb,
-                    self.pts_hit_so,
-                    self.pts_pit_ip,
-                    self.pts_pit_w,
-                    self.pts_pit_l,
-                    self.pts_pit_k,
-                    self.pts_pit_sv,
-                    self.pts_pit_svh,
-                    self.pts_pit_h,
-                    self.pts_pit_er,
-                    self.pts_pit_bb,
-                )
-            )
-            if not has_non_zero_rule:
-                raise ValueError("Points scoring must include at least one non-zero scoring rule.")
-        return self
-
-
-class CalculateExportRequest(CalculateRequest):
-    format: Literal["csv", "xlsx"] = "csv"
-    include_explanations: bool = False
-
-
 def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
-    started = time.perf_counter()
-    settings = req.model_dump()
-    active_cache = _calculate_points_dynasty_frame_cached if req.scoring_mode == "points" else _calculate_common_dynasty_frame_cached
-    cache_before = active_cache.cache_info()
-    result_cache_key = _calc_result_cache_key(settings)
-    result_cache_hit = False
-    status_code = 200
-
-    try:
-        _refresh_data_if_needed()
-        valid_years = _coerce_meta_years(META)
-        if valid_years and req.start_year not in set(valid_years):
-            raise HTTPException(
-                status_code=422,
-                detail=f"start_year must be one of the available projection years: {valid_years}",
-            )
-
-        cached_payload = _result_cache_get(result_cache_key)
-        if cached_payload is not None:
-            result_cache_hit = True
-            return cached_payload
-
-        try:
-            if req.scoring_mode == "points":
-                out = _calculate_points_dynasty_frame_cached(
-                    teams=req.teams,
-                    horizon=req.horizon,
-                    discount=req.discount,
-                    hit_c=req.hit_c,
-                    hit_1b=req.hit_1b,
-                    hit_2b=req.hit_2b,
-                    hit_3b=req.hit_3b,
-                    hit_ss=req.hit_ss,
-                    hit_ci=req.hit_ci,
-                    hit_mi=req.hit_mi,
-                    hit_of=req.hit_of,
-                    hit_ut=req.hit_ut,
-                    pit_p=req.pit_p,
-                    pit_sp=req.pit_sp,
-                    pit_rp=req.pit_rp,
-                    bench=req.bench,
-                    minors=req.minors,
-                    ir=req.ir,
-                    two_way=req.two_way,
-                    start_year=req.start_year,
-                    recent_projections=req.recent_projections,
-                    pts_hit_1b=req.pts_hit_1b,
-                    pts_hit_2b=req.pts_hit_2b,
-                    pts_hit_3b=req.pts_hit_3b,
-                    pts_hit_hr=req.pts_hit_hr,
-                    pts_hit_r=req.pts_hit_r,
-                    pts_hit_rbi=req.pts_hit_rbi,
-                    pts_hit_sb=req.pts_hit_sb,
-                    pts_hit_bb=req.pts_hit_bb,
-                    pts_hit_so=req.pts_hit_so,
-                    pts_pit_ip=req.pts_pit_ip,
-                    pts_pit_w=req.pts_pit_w,
-                    pts_pit_l=req.pts_pit_l,
-                    pts_pit_k=req.pts_pit_k,
-                    pts_pit_sv=req.pts_pit_sv,
-                    pts_pit_svh=req.pts_pit_svh,
-                    pts_pit_h=req.pts_pit_h,
-                    pts_pit_er=req.pts_pit_er,
-                    pts_pit_bb=req.pts_pit_bb,
-                ).copy(deep=True)
-            else:
-                out = _calculate_common_dynasty_frame_cached(
-                    teams=req.teams,
-                    sims=req.sims,
-                    horizon=req.horizon,
-                    discount=req.discount,
-                    hit_c=req.hit_c,
-                    hit_1b=req.hit_1b,
-                    hit_2b=req.hit_2b,
-                    hit_3b=req.hit_3b,
-                    hit_ss=req.hit_ss,
-                    hit_ci=req.hit_ci,
-                    hit_mi=req.hit_mi,
-                    hit_of=req.hit_of,
-                    hit_ut=req.hit_ut,
-                    pit_p=req.pit_p,
-                    pit_sp=req.pit_sp,
-                    pit_rp=req.pit_rp,
-                    bench=req.bench,
-                    minors=req.minors,
-                    ir=req.ir,
-                    ip_min=req.ip_min,
-                    ip_max=req.ip_max,
-                    two_way=req.two_way,
-                    start_year=req.start_year,
-                    recent_projections=req.recent_projections,
-                    **_roto_category_settings_from_dict(settings),
-                ).copy(deep=True)
-        except ValueError as calc_error:
-            message = str(calc_error)
-            if _is_user_fixable_calculation_error(message):
-                raise HTTPException(status_code=422, detail=message) from calc_error
-            raise
-
-        identity_by_name = _player_identity_by_name()
-        if PLAYER_KEY_COL not in out.columns:
-            out[PLAYER_KEY_COL] = None
-        if PLAYER_ENTITY_KEY_COL not in out.columns:
-            out[PLAYER_ENTITY_KEY_COL] = None
-
-        def _resolve_player_key(row: pd.Series) -> str:
-            player_name = str(row.get("Player") or "").strip()
-            existing_key = str(row.get(PLAYER_KEY_COL) or "").strip()
-            if existing_key:
-                return existing_key
-            mapped_key, _mapped_entity = identity_by_name.get(player_name, (_normalize_player_key(player_name), None))
-            return mapped_key
-
-        def _resolve_entity_key(row: pd.Series) -> str | None:
-            player_name = str(row.get("Player") or "").strip()
-            existing_entity = str(row.get(PLAYER_ENTITY_KEY_COL) or "").strip()
-            if existing_entity:
-                return existing_entity
-            _mapped_key, mapped_entity = identity_by_name.get(player_name, (_normalize_player_key(player_name), None))
-            return mapped_entity
-
-        out[PLAYER_KEY_COL] = out.apply(_resolve_player_key, axis=1)
-        out[PLAYER_ENTITY_KEY_COL] = out.apply(_resolve_entity_key, axis=1)
-        out["DynastyMatchStatus"] = out[PLAYER_ENTITY_KEY_COL].map(
-            lambda value: "matched" if value else "no_unique_match"
-        )
-        selected_roto_stat_cols: list[str] = []
-        if req.scoring_mode == "roto":
-            selected_hit_cats, selected_pit_cats = _selected_roto_categories(settings)
-            selected_roto_stat_cols = selected_hit_cats + selected_pit_cats
-            if selected_roto_stat_cols:
-                stats_by_entity = _start_year_roto_stats_by_entity(
-                    start_year=req.start_year,
-                    recent_projections=req.recent_projections,
-                )
-                identity_keys = out.apply(_projection_identity_key, axis=1)
-                for stat_col in selected_roto_stat_cols:
-                    stat_lookup = {
-                        key: values.get(stat_col)
-                        for key, values in stats_by_entity.items()
-                        if stat_col in values
-                    }
-                    out[stat_col] = identity_keys.map(stat_lookup)
-        explanations = _build_calculation_explanations(out, settings=settings)
-
-        # Select output columns
-        year_cols = [c for c in out.columns if c.startswith("Value_")]
-        cols = [
-            "Player", PLAYER_KEY_COL, PLAYER_ENTITY_KEY_COL, "DynastyMatchStatus", "Team", "Pos", "Age",
-        ] + selected_roto_stat_cols + [
-            "DynastyValue", "RawDynastyValue",
-            "minor_eligible",
-        ] + year_cols
-
-        available_cols = [c for c in cols if c in out.columns]
-        df = out[available_cols].copy()
-
-        # Round for JSON
-        three_decimal_cols = {"AVG", "OBP", "SLG", "OPS"}
-        for c in df.select_dtypes(include="float").columns:
-            df[c] = df[c].round(3 if c in three_decimal_cols else 2)
-
-        records = df.to_dict(orient="records")
-        records = _clean_records_for_json(records)
-
-        payload = {
-            "total": len(records),
-            "settings": settings,
-            "data": records,
-            "explanations": explanations,
-        }
-        _result_cache_set(result_cache_key, payload)
-        return payload
-
-    except HTTPException as exc:
-        status_code = exc.status_code
-        raise
-    except Exception as exc:
-        status_code = 500
-        CALC_LOGGER.exception("calculator request failed source=%s", source)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    finally:
-        duration_ms = round((time.perf_counter() - started) * 1000.0, 1)
-        cache_after = active_cache.cache_info()
-        cache_event = "none"
-        if result_cache_hit:
-            cache_event = "result-cache-hit"
-        elif cache_after.hits > cache_before.hits:
-            cache_event = "hit"
-        elif cache_after.misses > cache_before.misses:
-            cache_event = "miss"
-
-        CALC_LOGGER.info(
-            "calculator source=%s status=%s duration_ms=%s cache=%s settings=%s",
-            source,
-            status_code,
-            duration_ms,
-            cache_event,
-            json.dumps(settings, sort_keys=True),
-        )
+    return _calculator_service_from_globals()._run_calculate_request(req, source=source)
 
 
 def _run_calculation_job(job_id: str, req_payload: dict) -> None:
@@ -4163,7 +2991,6 @@ def _run_calculation_job(job_id: str, req_payload: dict) -> None:
 
 
 def calculate_dynasty_values(req: CalculateRequest, request: Request):
-    """Run the dynasty value calculator and return results as JSON."""
     _enforce_rate_limit(request, action="calc-sync", limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE)
     return _run_calculate_request(req, source="sync")
 
@@ -4295,8 +3122,8 @@ app.include_router(
 )
 app.include_router(
     build_projections_router(
-        projection_response_handler=_projection_response,
-        projection_export_handler=export_projections,
+        projection_response_handler=PROJECTION_SERVICE.projection_response,
+        projection_export_handler=PROJECTION_SERVICE.export_projections,
     )
 )
 app.include_router(
