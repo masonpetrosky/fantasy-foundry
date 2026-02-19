@@ -58,6 +58,69 @@ const MAX_COMPARE_PLAYERS = 4;
 const PRIMARY_NAV_ITEMS = [
   { key: "projections", label: "Projections" },
   { key: "calculator", label: "Dynasty Calculator" },
+  { key: "glossary", label: "Glossary" },
+];
+const GLOSSARY_TERMS = [
+  {
+    term: "5x5 Roto",
+    definition:
+      "A scoring format that tracks five hitting and five pitching categories. The default here is R, RBI, HR, SB, AVG and W, K, SV, ERA, WHIP.",
+  },
+  {
+    term: "Replacement Level",
+    definition:
+      "The baseline production expected from the last rosterable players in your league. Value is measured by how far a player clears that baseline.",
+  },
+  {
+    term: "Category Impact",
+    definition:
+      "How much a player's projected stats move a category relative to league context, roster slots, and innings constraints.",
+  },
+  {
+    term: "SGP (Standings Gain Points)",
+    definition:
+      "A way to convert raw stats into standings movement. One SGP estimates the amount of production needed to gain one place in a category.",
+  },
+  {
+    term: "Dynasty Value",
+    definition:
+      "A multi-year estimate of player worth that weighs present production, future seasons, and risk instead of only one season.",
+  },
+  {
+    term: "Positional Scarcity",
+    definition:
+      "Extra value assigned to players at positions where viable options are harder to find at replacement level.",
+  },
+  {
+    term: "Surplus Value",
+    definition:
+      "The gap between a player's projected contribution and what the same roster spot would provide from replacement-level talent.",
+  },
+  {
+    term: "Projection Window",
+    definition:
+      "The year range included in valuation. Fantasy Foundry provides projections from 2026 through 2045.",
+  },
+  {
+    term: "Career Totals View",
+    definition:
+      "An aggregate view that rolls up projected output across all seasons in the projection window.",
+  },
+  {
+    term: "Volatility",
+    definition:
+      "The uncertainty around a player's projection, often driven by role changes, health risk, and skill-variance categories.",
+  },
+  {
+    term: "Playing-Time Risk",
+    definition:
+      "Risk that projected opportunities (PA, AB, or IP) are not reached due to performance, roster competition, or injuries.",
+  },
+  {
+    term: "League Configuration",
+    definition:
+      "Your teams, roster slots, scoring categories, and innings rules. The calculator uses this setup to produce custom rankings.",
+  },
 ];
 const INDEX_BUILD_ID = (() => {
   const metaEl = document.querySelector('meta[name="ff-build-id"]');
@@ -925,7 +988,7 @@ function buildCalculatorPayload(settings, availableYears, meta) {
 // App
 // ---------------------------------------------------------------------------
 function App() {
-  const [section, setSection] = useState("projections"); // projections | calculator
+  const [section, setSection] = useState("projections"); // projections | calculator | glossary
   const [meta, setMeta] = useState(null);
   const [metaError, setMetaError] = useState("");
   const [buildLabel, setBuildLabel] = useState("");
@@ -943,6 +1006,7 @@ function App() {
   const versionEtagRef = useRef("");
   const accountMenuRef = useRef(null);
   const accountMenuLabel = !AUTH_SYNC_ENABLED || authUser ? "Account" : "Sign In";
+  const sectionNeedsMeta = section === "projections" || section === "calculator";
 
   useEffect(() => {
     presetsRef.current = presets;
@@ -1430,23 +1494,25 @@ function App() {
         </div>
 
         <div className="container">
-          <div className="methodology-card" style={{ marginBottom: "20px" }}>
-            <h2 style={{ marginBottom: "10px" }}>Default League Configuration</h2>
-            <p>This site defaults to a 12-team, 5x5 roto setup for rankings.</p>
-            <p>
-              Hitting categories: R, RBI, HR, SB, AVG
-              {" · "}
-              Pitching categories: W, K, SV, ERA, WHIP.
-            </p>
-            <p>
-              Roster defaults: 22 starters (13 hitters: C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT; 9 pitchers as 9 P),
-              plus 6 bench, 0 MiLB, and 0 IL slots.
-            </p>
-            <p className="methodology-note" style={{ marginBottom: 0 }}>
-              Need custom rankings? Open the <strong>Dynasty Calculator</strong> tab and adjust league settings before you run values.
-            </p>
-          </div>
-          {metaError && (
+          {sectionNeedsMeta && (
+            <div className="methodology-card" style={{ marginBottom: "20px" }}>
+              <h2 style={{ marginBottom: "10px" }}>Default League Configuration</h2>
+              <p>This site defaults to a 12-team, 5x5 roto setup for rankings.</p>
+              <p>
+                Hitting categories: R, RBI, HR, SB, AVG
+                {" · "}
+                Pitching categories: W, K, SV, ERA, WHIP.
+              </p>
+              <p>
+                Roster defaults: 22 starters (13 hitters: C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT; 9 pitchers as 9 P),
+                plus 6 bench, 0 MiLB, and 0 IL slots.
+              </p>
+              <p className="methodology-note" style={{ marginBottom: 0 }}>
+                Need custom rankings? Open the <strong>Dynasty Calculator</strong> tab and adjust league settings before you run values.
+              </p>
+            </div>
+          )}
+          {sectionNeedsMeta && metaError && (
             <p style={{marginBottom: "16px", color: "var(--red)"}}>
               Unable to load API data. Check that the backend is running and reachable. ({metaError})
             </p>
@@ -1468,6 +1534,7 @@ function App() {
               setWatchlist={setWatchlist}
             />
           )}
+          {section === "glossary" && <GlossarySection />}
         </div>
 
         <section id="methodology" className="methodology-section" aria-labelledby="methodology-heading">
@@ -1497,6 +1564,26 @@ function App() {
         {buildLabel && <span className="build-id">Build {buildLabel}</span>}
       </footer>
     </>
+  );
+}
+
+
+function GlossarySection() {
+  return (
+    <section className="methodology-card glossary-card" aria-labelledby="glossary-heading">
+      <h2 id="glossary-heading" style={{ marginBottom: "10px" }}>Dynasty Glossary</h2>
+      <p className="glossary-intro">
+        Quick definitions for terms used in projections, league settings, and dynasty valuation.
+      </p>
+      <dl className="glossary-list">
+        {GLOSSARY_TERMS.map(entry => (
+          <div key={entry.term} className="glossary-item">
+            <dt>{entry.term}</dt>
+            <dd>{entry.definition}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 
