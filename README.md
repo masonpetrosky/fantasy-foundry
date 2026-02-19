@@ -25,11 +25,17 @@ A web application for browsing 20-year MLB dynasty baseball projections (2026–
 dynasty-site/
 ├── backend/
 │   ├── app.py                          # FastAPI application
+│   ├── api/routes/                     # Route registration modules (status/projections/calculate)
 │   ├── dynasty_roto_values.py          # Main valuation workflow + CLI facade
 │   └── valuation/                      # Shared valuation modules (models/positions/assignment)
 ├── frontend/
 │   ├── index.html                      # Vite entry HTML (with inline styles)
 │   ├── src/                            # React source modules
+│   │   ├── main.jsx                    # App composition root + primary screens
+│   │   ├── app_state_storage.js        # Local/cloud preference persistence helpers
+│   │   ├── request_helpers.js          # API error/response/debounce helper utilities
+│   │   ├── account_panel.jsx           # Account sync/auth UI
+│   │   └── methodology_section.jsx     # Methodology + glossary + FAQ content block
 │   ├── dist/                           # Built frontend assets (served by backend)
 │   └── package.json                    # Frontend build scripts/deps
 ├── data/
@@ -117,6 +123,13 @@ git diff --exit-code -- frontend/dist
 ```
 
 `git diff` should be clean. If it is not, commit the regenerated `frontend/dist` output.
+
+### CI Parity Check (Source File Size Guardrail)
+```bash
+python scripts/check_max_file_lines.py
+```
+
+This guardrail keeps new backend/frontend source files under the configured line threshold while allowing known legacy hotspots during incremental refactors.
 
 ### Running Browser E2E Tests (Playwright)
 ```bash

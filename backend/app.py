@@ -34,11 +34,18 @@ from typing import Any, Literal, Optional
 from uuid import uuid4
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
+
+from backend.api.routes import (
+    build_calculate_router,
+    build_frontend_assets_router,
+    build_projections_router,
+    build_status_router,
+)
 
 try:  # pragma: no cover - optional dependency
     import redis as redis_lib  # type: ignore
@@ -2662,7 +2669,6 @@ def _meta_payload() -> dict[str, Any]:
     return payload
 
 
-@app.get("/api/meta")
 def get_meta(request: Request):
     _refresh_data_if_needed()
     payload = _meta_payload()
@@ -3535,7 +3541,6 @@ def _etag_matches(if_none_match: str | None, current_etag: str) -> bool:
     return False
 
 
-@app.get("/api/version")
 def get_version(request: Request):
     _refresh_data_if_needed()
     payload = _version_payload()
@@ -3550,7 +3555,6 @@ def get_version(request: Request):
     )
 
 
-@app.get("/api/health")
 def get_health():
     _refresh_data_if_needed()
 
@@ -3630,7 +3634,6 @@ def _projection_response(
     return {"total": total, "offset": offset, "limit": limit, "data": page}
 
 
-@app.get("/api/projections/all")
 def get_all_projections(
     player: Optional[str] = None,
     team: Optional[str] = None,
@@ -3643,8 +3646,8 @@ def get_all_projections(
     include_dynasty: bool = True,
     sort_col: Optional[str] = None,
     sort_dir: Literal["asc", "desc"] = "desc",
-    limit: int = Query(default=200, ge=1, le=5000),
-    offset: int = Query(default=0, ge=0),
+    limit: int = 200,
+    offset: int = 0,
 ):
     return _projection_response(
         "all", player=player, team=team, player_keys=player_keys, year=year,
@@ -3654,7 +3657,6 @@ def get_all_projections(
     )
 
 
-@app.get("/api/projections/bat")
 def get_bat_projections(
     player: Optional[str] = None,
     team: Optional[str] = None,
@@ -3667,8 +3669,8 @@ def get_bat_projections(
     include_dynasty: bool = True,
     sort_col: Optional[str] = None,
     sort_dir: Literal["asc", "desc"] = "desc",
-    limit: int = Query(default=200, ge=1, le=5000),
-    offset: int = Query(default=0, ge=0),
+    limit: int = 200,
+    offset: int = 0,
 ):
     return _projection_response(
         "bat", player=player, team=team, player_keys=player_keys, year=year,
@@ -3678,7 +3680,6 @@ def get_bat_projections(
     )
 
 
-@app.get("/api/projections/pitch")
 def get_pitch_projections(
     player: Optional[str] = None,
     team: Optional[str] = None,
@@ -3691,8 +3692,8 @@ def get_pitch_projections(
     include_dynasty: bool = True,
     sort_col: Optional[str] = None,
     sort_dir: Literal["asc", "desc"] = "desc",
-    limit: int = Query(default=200, ge=1, le=5000),
-    offset: int = Query(default=0, ge=0),
+    limit: int = 200,
+    offset: int = 0,
 ):
     return _projection_response(
         "pitch", player=player, team=team, player_keys=player_keys, year=year,
@@ -3702,10 +3703,9 @@ def get_pitch_projections(
     )
 
 
-@app.get("/api/projections/export/{dataset}")
 def export_projections(
     dataset: Literal["all", "bat", "pitch"],
-    file_format: Literal["csv", "xlsx"] = Query(default="csv", alias="format"),
+    file_format: Literal["csv", "xlsx"] = "csv",
     player: Optional[str] = None,
     team: Optional[str] = None,
     player_keys: Optional[str] = None,
@@ -4162,14 +4162,12 @@ def _run_calculation_job(job_id: str, req_payload: dict) -> None:
             _cleanup_calculation_jobs()
 
 
-@app.post("/api/calculate")
 def calculate_dynasty_values(req: CalculateRequest, request: Request):
     """Run the dynasty value calculator and return results as JSON."""
     _enforce_rate_limit(request, action="calc-sync", limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE)
     return _run_calculate_request(req, source="sync")
 
 
-@app.post("/api/calculate/export")
 def export_calculate_dynasty_values(req: CalculateExportRequest, request: Request):
     _enforce_rate_limit(request, action="calc-sync", limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE)
     payload = req.model_dump()
@@ -4186,7 +4184,6 @@ def export_calculate_dynasty_values(req: CalculateExportRequest, request: Reques
     )
 
 
-@app.post("/api/calculate/jobs", status_code=202)
 def create_calculate_dynasty_job(req: CalculateRequest, request: Request):
     _enforce_rate_limit(request, action="calc-job-create", limit_per_minute=CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE)
     client_ip = _client_ip(request)
@@ -4246,7 +4243,6 @@ def create_calculate_dynasty_job(req: CalculateRequest, request: Request):
     return response_payload
 
 
-@app.get("/api/calculate/jobs/{job_id}")
 def get_calculate_dynasty_job(job_id: str, request: Request):
     _enforce_rate_limit(request, action="calc-job-status", limit_per_minute=CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE)
     with CALCULATOR_JOB_LOCK:
@@ -4260,7 +4256,6 @@ def get_calculate_dynasty_job(job_id: str, request: Request):
         return _calculation_job_public_payload(job)
 
 
-@app.delete("/api/calculate/jobs/{job_id}")
 def cancel_calculate_dynasty_job(job_id: str, request: Request):
     _enforce_rate_limit(request, action="calc-job-status", limit_per_minute=CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE)
     with CALCULATOR_JOB_LOCK:
@@ -4289,42 +4284,43 @@ def cancel_calculate_dynasty_job(job_id: str, request: Request):
         return _calculation_job_public_payload(job)
 
 
+# Route registration is centralized into dedicated route modules so app.py keeps
+# request business logic while routing declarations stay focused and composable.
+app.include_router(
+    build_status_router(
+        meta_handler=get_meta,
+        version_handler=get_version,
+        health_handler=get_health,
+    )
+)
+app.include_router(
+    build_projections_router(
+        projection_response_handler=_projection_response,
+        projection_export_handler=export_projections,
+    )
+)
+app.include_router(
+    build_calculate_router(
+        calculate_request_model=CalculateRequest,
+        calculate_export_request_model=CalculateExportRequest,
+        calculate_handler=calculate_dynasty_values,
+        calculate_export_handler=export_calculate_dynasty_values,
+        calculate_job_create_handler=create_calculate_dynasty_job,
+        calculate_job_read_handler=get_calculate_dynasty_job,
+        calculate_job_cancel_handler=cancel_calculate_dynasty_job,
+    )
+)
+
+
 # ---------------------------------------------------------------------------
 # Serve frontend
 # ---------------------------------------------------------------------------
 if FRONTEND_DIR.exists():
-    INDEX_CACHE_HEADERS = {
-        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-        "Pragma": "no-cache",
-        "Expires": "0",
-        "X-App-Build": APP_BUILD_ID,
-    }
-    ASSET_CACHE_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
-
-    @app.get("/")
-    def serve_index():
-        try:
-            html = INDEX_PATH.read_text(encoding="utf-8")
-        except OSError as exc:
-            raise HTTPException(
-                status_code=500,
-                detail="Frontend dist/index.html is unavailable. Build the frontend with: npm run build (in frontend/).",
-            ) from exc
-
-        if INDEX_BUILD_TOKEN in html:
-            html = html.replace(INDEX_BUILD_TOKEN, APP_BUILD_ID)
-
-        return HTMLResponse(content=html, headers=INDEX_CACHE_HEADERS)
-
-    @app.get("/assets/{asset_path:path}")
-    def serve_frontend_asset(asset_path: str):
-        normalized = asset_path.lstrip("/")
-        candidate = (FRONTEND_DIST_ASSETS_DIR / normalized).resolve()
-        assets_root = FRONTEND_DIST_ASSETS_DIR.resolve()
-        try:
-            candidate.relative_to(assets_root)
-        except ValueError:
-            raise HTTPException(status_code=404, detail="Asset not found")
-        if not candidate.is_file():
-            raise HTTPException(status_code=404, detail="Asset not found")
-        return FileResponse(path=str(candidate), headers=ASSET_CACHE_HEADERS)
+    app.include_router(
+        build_frontend_assets_router(
+            index_path=INDEX_PATH,
+            assets_root=FRONTEND_DIST_ASSETS_DIR,
+            app_build_id=APP_BUILD_ID,
+            index_build_token=INDEX_BUILD_TOKEN,
+        )
+    )
