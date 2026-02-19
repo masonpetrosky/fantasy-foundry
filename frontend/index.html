@@ -1471,13 +1471,11 @@ td.value-negative { color: var(--red); }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 /* ====== FOOTER ====== */
-.methodology-section {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 32px 40px;
-  scroll-margin-top: 84px;
-  content-visibility: auto;
-  contain-intrinsic-size: 1px 420px;
+
+.methodology-stack {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
 }
 
 .methodology-card {
@@ -1507,6 +1505,11 @@ td.value-negative { color: var(--red); }
   color: var(--text-primary);
 }
 
+.methodology-card ul {
+  padding-left: 18px;
+  color: var(--text-primary);
+}
+
 .methodology-card li {
   margin-bottom: 10px;
 }
@@ -1519,8 +1522,12 @@ td.value-negative { color: var(--red); }
   margin-top: 8px;
 }
 
-.glossary-card {
-  margin-bottom: 20px;
+.app-methodology-note {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
 }
 
 .glossary-intro {
@@ -1549,6 +1556,31 @@ td.value-negative { color: var(--red); }
 }
 
 .glossary-item dd {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: var(--lh-relaxed);
+}
+
+.faq-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.faq-item {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  padding: 14px 16px;
+}
+
+.faq-item dt {
+  margin-bottom: 6px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.faq-item dd {
   margin: 0;
   color: var(--text-secondary);
   line-height: var(--lh-relaxed);
@@ -1607,7 +1639,6 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   .hero { padding: 64px 24px 50px; }
   .hero h1 { font-size: 2.9rem; }
   .container { padding: 0 24px 72px; }
-  .methodology-section { padding: 0 24px 32px; }
 }
 
 @media (max-width: 900px) {
@@ -1903,6 +1934,7 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   .methodology-card { padding: 18px; }
   .methodology-card h2 { font-size: 1.42rem; }
   .glossary-item { padding: 12px 14px; }
+  .faq-item { padding: 12px 14px; }
 }
 </style>
 </head>

@@ -58,7 +58,7 @@ const MAX_COMPARE_PLAYERS = 4;
 const PRIMARY_NAV_ITEMS = [
   { key: "projections", label: "Projections" },
   { key: "calculator", label: "Dynasty Calculator" },
-  { key: "glossary", label: "Glossary" },
+  { key: "methodology", label: "Methodology" },
 ];
 const GLOSSARY_TERMS = [
   {
@@ -120,6 +120,33 @@ const GLOSSARY_TERMS = [
     term: "League Configuration",
     definition:
       "Your teams, roster slots, scoring categories, and innings rules. The calculator uses this setup to produce custom rankings.",
+  },
+];
+const METHODOLOGY_FAQS = [
+  {
+    question: "Do I need to use the default league setup?",
+    answer:
+      "No. Use the Dynasty Calculator tab to customize teams, roster slots, categories, and scoring so values match your league.",
+  },
+  {
+    question: "How should I interpret Dynasty Value?",
+    answer:
+      "Dynasty Value is a relative ranking score, not a dollar amount. Higher values indicate stronger long-term roster impact in your selected format.",
+  },
+  {
+    question: "How are two-way players handled?",
+    answer:
+      "Two-way valuation follows your selected calculator option: sum hitting and pitching value, or keep the higher of the two sides.",
+  },
+  {
+    question: "Why do rankings change when I edit league settings?",
+    answer:
+      "Value depends on scarcity and scoring context. Changing format, roster depth, or categories changes replacement level and category impact.",
+  },
+  {
+    question: "Why might a player with strong stats rank lower than expected?",
+    answer:
+      "Multi-year value accounts for projection horizon, discounting, risk, and position/role context, not just one-season counting stats.",
   },
 ];
 const INDEX_BUILD_ID = (() => {
@@ -988,7 +1015,7 @@ function buildCalculatorPayload(settings, availableYears, meta) {
 // App
 // ---------------------------------------------------------------------------
 function App() {
-  const [section, setSection] = useState("projections"); // projections | calculator | glossary
+  const [section, setSection] = useState("projections"); // projections | calculator | methodology
   const [meta, setMeta] = useState(null);
   const [metaError, setMetaError] = useState("");
   const [buildLabel, setBuildLabel] = useState("");
@@ -1495,22 +1522,9 @@ function App() {
 
         <div className="container">
           {sectionNeedsMeta && (
-            <div className="methodology-card" style={{ marginBottom: "20px" }}>
-              <h2 style={{ marginBottom: "10px" }}>Default League Configuration</h2>
-              <p>This site defaults to a 12-team, 5x5 roto setup for rankings.</p>
-              <p>
-                Hitting categories: R, RBI, HR, SB, AVG
-                {" · "}
-                Pitching categories: W, K, SV, ERA, WHIP.
-              </p>
-              <p>
-                Roster defaults: 22 starters (13 hitters: C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT; 9 pitchers as 9 P),
-                plus 6 bench, 0 MiLB, and 0 IL slots.
-              </p>
-              <p className="methodology-note" style={{ marginBottom: 0 }}>
-                Need custom rankings? Open the <strong>Dynasty Calculator</strong> tab and adjust league settings before you run values.
-              </p>
-            </div>
+            <p className="methodology-note app-methodology-note">
+              For glossary definitions and detailed valuation notes, open the <strong>Methodology</strong> tab.
+            </p>
           )}
           {sectionNeedsMeta && metaError && (
             <p style={{marginBottom: "16px", color: "var(--red)"}}>
@@ -1534,33 +1548,12 @@ function App() {
               setWatchlist={setWatchlist}
             />
           )}
-          {section === "glossary" && <GlossarySection />}
+          {section === "methodology" && <MethodologySection />}
         </div>
-
-        <section id="methodology" className="methodology-section" aria-labelledby="methodology-heading">
-          <div className="methodology-card">
-            <h2 id="methodology-heading">Methodology</h2>
-            <p>Player values are generated from projection inputs and league settings in three stages:</p>
-            <ol>
-              <li>
-                For each player-year, duplicate rows are collapsed by averaging the most recent projections
-                (up to the configured <code>recent_projections</code> count).
-              </li>
-              <li>
-                Projections are translated into category-level impact using your scoring format, roster structure,
-                and innings constraints.
-              </li>
-              <li>
-                The backend runs simulation-based valuation to estimate multi-year dynasty value and produces ranked results.
-              </li>
-            </ol>
-          </div>
-        </section>
       </main>
 
       <footer>
-        Built for dynasty baseball enthusiasts &middot; Projections updated as-needed &middot;
-        <a href="#methodology"> About the methodology</a>
+        Projections updated as-needed.
         {buildLabel && <span className="build-id">Build {buildLabel}</span>}
       </footer>
     </>
@@ -1568,21 +1561,94 @@ function App() {
 }
 
 
-function GlossarySection() {
+function MethodologySection() {
   return (
-    <section className="methodology-card glossary-card" aria-labelledby="glossary-heading">
-      <h2 id="glossary-heading" style={{ marginBottom: "10px" }}>Dynasty Glossary</h2>
-      <p className="glossary-intro">
-        Quick definitions for terms used in projections, league settings, and dynasty valuation.
-      </p>
-      <dl className="glossary-list">
-        {GLOSSARY_TERMS.map(entry => (
-          <div key={entry.term} className="glossary-item">
-            <dt>{entry.term}</dt>
-            <dd>{entry.definition}</dd>
-          </div>
-        ))}
-      </dl>
+    <section className="methodology-stack" aria-labelledby="methodology-heading">
+      <article className="methodology-card" aria-labelledby="methodology-heading">
+        <h2 id="methodology-heading">Methodology</h2>
+        <p>Player values are generated from projection inputs and league settings in three stages:</p>
+        <ol>
+          <li>
+            For each player-year, duplicate rows are collapsed by averaging the most recent projections
+            (up to the configured <code>recent_projections</code> count).
+          </li>
+          <li>
+            Projections are translated into category-level impact using your scoring format, roster structure,
+            and innings constraints.
+          </li>
+          <li>
+            The backend runs simulation-based valuation to estimate multi-year dynasty value and produce ranked results.
+          </li>
+        </ol>
+        <p>Where each glossary term is used in this model:</p>
+        <ul>
+          <li>
+            Your <strong>League Configuration</strong> drives replacement baselines (<strong>Replacement Level</strong>)
+            and position premiums (<strong>Positional Scarcity</strong>).
+          </li>
+          <li>
+            In <strong>5x5 Roto</strong> mode, raw stats are converted into <strong>Category Impact</strong> and then
+            into <strong>SGP (Standings Gain Points)</strong>.
+          </li>
+          <li>
+            Player-level <strong>Surplus Value</strong> is measured against replacement-level production before
+            aggregation into <strong>Dynasty Value</strong>.
+          </li>
+          <li>
+            <strong>Dynasty Value</strong> spans the <strong>Projection Window</strong>, and the
+            {" "}
+            <strong>Career Totals View</strong> rolls those seasons into one aggregate lens.
+          </li>
+          <li>
+            Risk adjustments account for <strong>Volatility</strong> and <strong>Playing-Time Risk</strong> when
+            weighting future seasons.
+          </li>
+        </ul>
+        <p className="methodology-note" style={{ marginBottom: 0 }}>
+          Need league-specific rankings? Use the <strong>Dynasty Calculator</strong> tab to apply your settings before running values.
+        </p>
+      </article>
+
+      <article className="methodology-card" aria-labelledby="methodology-defaults-heading">
+        <h2 id="methodology-defaults-heading">Default League Configuration</h2>
+        <p>This site defaults to a 12-team, 5x5 roto setup for baseline rankings.</p>
+        <p>
+          Hitting categories: R, RBI, HR, SB, AVG
+          {" · "}
+          Pitching categories: W, K, SV, ERA, WHIP.
+        </p>
+        <p style={{ marginBottom: 0 }}>
+          Roster defaults: 22 starters (13 hitters: C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT; 9 pitchers as 9 P),
+          plus 6 bench, 0 MiLB, and 0 IL slots.
+        </p>
+      </article>
+
+      <article className="methodology-card glossary-card" aria-labelledby="glossary-heading">
+        <h2 id="glossary-heading" style={{ marginBottom: "10px" }}>Glossary</h2>
+        <p className="glossary-intro">
+          Quick definitions for terms used in projections, league settings, and dynasty valuation.
+        </p>
+        <dl className="glossary-list">
+          {GLOSSARY_TERMS.map(entry => (
+            <div key={entry.term} className="glossary-item">
+              <dt>{entry.term}</dt>
+              <dd>{entry.definition}</dd>
+            </div>
+          ))}
+        </dl>
+      </article>
+
+      <article className="methodology-card faq-card" aria-labelledby="faq-heading">
+        <h2 id="faq-heading">FAQs</h2>
+        <dl className="faq-list">
+          {METHODOLOGY_FAQS.map(entry => (
+            <div key={entry.question} className="faq-item">
+              <dt>{entry.question}</dt>
+              <dd>{entry.answer}</dd>
+            </div>
+          ))}
+        </dl>
+      </article>
     </section>
   );
 }
@@ -2492,9 +2558,6 @@ function ProjectionsExplorer({ meta, dataVersion, watchlist, setWatchlist }) {
           {watchlistCount > 40 && <p className="calc-note">Showing first 40 watchlist entries.</p>}
         </div>
       )}
-      <div style={{marginBottom: "12px", color: "var(--text-muted)", fontSize: "0.82rem"}}>
-        Dynasty Value already combines hitting and pitching contributions for two-way players.
-      </div>
       <div className="projection-layout-controls" role="group" aria-label="Projection layout controls">
           <div className="projection-layout-row">
             <span className="label">Layout</span>
