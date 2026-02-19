@@ -1566,60 +1566,119 @@ function MethodologySection() {
     <section className="methodology-stack" aria-labelledby="methodology-heading">
       <article className="methodology-card" aria-labelledby="methodology-heading">
         <h2 id="methodology-heading">Methodology</h2>
-        <p>Player values are generated from projection inputs and league settings in three stages:</p>
+        <p>
+          Dynasty values are deterministic from the projection file plus your calculator settings.
+          Reusing the same inputs produces the same output.
+        </p>
+        <p><strong>Pipeline:</strong></p>
         <ol>
           <li>
-            For each player-year, duplicate rows are collapsed by averaging the most recent projections
-            (up to the configured <code>recent_projections</code> count).
+            Import Bat/Pitch projections, normalize columns, and collapse duplicate player-year rows by
+            averaging the most recent <code>recent_projections</code> entries.
           </li>
           <li>
-            Projections are translated into category-level impact using your scoring format, roster structure,
-            and innings constraints.
+            Build valuation years from <code>start_year</code> and <code>horizon</code>, then compute
+            per-year player value relative to slot eligibility and league replacement baselines.
           </li>
           <li>
-            The backend runs simulation-based valuation to estimate multi-year dynasty value and produce ranked results.
+            Aggregate yearly values into <code>RawDynastyValue</code> with discounting, then center at
+            the replacement roster cutoff to produce <code>DynastyValue</code>.
           </li>
         </ol>
-        <p>Where each glossary term is used in this model:</p>
+        <p><strong>Core equations:</strong></p>
         <ul>
           <li>
-            Your <strong>League Configuration</strong> drives replacement baselines (<strong>Replacement Level</strong>)
-            and position premiums (<strong>Positional Scarcity</strong>).
+            <code>valuation_years = [start_year .. start_year + horizon - 1] intersect projection_years</code>
           </li>
           <li>
-            In <strong>5x5 Roto</strong> mode, raw stats are converted into <strong>Category Impact</strong> and then
-            into <strong>SGP (Standings Gain Points)</strong>.
+            <code>discount_factor(y) = discount ** (y - start_year)</code>
           </li>
           <li>
-            Player-level <strong>Surplus Value</strong> is measured against replacement-level production before
-            aggregation into <strong>Dynasty Value</strong>.
+            <code>DynastyValue = RawDynastyValue - CenteringBaselineValue</code>
           </li>
+        </ul>
+        <p><strong>Roto mode (SGP) math:</strong></p>
+        <ul>
           <li>
-            <strong>Dynasty Value</strong> spans the <strong>Projection Window</strong>, and the
+            SGP denominators come from Monte Carlo simulations of team standings:
             {" "}
-            <strong>Career Totals View</strong> rolls those seasons into one aggregate lens.
+            <code>SGP_denom(cat) = mean_adjacent_rank_gap(simulated_team_category_totals)</code>.
           </li>
           <li>
-            Risk adjustments account for <strong>Volatility</strong> and <strong>Playing-Time Risk</strong> when
-            weighting future seasons.
+            For each eligible slot, value is the category delta vs replacement:
+            {" "}
+            <code>Value_y = sum(delta_cat / SGP_denom(cat))</code> (ERA/WHIP deltas are sign-reversed).
+          </li>
+          <li>
+            Pitching totals apply innings rules before category deltas: <code>ip_max</code> scales/fills totals
+            and <code>ip_min</code> can force qualification penalties.
+          </li>
+          <li>
+            Multi-year value uses keep/drop optimization with stash rules:
+            {" "}
+            <code>F[i] = max(0, v_i + discount ** gap * F[i+1])</code>.
+          </li>
+        </ul>
+        <p><strong>Points mode math:</strong></p>
+        <ul>
+          <li>
+            Hitting and pitching points are weighted sums:
+            {" "}
+            <code>hitter_points = sum(stat * pts_hit_*)</code>,
+            {" "}
+            <code>pitcher_points = sum(stat * pts_pit_*)</code>.
+          </li>
+          <li>
+            Slot value is replacement-relative:
+            {" "}
+            <code>slot_value = player_points - replacement_points_for_slot</code>.
+          </li>
+          <li>
+            Two-way handling uses your setting: <code>sum</code> adds both sides, <code>max</code> keeps the higher side.
+          </li>
+          <li>
+            <code>RawDynastyValue = sum(Value_y * discount_factor(y))</code>.
           </li>
         </ul>
         <p className="methodology-note" style={{ marginBottom: 0 }}>
-          Need league-specific rankings? Use the <strong>Dynasty Calculator</strong> tab to apply your settings before running values.
+          Final values can be confidence-adjusted from <code>ProjectionsUsed</code>, projected playing time,
+          and age/minor context. Use the <strong>Dynasty Calculator</strong> tab to run your exact league settings.
         </p>
       </article>
 
       <article className="methodology-card" aria-labelledby="methodology-defaults-heading">
-        <h2 id="methodology-defaults-heading">Default League Configuration</h2>
-        <p>This site defaults to a 12-team, 5x5 roto setup for baseline rankings.</p>
+        <h2 id="methodology-defaults-heading">Reproduce It Yourself</h2>
+        <ol>
+          <li>
+            Export projections and keep the exact run settings: teams, slots, scoring mode, categories,
+            start year, horizon, discount, two-way mode, and <code>recent_projections</code>.
+          </li>
+          <li>
+            Rebuild <code>Value_YEAR</code> for each player using the formulas above (roto or points),
+            then compute <code>RawDynastyValue</code> and centering.
+          </li>
+          <li>
+            Validate against API output by matching <code>Value_YEAR</code>, <code>RawDynastyValue</code>,
+            and <code>DynastyValue</code> columns.
+          </li>
+        </ol>
         <p>
-          Hitting categories: R, RBI, HR, SB, AVG
-          {" · "}
-          Pitching categories: W, K, SV, ERA, WHIP.
+          Implementation entry points:
+          {" "}
+          <code>backend/app.py::_calculate_common_dynasty_frame_cached</code>,
+          {" "}
+          <code>backend/dynasty_roto_values.py::calculate_common_dynasty_values</code>,
+          {" "}
+          <code>backend/app.py::_calculate_points_dynasty_frame_cached</code>,
+          {" "}
+          <code>backend/dynasty_roto_values.py::compute_year_context</code>,
+          {" "}
+          <code>backend/dynasty_roto_values.py::compute_year_player_values_vs_replacement</code>,
+          {" "}
+          <code>backend/dynasty_roto_values.py::dynasty_keep_or_drop_value</code>.
         </p>
         <p style={{ marginBottom: 0 }}>
-          Roster defaults: 22 starters (13 hitters: C, 1B, 2B, 3B, SS, CI, MI, 5 OF, UT; 9 pitchers as 9 P),
-          plus 6 bench, 0 MiLB, and 0 IL slots.
+          Site baseline rankings default to 12-team 5x5 roto with 22 starters, 6 bench, 0 MiLB, and 0 IL.
         </p>
       </article>
 
