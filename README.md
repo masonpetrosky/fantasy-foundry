@@ -229,6 +229,12 @@ All three support Dockerfiles out of the box:
 - Just connect your GitHub repo and deploy
 - Current production custom domain: https://fantasy-foundry.com
 
+This Docker image sets these production-friendly runtime defaults:
+- `FF_PREWARM_DEFAULT_CALC=0` so post-deploy first projections loads are not delayed by calculator prewarm work.
+- `FF_REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP=1` so projections never fall back to expensive runtime dynasty lookup generation.
+
+If you set Railway service variables manually, keep those two values unless you intentionally want the opposite tradeoff.
+
 ### Backend `FF_*` Runtime Settings
 
 | Variable | Default | Description |
@@ -237,7 +243,7 @@ All three support Dockerfiles out of the box:
 | `FF_CALC_JOB_TTL_SECONDS` | `1800` | Retention window for completed/failed/cancelled async calculator jobs. |
 | `FF_CALC_JOB_MAX_ENTRIES` | `256` | Max in-memory async job records retained before pruning. |
 | `FF_CALC_JOB_WORKERS` | `2` | Thread pool size for async calculator jobs. |
-| `FF_PREWARM_DEFAULT_CALC` | `1` | Prewarm default calculator caches on startup. |
+| `FF_PREWARM_DEFAULT_CALC` | `1` | Prewarm default calculator caches on startup (`Dockerfile` overrides this to `0`). |
 | `FF_CALC_REQUEST_TIMEOUT_SECONDS` | `600` | Calculator request timeout metadata used in guardrails/status payloads. |
 | `FF_CALC_SYNC_RATE_LIMIT_PER_MINUTE` | `30` | Sync calculator request limit per identity per minute. |
 | `FF_CALC_JOB_CREATE_RATE_LIMIT_PER_MINUTE` | `15` | Async calculator job-create limit per identity per minute. |
@@ -265,6 +271,10 @@ When `FF_ENV=production`, startup fails fast for unsafe config combinations:
 - wildcard CORS (`FF_CORS_ALLOW_ORIGINS=*`)
 - trusted forwarded-chain mode without explicit trusted proxies (`FF_TRUST_X_FORWARDED_FOR=1` and empty `FF_TRUSTED_PROXY_CIDRS`)
 - required calculator auth without configured API keys (`FF_REQUIRE_CALCULATE_AUTH=1` and empty `FF_CALCULATE_API_KEYS`)
+
+Post-deploy sanity checks for projection startup latency:
+- `GET /api/ops` should report `data.dynasty_lookup_cache.status = "ready"` and matching expected/found versions.
+- `GET /api/health` should show calculator prewarm idle/off when `FF_PREWARM_DEFAULT_CALC=0`.
 
 ## API Endpoints
 

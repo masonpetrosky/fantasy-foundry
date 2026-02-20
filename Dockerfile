@@ -25,6 +25,8 @@ FROM python:3.12-slim
 WORKDIR /app
 
 ENV FF_CANONICAL_HOST=fantasy-foundry.com
+ENV FF_PREWARM_DEFAULT_CALC=0
+ENV FF_REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP=1
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
