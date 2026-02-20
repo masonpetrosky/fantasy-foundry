@@ -236,7 +236,7 @@ class ProjectionsVisualRegressionE2ETests(unittest.TestCase):
         finally:
             context.close()
 
-    def test_small_laptop_rankings_pinned_columns_no_overlap(self) -> None:
+    def test_small_laptop_calculator_overlay_keeps_projection_pinned_columns(self) -> None:
         context = self.browser.new_context(viewport={"width": 1280, "height": 800})
         page = context.new_page()
         try:
@@ -261,46 +261,43 @@ class ProjectionsVisualRegressionE2ETests(unittest.TestCase):
                 """,
                 timeout=180000,
             )
-            page.wait_for_selector(".rankings-table tbody tr.clickable-row", timeout=30000)
+            page.wait_for_selector(".projections-overlay-message", timeout=30000)
+            page.wait_for_selector(".projections-table tbody tr", timeout=30000)
 
             metrics = page.evaluate(
                 """
                 () => {
-                  const rankingsTable = document.querySelector('.rankings-table');
-                  const scroller = rankingsTable ? rankingsTable.closest('.table-scroll') : null;
-                  const row = rankingsTable ? rankingsTable.querySelector('tbody tr.clickable-row') : null;
+                  const table = document.querySelector('.projections-table');
+                  const scroller = table ? table.closest('.table-scroll') : null;
+                  const row = table ? table.querySelector('tbody tr') : null;
                   if (!scroller || !row) return { ready: false };
 
                   scroller.scrollLeft = scroller.scrollWidth;
 
-                  const rankCell = row.querySelector('td.rank-pin-rank');
-                  const playerCell = row.querySelector('td.rank-pin-player');
-                  const valueCell = row.querySelector('td.rank-pin-value');
-                  if (!rankCell || !playerCell || !valueCell) return { ready: false };
+                  const indexCell = row.querySelector('td.index-col');
+                  const playerCell = row.querySelector('td.player-name');
+                  if (!indexCell || !playerCell) return { ready: false };
 
-                  const rankRect = rankCell.getBoundingClientRect();
+                  const indexRect = indexCell.getBoundingClientRect();
                   const playerRect = playerCell.getBoundingClientRect();
-                  const valueRect = valueCell.getBoundingClientRect();
 
                   const visibleNext = Array.from(row.querySelectorAll('td'))
                     .filter((el) =>
-                      !el.classList.contains('rank-pin-rank') &&
-                      !el.classList.contains('rank-pin-player') &&
-                      !el.classList.contains('rank-pin-value')
+                      !el.classList.contains('index-col') &&
+                      !el.classList.contains('player-name')
                     )
                     .map((el) => ({ el, rect: el.getBoundingClientRect() }))
-                    .find(({ rect }) => rect.left > valueRect.right - 1 && rect.left < window.innerWidth);
+                    .find(({ rect }) => rect.left > playerRect.right - 1 && rect.left < window.innerWidth);
 
                   const playerName = (playerCell.textContent || '').trim();
-                  const largeNumberSample = Array.from(document.querySelectorAll('.rankings-table td.num'))
+                  const largeNumberSample = Array.from(document.querySelectorAll('.projections-table td.num'))
                     .map((el) => (el.textContent || '').trim())
                     .find((txt) => /\\d{4,}|,/.test(txt)) || '';
 
                   return {
                     ready: true,
-                    rank_player_overlap_px: Math.max(0, rankRect.right - playerRect.left),
-                    player_value_overlap_px: Math.max(0, playerRect.right - valueRect.left),
-                    value_next_overlap_px: visibleNext ? Math.max(0, valueRect.right - visibleNext.rect.left) : null,
+                    index_player_overlap_px: Math.max(0, indexRect.right - playerRect.left),
+                    player_next_overlap_px: visibleNext ? Math.max(0, playerRect.right - visibleNext.rect.left) : null,
                     player_scroll_overflow: playerCell.scrollWidth - playerCell.clientWidth,
                     player_name_len: playerName.length,
                     large_number_sample: largeNumberSample,
@@ -309,11 +306,10 @@ class ProjectionsVisualRegressionE2ETests(unittest.TestCase):
                 """
             )
 
-            self.assertTrue(metrics.get("ready"), "Expected rankings row for sticky checks")
-            self.assertLessEqual(metrics["rank_player_overlap_px"], 1.0)
-            self.assertLessEqual(metrics["player_value_overlap_px"], 1.0)
-            self.assertIsNotNone(metrics["value_next_overlap_px"])
-            self.assertLessEqual(metrics["value_next_overlap_px"], 1.0)
+            self.assertTrue(metrics.get("ready"), "Expected projections row for sticky checks")
+            self.assertLessEqual(metrics["index_player_overlap_px"], 1.0)
+            self.assertIsNotNone(metrics["player_next_overlap_px"])
+            self.assertLessEqual(metrics["player_next_overlap_px"], 1.0)
             self.assertLessEqual(metrics["player_scroll_overflow"], 0)
             self.assertGreaterEqual(metrics["player_name_len"], 10)
             self.assertTrue(metrics["large_number_sample"])

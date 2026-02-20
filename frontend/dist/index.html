@@ -1133,8 +1133,23 @@ td.value-negative { color: var(--red); }
   letter-spacing: 0.06em;
 }
 
+.projections-workspace {
+  display: grid;
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.projections-workspace > * {
+  min-width: 0;
+}
+
+.projections-content {
+  min-width: 0;
+}
+
 .embedded-calculator-section {
-  margin-top: 22px;
+  margin-top: 0;
   padding: 14px 16px 16px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1188,6 +1203,10 @@ td.value-negative { color: var(--red); }
   margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid var(--border-subtle);
+}
+
+.projections-overlay-message {
+  margin-top: 10px;
 }
 
 .calc-subheading {
@@ -1717,6 +1736,11 @@ footer a { color: var(--accent-dim); text-decoration: none; }
     grid-template-columns: 1fr;
   }
 
+  .projections-workspace {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
   .calc-layout {
     grid-template-columns: 1fr;
     gap: 16px;
@@ -2021,7 +2045,7 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   .faq-item { padding: 12px 14px; }
 }
 </style>
-  <script type="module" crossorigin src="/assets/index-DbG61o3T.js"></script>
+  <script type="module" crossorigin src="/assets/index-BnAl4U_t.js"></script>
 </head>
 <body>
 

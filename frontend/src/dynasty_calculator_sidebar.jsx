@@ -19,7 +19,9 @@ export function DynastyCalculatorSidebar({
   const {
     hittersPerTeam,
     isPointsMode,
+    lastRunTotal,
     loading,
+    mainTableOverlayActive,
     pointRulesCount,
     presetName,
     pitchersPerTeam,
@@ -36,6 +38,7 @@ export function DynastyCalculatorSidebar({
   const {
     applyQuickStartAndRun,
     applyScoringSetup,
+    clearAppliedValues,
     copyShareLink,
     deletePreset,
     loadPreset,
@@ -53,7 +56,7 @@ export function DynastyCalculatorSidebar({
     <div className="calc-sidebar">
       <div className="calc-sidebar-header">
         <h3>League Settings</h3>
-        <p className="calc-sidebar-intro">Configure format, roster depth, and scoring. Then generate rankings.</p>
+        <p className="calc-sidebar-intro">Configure format, roster depth, and scoring. Then apply custom dynasty values to the main projections table.</p>
       </div>
 
       <div className="calc-summary-grid">
@@ -454,8 +457,25 @@ export function DynastyCalculatorSidebar({
       </div>
 
       <div className="calc-section">
+        <p className="calc-section-title">Main Table Sync</p>
+        <p className="calc-note">
+          {mainTableOverlayActive
+            ? `Custom calculator values are active in the main table${lastRunTotal > 0 ? ` (${lastRunTotal.toLocaleString()} players from your latest run).` : "."}`
+            : "Run the calculator to apply your custom dynasty values directly in the main projections table."}
+        </p>
+        <button
+          type="button"
+          className="calc-secondary-btn"
+          onClick={clearAppliedValues}
+          disabled={!mainTableOverlayActive}
+        >
+          Clear Applied Values
+        </button>
+      </div>
+
+      <div className="calc-section">
         <button className="calc-btn" onClick={() => run()} disabled={loading || Boolean(validationError)}>
-          {loading ? "Computing..." : "Generate Rankings"}
+          {loading ? "Computing..." : "Apply To Main Table"}
         </button>
         <div
           className={`calc-status ${loading ? "running" : statusIsError ? "error" : ""}`}

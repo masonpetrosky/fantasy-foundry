@@ -143,20 +143,18 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
             """,
             timeout=180000,
         )
-        page.wait_for_selector(".calc-results-toolbar", timeout=30000)
-        page.wait_for_selector(".rankings-table tbody tr.clickable-row", timeout=30000)
+        page.wait_for_selector(".projections-overlay-message", timeout=30000)
+        page.wait_for_selector(".projections-table tbody tr", timeout=30000)
 
     def _assert_result_count_format(self, page) -> None:
-        count_text = page.locator(".calc-results-toolbar .result-count").first.inner_text().strip()
-        match = re.search(r"([\d,]+)\s*/\s*([\d,]+)\s+players", count_text)
-        self.assertIsNotNone(match, f"Expected 'filtered / total players' text format, got {count_text!r}")
-        filtered_count = int(match.group(1).replace(",", ""))
-        total_count = int(match.group(2).replace(",", ""))
-        self.assertGreater(total_count, 0, "Expected at least one ranked player")
-        self.assertGreaterEqual(total_count, filtered_count, "Expected filtered count to be <= total count")
+        count_text = page.locator(".filter-bar .result-count").first.inner_text().strip()
+        match = re.search(r"([\d,]+)\s+rows", count_text)
+        self.assertIsNotNone(match, f"Expected row count text format, got {count_text!r}")
+        total_count = int(match.group(1).replace(",", ""))
+        self.assertGreater(total_count, 0, "Expected at least one projection row")
 
     def _open_columns_menu(self, page, force: bool = False):
-        columns_button = page.locator("button.inline-btn").filter(has_text="Columns (").first
+        columns_button = page.locator("button").filter(has_text="Table Columns").first
         columns_button.scroll_into_view_if_needed()
         columns_button.click(force=force)
         page.wait_for_selector(".multi-select-menu", timeout=5000)
@@ -171,14 +169,13 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
             self._run_calculation_and_wait(page)
             self._assert_result_count_format(page)
 
-            search_input = page.locator(".calc-results-toolbar input[type='text']").first
+            overlay_text = page.locator(".projections-overlay-message").first.inner_text().strip()
+            self.assertIn("calculator-adjusted dynasty values", overlay_text.lower())
+
+            search_input = page.locator("#projections-search").first
             search_input.fill("shohei")
             page.wait_for_timeout(250)
-
-            reset_filters_btn = page.get_by_role("button", name="Reset Filters")
-            self.assertTrue(reset_filters_btn.is_enabled(), "Expected Reset Filters button to enable after typing")
-            reset_filters_btn.click()
-            self.assertEqual(search_input.input_value(), "")
+            self.assertEqual(search_input.input_value().lower(), "shohei")
 
             columns_button = self._open_columns_menu(page)
             optional_col_inputs = page.locator(
@@ -193,15 +190,12 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
             columns_button.click()
 
             columns_text = columns_button.inner_text().strip()
-            self.assertRegex(columns_text, r"^(?:Table )?Columns \(\d+/\d+\)$")
+            self.assertRegex(columns_text, r"^Table Columns \(\d+/\d+\)$")
 
-            first_row = page.locator(".rankings-table tbody tr.clickable-row").first
-            first_row.click()
-            page.wait_for_selector(".explain-card", timeout=10000)
-            first_row.focus()
-            first_row.press("Enter")
-            explain_title = page.locator(".explain-card h4").first.inner_text().strip()
-            self.assertIn("Value Breakdown:", explain_title)
+            first_row = page.locator(".projections-table tbody tr").first
+            first_row.scroll_into_view_if_needed()
+            track_button = first_row.locator("button.inline-btn").filter(has_text=re.compile("Track|Tracked")).first
+            self.assertTrue(track_button.is_visible())
         finally:
             context.close()
 
@@ -214,14 +208,14 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
             self._run_calculation_and_wait(page)
             self._assert_result_count_format(page)
 
-            toolbar = page.locator(".calc-results-toolbar").first
+            toolbar = page.locator(".filter-bar").first
             toolbar.scroll_into_view_if_needed()
             self.assertTrue(toolbar.is_visible())
 
             viewport_width = int(page.evaluate("window.innerWidth"))
             toolbar_width = float(
                 page.evaluate(
-                    "() => document.querySelector('.calc-results-toolbar').getBoundingClientRect().width"
+                    "() => document.querySelector('.filter-bar').getBoundingClientRect().width"
                 )
             )
             self.assertLessEqual(round(toolbar_width), viewport_width)
@@ -229,13 +223,9 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
             self._open_columns_menu(page, force=True)
             self.assertTrue(page.locator(".multi-select-menu").first.is_visible())
 
-            first_row = page.locator(".rankings-table tbody tr.clickable-row").first
+            first_row = page.locator(".projections-table tbody tr").first
             first_row.scroll_into_view_if_needed()
-            first_row.click(force=True)
-            page.wait_for_selector(".explain-card", timeout=10000)
-
-            hint_text = page.locator(".calc-results-hint").first.inner_text().strip()
-            self.assertIn("Click or press Enter", hint_text)
+            self.assertTrue(first_row.is_visible())
         finally:
             context.close()
 

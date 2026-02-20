@@ -74,7 +74,16 @@ function projectionCacheSet(cacheMapRef, cacheOrderRef, cacheKey, payload) {
     }
   }
 }
-export function ProjectionsExplorer({ apiBase, meta, dataVersion, watchlist, setWatchlist }) {
+export function ProjectionsExplorer({
+  apiBase,
+  meta,
+  dataVersion,
+  watchlist,
+  setWatchlist,
+  calculatorOverlayByPlayerKey,
+  calculatorOverlayActive,
+  calculatorOverlayPlayerCount,
+}) {
   const API = String(apiBase || "").trim();
   const [tab, setTab] = useState(DEFAULT_PROJECTIONS_TAB); // all | bat | pitch
   const [search, setSearch] = useState("");
@@ -100,7 +109,7 @@ export function ProjectionsExplorer({ apiBase, meta, dataVersion, watchlist, set
   const [posFilters, setPosFilters] = useState([]);
   const [showPosMenu, setShowPosMenu] = useState(false);
   const posMenuRef = useRef(null);
-  const [data, setData] = useState([]);
+  const [baseData, setBaseData] = useState([]);
   const [totalRows, setTotalRows] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -136,6 +145,32 @@ export function ProjectionsExplorer({ apiBase, meta, dataVersion, watchlist, set
     if (careerTotalsView) return availableProjectionYears;
     return [resolvedYearFilter];
   }, [availableProjectionYears, careerTotalsView, resolvedYearFilter]);
+  const resolvedCalculatorOverlayByPlayerKey = useMemo(() => (
+    calculatorOverlayByPlayerKey && typeof calculatorOverlayByPlayerKey === "object" && !Array.isArray(calculatorOverlayByPlayerKey)
+      ? calculatorOverlayByPlayerKey
+      : {}
+  ), [calculatorOverlayByPlayerKey]);
+  const resolvedCalculatorOverlayPlayerCount = useMemo(
+    () => Number.isFinite(Number(calculatorOverlayPlayerCount))
+      ? Math.max(0, Number(calculatorOverlayPlayerCount))
+      : Object.keys(resolvedCalculatorOverlayByPlayerKey).length,
+    [calculatorOverlayPlayerCount, resolvedCalculatorOverlayByPlayerKey]
+  );
+  const hasCalculatorOverlay = Boolean(calculatorOverlayActive) && resolvedCalculatorOverlayPlayerCount > 0;
+  const applyCalculatorOverlayToRows = useCallback(rows => {
+    if (!Array.isArray(rows) || rows.length === 0) return [];
+    if (!hasCalculatorOverlay) return rows;
+    return rows.map(row => {
+      const key = stablePlayerKeyFromRow(row);
+      const overlay = resolvedCalculatorOverlayByPlayerKey[key];
+      if (!overlay || typeof overlay !== "object") return row;
+      return { ...row, ...overlay, DynastyMatchStatus: "matched" };
+    });
+  }, [hasCalculatorOverlay, resolvedCalculatorOverlayByPlayerKey]);
+  const data = useMemo(
+    () => applyCalculatorOverlayToRows(baseData),
+    [applyCalculatorOverlayToRows, baseData]
+  );
 
   const updateProjectionHorizontalAffordance = useCallback(() => {
     const el = projectionTableScrollRef.current;
@@ -203,7 +238,7 @@ export function ProjectionsExplorer({ apiBase, meta, dataVersion, watchlist, set
         hasLoadedProjectionPageRef.current = true;
         setLoading(false);
         setError("");
-        setData([]);
+        setBaseData([]);
         setTotalRows(0);
         return;
       }
@@ -233,7 +268,7 @@ export function ProjectionsExplorer({ apiBase, meta, dataVersion, watchlist, set
         if (requestSeq !== requestSeqRef.current) return;
         hasLoadedProjectionPageRef.current = true;
         setError("");
-        setData(Array.isArray(cached.rows) ? cached.rows : []);
+        setBaseData(Array.isArray(cached.rows) ? cached.rows : []);
         setTotalRows(Number.isFinite(cached.total) ? cached.total : 0);
         setLoading(false);
         if (cached.total > offset + limit) {
@@ -271,7 +306,7 @@ export function ProjectionsExplorer({ apiBase, meta, dataVersion, watchlist, set
         { rows, total: resolvedTotal }
       );
       hasLoadedProjectionPageRef.current = true;
-      setData(rows);
+      setBaseData(rows);
       setTotalRows(resolvedTotal);
       setLoading(false);
       if (resolvedTotal > offset + limit) {
@@ -871,6 +906,11 @@ export function ProjectionsExplorer({ apiBase, meta, dataVersion, watchlist, set
           {exportingFormat === "xlsx" ? "Exporting XLSX..." : "Export XLSX"}
         </button>
       </div>
+      {hasCalculatorOverlay && (
+        <div className="table-refresh-message projections-overlay-message" role="status" aria-live="polite">
+          Showing calculator-adjusted dynasty values for matched players ({resolvedCalculatorOverlayPlayerCount.toLocaleString()} available).
+        </div>
+      )}
       {exportError && (
         <div className="table-refresh-message error" role="status" aria-live="polite">
           Export failed. {exportError}

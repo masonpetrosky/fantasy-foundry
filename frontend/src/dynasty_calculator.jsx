@@ -1,26 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cancelCalculationJob, runCalculationJob } from "./calculation_jobs.js";
-import { DynastyCalculatorResults } from "./dynasty_calculator_results.jsx";
 import { DynastyCalculatorSidebar } from "./dynasty_calculator_sidebar.jsx";
 import { normalizeCalculatorRunSettingsInput } from "./calculator_submit.js";
-import { parseDownloadFilename } from "./download_filename.js";
-import { downloadBlob, triggerBlobDownload } from "./download_helpers.js";
-import { RANK_COMPARE_ACTIONS, WATCHLIST_ACTIONS, rankCompareReducer, watchlistReducer } from "./rank_state_reducers.js";
 import {
   CALC_LINK_QUERY_PARAM,
-  buildWatchlistCsv,
-  calculationRowExplainKey,
   decodeCalculatorSettings,
   encodeCalculatorSettings,
   mergeKnownCalculatorSettings,
-  stablePlayerKeyFromRow,
 } from "./app_state_storage.js";
 import {
-  CALC_SEARCH_DEBOUNCE_MS,
   HITTER_SLOT_FIELDS,
   POINTS_SCORING_FIELDS,
-  POINTS_RESULT_COLUMN_LABELS,
-  POINTS_RESULT_SUMMARY_COLS,
   PITCHER_SLOT_FIELDS,
   ROTO_HITTER_CATEGORY_FIELDS,
   ROTO_PITCHER_CATEGORY_FIELDS,
@@ -30,38 +20,29 @@ import {
   resolvePointsScoringDefaults,
   resolvePointsSlotDefaults,
   resolveRotoCategoryDefaults,
-  resolveRotoSelectedStatColumns,
   resolveRotoSlotDefaults,
 } from "./dynasty_calculator_config.js";
-import { useDebouncedValue } from "./request_helpers.js";
 
-export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlist, setWatchlist }) {
+export function DynastyCalculator({
+  apiBase,
+  meta,
+  presets,
+  setPresets,
+  onApplyToMainTable,
+  onClearMainTableOverlay,
+  mainTableOverlayActive,
+}) {
   const API = String(apiBase || "").trim();
   const [settings, setSettings] = useState(() => buildDefaultCalculatorSettings(meta));
-  const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
-  const [sortCol, setSortCol] = useState("DynastyValue");
-  const [sortDir, setSortDir] = useState("desc");
-  const [searchInput, setSearchInput] = useState("");
-  const debouncedRankSearch = useDebouncedValue(searchInput, CALC_SEARCH_DEBOUNCE_MS);
-  const [posFilter, setPosFilter] = useState("");
   const [presetName, setPresetName] = useState("");
   const [selectedPresetName, setSelectedPresetName] = useState("");
-  const [selectedExplainKey, setSelectedExplainKey] = useState("");
-  const [selectedExplainYear, setSelectedExplainYear] = useState("");
-  const [hiddenRankCols, setHiddenRankCols] = useState({});
-  const [pinRankKeyColumns, setPinRankKeyColumns] = useState(true);
-  const [rankWatchlistOnly, setRankWatchlistOnly] = useState(false);
-  const [rankCompareRowsByKey, setRankCompareRowsByKey] = useState({});
+  const [lastRunTotal, setLastRunTotal] = useState(0);
   const calcRequestSeqRef = useRef(0);
   const calcAbortControllerRef = useRef(null);
   const calcActiveJobIdRef = useRef("");
-  const rankTableScrollRef = useRef(null);
-  const rankScrollRafRef = useRef(0);
-  const rankScrollPendingTopRef = useRef(0);
-  const [rankScrollTop, setRankScrollTop] = useState(0);
-  const [rankViewportHeight, setRankViewportHeight] = useState(480);
+
   const availableYears = useMemo(
     () => (meta.years || []).map(Number).filter(Number.isFinite),
     [meta.years]
@@ -86,12 +67,6 @@ export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlis
   }, [availableYears, settings.start_year]);
 
   useEffect(() => {
-    if (rankWatchlistOnly && Object.keys(watchlist).length === 0) {
-      setRankWatchlistOnly(false);
-    }
-  }, [rankWatchlistOnly, watchlist]);
-
-  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const encoded = String(params.get(CALC_LINK_QUERY_PARAM) || "").trim();
     if (!encoded) return;
@@ -113,15 +88,11 @@ export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlis
         calcAbortControllerRef.current.abort();
         calcAbortControllerRef.current = null;
       }
-      if (rankScrollRafRef.current) {
-        window.cancelAnimationFrame(rankScrollRafRef.current);
-        rankScrollRafRef.current = 0;
-      }
     };
   }, []);
 
   function update(key, val) {
-    setSettings(s => ({ ...s, [key]: val }));
+    setSettings(current => ({ ...current, [key]: val }));
   }
 
   function applyScoringSetup(nextMode) {
@@ -196,8 +167,6 @@ export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlis
   function applyQuickStartAndRun(mode) {
     const nextSettings = buildQuickStartSettings(mode);
     setSettings(nextSettings);
-    setSortCol("DynastyValue");
-    setSortDir("desc");
     setStatus(`Applied quick start (${mode === "points" ? "12-team points" : "12-team 5x5 roto"}).`);
     run(nextSettings);
   }
@@ -256,37 +225,11 @@ export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlis
     }
   }
 
-  async function exportRankings(format) {
-    const payload = buildCalculatorPayload(settings, availableYears, meta);
-    if (payload.error || !payload.payload) {
-      setStatus(`Error: ${payload.error || "Invalid settings"}`);
-      return;
+  function clearAppliedValues() {
+    if (typeof onClearMainTableOverlay === "function") {
+      onClearMainTableOverlay();
     }
-
-    try {
-      setStatus("Preparing export...");
-      const response = await fetch(`${API}/api/calculate/export`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...payload.payload,
-          format,
-          include_explanations: format === "xlsx",
-          export_columns: visibleRankCols,
-        }),
-      });
-      if (!response.ok) {
-        const parsed = await readResponsePayload(response);
-        throw new Error(formatApiError(response.status, parsed.payload, parsed.rawText));
-      }
-      const blob = await response.blob();
-      const fallback = `dynasty-rankings.${format}`;
-      const filename = parseDownloadFilename(response.headers.get("content-disposition"), fallback);
-      triggerBlobDownload(filename, blob);
-      setStatus(`Exported ${filename}`);
-    } catch (err) {
-      setStatus(`Error: ${err.message || "Failed to export rankings"}`);
-    }
+    setStatus("Cleared custom calculator values from the main table.");
   }
 
   function run(runSettings = settings) {
@@ -307,10 +250,12 @@ export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlis
     if (calcAbortControllerRef.current) {
       calcAbortControllerRef.current.abort();
     }
+
     const controller = new AbortController();
     calcAbortControllerRef.current = controller;
     setLoading(true);
     setStatus("Submitting simulation job...");
+
     void runCalculationJob({
       apiBase: API,
       payload: payload.payload,
@@ -321,9 +266,18 @@ export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlis
       timeoutSeconds: Number(meta?.calculator_guardrails?.job_timeout_seconds),
       onStatus: nextStatus => setStatus(nextStatus),
       onCompleted: result => {
-        setResults(result);
+        const total = Number(result?.total);
+        const resolvedTotal = Number.isFinite(total)
+          ? total
+          : Array.isArray(result?.data)
+            ? result.data.length
+            : 0;
+        setLastRunTotal(resolvedTotal);
+        if (typeof onApplyToMainTable === "function") {
+          onApplyToMainTable(result, normalizedSettings);
+        }
         setLoading(false);
-        setStatus(`Done - ${result.total} players ranked`);
+        setStatus(`Done - applied ${resolvedTotal} ranked players to the main table.`);
       },
       onCancelled: () => {
         setLoading(false);
@@ -340,119 +294,6 @@ export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlis
     });
   }
 
-  const sortedAll = useMemo(() => {
-    if (!results) return [];
-    const source = Array.isArray(results.data) ? results.data : [];
-    if (!sortCol) return source;
-    return [...source].sort((a, b) => {
-      let av = a[sortCol], bv = b[sortCol];
-      if (sortCol === "Player" || sortCol === "Team" || sortCol === "Pos") {
-        const avText = String(av ?? "").trim();
-        const bvText = String(bv ?? "").trim();
-        if (!avText && !bvText) return 0;
-        if (!avText) return 1;
-        if (!bvText) return -1;
-        return sortDir === "asc" ? avText.localeCompare(bvText) : bvText.localeCompare(avText);
-      }
-      const avNum = Number(av);
-      const bvNum = Number(bv);
-      const safeAv = Number.isFinite(avNum) ? avNum : -Infinity;
-      const safeBv = Number.isFinite(bvNum) ? bvNum : -Infinity;
-      return sortDir === "asc" ? safeAv - safeBv : safeBv - safeAv;
-    });
-  }, [results, sortCol, sortDir]);
-
-  function isRowWatched(row) {
-    const key = stablePlayerKeyFromRow(row);
-    return Boolean(watchlist[key]);
-  }
-
-  const rankedFiltered = useMemo(() => {
-    const q = debouncedRankSearch.trim().toLowerCase();
-    const posNeedle = posFilter.trim().toUpperCase();
-    return sortedAll
-      .map((row, idx) => ({ row, rank: idx + 1 }))
-      .filter(({ row }) => {
-        if (q && !(row.Player || "").toLowerCase().includes(q)) return false;
-        if (posNeedle && !(row.Pos || "").toUpperCase().includes(posNeedle)) return false;
-        if (rankWatchlistOnly && !isRowWatched(row)) return false;
-        return true;
-      });
-  }, [sortedAll, debouncedRankSearch, posFilter, rankWatchlistOnly, watchlist]);
-
-  function handleSort(col) {
-    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortCol(col); setSortDir(col === "Player" || col === "Team" || col === "Pos" ? "asc" : "desc"); }
-  }
-
-  function toggleRankColumn(col) {
-    if (requiredRankCols.has(col)) return;
-    setHiddenRankCols(current => {
-      const next = { ...current };
-      if (next[col]) delete next[col];
-      else next[col] = true;
-      return next;
-    });
-  }
-
-  function showAllRankColumns() {
-    setHiddenRankCols({});
-  }
-
-  function clearRankFilters() {
-    setSearchInput("");
-    setPosFilter("");
-    setRankWatchlistOnly(false);
-  }
-
-  function toggleRowWatch(row) {
-    setWatchlist(current => watchlistReducer(current, {
-      type: WATCHLIST_ACTIONS.TOGGLE_ROW,
-      row,
-    }));
-  }
-
-  function clearWatchlist() {
-    setWatchlist(current => watchlistReducer(current, { type: WATCHLIST_ACTIONS.CLEAR }));
-  }
-
-  function exportWatchlistCsv() {
-    const csv = buildWatchlistCsv(watchlist);
-    downloadBlob("player-watchlist.csv", csv, "text/csv;charset=utf-8");
-  }
-
-  function toggleRankCompareRow(row) {
-    setRankCompareRowsByKey(current => rankCompareReducer(current, {
-      type: RANK_COMPARE_ACTIONS.TOGGLE_ROW,
-      row,
-    }));
-  }
-
-  function removeRankCompareRow(key) {
-    setRankCompareRowsByKey(current => rankCompareReducer(current, {
-      type: RANK_COMPARE_ACTIONS.REMOVE_KEY,
-      key,
-    }));
-  }
-
-  function clearRankCompareRows() {
-    setRankCompareRowsByKey(current => rankCompareReducer(current, {
-      type: RANK_COMPARE_ACTIONS.CLEAR,
-    }));
-  }
-
-  // Determine columns to show
-  const baseCols = ["Player", "DynastyValue", "Age", "Team", "Pos"];
-  const yearCols = results
-    ? Object.keys(results.data[0] || {})
-      .filter(c => c.startsWith("Value_"))
-      .sort((a, b) => {
-        const av = Number(a.replace("Value_", ""));
-        const bv = Number(b.replace("Value_", ""));
-        if (Number.isFinite(av) && Number.isFinite(bv)) return av - bv;
-        return a.localeCompare(b);
-      })
-    : [];
   const isPointsMode = settings.scoring_mode === "points";
   const selectedRotoHitCategoryCount = ROTO_HITTER_CATEGORY_FIELDS.filter(
     field => coerceBooleanSetting(settings[field.key], field.defaultValue)
@@ -460,63 +301,6 @@ export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlis
   const selectedRotoPitchCategoryCount = ROTO_PITCHER_CATEGORY_FIELDS.filter(
     field => coerceBooleanSetting(settings[field.key], field.defaultValue)
   ).length;
-  const resultSettings = (results && results.settings && typeof results.settings === "object")
-    ? results.settings
-    : settings;
-  const resultScoringMode = String(resultSettings.scoring_mode || settings.scoring_mode || "roto")
-    .trim()
-    .toLowerCase() || "roto";
-  const selectedRotoStatColsForResults = useMemo(() => {
-    if (resultScoringMode !== "roto") return [];
-    const requested = resolveRotoSelectedStatColumns(resultSettings);
-    const firstResultRow = results?.data?.[0];
-    if (!firstResultRow || typeof firstResultRow !== "object") return [];
-    const available = new Set(Object.keys(firstResultRow));
-    return requested.filter(col => available.has(col));
-  }, [resultScoringMode, resultSettings, results]);
-  const selectedPointsSummaryColsForResults = useMemo(() => {
-    if (resultScoringMode !== "points") return [];
-    const firstResultRow = results?.data?.[0];
-    if (!firstResultRow || typeof firstResultRow !== "object") return [];
-    const available = new Set(Object.keys(firstResultRow));
-    return POINTS_RESULT_SUMMARY_COLS.filter(col => available.has(col));
-  }, [resultScoringMode, results]);
-  const displayCols = [
-    ...baseCols,
-    ...selectedRotoStatColsForResults,
-    ...selectedPointsSummaryColsForResults,
-    ...yearCols,
-  ];
-  const columnLabels = useMemo(() => {
-    const labels = {};
-    displayCols.forEach(col => {
-      labels[col] = POINTS_RESULT_COLUMN_LABELS[col] || (col.startsWith("Value_") ? col.replace("Value_", "") : col);
-    });
-    return labels;
-  }, [displayCols]);
-  const requiredRankCols = useMemo(() => new Set(["Player", "DynastyValue"]), []);
-  const visibleRankCols = useMemo(
-    () => displayCols.filter(col => !hiddenRankCols[col]),
-    [displayCols, hiddenRankCols]
-  );
-  const virtualRowHeight = 38;
-  const virtualOverscan = 8;
-  const totalRankRows = rankedFiltered.length;
-  const virtualStartIndex = Math.max(0, Math.floor(rankScrollTop / virtualRowHeight) - virtualOverscan);
-  const virtualVisibleCount = Math.ceil(rankViewportHeight / virtualRowHeight) + virtualOverscan * 2;
-  const virtualEndIndex = Math.min(totalRankRows, virtualStartIndex + virtualVisibleCount);
-  const virtualRows = rankedFiltered.slice(virtualStartIndex, virtualEndIndex);
-  const virtualTopPad = virtualStartIndex * virtualRowHeight;
-  const virtualBottomPad = Math.max(0, (totalRankRows - virtualEndIndex) * virtualRowHeight);
-  const explanationMap = useMemo(() => (
-    results && results.explanations && typeof results.explanations === "object"
-      ? results.explanations
-      : {}
-  ), [results]);
-  const activeExplanation = useMemo(() => {
-    if (!selectedExplainKey) return null;
-    return explanationMap[selectedExplainKey] || null;
-  }, [explanationMap, selectedExplainKey]);
   const hittersPerTeam = useMemo(() => HITTER_SLOT_FIELDS.reduce((sum, slot) => {
     const value = Number(settings[slot.key]);
     return sum + (Number.isFinite(value) ? value : 0);
@@ -530,19 +314,14 @@ export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlis
   const reservePerTeam = benchPerTeam + minorsPerTeam;
   const totalPlayersPerTeam = hittersPerTeam + pitchersPerTeam + reservePerTeam;
   const pointRulesCount = POINTS_SCORING_FIELDS.length;
-  const watchlistCount = Object.keys(watchlist).length;
-  const rankCompareRows = useMemo(
-    () => Object.values(rankCompareRowsByKey || {}).filter(Boolean),
-    [rankCompareRowsByKey]
-  );
-  const compareYearCols = yearCols.slice(0, 6);
-  const hasRankFilters = Boolean(searchInput.trim() || posFilter.trim() || rankWatchlistOnly);
-  const rankSearchIsDebouncing = searchInput !== debouncedRankSearch;
   const statusIsError = Boolean(validationError) || String(status || "").startsWith("Error");
+
   const sidebarState = {
     hittersPerTeam,
     isPointsMode,
+    lastRunTotal,
     loading,
+    mainTableOverlayActive: Boolean(mainTableOverlayActive),
     pointRulesCount,
     presetName,
     pitchersPerTeam,
@@ -556,9 +335,11 @@ export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlis
     validationError,
     validationWarning,
   };
+
   const sidebarActions = {
     applyQuickStartAndRun,
     applyScoringSetup,
+    clearAppliedValues,
     copyShareLink,
     deletePreset,
     loadPreset,
@@ -571,134 +352,16 @@ export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlis
     setSelectedPresetName,
     update,
   };
-  const resultsState = {
-    activeExplanation,
-    compareYearCols,
-    displayCols,
-    hasRankFilters,
-    hiddenRankCols,
-    columnLabels,
-    pinRankKeyColumns,
-    posFilter,
-    rankCompareRows,
-    rankCompareRowsByKey,
-    rankedFiltered,
-    rankSearchIsDebouncing,
-    rankWatchlistOnly,
-    requiredRankCols,
-    searchInput,
-    selectedExplainKey,
-    selectedExplainYear,
-    sortCol,
-    sortDir,
-    sortedAll,
-    virtualBottomPad,
-    virtualRows,
-    virtualStartIndex,
-    virtualTopPad,
-    visibleRankCols,
-    watchlist,
-    watchlistCount,
-  };
-  const resultsActions = {
-    clearRankCompareRows,
-    clearRankFilters,
-    clearWatchlist,
-    exportRankings,
-    exportWatchlistCsv,
-    handleSort,
-    removeRankCompareRow,
-    setPinRankKeyColumns,
-    setPosFilter,
-    setRankWatchlistOnly,
-    setSearchInput,
-    setSelectedExplainKey,
-    setSelectedExplainYear,
-    showAllRankColumns,
-    toggleRankColumn,
-    toggleRankCompareRow,
-    toggleRowWatch,
-  };
-
-  const handleRankScroll = useCallback(event => {
-    rankScrollPendingTopRef.current = event.currentTarget.scrollTop;
-    if (rankScrollRafRef.current) return;
-    rankScrollRafRef.current = window.requestAnimationFrame(() => {
-      rankScrollRafRef.current = 0;
-      setRankScrollTop(rankScrollPendingTopRef.current);
-    });
-  }, []);
-  const resultsRefs = {
-    handleRankScroll,
-    rankTableScrollRef,
-  };
-
-  useEffect(() => {
-    if (!results || !Array.isArray(results.data) || results.data.length === 0) {
-      setSelectedExplainKey("");
-      setSelectedExplainYear("");
-      return;
-    }
-    const firstKey = calculationRowExplainKey(results.data[0]);
-    setSelectedExplainKey(current => (current && explanationMap[current] ? current : firstKey));
-  }, [results, explanationMap]);
-
-  useEffect(() => {
-    setSelectedExplainYear("");
-  }, [selectedExplainKey]);
-
-  useEffect(() => {
-    setRankCompareRowsByKey(current => rankCompareReducer(current, {
-      type: RANK_COMPARE_ACTIONS.SYNC_ROWS,
-      rows: sortedAll,
-    }));
-  }, [sortedAll]);
-
-  useEffect(() => {
-    setHiddenRankCols(current => {
-      const next = {};
-      displayCols.forEach(col => {
-        if (current[col] && !requiredRankCols.has(col)) next[col] = true;
-      });
-      return next;
-    });
-  }, [displayCols, requiredRankCols]);
-
-  useEffect(() => {
-    const tableEl = rankTableScrollRef.current;
-    if (!tableEl) return;
-    const measure = () => setRankViewportHeight(Math.max(240, tableEl.clientHeight || 480));
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [results]);
-
-  useEffect(() => {
-    const tableEl = rankTableScrollRef.current;
-    if (tableEl) tableEl.scrollTop = 0;
-    rankScrollPendingTopRef.current = 0;
-    setRankScrollTop(0);
-  }, [debouncedRankSearch, posFilter, rankWatchlistOnly, sortCol, sortDir, results, visibleRankCols.length]);
 
   return (
     <div className="fade-up fade-up-1">
-      <div className="calc-layout">
-        <DynastyCalculatorSidebar
-          meta={meta}
-          presets={presets}
-          settings={settings}
-          state={sidebarState}
-          actions={sidebarActions}
-        />
-        <div>
-          <DynastyCalculatorResults
-            results={results}
-            state={resultsState}
-            refs={resultsRefs}
-            actions={resultsActions}
-          />
-        </div>
-      </div>
+      <DynastyCalculatorSidebar
+        meta={meta}
+        presets={presets}
+        settings={settings}
+        state={sidebarState}
+        actions={sidebarActions}
+      />
     </div>
   );
 }

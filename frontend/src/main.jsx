@@ -19,6 +19,7 @@ import {
   readPlayerWatchlist,
   safeReadStorage,
   safeWriteStorage,
+  stablePlayerKeyFromRow,
   writeCalculatorPresets,
   writePlayerWatchlist,
 } from "./app_state_storage.js";
@@ -30,6 +31,31 @@ const INDEX_BUILD_ID = (() => {
   return value.startsWith("__APP_BUILD_") ? "" : value;
 })();
 const VERSION_POLL_INTERVAL_MS = 60000;
+
+function buildCalculatorOverlayMap(result) {
+  const rows = Array.isArray(result?.data) ? result.data : [];
+  const byPlayerKey = {};
+
+  rows.forEach(row => {
+    const key = stablePlayerKeyFromRow(row);
+    if (!key) return;
+
+    const overlayRow = {};
+    if (row?.DynastyValue != null && row?.DynastyValue !== "") {
+      overlayRow.DynastyValue = row.DynastyValue;
+    }
+    Object.keys(row || {}).forEach(col => {
+      if (!col.startsWith("Value_")) return;
+      const value = row[col];
+      if (value == null || value === "") return;
+      overlayRow[col] = value;
+    });
+    if (Object.keys(overlayRow).length === 0) return;
+    byPlayerKey[key] = overlayRow;
+  });
+
+  return byPlayerKey;
+}
 
 function App() {
   const [section, setSection] = useState("projections"); // projections | methodology
@@ -43,6 +69,8 @@ function App() {
   const [dataVersion, setDataVersion] = useState("");
   const [presets, setPresets] = useState(() => readCalculatorPresets());
   const [watchlist, setWatchlist] = useState(() => readPlayerWatchlist());
+  const [calculatorOverlayByPlayerKey, setCalculatorOverlayByPlayerKey] = useState({});
+  const [calculatorOverlayActive, setCalculatorOverlayActive] = useState(false);
   const [authReady, setAuthReady] = useState(!AUTH_SYNC_ENABLED);
   const [authUser, setAuthUser] = useState(null);
   const [authStatus, setAuthStatus] = useState("");
@@ -55,6 +83,18 @@ function App() {
   const accountMenuRef = useRef(null);
   const accountMenuLabel = !AUTH_SYNC_ENABLED || authUser ? "Account" : "Sign In";
   const sectionNeedsMeta = section === "projections";
+  const calculatorOverlayPlayerCount = Object.keys(calculatorOverlayByPlayerKey).length;
+
+  const applyCalculatorOverlay = useCallback(result => {
+    const nextOverlay = buildCalculatorOverlayMap(result);
+    setCalculatorOverlayByPlayerKey(nextOverlay);
+    setCalculatorOverlayActive(Object.keys(nextOverlay).length > 0);
+  }, []);
+
+  const clearCalculatorOverlay = useCallback(() => {
+    setCalculatorOverlayByPlayerKey({});
+    setCalculatorOverlayActive(false);
+  }, []);
 
   useEffect(() => {
     presetsRef.current = presets;
@@ -553,14 +593,7 @@ function App() {
             </p>
           )}
           {section === "projections" && meta && (
-            <>
-              <ProjectionsExplorer
-                apiBase={API}
-                meta={meta}
-                dataVersion={dataVersion}
-                watchlist={watchlist}
-                setWatchlist={setWatchlist}
-              />
+            <div className="projections-workspace">
               <section className="embedded-calculator-section" aria-labelledby="embedded-calculator-heading">
                 <div className="embedded-calculator-head">
                   <h2 id="embedded-calculator-heading">Dynasty Calculator</h2>
@@ -575,7 +608,7 @@ function App() {
                   </button>
                 </div>
                 <p className="methodology-note embedded-calculator-note">
-                  Configure your league settings and run custom dynasty rankings without leaving this tab.
+                  Configure your league settings and apply custom dynasty values directly in the projections table.
                 </p>
                 {calculatorPanelOpen && (
                   <div id="embedded-calculator-content" className="embedded-calculator-content">
@@ -584,13 +617,26 @@ function App() {
                       meta={meta}
                       presets={presets}
                       setPresets={setPresets}
-                      watchlist={watchlist}
-                      setWatchlist={setWatchlist}
+                      onApplyToMainTable={applyCalculatorOverlay}
+                      onClearMainTableOverlay={clearCalculatorOverlay}
+                      mainTableOverlayActive={calculatorOverlayActive}
                     />
                   </div>
                 )}
               </section>
-            </>
+              <div className="projections-content">
+                <ProjectionsExplorer
+                  apiBase={API}
+                  meta={meta}
+                  dataVersion={dataVersion}
+                  watchlist={watchlist}
+                  setWatchlist={setWatchlist}
+                  calculatorOverlayByPlayerKey={calculatorOverlayByPlayerKey}
+                  calculatorOverlayActive={calculatorOverlayActive}
+                  calculatorOverlayPlayerCount={calculatorOverlayPlayerCount}
+                />
+              </div>
+            </div>
           )}
           {section === "methodology" && <MethodologySection />}
         </div>
