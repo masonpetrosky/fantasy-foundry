@@ -42,6 +42,25 @@ class ApiContractShapeTests(unittest.TestCase):
         self.assertIsInstance(payload.get("jobs"), dict)
         self.assertIsInstance(payload.get("dynasty_lookup_cache"), dict)
 
+    def test_ready_endpoint_contract_shape(self) -> None:
+        with patch.object(app_module, "_refresh_data_if_needed", return_value=None), patch.object(
+            app_module, "INDEX_PATH"
+        ) as index_path_mock, patch.object(app_module, "_inspect_precomputed_default_dynasty_lookup") as lookup_mock:
+            index_path_mock.exists.return_value = True
+            lookup_mock.return_value = app_module.DynastyLookupCacheInspection(
+                status="ready",
+                expected_version="test-version",
+                found_version="test-version",
+            )
+            response = self.client.get("/api/ready")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload.get("status"), "ready")
+        self.assertIn("build_id", payload)
+        self.assertIn("data_version", payload)
+        self.assertIn("timestamp", payload)
+
     def test_projections_endpoint_contract_shape(self) -> None:
         response = self.client.get("/api/projections/all", params={"limit": 2, "offset": 0})
 

@@ -10,58 +10,11 @@ import pandas as pd
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, Field, model_validator
 
-ROTO_HITTER_CATEGORY_FIELDS: tuple[tuple[str, str, bool], ...] = (
-    ("roto_hit_r", "R", True),
-    ("roto_hit_rbi", "RBI", True),
-    ("roto_hit_hr", "HR", True),
-    ("roto_hit_sb", "SB", True),
-    ("roto_hit_avg", "AVG", True),
-    ("roto_hit_obp", "OBP", False),
-    ("roto_hit_slg", "SLG", False),
-    ("roto_hit_ops", "OPS", False),
-    ("roto_hit_h", "H", False),
-    ("roto_hit_bb", "BB", False),
-    ("roto_hit_2b", "2B", False),
-    ("roto_hit_tb", "TB", False),
-)
-ROTO_PITCHER_CATEGORY_FIELDS: tuple[tuple[str, str, bool], ...] = (
-    ("roto_pit_w", "W", True),
-    ("roto_pit_k", "K", True),
-    ("roto_pit_sv", "SV", True),
-    ("roto_pit_era", "ERA", True),
-    ("roto_pit_whip", "WHIP", True),
-    ("roto_pit_qs", "QS", False),
-    ("roto_pit_svh", "SVH", False),
-)
-CALCULATOR_RESULT_STAT_EXPORT_ORDER: tuple[str, ...] = (
-    "R",
-    "RBI",
-    "HR",
-    "SB",
-    "AVG",
-    "OBP",
-    "SLG",
-    "OPS",
-    "H",
-    "BB",
-    "2B",
-    "TB",
-    "W",
-    "K",
-    "SV",
-    "ERA",
-    "WHIP",
-    "QS",
-    "SVH",
-)
-CALCULATOR_RESULT_POINTS_EXPORT_ORDER: tuple[str, ...] = (
-    "HittingPoints",
-    "PitchingPoints",
-    "SelectedPoints",
-    "HittingBestSlot",
-    "PitchingBestSlot",
-    "HittingValue",
-    "PitchingValue",
+from backend.domain.constants import (
+    CALCULATOR_RESULT_POINTS_EXPORT_ORDER,
+    CALCULATOR_RESULT_STAT_EXPORT_ORDER,
+    ROTO_HITTER_CATEGORY_FIELDS,
+    ROTO_PITCHER_CATEGORY_FIELDS,
 )
 
 

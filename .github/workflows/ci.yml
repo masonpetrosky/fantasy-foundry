@@ -50,6 +50,42 @@ jobs:
             exit 1
           fi
 
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ruff
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Run Backend Lint
+        run: ruff check backend tests preprocess.py scripts
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run Frontend Lint
+        working-directory: frontend
+        run: npm run lint
+
   unit-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -73,6 +109,46 @@ jobs:
 
       - name: Run Unit + Integration Test Suite
         run: pytest -q
+
+  e2e-smoke:
+    if: github.event_name != 'workflow_dispatch' || inputs.run_e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build Frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Backend + E2E Test Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt pytest
+
+      - name: Install Playwright Chromium + OS Dependencies
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run Browser Smoke Test
+        run: FF_RUN_E2E=1 pytest -q tests/test_e2e_projections_pagination.py
 
   e2e-tests:
     if: github.event_name == 'workflow_dispatch' && inputs.run_e2e

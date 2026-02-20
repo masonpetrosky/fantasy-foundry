@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import os
+import time
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from threading import Thread
@@ -20,6 +22,7 @@ def create_app(
     version: str,
     app_build_id: str,
     api_no_cache_headers: dict[str, str],
+    cors_allow_origins: list[str] | tuple[str, ...],
     refresh_data_if_needed: Callable[[], None],
     current_data_version: Callable[[], str],
     enable_startup_calc_prewarm: bool,
@@ -38,9 +41,10 @@ def create_app(
             calculator_job_executor.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(title=title, version=version, lifespan=app_lifespan)
+    request_logger = logging.getLogger("fantasy_foundry.http")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=list(cors_allow_origins),
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -69,5 +73,27 @@ def create_app(
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
         return response
+
+    @app.middleware("http")
+    async def log_api_request(request: Request, call_next: CallNext):
+        if not request.url.path.startswith("/api/"):
+            return await call_next(request)
+
+        started = time.perf_counter()
+        response = None
+        try:
+            response = await call_next(request)
+            return response
+        finally:
+            duration_ms = round((time.perf_counter() - started) * 1000.0, 1)
+            status_code = response.status_code if response is not None else 500
+            request_logger.info(
+                "api_request method=%s path=%s status=%s duration_ms=%s client_ip=%s",
+                request.method,
+                request.url.path,
+                status_code,
+                duration_ms,
+                request.client.host if request.client else "unknown",
+            )
 
     return app

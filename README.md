@@ -26,12 +26,26 @@ dynasty-site/
 ├── backend/
 │   ├── app.py                          # FastAPI application
 │   ├── api/routes/                     # Route registration modules (status/projections/calculate)
+│   ├── core/settings.py                # Typed env/config loader
+│   ├── core/calculator_orchestration.py # Calculator endpoint/job orchestration helpers
+│   ├── core/status_orchestration.py    # Status/health/version/readiness endpoint helpers
+│   ├── core/dynasty_lookup_orchestration.py # Dynasty lookup attach/year-filter helpers
+│   ├── core/projection_preprocessing.py # Projection data identity/date averaging helpers
+│   ├── core/projection_utils.py        # Projection utility/parsing helpers
+│   ├── core/points_calculator.py       # Points scoring and replacement-level calculation helpers
+│   ├── core/calculator_helpers.py      # Category parsing, guardrails, and explanation helpers
+│   ├── core/common_calculator.py       # Cached common roto calculator orchestration helper
+│   ├── core/export_utils.py            # CSV/XLSX export and record serialization helpers
+│   ├── core/result_cache.py            # Local/Redis calculator result and job snapshot cache helpers
+│   ├── core/data_refresh.py            # Data refresh/content-version/cache-inspection helpers
+│   ├── domain/constants.py             # Shared domain constants
 │   ├── dynasty_roto_values.py          # Main valuation workflow + CLI facade
 │   └── valuation/                      # Shared valuation modules (models/positions/assignment)
 ├── frontend/
 │   ├── index.html                      # Vite entry HTML (with inline styles)
 │   ├── src/                            # React source modules
 │   │   ├── main.jsx                    # App composition root + primary screens
+│   │   ├── hooks/useProjectionsData.js # Projections query/filter/cache hook
 │   │   ├── app_state_storage.js        # Local/cloud preference persistence helpers
 │   │   ├── request_helpers.js          # API error/response/debounce helper utilities
 │   │   ├── account_panel.jsx           # Account sync/auth UI
@@ -111,6 +125,22 @@ pytest -q
 # Frontend unit tests
 cd frontend
 npm test
+```
+
+### Linting
+```bash
+# Backend lint
+ruff check backend tests preprocess.py scripts
+
+# Frontend lint
+cd frontend
+npm run lint
+```
+
+### Unified Local Check
+```bash
+# Runs lint + backend/frontend tests
+make check
 ```
 
 ### CI Parity Check (Frontend Dist Freshness)
@@ -209,6 +239,9 @@ The API rate limiter and async-job IP guardrails can be configured for proxy dep
   - When set, `X-Forwarded-For` is only honored if the direct peer is in this allow-list.
 - `FF_RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS` (default: `60`)  
   - Periodic cleanup interval for stale in-memory rate-limit buckets.
+- `FF_CORS_ALLOW_ORIGINS` (default: `*`)  
+  - Comma-separated CORS allow-list (example: `https://fantasy-foundry.com,https://staging.fantasy-foundry.com`).
+  - For production, prefer explicit origins over `*`.
 - `FF_REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP` (default: `1`)  
   - `1`/`true`: require a valid precomputed `data/dynasty_lookup.json`; projections return HTTP 503 if missing/stale/invalid.
   - `0`/`false`: allow runtime fallback generation (slower cold-start projections responses).
@@ -218,6 +251,7 @@ The API rate limiter and async-job IP guardrails can be configured for proxy dep
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/health` | Runtime health summary (projection row counts, cache/job stats) |
+| GET | `/api/ready` | Readiness probe (returns HTTP 503 when required startup prerequisites are not ready) |
 | GET | `/api/version` | Build metadata (`build_id`, commit SHA, build timestamp) |
 | GET | `/api/meta` | Filter options (teams, years, positions) |
 | GET | `/api/projections/all` | Combined hitter+pitcher rows (query params: player, team, player_keys, year, years, pos, dynasty_years, career_totals, include_dynasty, sort_col, sort_dir, limit, offset) |

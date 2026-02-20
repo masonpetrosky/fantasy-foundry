@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request
 MetaHandler = Callable[[Request], Any]
 VersionHandler = Callable[[Request], Any]
 HealthHandler = Callable[[], Any]
+ReadyHandler = Callable[[], Any]
 
 
 def build_status_router(
@@ -16,6 +17,7 @@ def build_status_router(
     meta_handler: MetaHandler,
     version_handler: VersionHandler,
     health_handler: HealthHandler,
+    ready_handler: ReadyHandler,
 ) -> APIRouter:
     """Create metadata/version/health routes using injected handler callables."""
     router = APIRouter(tags=["status"])
@@ -31,5 +33,9 @@ def build_status_router(
     @router.get("/api/health")
     def get_health():
         return health_handler()
+
+    @router.get("/api/ready")
+    def get_ready():
+        return ready_handler()
 
     return router
