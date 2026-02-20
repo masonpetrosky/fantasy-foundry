@@ -75,6 +75,43 @@ export function writeCalculatorPresets(presets) {
   safeWriteStorage(CALC_PRESETS_STORAGE_KEY, JSON.stringify(normalizeCalculatorPresets(presets)));
 }
 
+function stableSerialize(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(entry => stableSerialize(entry)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.keys(value)
+      .sort((a, b) => a.localeCompare(b))
+      .map(key => `${JSON.stringify(key)}:${stableSerialize(value[key])}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+export function calculatorPresetsEqual(left, right) {
+  const normalizedLeft = normalizeCalculatorPresets(left);
+  const normalizedRight = normalizeCalculatorPresets(right);
+  const leftKeys = Object.keys(normalizedLeft).sort((a, b) => a.localeCompare(b));
+  const rightKeys = Object.keys(normalizedRight).sort((a, b) => a.localeCompare(b));
+  if (leftKeys.length !== rightKeys.length) return false;
+  for (let i = 0; i < leftKeys.length; i += 1) {
+    const leftKey = leftKeys[i];
+    const rightKey = rightKeys[i];
+    if (leftKey !== rightKey) return false;
+    if (stableSerialize(normalizedLeft[leftKey]) !== stableSerialize(normalizedRight[rightKey])) return false;
+  }
+  return true;
+}
+
+export function mergeCalculatorPresetsPreferLocal(localPresets, cloudPresets) {
+  const normalizedLocal = normalizeCalculatorPresets(localPresets);
+  const normalizedCloud = normalizeCalculatorPresets(cloudPresets);
+  return {
+    ...normalizedCloud,
+    ...normalizedLocal,
+  };
+}
+
 export function stablePlayerKeyFromRow(row) {
   const explicitKey = String(row?.PlayerEntityKey || row?.PlayerKey || "").trim();
   if (explicitKey) return explicitKey;

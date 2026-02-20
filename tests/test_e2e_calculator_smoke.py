@@ -130,6 +130,39 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
         ).first.locator("input").first
         self.assertTrue(sims_input.is_disabled(), "Expected simulations input to be disabled in points mode")
 
+    def _assert_preset_save_and_select_load_flow(self, page) -> None:
+        teams_input = page.locator(".calc-sidebar .form-group").filter(
+            has=page.locator("label", has_text="Teams")
+        ).first.locator("input").first
+        teams_input.fill("14")
+
+        preset_name = "Smoke Preset"
+        preset_name_input = page.locator(".calc-sidebar .form-group").filter(
+            has=page.locator("label", has_text="Preset Name")
+        ).first.locator("input").first
+        preset_name_input.fill(preset_name)
+
+        save_button = page.locator(".calc-sidebar button").filter(
+            has_text="Save / Update Preset"
+        ).first
+        self.assertTrue(save_button.is_enabled(), "Expected save button enabled after naming a preset")
+        save_button.click()
+
+        preset_status = page.locator(".calc-preset-status").first
+        self.assertIn("Saved new preset", preset_status.inner_text())
+
+        saved_presets_select = page.locator(".calc-sidebar .form-group").filter(
+            has=page.locator("label", has_text="Saved Presets")
+        ).first.locator("select").first
+        saved_presets_select.select_option("")
+
+        teams_input.fill("10")
+        saved_presets_select.select_option(preset_name)
+        page.wait_for_timeout(200)
+
+        self.assertEqual(teams_input.input_value().strip(), "14")
+        self.assertIn("Loaded preset", preset_status.inner_text())
+
     def _run_calculation_and_wait(self, page) -> None:
         page.locator(".calc-btn").first.click()
         page.wait_for_function(
@@ -165,6 +198,7 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
         page = context.new_page()
         try:
             self._open_calculator(page)
+            self._assert_preset_save_and_select_load_flow(page)
             self._switch_to_points_mode(page)
             self._run_calculation_and_wait(page)
             self._assert_result_count_format(page)

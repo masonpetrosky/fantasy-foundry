@@ -17,6 +17,7 @@ export function DynastyCalculatorSidebar({
   actions,
 }) {
   const {
+    canSavePreset,
     hittersPerTeam,
     isPointsMode,
     lastRunTotal,
@@ -24,6 +25,8 @@ export function DynastyCalculatorSidebar({
     mainTableOverlayActive,
     pointRulesCount,
     presetName,
+    presetStatus,
+    presetStatusIsError,
     pitchersPerTeam,
     reservePerTeam,
     selectedPresetName,
@@ -41,14 +44,13 @@ export function DynastyCalculatorSidebar({
     clearAppliedValues,
     copyShareLink,
     deletePreset,
-    loadPreset,
     reapplySetupDefaults,
     resetPointsScoringDefaults,
     resetRotoCategoryDefaults,
     run,
     savePreset,
+    selectPreset,
     setPresetName,
-    setSelectedPresetName,
     update,
   } = actions;
 
@@ -242,7 +244,7 @@ export function DynastyCalculatorSidebar({
           </div>
           <div className="form-group">
             <label>Preset Actions</label>
-            <button type="button" className="calc-secondary-btn" onClick={savePreset}>
+            <button type="button" className="calc-secondary-btn" onClick={savePreset} disabled={!canSavePreset}>
               Save / Update Preset
             </button>
           </div>
@@ -252,7 +254,7 @@ export function DynastyCalculatorSidebar({
             <label>Saved Presets</label>
             <select
               value={selectedPresetName}
-              onChange={e => setSelectedPresetName(e.target.value)}
+              onChange={e => selectPreset(e.target.value)}
             >
               <option value="">Select Preset</option>
               {Object.keys(presets).sort((a, b) => a.localeCompare(b)).map(name => (
@@ -267,11 +269,17 @@ export function DynastyCalculatorSidebar({
             </button>
           </div>
         </div>
+        {presetStatus && (
+          <p
+            className={`calc-preset-status ${presetStatusIsError ? "error" : ""}`.trim()}
+            role={presetStatusIsError ? "alert" : "status"}
+            aria-live="polite"
+          >
+            {presetStatus}
+          </p>
+        )}
         {selectedPresetName && (
-          <div className="calc-inline-actions">
-            <button type="button" className="calc-secondary-btn" onClick={() => loadPreset(selectedPresetName)}>
-              Load Selected Preset
-            </button>
+          <div className="calc-inline-actions calc-inline-actions-single">
             <button type="button" className="calc-secondary-btn danger" onClick={() => deletePreset(selectedPresetName)}>
               Delete Selected Preset
             </button>

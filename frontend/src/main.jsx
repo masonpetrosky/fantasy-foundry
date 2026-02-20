@@ -13,7 +13,9 @@ import {
   CALC_LINK_QUERY_PARAM,
   CLOUD_SYNC_DEBOUNCE_MS,
   buildCloudPreferencesPayload,
+  calculatorPresetsEqual,
   formatAuthError,
+  mergeCalculatorPresetsPreferLocal,
   normalizeCloudPreferences,
   readCalculatorPresets,
   readPlayerWatchlist,
@@ -311,8 +313,43 @@ function App() {
 
       if (data?.preferences) {
         const normalized = normalizeCloudPreferences(data.preferences);
-        setPresets(normalized.calculatorPresets);
+        const mergedCalculatorPresets = mergeCalculatorPresetsPreferLocal(
+          presetsRef.current,
+          normalized.calculatorPresets
+        );
+        const shouldPersistMergedPresets = !calculatorPresetsEqual(
+          mergedCalculatorPresets,
+          normalized.calculatorPresets
+        );
+
+        setPresets(mergedCalculatorPresets);
         setWatchlist(normalized.playerWatchlist);
+
+        if (shouldPersistMergedPresets) {
+          const mergedPayload = buildCloudPreferencesPayload({
+            calculatorPresets: mergedCalculatorPresets,
+            playerWatchlist: normalized.playerWatchlist,
+          });
+          const { error: mergeError } = await client
+            .from(SUPABASE_PREFS_TABLE)
+            .upsert(
+              {
+                user_id: authUser.id,
+                preferences: mergedPayload,
+              },
+              { onConflict: "user_id" }
+            );
+
+          if (cancelled) return;
+          if (mergeError) {
+            setCloudStatus(`Cloud sync error: ${formatAuthError(mergeError, "Unable to merge account presets.")}`);
+            return;
+          }
+          setCloudStatus("Merged local and cloud presets.");
+          setCloudReadyForSave(true);
+          return;
+        }
+
         setCloudStatus("Loaded saved account settings.");
         setCloudReadyForSave(true);
         return;
@@ -604,7 +641,10 @@ function App() {
                     aria-expanded={calculatorPanelOpen}
                     aria-controls="embedded-calculator-content"
                   >
-                    Dynasty Calculator
+                    <span className="embedded-calculator-toggle-label">
+                      {calculatorPanelOpen ? "Hide Calculator" : "Show Calculator"}
+                    </span>
+                    <span className="embedded-calculator-toggle-chevron" aria-hidden="true">v</span>
                   </button>
                 </div>
                 <p className="methodology-note embedded-calculator-note">

@@ -36,6 +36,7 @@ export function DynastyCalculator({
   const [settings, setSettings] = useState(() => buildDefaultCalculatorSettings(meta));
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
+  const [presetStatus, setPresetStatus] = useState("");
   const [presetName, setPresetName] = useState("");
   const [selectedPresetName, setSelectedPresetName] = useState("");
   const [lastRunTotal, setLastRunTotal] = useState(0);
@@ -174,33 +175,53 @@ export function DynastyCalculator({
   function savePreset() {
     const name = String(presetName || "").trim();
     if (!name) {
-      setStatus("Error: Enter a preset name before saving.");
+      setPresetStatus("Error: Enter a preset name before saving.");
       return;
     }
+    const existingPreset = presets[name];
+    const isUpdate = Boolean(existingPreset && typeof existingPreset === "object");
     setPresets(current => ({ ...current, [name]: settings }));
-    setStatus(`Saved preset '${name}'.`);
+    setPresetName(name);
+    setSelectedPresetName(name);
+    setPresetStatus(`${isUpdate ? "Updated" : "Saved new"} preset '${name}'.`);
   }
 
   function loadPreset(name) {
     const preset = presets[name];
     if (!preset || typeof preset !== "object") {
-      setStatus(`Error: Preset '${name}' was not found.`);
+      setPresetStatus(`Error: Preset '${name}' was not found.`);
       return;
     }
     setSettings(current => mergeKnownCalculatorSettings(current, preset));
     setPresetName(name);
     setSelectedPresetName(name);
-    setStatus(`Loaded preset '${name}'.`);
+    setPresetStatus(`Loaded preset '${name}'.`);
+  }
+
+  function selectPreset(name) {
+    const normalizedName = String(name || "").trim();
+    setSelectedPresetName(normalizedName);
+    if (!normalizedName) {
+      setPresetStatus("");
+      return;
+    }
+    loadPreset(normalizedName);
   }
 
   function deletePreset(name) {
+    const normalizedName = String(name || "").trim();
+    if (!normalizedName) return;
+    if (!window.confirm(`Delete preset '${normalizedName}'?`)) {
+      return;
+    }
     setPresets(current => {
       const next = { ...current };
-      delete next[name];
+      delete next[normalizedName];
       return next;
     });
-    setSelectedPresetName(current => (current === name ? "" : current));
-    setStatus(`Deleted preset '${name}'.`);
+    setPresetName(current => (current === normalizedName ? "" : current));
+    setSelectedPresetName(current => (current === normalizedName ? "" : current));
+    setPresetStatus(`Deleted preset '${normalizedName}'.`);
   }
 
   async function copyShareLink() {
@@ -315,8 +336,11 @@ export function DynastyCalculator({
   const totalPlayersPerTeam = hittersPerTeam + pitchersPerTeam + reservePerTeam;
   const pointRulesCount = POINTS_SCORING_FIELDS.length;
   const statusIsError = Boolean(validationError) || String(status || "").startsWith("Error");
+  const presetStatusIsError = String(presetStatus || "").startsWith("Error");
+  const canSavePreset = String(presetName || "").trim().length > 0;
 
   const sidebarState = {
+    canSavePreset,
     hittersPerTeam,
     isPointsMode,
     lastRunTotal,
@@ -324,6 +348,8 @@ export function DynastyCalculator({
     mainTableOverlayActive: Boolean(mainTableOverlayActive),
     pointRulesCount,
     presetName,
+    presetStatus,
+    presetStatusIsError,
     pitchersPerTeam,
     reservePerTeam,
     selectedPresetName,
@@ -342,14 +368,13 @@ export function DynastyCalculator({
     clearAppliedValues,
     copyShareLink,
     deletePreset,
-    loadPreset,
     reapplySetupDefaults,
     resetPointsScoringDefaults,
     resetRotoCategoryDefaults,
     run,
     savePreset,
+    selectPreset,
     setPresetName,
-    setSelectedPresetName,
     update,
   };
 

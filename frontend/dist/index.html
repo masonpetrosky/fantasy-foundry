@@ -1175,24 +1175,45 @@ td.value-negative { color: var(--red); }
 .embedded-calculator-toggle {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-height: 36px;
-  padding: 8px 14px;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 38px;
+  min-width: 170px;
+  padding: 8px 12px 8px 14px;
   border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
+  border: 1px solid var(--accent-dim);
+  background: rgba(212, 168, 83, 0.1);
+  color: var(--text-primary);
   font-size: var(--fs-sm);
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
+.embedded-calculator-toggle-label {
+  text-align: left;
+}
+
 .embedded-calculator-toggle:hover,
+.embedded-calculator-toggle:focus-visible {
+  background: rgba(212, 168, 83, 0.16);
+  border-color: var(--accent);
+}
+
 .embedded-calculator-toggle.open {
   background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-color: var(--border-subtle);
+  border-color: var(--accent-dim);
+}
+
+.embedded-calculator-toggle-chevron {
+  color: var(--accent);
+  font-size: 0.78rem;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+
+.embedded-calculator-toggle.open .embedded-calculator-toggle-chevron {
+  transform: rotate(180deg);
 }
 
 .embedded-calculator-note {
@@ -1319,6 +1340,10 @@ td.value-negative { color: var(--red); }
   gap: 10px;
 }
 
+.calc-inline-actions-single {
+  grid-template-columns: 1fr;
+}
+
 .calc-btn {
   width: 100%;
   margin-top: 8px;
@@ -1356,6 +1381,16 @@ td.value-negative { color: var(--red); }
   line-height: var(--lh-base);
 }
 
+.calc-preset-status {
+  margin: -4px 0 10px;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.calc-preset-status.error {
+  color: var(--red);
+}
+
 .calc-secondary-btn {
   width: 100%;
   margin-top: 4px;
@@ -1370,12 +1405,17 @@ td.value-negative { color: var(--red); }
   cursor: pointer;
 }
 
-.calc-secondary-btn:hover {
+.calc-secondary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.calc-secondary-btn:hover:not(:disabled) {
   border-color: var(--accent-dim);
   color: var(--accent);
 }
 
-.calc-secondary-btn.danger:hover {
+.calc-secondary-btn.danger:hover:not(:disabled) {
   border-color: rgba(245, 108, 108, 0.6);
   color: var(--red);
 }
@@ -2045,7 +2085,7 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   .faq-item { padding: 12px 14px; }
 }
 </style>
-  <script type="module" crossorigin src="/assets/index-BnAl4U_t.js"></script>
+  <script type="module" crossorigin src="/assets/index-cOR79yXH.js"></script>
 </head>
 <body>
 
