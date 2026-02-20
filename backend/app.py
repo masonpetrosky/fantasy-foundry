@@ -655,10 +655,12 @@ def _dynasty_lookup_payload_version(payload: dict[str, object]) -> str | None:
 
 
 def _inspect_precomputed_default_dynasty_lookup() -> DynastyLookupCacheInspection:
+    pytest_current_test = bool(os.getenv("PYTEST_CURRENT_TEST"))
+    e2e_enabled = str(os.getenv("FF_RUN_E2E", "")).strip().lower() in {"1", "true", "yes", "on"}
     inspection: LookupInspectionResult = core_inspect_precomputed_default_dynasty_lookup(
         current_data_version=_current_data_version(),
         dynasty_lookup_cache_path=DYNASTY_LOOKUP_CACHE_PATH,
-        pytest_current_test=bool(os.getenv("PYTEST_CURRENT_TEST")),
+        pytest_current_test=pytest_current_test and not e2e_enabled,
         value_col_sort_key=_value_col_sort_key,
     )
     return DynastyLookupCacheInspection(

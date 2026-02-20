@@ -11,7 +11,6 @@ Optional:
 import argparse
 import json
 import re
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -213,7 +212,6 @@ def _build_dynasty_lookup_cache() -> tuple[int, int]:
     cache_data_version = backend_app._current_data_version()
     payload = {
         "format_version": 1,
-        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
         "cache_data_version": cache_data_version,
         # Legacy compatibility key: retained for older deployments/tests.
         "data_version": cache_data_version,
