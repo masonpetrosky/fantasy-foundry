@@ -25,6 +25,7 @@ class ProjectionServiceContext:
     attach_dynasty_values: callable
     coerce_meta_years: callable
     tabular_export_response: callable
+    calculator_overlay_values_for_job: callable
     player_key_col: str
     player_entity_key_col: str
     position_token_split_re: re.Pattern[str]
@@ -736,6 +737,42 @@ class ProjectionService:
             )
         return normalized
 
+    def _row_overlay_lookup_key(self, row: dict) -> str:
+        entity_key = str(row.get(self._ctx.player_entity_key_col) or "").strip().lower()
+        if entity_key:
+            return entity_key
+        return str(row.get(self._ctx.player_key_col) or "").strip().lower()
+
+    def _apply_calculator_overlay_values(
+        self,
+        rows: list[dict],
+        *,
+        include_dynasty: bool,
+        calculator_job_id: str | None,
+    ) -> list[dict]:
+        if not include_dynasty or not rows:
+            return rows
+
+        job_id = self._normalize_filter_value(calculator_job_id)
+        if not job_id:
+            return rows
+
+        overlay_by_key = self._ctx.calculator_overlay_values_for_job(job_id)
+        if not overlay_by_key or not isinstance(overlay_by_key, dict):
+            return rows
+
+        next_rows: list[dict] = []
+        changed = False
+        for row in rows:
+            key = self._row_overlay_lookup_key(row)
+            overlay = overlay_by_key.get(key) if key else None
+            if overlay and isinstance(overlay, dict):
+                next_rows.append({**row, **overlay})
+                changed = True
+            else:
+                next_rows.append(row)
+        return next_rows if changed else rows
+
     def _sort_projection_rows(self, rows: list[dict], sort_col: str | None, sort_dir: str | None) -> list[dict]:
         col = str(sort_col or "").strip()
         if not col:
@@ -917,6 +954,7 @@ class ProjectionService:
         pos: str | None,
         include_dynasty: bool,
         dynasty_years: str | None,
+        calculator_job_id: str | None,
         career_totals: bool,
         sort_col: str | None,
         sort_dir: str | None,
@@ -933,8 +971,13 @@ class ProjectionService:
             self._normalize_filter_value(dynasty_years),
             career_totals,
         )
-        sorted_rows = self._sort_projection_rows(
+        with_overlay = self._apply_calculator_overlay_values(
             list(cached_rows),
+            include_dynasty=include_dynasty,
+            calculator_job_id=calculator_job_id,
+        )
+        sorted_rows = self._sort_projection_rows(
+            with_overlay,
             self._normalize_filter_value(sort_col),
             self._normalize_sort_dir(sort_dir),
         )
@@ -951,6 +994,7 @@ class ProjectionService:
         pos: str | None,
         include_dynasty: bool,
         dynasty_years: str | None,
+        calculator_job_id: str | None,
         career_totals: bool,
         sort_col: str | None,
         sort_dir: str | None,
@@ -966,8 +1010,13 @@ class ProjectionService:
             self._normalize_filter_value(dynasty_years),
             career_totals,
         )
-        sorted_rows = self._sort_projection_rows(
+        with_overlay = self._apply_calculator_overlay_values(
             list(cached_rows),
+            include_dynasty=include_dynasty,
+            calculator_job_id=calculator_job_id,
+        )
+        sorted_rows = self._sort_projection_rows(
+            with_overlay,
             self._normalize_filter_value(sort_col),
             self._normalize_sort_dir(sort_dir),
         )
@@ -986,6 +1035,7 @@ class ProjectionService:
         dynasty_years: str | None,
         career_totals: bool,
         include_dynasty: bool,
+        calculator_job_id: str | None,
         sort_col: str | None,
         sort_dir: str,
         limit: int,
@@ -1002,6 +1052,7 @@ class ProjectionService:
             pos=pos,
             include_dynasty=include_dynasty,
             dynasty_years=dynasty_years,
+            calculator_job_id=calculator_job_id,
             career_totals=career_totals,
             sort_col=validated_sort_col,
             sort_dir=sort_dir,
@@ -1027,6 +1078,7 @@ class ProjectionService:
         dynasty_years: Optional[str] = None,
         career_totals: bool = False,
         include_dynasty: bool = True,
+        calculator_job_id: Optional[str] = None,
         sort_col: Optional[str] = None,
         sort_dir: Literal["asc", "desc"] = "desc",
         columns: Optional[str] = None,
@@ -1044,6 +1096,7 @@ class ProjectionService:
                     pos=pos,
                     include_dynasty=include_dynasty,
                     dynasty_years=dynasty_years,
+                    calculator_job_id=calculator_job_id,
                     career_totals=career_totals,
                     sort_col=validated_sort_col,
                     sort_dir=sort_dir,
@@ -1061,6 +1114,7 @@ class ProjectionService:
                     pos=pos,
                     include_dynasty=include_dynasty,
                     dynasty_years=dynasty_years,
+                    calculator_job_id=calculator_job_id,
                     career_totals=career_totals,
                     sort_col=validated_sort_col,
                     sort_dir=sort_dir,

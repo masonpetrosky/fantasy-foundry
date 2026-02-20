@@ -177,7 +177,43 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
             timeout=180000,
         )
         page.wait_for_selector(".projections-overlay-message", timeout=30000)
-        page.wait_for_selector(".projections-table tbody tr", timeout=30000)
+        page.wait_for_function(
+            """
+            () => Boolean(
+              document.querySelector('.projections-table tbody tr') ||
+              document.querySelector('.projection-card-list .projection-card')
+            )
+            """,
+            timeout=30000,
+        )
+
+    def _set_projection_layout(self, page, mode: str) -> None:
+        desired = "cards" if str(mode).strip().lower() == "cards" else "table"
+        label = "Cards" if desired == "cards" else "Table"
+        button = page.locator(".projection-view-toggle .projection-view-btn").filter(
+            has_text=re.compile(rf"^{label}$")
+        ).first
+        button.scroll_into_view_if_needed()
+        if button.get_attribute("aria-pressed") != "true":
+            button.click(force=True)
+
+        page.wait_for_function(
+            """
+            (targetMode) => {
+              const active = document.querySelector('.projection-view-toggle .projection-view-btn.active');
+              if (!active) return false;
+              const text = (active.textContent || '').trim().toLowerCase();
+              return text === targetMode;
+            }
+            """,
+            arg=desired,
+            timeout=10000,
+        )
+
+        if desired == "cards":
+            page.wait_for_selector(".projection-card-list .projection-card", timeout=30000)
+        else:
+            page.wait_for_selector(".projections-table tbody tr", timeout=30000)
 
     def _assert_result_count_format(self, page) -> None:
         count_text = page.locator(".filter-bar .result-count").first.inner_text().strip()
@@ -186,11 +222,27 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
         total_count = int(match.group(1).replace(",", ""))
         self.assertGreater(total_count, 0, "Expected at least one projection row")
 
-    def _open_columns_menu(self, page, force: bool = False):
-        columns_button = page.locator("button").filter(has_text="Table Columns").first
-        columns_button.scroll_into_view_if_needed()
-        columns_button.click(force=force)
-        page.wait_for_selector(".multi-select-menu", timeout=5000)
+    def _open_columns_menu(self, page, force: bool = False, button_text: str = "Table Columns"):
+        columns_button = page.locator("button").filter(
+            has_text=re.compile(rf"^{re.escape(button_text)}")
+        ).first
+        menu_container = columns_button.locator(
+            "xpath=ancestor::div[contains(@class, 'multi-select')]"
+        ).first
+
+        for _ in range(2):
+            columns_button.scroll_into_view_if_needed()
+            if columns_button.get_attribute("aria-expanded") != "true":
+                columns_button.click(force=force)
+            try:
+                menu_container.locator(".multi-select-menu").first.wait_for(state="visible", timeout=5000)
+                return columns_button
+            except PlaywrightError:
+                if columns_button.get_attribute("aria-expanded") == "true":
+                    columns_button.click(force=True)
+                page.wait_for_timeout(200)
+
+        menu_container.locator(".multi-select-menu").first.wait_for(state="visible", timeout=5000)
         return columns_button
 
     def test_desktop_calculator_polish_smoke(self) -> None:
@@ -254,9 +306,13 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
             )
             self.assertLessEqual(round(toolbar_width), viewport_width)
 
-            self._open_columns_menu(page, force=True)
+            self._set_projection_layout(page, "cards")
+            self.assertTrue(page.locator(".projection-card-list .projection-card").first.is_visible())
+
+            self._open_columns_menu(page, force=True, button_text="Card Stats")
             self.assertTrue(page.locator(".multi-select-menu").first.is_visible())
 
+            self._set_projection_layout(page, "table")
             first_row = page.locator(".projections-table tbody tr").first
             first_row.scroll_into_view_if_needed()
             self.assertTrue(first_row.is_visible())

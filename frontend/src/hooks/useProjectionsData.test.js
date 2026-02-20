@@ -45,6 +45,22 @@ describe("buildProjectionQueryParams", () => {
     expect(baseParams.get("dynasty_years")).toBe("2026,2027");
     expect(baseParams.get("include_dynasty")).toBe("true");
   });
+
+  it("includes calculator job id when provided", () => {
+    const { baseParams } = buildProjectionQueryParams({
+      debouncedSearch: "",
+      teamFilter: "",
+      watchlistOnly: false,
+      watchlistKeysFilter: "",
+      careerTotalsView: false,
+      resolvedYearFilter: "2026",
+      posFilters: [],
+      selectedDynastyYears: ["2026"],
+      calculatorJobId: "abc123",
+    });
+
+    expect(baseParams.get("calculator_job_id")).toBe("abc123");
+  });
 });
 
 describe("buildProjectionCacheKey", () => {

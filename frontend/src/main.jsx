@@ -73,6 +73,7 @@ function App() {
   const [watchlist, setWatchlist] = useState(() => readPlayerWatchlist());
   const [calculatorOverlayByPlayerKey, setCalculatorOverlayByPlayerKey] = useState({});
   const [calculatorOverlayActive, setCalculatorOverlayActive] = useState(false);
+  const [calculatorOverlayJobId, setCalculatorOverlayJobId] = useState("");
   const [authReady, setAuthReady] = useState(!AUTH_SYNC_ENABLED);
   const [authUser, setAuthUser] = useState(null);
   const [authStatus, setAuthStatus] = useState("");
@@ -87,15 +88,19 @@ function App() {
   const sectionNeedsMeta = section === "projections";
   const calculatorOverlayPlayerCount = Object.keys(calculatorOverlayByPlayerKey).length;
 
-  const applyCalculatorOverlay = useCallback(result => {
+  const applyCalculatorOverlay = useCallback((result, _settings, runMeta) => {
     const nextOverlay = buildCalculatorOverlayMap(result);
+    const hasOverlay = Object.keys(nextOverlay).length > 0;
+    const nextJobId = hasOverlay ? String(runMeta?.jobId || "").trim() : "";
     setCalculatorOverlayByPlayerKey(nextOverlay);
-    setCalculatorOverlayActive(Object.keys(nextOverlay).length > 0);
+    setCalculatorOverlayActive(hasOverlay);
+    setCalculatorOverlayJobId(nextJobId);
   }, []);
 
   const clearCalculatorOverlay = useCallback(() => {
     setCalculatorOverlayByPlayerKey({});
     setCalculatorOverlayActive(false);
+    setCalculatorOverlayJobId("");
   }, []);
 
   useEffect(() => {
@@ -673,6 +678,7 @@ function App() {
                   setWatchlist={setWatchlist}
                   calculatorOverlayByPlayerKey={calculatorOverlayByPlayerKey}
                   calculatorOverlayActive={calculatorOverlayActive}
+                  calculatorOverlayJobId={calculatorOverlayJobId}
                   calculatorOverlayPlayerCount={calculatorOverlayPlayerCount}
                 />
               </div>

@@ -1633,6 +1633,52 @@ def _clear_after_data_reload() -> None:
         CALC_RESULT_CACHE_ORDER.clear()
 
 
+def _calculator_overlay_values_for_job(job_id: str | None) -> dict[str, dict[str, Any]]:
+    normalized_job_id = str(job_id or "").strip()
+    if not normalized_job_id:
+        return {}
+
+    with CALCULATOR_JOB_LOCK:
+        live_job = CALCULATOR_JOBS.get(normalized_job_id)
+    job_payload = live_job if isinstance(live_job, dict) else _cached_calculation_job_snapshot(normalized_job_id)
+    if not isinstance(job_payload, dict):
+        return {}
+    if str(job_payload.get("status") or "").lower() != "completed":
+        return {}
+
+    result = job_payload.get("result")
+    rows = result.get("data") if isinstance(result, dict) else None
+    if not isinstance(rows, list):
+        return {}
+
+    overlay_by_player_key: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+
+        overlay: dict[str, Any] = {}
+        dynasty_value = row.get("DynastyValue")
+        if dynasty_value is not None and dynasty_value != "":
+            overlay["DynastyValue"] = dynasty_value
+        for col, value in row.items():
+            if not str(col).startswith("Value_"):
+                continue
+            if value is None or value == "":
+                continue
+            overlay[str(col)] = value
+        if not overlay:
+            continue
+
+        entity_key = str(row.get(PLAYER_ENTITY_KEY_COL) or "").strip().lower()
+        player_key = str(row.get(PLAYER_KEY_COL) or "").strip().lower()
+        if entity_key:
+            overlay_by_player_key[entity_key] = overlay
+        elif player_key:
+            overlay_by_player_key[player_key] = overlay
+
+    return overlay_by_player_key
+
+
 PROJECTION_SERVICE = ProjectionService(
     ProjectionServiceContext(
         refresh_data_if_needed=_refresh_data_if_needed,
@@ -1645,6 +1691,7 @@ PROJECTION_SERVICE = ProjectionService(
         attach_dynasty_values=_attach_dynasty_values,
         coerce_meta_years=_coerce_meta_years,
         tabular_export_response=_tabular_export_response,
+        calculator_overlay_values_for_job=_calculator_overlay_values_for_job,
         player_key_col=PLAYER_KEY_COL,
         player_entity_key_col=PLAYER_ENTITY_KEY_COL,
         position_token_split_re=POSITION_TOKEN_SPLIT_RE,
@@ -1937,6 +1984,7 @@ def projection_response(
     dynasty_years: str | None,
     career_totals: bool,
     include_dynasty: bool,
+    calculator_job_id: str | None,
     sort_col: str | None,
     sort_dir: Literal["asc", "desc"],
     limit: int,
@@ -1954,6 +2002,7 @@ def projection_response(
         dynasty_years=dynasty_years,
         career_totals=career_totals,
         include_dynasty=include_dynasty,
+        calculator_job_id=calculator_job_id,
         sort_col=sort_col,
         sort_dir=sort_dir,
         limit=limit,
@@ -1975,6 +2024,7 @@ def export_projections(
     dynasty_years: str | None = None,
     career_totals: bool = False,
     include_dynasty: bool = True,
+    calculator_job_id: str | None = None,
     sort_col: str | None = None,
     sort_dir: Literal["asc", "desc"] = "desc",
     columns: str | None = None,
@@ -1992,6 +2042,7 @@ def export_projections(
         dynasty_years=dynasty_years,
         career_totals=career_totals,
         include_dynasty=include_dynasty,
+        calculator_job_id=calculator_job_id,
         sort_col=sort_col,
         sort_dir=sort_dir,
         columns=columns,

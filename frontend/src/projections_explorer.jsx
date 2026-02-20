@@ -52,9 +52,13 @@ export function ProjectionsExplorer({
   setWatchlist,
   calculatorOverlayByPlayerKey,
   calculatorOverlayActive,
+  calculatorOverlayJobId,
   calculatorOverlayPlayerCount,
 }) {
   const API = String(apiBase || "").trim();
+  const activeCalculatorJobId = calculatorOverlayActive
+    ? String(calculatorOverlayJobId || "").trim()
+    : "";
   const {
     tab,
     setTab,
@@ -89,6 +93,7 @@ export function ProjectionsExplorer({
     meta,
     watchlist,
     dataVersion,
+    calculatorJobId: activeCalculatorJobId,
   });
   const [isMobileViewport, setIsMobileViewport] = useState(() => (
     window.matchMedia("(max-width: 768px)").matches
@@ -138,6 +143,28 @@ export function ProjectionsExplorer({
     () => applyCalculatorOverlayToRows(baseData),
     [applyCalculatorOverlayToRows, baseData]
   );
+
+  useEffect(() => {
+    if (!Array.isArray(data) || data.length === 0) return;
+    setCompareRowsByKey(current => {
+      const keys = Object.keys(current || {});
+      if (keys.length === 0) return current;
+      const latestByKey = {};
+      data.forEach(row => {
+        latestByKey[stablePlayerKeyFromRow(row)] = row;
+      });
+      let changed = false;
+      const next = { ...current };
+      keys.forEach(key => {
+        const latest = latestByKey[key];
+        if (latest && next[key] !== latest) {
+          next[key] = latest;
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+  }, [data]);
 
   const updateProjectionHorizontalAffordance = useCallback(() => {
     const el = projectionTableScrollRef.current;
@@ -310,6 +337,7 @@ export function ProjectionsExplorer({
     if (posFilters.length > 0) params.set("pos", posFilters.join(","));
     if (selectedDynastyYears.length > 0) params.set("dynasty_years", selectedDynastyYears.join(","));
     params.set("include_dynasty", "true");
+    if (activeCalculatorJobId) params.set("calculator_job_id", activeCalculatorJobId);
     params.set("sort_col", sortCol);
     params.set("sort_dir", sortDir);
     if (cols.length > 0) params.set("columns", cols.join(","));

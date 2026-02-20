@@ -948,6 +948,201 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         actual = [row["Player"] for row in page1["data"] + page2["data"]]
         self.assertEqual(actual, expected)
 
+    def test_calculator_job_overlay_reorders_dynasty_sort_globally(self) -> None:
+        bat_rows = [
+            {
+                "Player": "Alpha",
+                "Team": "NYY",
+                "Year": 2026,
+                "Pos": "OF",
+                "DynastyValue": 1.0,
+                "PlayerKey": "alpha",
+                "PlayerEntityKey": "alpha",
+            },
+            {
+                "Player": "Bravo",
+                "Team": "BOS",
+                "Year": 2026,
+                "Pos": "OF",
+                "DynastyValue": 9.0,
+                "PlayerKey": "bravo",
+                "PlayerEntityKey": "bravo",
+            },
+        ]
+        overlay_job_id = "job-overlay-sort"
+        overlay_job_payload = {
+            "job_id": overlay_job_id,
+            "status": "completed",
+            "result": {
+                "data": [
+                    {"PlayerEntityKey": "alpha", "PlayerKey": "alpha", "DynastyValue": 20.0},
+                ]
+            },
+        }
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(
+            app_module, "PIT_DATA", []
+        ), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ), patch.object(
+            app_module.PROJECTION_SERVICE._ctx,
+            "attach_dynasty_values",
+            side_effect=lambda rows, _years: rows,
+        ), patch.dict(
+            app_module.CALCULATOR_JOBS,
+            {overlay_job_id: overlay_job_payload},
+            clear=True,
+        ):
+            baseline_response = self.client.get(
+                "/api/projections/all",
+                params={
+                    "include_dynasty": "true",
+                    "sort_col": "DynastyValue",
+                    "sort_dir": "desc",
+                },
+            )
+            overlay_response = self.client.get(
+                "/api/projections/all",
+                params={
+                    "include_dynasty": "true",
+                    "sort_col": "DynastyValue",
+                    "sort_dir": "desc",
+                    "calculator_job_id": overlay_job_id,
+                },
+            )
+
+        self.assertEqual(baseline_response.status_code, 200)
+        self.assertEqual(overlay_response.status_code, 200)
+        baseline_players = [row["Player"] for row in baseline_response.json()["data"]]
+        overlay_players = [row["Player"] for row in overlay_response.json()["data"]]
+        self.assertEqual(baseline_players, ["Bravo", "Alpha"])
+        self.assertEqual(overlay_players, ["Alpha", "Bravo"])
+        self.assertEqual(float(overlay_response.json()["data"][0]["DynastyValue"]), 20.0)
+
+    def test_projection_overlay_missing_job_falls_back_to_baseline_values(self) -> None:
+        bat_rows = [
+            {
+                "Player": "Alpha",
+                "Team": "NYY",
+                "Year": 2026,
+                "Pos": "OF",
+                "DynastyValue": 1.0,
+                "PlayerKey": "alpha",
+                "PlayerEntityKey": "alpha",
+            },
+            {
+                "Player": "Bravo",
+                "Team": "BOS",
+                "Year": 2026,
+                "Pos": "OF",
+                "DynastyValue": 9.0,
+                "PlayerKey": "bravo",
+                "PlayerEntityKey": "bravo",
+            },
+        ]
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(
+            app_module, "PIT_DATA", []
+        ), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ), patch.object(
+            app_module.PROJECTION_SERVICE._ctx,
+            "attach_dynasty_values",
+            side_effect=lambda rows, _years: rows,
+        ), patch.dict(
+            app_module.CALCULATOR_JOBS,
+            {},
+            clear=True,
+        ), patch.object(
+            app_module,
+            "_cached_calculation_job_snapshot",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/all",
+                params={
+                    "include_dynasty": "true",
+                    "sort_col": "DynastyValue",
+                    "sort_dir": "desc",
+                    "calculator_job_id": "missing-job",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        players = [row["Player"] for row in response.json()["data"]]
+        self.assertEqual(players, ["Bravo", "Alpha"])
+        self.assertEqual(float(response.json()["data"][0]["DynastyValue"]), 9.0)
+
+    def test_projection_export_uses_calculator_job_overlay_values(self) -> None:
+        bat_rows = [
+            {
+                "Player": "Alpha",
+                "Team": "NYY",
+                "Year": 2026,
+                "Pos": "OF",
+                "DynastyValue": 1.0,
+                "PlayerKey": "alpha",
+                "PlayerEntityKey": "alpha",
+            },
+            {
+                "Player": "Bravo",
+                "Team": "BOS",
+                "Year": 2026,
+                "Pos": "OF",
+                "DynastyValue": 9.0,
+                "PlayerKey": "bravo",
+                "PlayerEntityKey": "bravo",
+            },
+        ]
+        overlay_job_id = "job-overlay-export"
+        overlay_job_payload = {
+            "job_id": overlay_job_id,
+            "status": "completed",
+            "result": {
+                "data": [
+                    {"PlayerEntityKey": "alpha", "PlayerKey": "alpha", "DynastyValue": 20.0},
+                ]
+            },
+        }
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(
+            app_module, "PIT_DATA", []
+        ), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ), patch.object(
+            app_module.PROJECTION_SERVICE._ctx,
+            "attach_dynasty_values",
+            side_effect=lambda rows, _years: rows,
+        ), patch.dict(
+            app_module.CALCULATOR_JOBS,
+            {overlay_job_id: overlay_job_payload},
+            clear=True,
+        ):
+            response = self.client.get(
+                "/api/projections/export/bat",
+                params={
+                    "format": "csv",
+                    "include_dynasty": "true",
+                    "sort_col": "DynastyValue",
+                    "sort_dir": "desc",
+                    "calculator_job_id": overlay_job_id,
+                    "columns": "Player,DynastyValue",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        lines = response.text.splitlines()
+        self.assertGreaterEqual(len(lines), 2)
+        first_row = lines[1].split(",")
+        self.assertEqual(first_row[0], "Alpha")
+        self.assertEqual(float(first_row[1]), 20.0)
+
     def test_attach_dynasty_values_uses_entity_key_for_ambiguous_name(self) -> None:
         rows = [
             {"Player": "John Doe", "Team": "BOS", "Year": 2026, "PlayerKey": "john-doe", "PlayerEntityKey": "john-doe__bos"},

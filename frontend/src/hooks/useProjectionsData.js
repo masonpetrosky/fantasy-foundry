@@ -52,6 +52,7 @@ export function buildProjectionQueryParams({
   resolvedYearFilter,
   posFilters,
   selectedDynastyYears,
+  calculatorJobId,
 }) {
   const baseParams = new URLSearchParams();
   if (debouncedSearch) baseParams.set("player", debouncedSearch);
@@ -67,6 +68,7 @@ export function buildProjectionQueryParams({
   if (posFilters.length > 0) baseParams.set("pos", posFilters.join(","));
   if (selectedDynastyYears.length > 0) baseParams.set("dynasty_years", selectedDynastyYears.join(","));
   baseParams.set("include_dynasty", "true");
+  if (calculatorJobId) baseParams.set("calculator_job_id", calculatorJobId);
 
   return {
     baseParams,
@@ -74,7 +76,7 @@ export function buildProjectionQueryParams({
   };
 }
 
-export function useProjectionsData({ apiBase, meta, watchlist, dataVersion }) {
+export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calculatorJobId }) {
   const API = String(apiBase || "").trim();
   const [tab, setTab] = useState(DEFAULT_PROJECTIONS_TAB); // all | bat | pitch
   const [search, setSearch] = useState("");
@@ -163,6 +165,7 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion }) {
       resolvedYearFilter,
       posFilters,
       selectedDynastyYears,
+      calculatorJobId,
     });
 
     if (shouldReturnEmptyWatchlist) {
@@ -257,6 +260,7 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion }) {
     resolvedYearFilter,
     posFilters,
     selectedDynastyYears,
+    calculatorJobId,
     offset,
     sortCol,
     sortDir,
@@ -302,7 +306,7 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion }) {
 
   useEffect(() => {
     setOffset(0);
-  }, [tab, search, teamFilter, watchlistOnly, watchlistKeysFilter, resolvedYearFilter, posFilters, sortCol, sortDir]);
+  }, [tab, search, teamFilter, watchlistOnly, watchlistKeysFilter, resolvedYearFilter, posFilters, calculatorJobId, sortCol, sortDir]);
 
   useEffect(() => {
     if (yearFilter !== resolvedYearFilter) {

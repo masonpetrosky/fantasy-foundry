@@ -129,7 +129,7 @@ export async function runCalculationJob({
         if (activeJobIdRef.current === jobId) {
           activeJobIdRef.current = "";
         }
-        onCompleted(result);
+        onCompleted(result, { jobId });
         return;
       }
       if (jobStatus === "cancelled" || jobStatus === "canceled") {

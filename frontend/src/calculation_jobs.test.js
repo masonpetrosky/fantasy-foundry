@@ -59,7 +59,10 @@ describe("runCalculationJob", () => {
       "/api/calculate/jobs/job-1",
       expect.any(Object)
     );
-    expect(onCompleted).toHaveBeenCalledWith(expect.objectContaining({ total: 0 }));
+    expect(onCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ total: 0 }),
+      expect.objectContaining({ jobId: "job-1" })
+    );
     expect(onCancelled).not.toHaveBeenCalled();
     expect(onError).not.toHaveBeenCalled();
   });
@@ -99,7 +102,10 @@ describe("runCalculationJob", () => {
       expect.any(Object)
     );
     expect(onStatus).toHaveBeenCalledWith(expect.stringContaining("Running Monte Carlo simulations"));
-    expect(onCompleted).toHaveBeenCalledWith(expect.objectContaining({ total: 3 }));
+    expect(onCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ total: 3 }),
+      expect.objectContaining({ jobId: "job-2" })
+    );
   });
 
   it("uses points-specific status messaging for points jobs", async () => {
@@ -126,7 +132,10 @@ describe("runCalculationJob", () => {
     });
 
     expect(onStatus).toHaveBeenCalledWith(expect.stringContaining("Running points valuation"));
-    expect(onCompleted).toHaveBeenCalledWith(expect.objectContaining({ total: 2 }));
+    expect(onCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ total: 2 }),
+      expect.objectContaining({ jobId: "job-points" })
+    );
   });
 
   it("rejects missing payloads before making requests", async () => {

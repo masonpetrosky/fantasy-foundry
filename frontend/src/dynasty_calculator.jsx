@@ -286,7 +286,7 @@ export function DynastyCalculator({
       activeJobIdRef: calcActiveJobIdRef,
       timeoutSeconds: Number(meta?.calculator_guardrails?.job_timeout_seconds),
       onStatus: nextStatus => setStatus(nextStatus),
-      onCompleted: result => {
+      onCompleted: (result, runMeta) => {
         const total = Number(result?.total);
         const resolvedTotal = Number.isFinite(total)
           ? total
@@ -295,7 +295,7 @@ export function DynastyCalculator({
             : 0;
         setLastRunTotal(resolvedTotal);
         if (typeof onApplyToMainTable === "function") {
-          onApplyToMainTable(result, normalizedSettings);
+          onApplyToMainTable(result, normalizedSettings, runMeta);
         }
         setLoading(false);
         setStatus(`Done - applied ${resolvedTotal} ranked players to the main table.`);
