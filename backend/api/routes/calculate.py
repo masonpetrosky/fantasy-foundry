@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 
@@ -12,6 +12,7 @@ CalculateExportHandler = Callable[[Any, Request], Any]
 CalculateJobCreateHandler = Callable[[Any, Request], Any]
 CalculateJobReadHandler = Callable[[str, Request], Any]
 CalculateJobCancelHandler = Callable[[str, Request], Any]
+CalculateAuthorizeHandler = Callable[[Request], Any]
 
 
 def build_calculate_router(
@@ -23,9 +24,11 @@ def build_calculate_router(
     calculate_job_create_handler: CalculateJobCreateHandler,
     calculate_job_read_handler: CalculateJobReadHandler,
     calculate_job_cancel_handler: CalculateJobCancelHandler,
+    calculate_authorize_handler: CalculateAuthorizeHandler | None = None,
 ) -> APIRouter:
     """Create calculator sync/export/job routes using injected handlers."""
-    router = APIRouter(tags=["calculate"])
+    dependencies = [Depends(calculate_authorize_handler)] if calculate_authorize_handler is not None else []
+    router = APIRouter(tags=["calculate"], dependencies=dependencies)
 
     @router.post("/api/calculate")
     def calculate_dynasty_values(req: calculate_request_model, request: Request):

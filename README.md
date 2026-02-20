@@ -227,24 +227,33 @@ All three support Dockerfiles out of the box:
 - Just connect your GitHub repo and deploy
 - Current production custom domain: https://fantasy-foundry.com
 
-### Optional: Proxy + Rate Limit Identity Settings
+### Backend `FF_*` Runtime Settings
 
-The API rate limiter and async-job IP guardrails can be configured for proxy deployments:
+| Variable | Default | Description |
+| --- | --- | --- |
+| `FF_CALC_JOB_TTL_SECONDS` | `1800` | Retention window for completed/failed/cancelled async calculator jobs. |
+| `FF_CALC_JOB_MAX_ENTRIES` | `256` | Max in-memory async job records retained before pruning. |
+| `FF_CALC_JOB_WORKERS` | `2` | Thread pool size for async calculator jobs. |
+| `FF_PREWARM_DEFAULT_CALC` | `1` | Prewarm default calculator caches on startup. |
+| `FF_CALC_REQUEST_TIMEOUT_SECONDS` | `600` | Calculator request timeout metadata used in guardrails/status payloads. |
+| `FF_CALC_SYNC_RATE_LIMIT_PER_MINUTE` | `30` | Sync calculator request limit per identity per minute. |
+| `FF_CALC_JOB_CREATE_RATE_LIMIT_PER_MINUTE` | `15` | Async calculator job-create limit per identity per minute. |
+| `FF_CALC_JOB_STATUS_RATE_LIMIT_PER_MINUTE` | `240` | Async calculator job status/cancel limit per identity per minute. |
+| `FF_CALC_MAX_ACTIVE_JOBS_PER_IP` | `2` | Max queued/running async jobs per client IP. |
+| `FF_CALC_RESULT_CACHE_TTL_SECONDS` | `1800` | TTL for calculator result cache entries. |
+| `FF_CALC_RESULT_CACHE_MAX_ENTRIES` | `256` | Max local calculator result cache entries before LRU pruning. |
+| `FF_REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP` | `1` | Require a valid `data/dynasty_lookup.json` (otherwise projections return 503). |
+| `FF_TRUST_X_FORWARDED_FOR` | `0` | Trust `X-Forwarded-For` chain when resolving client identity. |
+| `FF_TRUSTED_PROXY_CIDRS` | `""` | Comma-separated trusted proxy CIDRs for forwarded IP handling. |
+| `FF_REDIS_URL` | `""` | Optional Redis URL; enables shared calculator result cache, shared rate limiting, shared cancellation markers, and shared active-job tracking across workers/pods. |
+| `FF_REQUIRE_CALCULATE_AUTH` | `0` | Require API keys on `/api/calculate*` endpoints. |
+| `FF_CALCULATE_API_KEYS` | `""` | Comma/space-separated calculator API keys accepted via `X-API-Key` or `Authorization: Bearer ...`. |
+| `FF_RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS` | `60` | Cleanup interval for local in-memory rate-limit buckets (used when Redis limiter is unavailable). |
+| `FF_CORS_ALLOW_ORIGINS` | `*` | Comma-separated CORS origins (`*` by default; use explicit origins in production). |
 
-- `FF_TRUST_X_FORWARDED_FOR` (default: `0`)  
-  - `0`/`false`: use direct socket client IP (`request.client.host`) unless trusted proxy CIDRs are configured.
-  - `1`/`true`: trust `X-Forwarded-For` even without CIDR allow-list (only recommended behind a trusted proxy chain).
-- `FF_TRUSTED_PROXY_CIDRS` (default: empty)  
-  - Comma-separated IP/CIDR allow-list for trusted proxy hops (example: `10.0.0.0/8,172.16.0.0/12`).
-  - When set, `X-Forwarded-For` is only honored if the direct peer is in this allow-list.
-- `FF_RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS` (default: `60`)  
-  - Periodic cleanup interval for stale in-memory rate-limit buckets.
-- `FF_CORS_ALLOW_ORIGINS` (default: `*`)  
-  - Comma-separated CORS allow-list (example: `https://fantasy-foundry.com,https://staging.fantasy-foundry.com`).
-  - For production, prefer explicit origins over `*`.
-- `FF_REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP` (default: `1`)  
-  - `1`/`true`: require a valid precomputed `data/dynasty_lookup.json`; projections return HTTP 503 if missing/stale/invalid.
-  - `0`/`false`: allow runtime fallback generation (slower cold-start projections responses).
+When `FF_REQUIRE_CALCULATE_AUTH=1`, calculate routes return:
+- HTTP `401` for missing/invalid API keys
+- HTTP `503` if auth is required but `FF_CALCULATE_API_KEYS` is not configured
 
 ## API Endpoints
 
@@ -263,6 +272,9 @@ The API rate limiter and async-job IP guardrails can be configured for proxy dep
 | POST | `/api/calculate/jobs` | Create async calculator job (returns `job_id` and queue status) |
 | GET | `/api/calculate/jobs/{job_id}` | Poll async calculator job status/result |
 | DELETE | `/api/calculate/jobs/{job_id}` | Cancel queued/running async calculator job |
+
+Calculator auth note:
+- If `FF_REQUIRE_CALCULATE_AUTH=1`, include `X-API-Key: <key>` or `Authorization: Bearer <key>` on all `/api/calculate*` requests.
 
 `years` accepts comma-separated years and inclusive ranges, for example `2026,2028-2030`.
 If both `year` and `years` are provided, results use the intersection.

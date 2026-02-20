@@ -2322,6 +2322,49 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 429)
 
+    def test_calculate_auth_blocks_missing_key_when_required(self) -> None:
+        with patch.object(app_module, "REQUIRE_CALCULATE_AUTH", True), patch.object(
+            app_module,
+            "CALCULATE_API_KEY_IDENTITIES",
+            {"secret-key": "api_key:test-secret"},
+        ), patch.object(
+            app_module,
+            "_run_calculate_request",
+            return_value={"total": 0, "settings": {}, "data": [], "explanations": {}},
+        ):
+            missing = self.client.post("/api/calculate", json={})
+            authorized = self.client.post("/api/calculate", json={}, headers={"x-api-key": "secret-key"})
+
+        self.assertEqual(missing.status_code, 401)
+        self.assertEqual(authorized.status_code, 200)
+
+    def test_calculate_auth_returns_503_when_enabled_without_keys(self) -> None:
+        with patch.object(app_module, "REQUIRE_CALCULATE_AUTH", True), patch.object(
+            app_module,
+            "CALCULATE_API_KEY_IDENTITIES",
+            {},
+        ):
+            response = self.client.post("/api/calculate", json={})
+        self.assertEqual(response.status_code, 503)
+
+    def test_sync_rate_limit_applies_per_api_key_identity(self) -> None:
+        with patch.object(app_module, "REQUIRE_CALCULATE_AUTH", True), patch.object(
+            app_module,
+            "CALCULATE_API_KEY_IDENTITIES",
+            {"key-a": "api_key:a", "key-b": "api_key:b"},
+        ), patch.object(app_module, "CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE", 1), patch.object(
+            app_module,
+            "_run_calculate_request",
+            return_value={"total": 0, "settings": {}, "data": [], "explanations": {}},
+        ):
+            first_key_a = self.client.post("/api/calculate", json={}, headers={"x-api-key": "key-a"})
+            second_key_a = self.client.post("/api/calculate", json={}, headers={"x-api-key": "key-a"})
+            first_key_b = self.client.post("/api/calculate", json={}, headers={"x-api-key": "key-b"})
+
+        self.assertEqual(first_key_a.status_code, 200)
+        self.assertEqual(second_key_a.status_code, 429)
+        self.assertEqual(first_key_b.status_code, 200)
+
     def test_client_ip_ignores_untrusted_forwarded_chain(self) -> None:
         request = types.SimpleNamespace(
             headers={"x-forwarded-for": "203.0.113.9, 10.9.1.2"},

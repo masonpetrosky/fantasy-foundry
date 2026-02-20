@@ -43,6 +43,11 @@ class CalculatorOrchestrationContext:
     calculator_job_executor: Any
     calc_job_cancelled_status: str
     calc_logger: Any
+    track_active_job: Callable[[str, str], None]
+    untrack_active_job: Callable[[str, str | None], None]
+    set_job_cancel_requested: Callable[[str], None]
+    clear_job_cancel_requested: Callable[[str], None]
+    job_cancel_requested: Callable[[str], bool]
 
 
 def run_calculation_job(
@@ -52,13 +57,19 @@ def run_calculation_job(
     ctx: CalculatorOrchestrationContext,
     run_calculate_request: Callable[..., dict],
 ) -> None:
+    terminal_client_ip: str | None = None
     with ctx.calculator_job_lock:
         job = ctx.calculator_jobs.get(job_id)
         if job is None:
             return
-        if str(job.get("status") or "").lower() == ctx.calc_job_cancelled_status or bool(job.get("cancel_requested")):
+        terminal_client_ip = str(job.get("client_ip") or "").strip() or None
+        cancelled = bool(job.get("cancel_requested")) or ctx.job_cancel_requested(job_id)
+        if str(job.get("status") or "").lower() == ctx.calc_job_cancelled_status or cancelled:
+            job["cancel_requested"] = True
             ctx.mark_job_cancelled_locked(job)
             ctx.cache_calculation_job_snapshot(job)
+            ctx.clear_job_cancel_requested(job_id)
+            ctx.untrack_active_job(job_id, terminal_client_ip)
             return
         job["status"] = "running"
         job["started_at"] = ctx.iso_now()
@@ -73,7 +84,9 @@ def run_calculation_job(
             job = ctx.calculator_jobs.get(job_id)
             if job is None:
                 return
-            if str(job.get("status") or "").lower() == ctx.calc_job_cancelled_status or bool(job.get("cancel_requested")):
+            cancelled = bool(job.get("cancel_requested")) or ctx.job_cancel_requested(job_id)
+            if str(job.get("status") or "").lower() == ctx.calc_job_cancelled_status or cancelled:
+                job["cancel_requested"] = True
                 ctx.mark_job_cancelled_locked(job)
                 ctx.cache_calculation_job_snapshot(job)
                 return
@@ -89,7 +102,9 @@ def run_calculation_job(
             job = ctx.calculator_jobs.get(job_id)
             if job is None:
                 return
-            if str(job.get("status") or "").lower() == ctx.calc_job_cancelled_status or bool(job.get("cancel_requested")):
+            cancelled = bool(job.get("cancel_requested")) or ctx.job_cancel_requested(job_id)
+            if str(job.get("status") or "").lower() == ctx.calc_job_cancelled_status or cancelled:
+                job["cancel_requested"] = True
                 ctx.mark_job_cancelled_locked(job)
                 ctx.cache_calculation_job_snapshot(job)
                 return
@@ -100,19 +115,21 @@ def run_calculation_job(
             job["updated_at"] = now
             job["result"] = None
             ctx.cache_calculation_job_snapshot(job)
-    except Exception as exc:
+    except Exception:
         ctx.calc_logger.exception("calculator job crashed job_id=%s", job_id)
         with ctx.calculator_job_lock:
             job = ctx.calculator_jobs.get(job_id)
             if job is None:
                 return
-            if str(job.get("status") or "").lower() == ctx.calc_job_cancelled_status or bool(job.get("cancel_requested")):
+            cancelled = bool(job.get("cancel_requested")) or ctx.job_cancel_requested(job_id)
+            if str(job.get("status") or "").lower() == ctx.calc_job_cancelled_status or cancelled:
+                job["cancel_requested"] = True
                 ctx.mark_job_cancelled_locked(job)
                 ctx.cache_calculation_job_snapshot(job)
                 return
             now = ctx.iso_now()
             job["status"] = "failed"
-            job["error"] = {"status_code": 500, "detail": str(exc)}
+            job["error"] = {"status_code": 500, "detail": "Internal calculator error."}
             job["completed_at"] = now
             job["updated_at"] = now
             job["result"] = None
@@ -120,6 +137,8 @@ def run_calculation_job(
     finally:
         with ctx.calculator_job_lock:
             ctx.cleanup_calculation_jobs(None)
+        ctx.clear_job_cancel_requested(job_id)
+        ctx.untrack_active_job(job_id, terminal_client_ip)
 
 
 def calculate_dynasty_values(
@@ -204,16 +223,19 @@ def create_calculate_dynasty_job(
                     ),
                 )
         ctx.calculator_jobs[job_id] = job
-        if cached_result is not None:
-            ctx.cache_calculation_job_snapshot(job)
+        if cached_result is None:
+            ctx.track_active_job(job_id, client_ip)
+        ctx.cache_calculation_job_snapshot(job)
         response_payload = ctx.calculation_job_public_payload(job)
 
     if cached_result is None:
+        ctx.clear_job_cancel_requested(job_id)
         try:
             future = ctx.calculator_job_executor.submit(run_calculation_job, job_id, payload)
         except RuntimeError as exc:
             with ctx.calculator_job_lock:
                 ctx.calculator_jobs.pop(job_id, None)
+            ctx.untrack_active_job(job_id, client_ip)
             raise HTTPException(status_code=503, detail="Calculation worker is unavailable.") from exc
         with ctx.calculator_job_lock:
             live_job = ctx.calculator_jobs.get(job_id)
@@ -257,6 +279,18 @@ def cancel_calculate_dynasty_job(
         if job is None:
             cached_job = ctx.cached_calculation_job_snapshot(job_id)
             if cached_job is not None:
+                status = str(cached_job.get("status") or "").lower()
+                if status in {"queued", "running"}:
+                    ctx.set_job_cancel_requested(job_id)
+                    synthetic = dict(cached_job)
+                    synthetic["cancel_requested"] = True
+                    synthetic["updated_at"] = ctx.iso_now()
+                    synthetic.setdefault("created_at", ctx.iso_now())
+                    synthetic["job_id"] = str(cached_job.get("job_id") or job_id)
+                    ctx.mark_job_cancelled_locked(synthetic)
+                    ctx.cache_calculation_job_snapshot(synthetic)
+                    ctx.untrack_active_job(job_id, None)
+                    return ctx.calculation_job_public_payload(synthetic)
                 return cached_job
             raise HTTPException(status_code=404, detail="Calculation job not found or expired.")
 
@@ -264,6 +298,7 @@ def cancel_calculate_dynasty_job(
         if status not in {"queued", "running"}:
             return ctx.calculation_job_public_payload(job)
 
+        ctx.set_job_cancel_requested(job_id)
         job["cancel_requested"] = True
         future = job.get("future")
         cancel_future = getattr(future, "cancel", None)
@@ -274,4 +309,5 @@ def cancel_calculate_dynasty_job(
                 pass
         ctx.mark_job_cancelled_locked(job)
         ctx.cache_calculation_job_snapshot(job)
+        ctx.untrack_active_job(job_id, str(job.get("client_ip") or "").strip() or None)
         return ctx.calculation_job_public_payload(job)

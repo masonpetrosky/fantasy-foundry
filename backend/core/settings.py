@@ -60,6 +60,8 @@ class AppSettings:
     trust_x_forwarded_for: bool
     trusted_proxy_cidrs_raw: str
     redis_url: str
+    require_calculate_auth: bool
+    calculate_api_keys_raw: str
     rate_limit_bucket_cleanup_interval_seconds: float
     cors_allow_origins: tuple[str, ...]
 
@@ -87,6 +89,8 @@ def load_settings_from_env() -> AppSettings:
         trust_x_forwarded_for=_get_bool("FF_TRUST_X_FORWARDED_FOR", default=False),
         trusted_proxy_cidrs_raw=str(os.getenv("FF_TRUSTED_PROXY_CIDRS", "")).strip(),
         redis_url=str(os.getenv("FF_REDIS_URL", "")).strip(),
+        require_calculate_auth=_get_bool("FF_REQUIRE_CALCULATE_AUTH", default=False),
+        calculate_api_keys_raw=str(os.getenv("FF_CALCULATE_API_KEYS", "")).strip(),
         rate_limit_bucket_cleanup_interval_seconds=_get_float(
             "FF_RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS", default=60.0, minimum=5.0
         ),

@@ -429,7 +429,7 @@ class CalculatorService:
         except Exception as exc:
             status_code = 500
             self._ctx.calc_logger.exception("calculator request failed source=%s", source)
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(status_code=500, detail="Internal calculator error.") from exc
         finally:
             duration_ms = round((time.perf_counter() - started) * 1000.0, 1)
             cache_after = active_cache.cache_info()
@@ -499,7 +499,7 @@ class CalculatorService:
                 job["updated_at"] = now
                 job["result"] = None
                 self._ctx.cache_calculation_job_snapshot(job)
-        except Exception as exc:
+        except Exception:
             self._ctx.calc_logger.exception("calculator job crashed job_id=%s", job_id)
             with self._ctx.calculator_job_lock:
                 job = self._ctx.calculator_jobs.get(job_id)
@@ -511,7 +511,7 @@ class CalculatorService:
                     return
                 now = self._ctx.iso_now()
                 job["status"] = "failed"
-                job["error"] = {"status_code": 500, "detail": str(exc)}
+                job["error"] = {"status_code": 500, "detail": "Internal calculator error."}
                 job["completed_at"] = now
                 job["updated_at"] = now
                 job["result"] = None
