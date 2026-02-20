@@ -35,8 +35,8 @@ describe("projectionTable defaults", () => {
       "Age",
       "DynastyValue",
       "AB",
-      "IP",
       "HR",
+      "IP",
       "K",
       "PitBB",
       "Value_2026",
@@ -94,6 +94,24 @@ describe("projectionCard defaults", () => {
     ]);
   });
 
+  it("groups mixed all-tab card defaults as AB, hitting stats, then IP, then pitching stats", () => {
+    const settings = {
+      scoring_mode: "points",
+      pts_hit_hr: 4,
+      pts_pit_k: 1,
+      pts_pit_bb: -1,
+    };
+    expect(resolveProjectionCardColumns("all", "Year", ["Value_2026"], { Type: "BOTH" }, {}, settings)).toEqual([
+      "AB",
+      "HR",
+      "IP",
+      "K",
+      "PitBB",
+      "Rank",
+      "DynastyValue",
+    ]);
+  });
+
   it("lets user overrides hide default card stats", () => {
     const settings = {
       scoring_mode: "points",
@@ -124,6 +142,29 @@ describe("priority stat resolution", () => {
   it("falls back to legacy core stats when no calculator settings are available", () => {
     expect(resolveProjectionPriorityStats("bat", null, null)).toEqual(PROJECTION_HITTER_CORE_STATS);
     expect(resolveProjectionPriorityStats("pitch", null, null)).toEqual(PROJECTION_PITCHER_CORE_STATS);
+  });
+
+  it("keeps mixed all-tab priority grouped by hitting before pitching", () => {
+    const settings = {
+      scoring_mode: "points",
+      pts_hit_hr: 4,
+      pts_pit_k: 1,
+      pts_pit_bb: -1,
+    };
+    expect(resolveProjectionPriorityStats("all", null, settings)).toEqual([
+      "AB",
+      "HR",
+      "IP",
+      "K",
+      "PitBB",
+    ]);
+  });
+
+  it("separates AB and IP in mixed all-tab fallback ordering", () => {
+    const stats = resolveProjectionPriorityStats("all", null, null);
+    expect(stats.indexOf("AB")).toBe(0);
+    expect(stats.indexOf("IP")).toBeGreaterThan(stats.indexOf("OPS"));
+    expect(stats.indexOf("W")).toBeGreaterThan(stats.indexOf("IP"));
   });
 });
 

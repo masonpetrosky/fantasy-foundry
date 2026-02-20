@@ -8,6 +8,28 @@ import {
 export const PROJECTION_TABS = ["all", "bat", "pitch"];
 export const PROJECTION_HITTER_CORE_STATS = ["AB", "R", "HR", "RBI", "SB", "AVG", "OPS"];
 export const PROJECTION_PITCHER_CORE_STATS = ["IP", "W", "K", "SV", "ERA", "WHIP", "QS", "QA3"];
+const ALL_TAB_HITTING_STAT_SET = new Set([
+  ...PROJECTION_HITTER_CORE_STATS,
+  "OBP",
+  "SLG",
+  "G",
+  "H",
+  "2B",
+  "3B",
+  "BB",
+  "SO",
+  "TB",
+]);
+const ALL_TAB_PITCHING_STAT_SET = new Set([
+  ...PROJECTION_PITCHER_CORE_STATS,
+  "GS",
+  "L",
+  "PitBB",
+  "PitH",
+  "PitHR",
+  "ER",
+  "SVH",
+]);
 
 const POINTS_RULE_COLUMN_MAP = {
   pts_hit_1b: { bat: "H", all_hit: "H" },
@@ -109,6 +131,47 @@ function resolveSelectedPointsStats(tab, row, settings) {
   return uniqueColumnOrder(selected);
 }
 
+function shouldGroupMixedAllPriorityStats(tab, row) {
+  return tab === "all" && resolveRowSide(tab, row) === "BOTH";
+}
+
+function regroupMixedAllPriorityStats(priorityStats) {
+  const ordered = uniqueColumnOrder(priorityStats);
+  const groupedHitting = [];
+  const groupedPitching = [];
+  const groupedOther = [];
+  let includeAB = false;
+  let includeIP = false;
+
+  ordered.forEach(stat => {
+    if (stat === "AB") {
+      includeAB = true;
+      return;
+    }
+    if (stat === "IP") {
+      includeIP = true;
+      return;
+    }
+    if (ALL_TAB_HITTING_STAT_SET.has(stat)) {
+      groupedHitting.push(stat);
+      return;
+    }
+    if (ALL_TAB_PITCHING_STAT_SET.has(stat)) {
+      groupedPitching.push(stat);
+      return;
+    }
+    groupedOther.push(stat);
+  });
+
+  return uniqueColumnOrder([
+    ...(includeAB ? ["AB"] : []),
+    ...groupedHitting,
+    ...(includeIP ? ["IP"] : []),
+    ...groupedPitching,
+    ...groupedOther,
+  ]);
+}
+
 export function resolveProjectionPriorityStats(tab, row, calculatorSettings) {
   const forced = forcedUsageStats(tab, row);
   const mode = resolveScoringMode(calculatorSettings);
@@ -116,7 +179,11 @@ export function resolveProjectionPriorityStats(tab, row, calculatorSettings) {
     ? resolveSelectedPointsStats(tab, row, calculatorSettings)
     : resolveSelectedRotoStats(tab, row, calculatorSettings);
   const fallback = fromMetrics.length > 0 ? [] : fallbackCoreStats(tab, row);
-  return uniqueColumnOrder([...forced, ...fromMetrics, ...fallback]);
+  const prioritized = uniqueColumnOrder([...forced, ...fromMetrics, ...fallback]);
+  if (shouldGroupMixedAllPriorityStats(tab, row)) {
+    return regroupMixedAllPriorityStats(prioritized);
+  }
+  return prioritized;
 }
 
 function filterToCandidates(priorityStats, candidates) {
