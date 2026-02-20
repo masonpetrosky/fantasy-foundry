@@ -54,6 +54,15 @@ CALCULATOR_RESULT_STAT_EXPORT_ORDER: tuple[str, ...] = (
     "QS",
     "SVH",
 )
+CALCULATOR_RESULT_POINTS_EXPORT_ORDER: tuple[str, ...] = (
+    "HittingPoints",
+    "PitchingPoints",
+    "SelectedPoints",
+    "HittingBestSlot",
+    "PitchingBestSlot",
+    "HittingValue",
+    "PitchingValue",
+)
 
 
 class CalculateRequest(BaseModel):
@@ -257,9 +266,10 @@ class CalculatorService:
             key=self._value_col_sort_key,
         )
         stat_cols = [col for col in CALCULATOR_RESULT_STAT_EXPORT_ORDER if col in available_set]
+        points_cols = [col for col in CALCULATOR_RESULT_POINTS_EXPORT_ORDER if col in available_set]
 
         ordered: list[str] = []
-        for col in ["Player", "DynastyValue", "Age", "Team", "Pos", *stat_cols, *year_cols]:
+        for col in ["Player", "DynastyValue", "Age", "Team", "Pos", *points_cols, *stat_cols, *year_cols]:
             if col in available_set and col not in ordered:
                 ordered.append(col)
         return ordered
@@ -402,6 +412,7 @@ class CalculatorService:
                 lambda value: "matched" if value else "no_unique_match"
             )
             selected_roto_stat_cols: list[str] = []
+            selected_points_summary_cols: list[str] = []
             if req.scoring_mode == "roto":
                 selected_hit_cats, selected_pit_cats = self._ctx.selected_roto_categories(settings)
                 selected_roto_stat_cols = selected_hit_cats + selected_pit_cats
@@ -418,6 +429,11 @@ class CalculatorService:
                             if stat_col in values
                         }
                         out[stat_col] = identity_keys.map(stat_lookup)
+            elif req.scoring_mode == "points":
+                selected_points_summary_cols = [
+                    col for col in CALCULATOR_RESULT_POINTS_EXPORT_ORDER
+                    if col in out.columns
+                ]
             explanations = self._ctx.build_calculation_explanations(out, settings=settings)
 
             year_cols = [c for c in out.columns if c.startswith("Value_")]
@@ -429,7 +445,7 @@ class CalculatorService:
                 "Team",
                 "Pos",
                 "Age",
-            ] + selected_roto_stat_cols + [
+            ] + selected_roto_stat_cols + selected_points_summary_cols + [
                 "DynastyValue",
                 "RawDynastyValue",
                 "minor_eligible",

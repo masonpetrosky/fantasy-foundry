@@ -1912,11 +1912,20 @@ class CalculatorValidationTests(unittest.TestCase):
 
         self.assertEqual(low_hr.status_code, 200)
         self.assertEqual(high_hr.status_code, 200)
-        low_raw = low_hr.json()["data"][0]["RawDynastyValue"]
-        high_raw = high_hr.json()["data"][0]["RawDynastyValue"]
+        low_row = low_hr.json()["data"][0]
+        high_row = high_hr.json()["data"][0]
+        low_raw = low_row["RawDynastyValue"]
+        high_raw = high_row["RawDynastyValue"]
         self.assertEqual(low_raw, 20.0)
         self.assertEqual(high_raw, 40.0)
         self.assertGreater(high_raw, low_raw)
+        self.assertEqual(high_row["HittingPoints"], 40.0)
+        self.assertEqual(high_row["PitchingPoints"], 0.0)
+        self.assertEqual(high_row["SelectedPoints"], 40.0)
+        self.assertEqual(high_row["HittingBestSlot"], "OF")
+        self.assertEqual(high_row["PitchingBestSlot"], "P")
+        self.assertEqual(high_row["HittingValue"], 40.0)
+        self.assertEqual(high_row["PitchingValue"], 0.0)
 
     def test_points_mode_applies_position_eligibility_for_year_values(self) -> None:
         bat_rows = [
@@ -2032,6 +2041,9 @@ class CalculatorValidationTests(unittest.TestCase):
         row = response.json()["data"][0]
         self.assertEqual(row["Value_2026"], 0.0)
         self.assertEqual(row["RawDynastyValue"], 0.0)
+        self.assertEqual(row["HittingPoints"], 40.0)
+        self.assertEqual(row["SelectedPoints"], 0.0)
+        self.assertIsNone(row["HittingBestSlot"])
 
     def test_meta_includes_calculator_guardrails_payload(self) -> None:
         with patch.object(
@@ -2198,6 +2210,47 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertNotIn("PlayerKey", lines[0])
         self.assertIn("7.13", lines[1])
         self.assertIn("2.35", lines[1])
+
+    def test_calculate_export_csv_points_defaults_include_points_summary_columns(self) -> None:
+        fake_result = {
+            "total": 1,
+            "settings": {"scoring_mode": "points"},
+            "data": [
+                {
+                    "Player": "Jane Roe",
+                    "Team": "SEA",
+                    "Pos": "OF",
+                    "Age": 26,
+                    "DynastyValue": 7.126,
+                    "RawDynastyValue": 8.555,
+                    "HittingPoints": 22.4,
+                    "PitchingPoints": 0.0,
+                    "SelectedPoints": 19.2,
+                    "HittingBestSlot": "OF",
+                    "PitchingBestSlot": "P",
+                    "HittingValue": 19.2,
+                    "PitchingValue": 0.0,
+                    "Value_2026": 2.345,
+                }
+            ],
+            "explanations": {},
+        }
+        with patch.object(app_module, "_run_calculate_request", return_value=fake_result):
+            response = self.client.post("/api/calculate/export", json={"format": "csv", "scoring_mode": "points"})
+
+        self.assertEqual(response.status_code, 200)
+        lines = response.text.splitlines()
+        self.assertGreaterEqual(len(lines), 2)
+        self.assertEqual(
+            lines[0],
+            (
+                "Player,Dynasty Value,Age,Team,Pos,Hitting Points,Pitching Points,"
+                "Selected Points,Hitting Best Slot,Pitching Best Slot,Hitting Value,"
+                "Pitching Value,2026 Dyn Value"
+            ),
+        )
+        self.assertIn("22.4", lines[1])
+        self.assertIn("19.2", lines[1])
 
     def test_calculate_export_xlsx_endpoint(self) -> None:
         fake_out = pd.DataFrame(

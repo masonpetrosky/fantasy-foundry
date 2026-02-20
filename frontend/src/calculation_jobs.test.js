@@ -102,6 +102,33 @@ describe("runCalculationJob", () => {
     expect(onCompleted).toHaveBeenCalledWith(expect.objectContaining({ total: 3 }));
   });
 
+  it("uses points-specific status messaging for points jobs", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ job_id: "job-points", created_at: "2026-01-01T00:00:00Z" }, { status: 202 }))
+      .mockResolvedValueOnce(jsonResponse({ status: "running", started_at: "2026-01-01T00:00:10Z" }))
+      .mockResolvedValueOnce(jsonResponse({ status: "completed", result: { data: [], total: 2 } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const onStatus = vi.fn();
+    const onCompleted = vi.fn();
+    await runCalculationJob({
+      apiBase: "",
+      payload: { scoring_mode: "points" },
+      controller: new AbortController(),
+      requestSeq: 1,
+      requestSeqRef: { current: 1 },
+      activeJobIdRef: { current: "" },
+      timeoutSeconds: 60,
+      onStatus,
+      onCompleted,
+      onCancelled: vi.fn(),
+      onError: vi.fn(),
+    });
+
+    expect(onStatus).toHaveBeenCalledWith(expect.stringContaining("Running points valuation"));
+    expect(onCompleted).toHaveBeenCalledWith(expect.objectContaining({ total: 2 }));
+  });
+
   it("rejects missing payloads before making requests", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

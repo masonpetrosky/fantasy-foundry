@@ -54,6 +54,25 @@ export const POINTS_SCORING_FIELDS = [
 ];
 export const POINTS_BATTING_FIELDS = POINTS_SCORING_FIELDS.filter(field => field.group === "bat");
 export const POINTS_PITCHING_FIELDS = POINTS_SCORING_FIELDS.filter(field => field.group === "pit");
+export const POINTS_RESULT_SUMMARY_FIELDS = [
+  { key: "HittingPoints", label: "Hitting Points", type: "number" },
+  { key: "PitchingPoints", label: "Pitching Points", type: "number" },
+  { key: "SelectedPoints", label: "Selected Points", type: "number" },
+  { key: "HittingBestSlot", label: "Hitting Best Slot", type: "slot" },
+  { key: "PitchingBestSlot", label: "Pitching Best Slot", type: "slot" },
+  { key: "HittingValue", label: "Hitting Value", type: "number" },
+  { key: "PitchingValue", label: "Pitching Value", type: "number" },
+];
+export const POINTS_RESULT_SUMMARY_COLS = POINTS_RESULT_SUMMARY_FIELDS.map(field => field.key);
+export const POINTS_RESULT_NUMERIC_COLS = new Set(
+  POINTS_RESULT_SUMMARY_FIELDS.filter(field => field.type === "number").map(field => field.key)
+);
+export const POINTS_RESULT_SLOT_COLS = new Set(
+  POINTS_RESULT_SUMMARY_FIELDS.filter(field => field.type === "slot").map(field => field.key)
+);
+export const POINTS_RESULT_COLUMN_LABELS = Object.fromEntries(
+  POINTS_RESULT_SUMMARY_FIELDS.map(field => [field.key, field.label])
+);
 export const ROTO_HITTER_CATEGORY_FIELDS = [
   { key: "roto_hit_r", label: "R", statCol: "R", defaultValue: true },
   { key: "roto_hit_rbi", label: "RBI", statCol: "RBI", defaultValue: true },

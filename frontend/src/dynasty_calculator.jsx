@@ -19,6 +19,8 @@ import {
   CALC_SEARCH_DEBOUNCE_MS,
   HITTER_SLOT_FIELDS,
   POINTS_SCORING_FIELDS,
+  POINTS_RESULT_COLUMN_LABELS,
+  POINTS_RESULT_SUMMARY_COLS,
   PITCHER_SLOT_FIELDS,
   ROTO_HITTER_CATEGORY_FIELDS,
   ROTO_PITCHER_CATEGORY_FIELDS,
@@ -472,7 +474,26 @@ export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlis
     const available = new Set(Object.keys(firstResultRow));
     return requested.filter(col => available.has(col));
   }, [resultScoringMode, resultSettings, results]);
-  const displayCols = [...baseCols, ...selectedRotoStatColsForResults, ...yearCols];
+  const selectedPointsSummaryColsForResults = useMemo(() => {
+    if (resultScoringMode !== "points") return [];
+    const firstResultRow = results?.data?.[0];
+    if (!firstResultRow || typeof firstResultRow !== "object") return [];
+    const available = new Set(Object.keys(firstResultRow));
+    return POINTS_RESULT_SUMMARY_COLS.filter(col => available.has(col));
+  }, [resultScoringMode, results]);
+  const displayCols = [
+    ...baseCols,
+    ...selectedRotoStatColsForResults,
+    ...selectedPointsSummaryColsForResults,
+    ...yearCols,
+  ];
+  const columnLabels = useMemo(() => {
+    const labels = {};
+    displayCols.forEach(col => {
+      labels[col] = POINTS_RESULT_COLUMN_LABELS[col] || (col.startsWith("Value_") ? col.replace("Value_", "") : col);
+    });
+    return labels;
+  }, [displayCols]);
   const requiredRankCols = useMemo(() => new Set(["Player", "DynastyValue"]), []);
   const visibleRankCols = useMemo(
     () => displayCols.filter(col => !hiddenRankCols[col]),
@@ -556,6 +577,7 @@ export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlis
     displayCols,
     hasRankFilters,
     hiddenRankCols,
+    columnLabels,
     pinRankKeyColumns,
     posFilter,
     rankCompareRows,

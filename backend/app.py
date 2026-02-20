@@ -146,6 +146,15 @@ CALCULATOR_RESULT_STAT_EXPORT_ORDER = (
     "QS",
     "SVH",
 )
+CALCULATOR_RESULT_POINTS_EXPORT_ORDER = (
+    "HittingPoints",
+    "PitchingPoints",
+    "SelectedPoints",
+    "HittingBestSlot",
+    "PitchingBestSlot",
+    "HittingValue",
+    "PitchingValue",
+)
 EXPORT_HEADER_LABEL_OVERRIDES = {
     "Type": "Side",
     "ProjectionsUsed": "Proj Count",
@@ -158,6 +167,10 @@ EXPORT_HEADER_LABEL_OVERRIDES = {
     "HittingPoints": "Hitting Points",
     "PitchingPoints": "Pitching Points",
     "SelectedPoints": "Selected Points",
+    "HittingBestSlot": "Hitting Best Slot",
+    "PitchingBestSlot": "Pitching Best Slot",
+    "HittingValue": "Hitting Value",
+    "PitchingValue": "Pitching Value",
     "HittingRulePoints": "Hitting Rule Points",
     "PitchingRulePoints": "Pitching Rule Points",
     "Years": "Years",
@@ -175,6 +188,8 @@ EXPORT_TWO_DECIMAL_COLS = {
     "HittingPoints",
     "PitchingPoints",
     "SelectedPoints",
+    "HittingValue",
+    "PitchingValue",
     "ERA",
     "WHIP",
 }
@@ -1855,6 +1870,16 @@ def _calculate_points_dynasty_frame_cached(
                 "pitching": pit_breakdown,
             }
 
+        start_year_points = row_out["_ExplainPointsByYear"].get(str(start_year), {})
+        if isinstance(start_year_points, dict):
+            row_out["HittingPoints"] = start_year_points.get("hitting_points")
+            row_out["PitchingPoints"] = start_year_points.get("pitching_points")
+            row_out["SelectedPoints"] = start_year_points.get("selected_points")
+            row_out["HittingBestSlot"] = start_year_points.get("hitting_best_slot")
+            row_out["PitchingBestSlot"] = start_year_points.get("pitching_best_slot")
+            row_out["HittingValue"] = start_year_points.get("hitting_value")
+            row_out["PitchingValue"] = start_year_points.get("pitching_value")
+
         row_out["RawDynastyValue"] = float(raw_total)
         result_rows.append(row_out)
 
@@ -2261,9 +2286,10 @@ def _default_calculator_export_columns(rows: list[dict]) -> list[str]:
         key=_value_col_sort_key,
     )
     stat_cols = [col for col in CALCULATOR_RESULT_STAT_EXPORT_ORDER if col in available_set]
+    points_cols = [col for col in CALCULATOR_RESULT_POINTS_EXPORT_ORDER if col in available_set]
 
     ordered: list[str] = []
-    for col in ["Player", "DynastyValue", "Age", "Team", "Pos", *stat_cols, *year_cols]:
+    for col in ["Player", "DynastyValue", "Age", "Team", "Pos", *points_cols, *stat_cols, *year_cols]:
         if col in available_set and col not in ordered:
             ordered.append(col)
     return ordered

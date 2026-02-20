@@ -6,6 +6,8 @@ import {
   stablePlayerKeyFromRow,
 } from "./app_state_storage.js";
 import {
+  POINTS_RESULT_NUMERIC_COLS,
+  POINTS_RESULT_SLOT_COLS,
   ROTO_COUNTING_STAT_COLS,
   ROTO_RATE_STAT_COLS,
   ROTO_THREE_DECIMAL_RATE_COLS,
@@ -30,6 +32,7 @@ export function DynastyCalculatorResults({ results, state, refs, actions }) {
   const {
     activeExplanation,
     compareYearCols,
+    columnLabels,
     displayCols,
     hasRankFilters,
     hiddenRankCols,
@@ -114,6 +117,7 @@ export function DynastyCalculatorResults({ results, state, refs, actions }) {
             requiredCols={requiredRankCols}
             onToggleColumn={toggleRankColumn}
             onShowAllColumns={showAllRankColumns}
+            columnLabels={columnLabels}
           />
         )}
         <button type="button" className="inline-btn" onClick={() => setPinRankKeyColumns(v => !v)}>
@@ -194,7 +198,7 @@ export function DynastyCalculatorResults({ results, state, refs, actions }) {
                     tabIndex={0}
                     aria-sort={sortCol === c ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                   >
-                    {c.replace("Value_", "")}
+                    {columnLabels[c] || c.replace("Value_", "")}
                     {sortCol === c && <span className="sort-arrow">{sortDir === "asc" ? "▲" : "▼"}</span>}
                   </th>
                 ))}
@@ -242,6 +246,12 @@ export function DynastyCalculatorResults({ results, state, refs, actions }) {
                         const n = Number(val);
                         const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
                         return <td key={c} className={`num ${cls} ${pinClass}`.trim()}>{fmt(val, 2)}</td>;
+                      }
+                      if (POINTS_RESULT_NUMERIC_COLS.has(c)) {
+                        return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, 2)}</td>;
+                      }
+                      if (POINTS_RESULT_SLOT_COLS.has(c)) {
+                        return <td key={c} className={pinClass}>{val || "—"}</td>;
                       }
                       if (ROTO_COUNTING_STAT_COLS.has(c)) {
                         return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, 0)}</td>;

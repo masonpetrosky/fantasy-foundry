@@ -92,6 +92,16 @@ export function ExplainabilityCard({
   const points = activeYear?.points || {};
   const pointsHitting = points.hitting && typeof points.hitting === "object" ? points.hitting : {};
   const pointsPitching = points.pitching && typeof points.pitching === "object" ? points.pitching : {};
+  const hittingRulePoints = pointsHitting.rule_points && typeof pointsHitting.rule_points === "object"
+    ? pointsHitting.rule_points
+    : {};
+  const pitchingRulePoints = pointsPitching.rule_points && typeof pointsPitching.rule_points === "object"
+    ? pointsPitching.rule_points
+    : {};
+  const HITTING_POINT_EVENT_ORDER = ["1B", "2B", "3B", "HR", "R", "RBI", "SB", "BB", "SO"];
+  const PITCHING_POINT_EVENT_ORDER = ["IP", "W", "L", "K", "SV", "SVH", "H", "ER", "BB"];
+  const HITTING_POINT_LABELS = {};
+  const PITCHING_POINT_LABELS = { SVH: "SVH", H: "H Allowed", BB: "BB Allowed" };
 
   const formatPointLabel = key => String(key || "")
     .replace(/_/g, " ")
@@ -100,13 +110,23 @@ export function ExplainabilityCard({
   const formatPointValue = value => {
     if (typeof value === "number" && Number.isFinite(value)) return fmt(value, 2);
     if (typeof value === "boolean") return value ? "Yes" : "No";
-    if (value == null) return "0";
+    if (value == null || value === "") return "—";
     if (typeof value === "object") return JSON.stringify(value);
     return String(value);
   };
 
-  const renderPointList = (title, valueMap) => {
-    const entries = Object.entries(valueMap || {});
+  const orderedPointEntries = (valueMap, order) => {
+    const orderIndex = new Map(order.map((key, idx) => [key, idx]));
+    return Object.entries(valueMap || {}).sort(([left], [right]) => {
+      const leftIdx = orderIndex.has(left) ? orderIndex.get(left) : Number.MAX_SAFE_INTEGER;
+      const rightIdx = orderIndex.has(right) ? orderIndex.get(right) : Number.MAX_SAFE_INTEGER;
+      if (leftIdx !== rightIdx) return leftIdx - rightIdx;
+      return left.localeCompare(right);
+    });
+  };
+
+  const renderPointList = (title, valueMap, order, labels) => {
+    const entries = orderedPointEntries(valueMap, order);
     if (entries.length === 0) {
       return (
         <div className="explain-points-card">
@@ -123,7 +143,7 @@ export function ExplainabilityCard({
           <tbody>
             {entries.map(([key, value]) => (
               <tr key={key}>
-                <td>{formatPointLabel(key)}</td>
+                <td>{labels[key] || formatPointLabel(key)}</td>
                 <td className="num">{formatPointValue(value)}</td>
               </tr>
             ))}
@@ -132,6 +152,16 @@ export function ExplainabilityCard({
       </div>
     );
   };
+
+  const pointSummaryRows = [
+    ["Hitting Points", points.hitting_points],
+    ["Pitching Points", points.pitching_points],
+    ["Selected Points", points.selected_points],
+    ["Hitting Best Slot", points.hitting_best_slot],
+    ["Pitching Best Slot", points.pitching_best_slot],
+    ["Hitting Value", points.hitting_value],
+    ["Pitching Value", points.pitching_value],
+  ];
 
   return (
     <div className="explain-card">
@@ -177,8 +207,21 @@ export function ExplainabilityCard({
       </table>
       {explanation.mode === "points" && (
         <div className="explain-points-grid">
-          {renderPointList("Hitting Points", pointsHitting)}
-          {renderPointList("Pitching Points", pointsPitching)}
+          <div className="explain-points-card">
+            <h5>Point Summary</h5>
+            <table className="explain-mini-table">
+              <tbody>
+                {pointSummaryRows.map(([label, value]) => (
+                  <tr key={label}>
+                    <td>{label}</td>
+                    <td className="num">{formatPointValue(value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {renderPointList("Hitting Rule Points", hittingRulePoints, HITTING_POINT_EVENT_ORDER, HITTING_POINT_LABELS)}
+          {renderPointList("Pitching Rule Points", pitchingRulePoints, PITCHING_POINT_EVENT_ORDER, PITCHING_POINT_LABELS)}
         </div>
       )}
     </div>

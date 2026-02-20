@@ -79,6 +79,9 @@ export function MethodologySection() {
           <li>
             <code>RawDynastyValue = sum(Value_y * discount_factor(y))</code>.
           </li>
+          <li>
+            Points mode is deterministic and does not use Monte Carlo simulation or <code>ip_min</code>/<code>ip_max</code> rules.
+          </li>
         </ul>
         <p className="methodology-note" style={{ marginBottom: 0 }}>
           Final values come directly from the valuation pipeline after projection averaging and league settings.
