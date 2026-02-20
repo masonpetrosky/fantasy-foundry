@@ -11,7 +11,7 @@ export function fmtInt(val, useGrouping = true) {
 export const THREE_DECIMAL_COLS = new Set(["AVG", "OBP", "OPS"]);
 export const TWO_DECIMAL_COLS = new Set(["ERA", "WHIP"]);
 export const WHOLE_NUMBER_COLS = new Set([
-  "AB", "R", "HR", "RBI", "SB", "IP", "W", "K", "SVH", "QS",
+  "AB", "R", "HR", "RBI", "SB", "IP", "W", "K", "SVH", "QS", "QA3",
   "G", "H", "2B", "3B", "BB", "SO", "GS", "L", "PitBB", "SV",
   "PitH", "PitHR", "ER",
 ]);

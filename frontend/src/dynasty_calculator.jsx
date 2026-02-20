@@ -31,6 +31,7 @@ export function DynastyCalculator({
   onApplyToMainTable,
   onClearMainTableOverlay,
   mainTableOverlayActive,
+  onSettingsChange,
 }) {
   const API = String(apiBase || "").trim();
   const [settings, setSettings] = useState(() => buildDefaultCalculatorSettings(meta));
@@ -66,6 +67,11 @@ export function DynastyCalculator({
       setSettings(prev => ({ ...prev, start_year: availableYears[0] }));
     }
   }, [availableYears, settings.start_year]);
+
+  useEffect(() => {
+    if (typeof onSettingsChange !== "function") return;
+    onSettingsChange(settings);
+  }, [onSettingsChange, settings]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

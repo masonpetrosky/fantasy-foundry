@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 ProjectionDataset = Literal["all", "bat", "pitch"]
 PROJECTION_HITTER_CORE_EXPORT_COLS: tuple[str, ...] = ("AB", "R", "HR", "RBI", "SB", "AVG", "OPS")
-PROJECTION_PITCHER_CORE_EXPORT_COLS: tuple[str, ...] = ("IP", "W", "K", "SV", "ERA", "WHIP", "QS")
+PROJECTION_PITCHER_CORE_EXPORT_COLS: tuple[str, ...] = ("IP", "W", "K", "SV", "ERA", "WHIP", "QS", "QA3")
 
 
 @dataclass(slots=True)

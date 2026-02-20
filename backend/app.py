@@ -240,7 +240,7 @@ POSITION_TOKEN_SPLIT_RE = re.compile(r"[,\s/]+")
 PROJECTION_QUERY_CACHE_MAXSIZE = 256
 POSITION_DISPLAY_ORDER = ("C", "1B", "2B", "3B", "SS", "OF", "DH", "UT", "SP", "RP")
 ALL_TAB_HITTER_STAT_COLS = ("G", "AB", "R", "H", "2B", "3B", "HR", "RBI", "SB", "BB", "SO", "AVG", "OBP", "OPS")
-ALL_TAB_PITCH_STAT_COLS = ("GS", "IP", "W", "QS", "L", "K", "SV", "SVH", "ERA", "WHIP", "ER")
+ALL_TAB_PITCH_STAT_COLS = ("GS", "IP", "W", "QS", "QA3", "L", "K", "SV", "SVH", "ERA", "WHIP", "ER")
 PROJECTION_TEXT_SORT_COLS = {"Player", "Team", "Pos", "Type", "Years"}
 PLAYER_KEY_PATTERN = re.compile(r"[^a-z0-9]+")
 EXPORT_INTERNAL_COLUMN_BLOCKLIST = {
@@ -299,6 +299,7 @@ EXPORT_WHOLE_NUMBER_COLS = {
     "K",
     "SVH",
     "QS",
+    "QA3",
     "G",
     "H",
     "2B",

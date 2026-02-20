@@ -94,12 +94,13 @@ export const ROTO_PITCHER_CATEGORY_FIELDS = [
   { key: "roto_pit_era", label: "ERA", statCol: "ERA", defaultValue: true },
   { key: "roto_pit_whip", label: "WHIP", statCol: "WHIP", defaultValue: true },
   { key: "roto_pit_qs", label: "QS", statCol: "QS", defaultValue: false },
+  { key: "roto_pit_qa3", label: "QA3", statCol: "QA3", defaultValue: false },
   { key: "roto_pit_svh", label: "SVH", statCol: "SVH", defaultValue: false },
 ];
 const ROTO_CATEGORY_FIELDS = [...ROTO_HITTER_CATEGORY_FIELDS, ...ROTO_PITCHER_CATEGORY_FIELDS];
 export const ROTO_RATE_STAT_COLS = new Set(["AVG", "OBP", "SLG", "OPS", "ERA", "WHIP"]);
 export const ROTO_THREE_DECIMAL_RATE_COLS = new Set(["AVG", "OBP", "SLG", "OPS"]);
-export const ROTO_COUNTING_STAT_COLS = new Set(["R", "RBI", "HR", "SB", "H", "BB", "2B", "TB", "W", "K", "SV", "QS", "SVH"]);
+export const ROTO_COUNTING_STAT_COLS = new Set(["R", "RBI", "HR", "SB", "H", "BB", "2B", "TB", "W", "K", "SV", "QS", "QA3", "SVH"]);
 
 export function coerceBooleanSetting(value, fallback = false) {
   if (typeof value === "boolean") return value;

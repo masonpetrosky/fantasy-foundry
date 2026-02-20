@@ -63,6 +63,7 @@ class CalculateRequest(BaseModel):
     roto_pit_era: bool = True
     roto_pit_whip: bool = True
     roto_pit_qs: bool = False
+    roto_pit_qa3: bool = False
     roto_pit_svh: bool = False
     pts_hit_1b: float = Field(default=1.0, ge=-50.0, le=50.0)
     pts_hit_2b: float = Field(default=2.0, ge=-50.0, le=50.0)

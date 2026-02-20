@@ -24,6 +24,7 @@ CALCULATOR_RESULT_STAT_EXPORT_ORDER: tuple[str, ...] = (
     "ERA",
     "WHIP",
     "QS",
+    "QA3",
     "SVH",
 )
 CALCULATOR_RESULT_POINTS_EXPORT_ORDER: tuple[str, ...] = (
@@ -57,6 +58,7 @@ ROTO_PITCHER_CATEGORY_FIELDS: tuple[tuple[str, str, bool], ...] = (
     ("roto_pit_era", "ERA", True),
     ("roto_pit_whip", "WHIP", True),
     ("roto_pit_qs", "QS", False),
+    ("roto_pit_qa3", "QA3", False),
     ("roto_pit_svh", "SVH", False),
 )
 ROTO_CATEGORY_FIELD_DEFAULTS: dict[str, bool] = {

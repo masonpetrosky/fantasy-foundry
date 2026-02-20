@@ -28,14 +28,13 @@ import {
 } from "./formatting_utils.js";
 import { formatApiError, readResponsePayload } from "./request_helpers.js";
 import {
-  PROJECTION_HITTER_CORE_STATS,
-  PROJECTION_PITCHER_CORE_STATS,
   normalizeHiddenColumnOverridesByTab,
   projectionCardColumnCatalog,
+  projectionCardDefaultVisibleColumns,
   projectionCardOptionalColumnHiddenByDefault,
+  resolveProjectionCardColumns,
   projectionTableColumnCatalog,
   projectionTableColumnHiddenByDefault,
-  uniqueColumnOrder,
 } from "./projections_view_config.js";
 import {
   CAREER_TOTALS_FILTER_VALUE,
@@ -50,6 +49,7 @@ export function ProjectionsExplorer({
   dataVersion,
   watchlist,
   setWatchlist,
+  activeCalculatorSettings,
   calculatorOverlayByPlayerKey,
   calculatorOverlayActive,
   calculatorOverlayJobId,
@@ -369,8 +369,8 @@ export function ProjectionsExplorer({
   const seasonCol = careerTotalsView ? "Years" : "Year";
   const dynastyYearCols = selectedDynastyYears.map(year => `Value_${year}`);
   const tableColumnCatalog = useMemo(
-    () => projectionTableColumnCatalog(tab, seasonCol, dynastyYearCols),
-    [tab, seasonCol, dynastyYearCols]
+    () => projectionTableColumnCatalog(tab, seasonCol, dynastyYearCols, activeCalculatorSettings),
+    [tab, seasonCol, dynastyYearCols, activeCalculatorSettings]
   );
   const activeProjectionTableHiddenCols = projectionTableHiddenColsByTab[tab] || {};
   const requiredProjectionTableCols = useMemo(() => new Set(["Player"]), []);
@@ -393,39 +393,27 @@ export function ProjectionsExplorer({
   );
 
   const cardColumnCatalog = useMemo(
-    () => projectionCardColumnCatalog(tab, seasonCol, dynastyYearCols),
-    [tab, seasonCol, dynastyYearCols]
+    () => projectionCardColumnCatalog(tab, seasonCol, dynastyYearCols, activeCalculatorSettings),
+    [tab, seasonCol, dynastyYearCols, activeCalculatorSettings]
   );
-  const projectionCardCoreUnionCols = useMemo(() => (
-    tab === "bat"
-      ? [...PROJECTION_HITTER_CORE_STATS]
-      : tab === "pitch"
-        ? [...PROJECTION_PITCHER_CORE_STATS]
-        : [...PROJECTION_HITTER_CORE_STATS, ...PROJECTION_PITCHER_CORE_STATS]
-  ), [tab]);
-  const projectionCardCoreUnionSet = useMemo(
-    () => new Set(projectionCardCoreUnionCols),
-    [projectionCardCoreUnionCols]
+  const cardDefaultVisibleSet = useMemo(
+    () => new Set(projectionCardDefaultVisibleColumns(tab, null, activeCalculatorSettings)),
+    [tab, activeCalculatorSettings]
   );
   const activeProjectionCardHiddenCols = projectionCardHiddenColsByTab[tab] || {};
   const isProjectionCardOptionalColHidden = useCallback((col, hiddenOverrides = activeProjectionCardHiddenCols) => {
-    if (projectionCardCoreUnionSet.has(col)) return false;
     if (Object.prototype.hasOwnProperty.call(hiddenOverrides, col)) {
       return Boolean(hiddenOverrides[col]);
     }
-    return projectionCardOptionalColumnHiddenByDefault(col);
-  }, [activeProjectionCardHiddenCols, projectionCardCoreUnionSet]);
+    return projectionCardOptionalColumnHiddenByDefault(col, cardDefaultVisibleSet);
+  }, [activeProjectionCardHiddenCols, cardDefaultVisibleSet]);
   const cardOptionalCols = useMemo(
-    () => cardColumnCatalog.filter(col => !projectionCardCoreUnionSet.has(col)),
-    [cardColumnCatalog, projectionCardCoreUnionSet]
-  );
-  const visibleCardOptionalCols = useMemo(
-    () => cardOptionalCols.filter(col => !isProjectionCardOptionalColHidden(col)),
-    [cardOptionalCols, isProjectionCardOptionalColHidden]
+    () => [...cardColumnCatalog],
+    [cardColumnCatalog]
   );
   const requiredProjectionCardCols = useMemo(
-    () => new Set(projectionCardCoreUnionCols),
-    [projectionCardCoreUnionCols]
+    () => new Set(),
+    []
   );
   const resolvedProjectionCardHiddenCols = useMemo(() => {
     const hidden = {};
@@ -434,20 +422,16 @@ export function ProjectionsExplorer({
     });
     return hidden;
   }, [cardColumnCatalog, isProjectionCardOptionalColHidden]);
-  const projectionCardCoreColumnsForRow = useCallback(row => {
-    if (tab === "bat") return PROJECTION_HITTER_CORE_STATS;
-    if (tab === "pitch") return PROJECTION_PITCHER_CORE_STATS;
-    const side = String(row?.Type || "").trim().toUpperCase();
-    if (side === "P") return PROJECTION_PITCHER_CORE_STATS;
-    if (side === "H") return PROJECTION_HITTER_CORE_STATS;
-    return [...PROJECTION_HITTER_CORE_STATS, ...PROJECTION_PITCHER_CORE_STATS];
-  }, [tab]);
   const projectionCardColumnsForRow = useCallback(row => (
-    uniqueColumnOrder([
-      ...projectionCardCoreColumnsForRow(row),
-      ...visibleCardOptionalCols,
-    ])
-  ), [projectionCardCoreColumnsForRow, visibleCardOptionalCols]);
+    resolveProjectionCardColumns(
+      tab,
+      seasonCol,
+      dynastyYearCols,
+      row,
+      activeProjectionCardHiddenCols,
+      activeCalculatorSettings
+    )
+  ), [tab, seasonCol, dynastyYearCols, activeProjectionCardHiddenCols, activeCalculatorSettings]);
 
   function setProjectionTableColumnHidden(col, hidden) {
     setProjectionTableHiddenColsByTab(current => {
@@ -484,11 +468,10 @@ export function ProjectionsExplorer({
   }
 
   function setProjectionCardOptionalColumnHidden(col, hidden) {
-    if (projectionCardCoreUnionSet.has(col)) return;
     setProjectionCardHiddenColsByTab(current => {
       const next = normalizeHiddenColumnOverridesByTab(current);
       const nextTab = { ...(next[tab] || {}) };
-      const defaultHidden = projectionCardOptionalColumnHiddenByDefault(col);
+      const defaultHidden = projectionCardOptionalColumnHiddenByDefault(col, cardDefaultVisibleSet);
       if (hidden === defaultHidden) {
         delete nextTab[col];
       } else {

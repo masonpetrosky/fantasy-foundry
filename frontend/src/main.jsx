@@ -71,6 +71,7 @@ function App() {
   const [dataVersion, setDataVersion] = useState("");
   const [presets, setPresets] = useState(() => readCalculatorPresets());
   const [watchlist, setWatchlist] = useState(() => readPlayerWatchlist());
+  const [calculatorSettings, setCalculatorSettings] = useState(null);
   const [calculatorOverlayByPlayerKey, setCalculatorOverlayByPlayerKey] = useState({});
   const [calculatorOverlayActive, setCalculatorOverlayActive] = useState(false);
   const [calculatorOverlayJobId, setCalculatorOverlayJobId] = useState("");
@@ -662,6 +663,7 @@ function App() {
                       meta={meta}
                       presets={presets}
                       setPresets={setPresets}
+                      onSettingsChange={setCalculatorSettings}
                       onApplyToMainTable={applyCalculatorOverlay}
                       onClearMainTableOverlay={clearCalculatorOverlay}
                       mainTableOverlayActive={calculatorOverlayActive}
@@ -676,6 +678,7 @@ function App() {
                   dataVersion={dataVersion}
                   watchlist={watchlist}
                   setWatchlist={setWatchlist}
+                  activeCalculatorSettings={calculatorSettings}
                   calculatorOverlayByPlayerKey={calculatorOverlayByPlayerKey}
                   calculatorOverlayActive={calculatorOverlayActive}
                   calculatorOverlayJobId={calculatorOverlayJobId}
