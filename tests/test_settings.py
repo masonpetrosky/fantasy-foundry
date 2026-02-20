@@ -19,6 +19,7 @@ class AppSettingsTests(unittest.TestCase):
         self.assertEqual(settings.projection_export_rate_limit_per_minute, 30)
         self.assertFalse(settings.require_calculate_auth)
         self.assertEqual(settings.calculate_api_keys_raw, "")
+        self.assertEqual(settings.canonical_host, "")
 
     def test_overrides_and_bounds(self) -> None:
         with patch.dict(
@@ -33,6 +34,7 @@ class AppSettingsTests(unittest.TestCase):
                 "FF_EXPORT_RATE_LIMIT_PER_MINUTE": "0",
                 "FF_REQUIRE_CALCULATE_AUTH": "true",
                 "FF_CALCULATE_API_KEYS": "key-a,key-b",
+                "FF_CANONICAL_HOST": "https://WWW.Example.com:443/",
             },
             clear=True,
         ):
@@ -47,6 +49,7 @@ class AppSettingsTests(unittest.TestCase):
         self.assertEqual(settings.projection_export_rate_limit_per_minute, 1)
         self.assertTrue(settings.require_calculate_auth)
         self.assertEqual(settings.calculate_api_keys_raw, "key-a,key-b")
+        self.assertEqual(settings.canonical_host, "www.example.com")
 
 
 if __name__ == "__main__":

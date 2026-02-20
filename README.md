@@ -253,6 +253,7 @@ All three support Dockerfiles out of the box:
 | `FF_REDIS_URL` | `""` | Optional Redis URL; enables shared calculator result cache, shared rate limiting, shared cancellation markers, and shared active-job tracking across workers/pods. |
 | `FF_REQUIRE_CALCULATE_AUTH` | `0` | Require API keys on `/api/calculate*` endpoints. |
 | `FF_CALCULATE_API_KEYS` | `""` | Comma/space-separated calculator API keys accepted via `X-API-Key` or `Authorization: Bearer ...`. |
+| `FF_CANONICAL_HOST` | `""` | Optional canonical host; when set, requests for `www.<host>` are redirected to `<host>` with HTTP `308`. |
 | `FF_RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS` | `60` | Cleanup interval for local in-memory rate-limit buckets (used when Redis limiter is unavailable). |
 | `FF_CORS_ALLOW_ORIGINS` | `*` | Comma-separated CORS origins (`*` by default; use explicit origins in production). |
 

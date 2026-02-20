@@ -21,6 +21,7 @@ class StatusOrchestrationContext:
     cors_allow_origins: tuple[str, ...]
     trust_x_forwarded_for: bool
     trusted_proxy_cidrs: tuple[str, ...]
+    canonical_host: str
     require_calculate_auth: bool
     calculate_api_keys_configured: bool
     calculator_prewarm_lock: Any
@@ -200,6 +201,7 @@ def get_ops(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
             "cors_allow_origins": list(ctx.cors_allow_origins),
             "trust_x_forwarded_for": ctx.trust_x_forwarded_for,
             "trusted_proxy_cidrs": list(ctx.trusted_proxy_cidrs),
+            "canonical_host": ctx.canonical_host or None,
             "require_calculate_auth": ctx.require_calculate_auth,
             "calculate_api_keys_configured": ctx.calculate_api_keys_configured,
             "redis_configured": bool(ctx.redis_url),

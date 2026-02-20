@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from typing import Literal, cast
+from urllib.parse import urlparse
 
 
 APP_ENVIRONMENTS = {"development", "production"}
@@ -54,6 +55,27 @@ def _parse_environment(raw: str | None) -> Literal["development", "production"]:
     return "development"
 
 
+def _parse_canonical_host(raw: str | None) -> str:
+    text = str(raw or "").strip().lower()
+    if not text:
+        return ""
+
+    if "://" in text:
+        parsed = urlparse(text)
+        text = str(parsed.hostname or "").strip().lower()
+
+    text = text.strip().rstrip(".")
+    if not text:
+        return ""
+
+    if ":" in text and not text.startswith("["):
+        host, port = text.rsplit(":", 1)
+        if port.isdigit():
+            text = host
+
+    return text
+
+
 @dataclass(frozen=True)
 class AppSettings:
     environment: Literal["development", "production"]
@@ -76,6 +98,7 @@ class AppSettings:
     redis_url: str
     require_calculate_auth: bool
     calculate_api_keys_raw: str
+    canonical_host: str
     rate_limit_bucket_cleanup_interval_seconds: float
     cors_allow_origins: tuple[str, ...]
 
@@ -108,6 +131,7 @@ def load_settings_from_env() -> AppSettings:
         redis_url=str(os.getenv("FF_REDIS_URL", "")).strip(),
         require_calculate_auth=_get_bool("FF_REQUIRE_CALCULATE_AUTH", default=False),
         calculate_api_keys_raw=str(os.getenv("FF_CALCULATE_API_KEYS", "")).strip(),
+        canonical_host=_parse_canonical_host(os.getenv("FF_CANONICAL_HOST")),
         rate_limit_bucket_cleanup_interval_seconds=_get_float(
             "FF_RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS", default=60.0, minimum=5.0
         ),

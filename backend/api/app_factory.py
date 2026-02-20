@@ -8,10 +8,12 @@ from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from threading import Thread
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import RedirectResponse
 
 
 CallNext = Callable[[Request], Awaitable[Any]]
@@ -27,6 +29,7 @@ def create_app(
     refresh_data_if_needed: Callable[[], None],
     current_data_version: Callable[[], str],
     client_identity_resolver: Callable[[Request | None], str],
+    canonical_host: str,
     enable_startup_calc_prewarm: bool,
     prewarm_default_calculation_caches: Callable[[], None],
     calculator_job_executor: Any,
@@ -54,6 +57,42 @@ def create_app(
         GZipMiddleware,
         minimum_size=1000,
     )
+
+    canonical_host_clean = str(canonical_host or "").strip().lower().rstrip(".")
+    www_canonical_host = f"www.{canonical_host_clean}" if canonical_host_clean else ""
+
+    def _normalized_host(raw_value: str | None) -> str:
+        text = str(raw_value or "").strip().lower()
+        if not text:
+            return ""
+        if "," in text:
+            text = text.split(",", 1)[0].strip()
+        if "://" in text:
+            parsed = urlparse(text)
+            text = str(parsed.hostname or "").strip().lower()
+        text = text.rstrip(".")
+        if ":" in text and not text.startswith("["):
+            host, port = text.rsplit(":", 1)
+            if port.isdigit():
+                text = host
+        return text
+
+    @app.middleware("http")
+    async def redirect_www_to_canonical_host(request: Request, call_next: CallNext):
+        if not canonical_host_clean:
+            return await call_next(request)
+
+        forwarded_host = _normalized_host(request.headers.get("x-forwarded-host"))
+        request_host = forwarded_host or _normalized_host(str(request.url.hostname or ""))
+        if request_host != www_canonical_host:
+            return await call_next(request)
+
+        forwarded_proto = str(request.headers.get("x-forwarded-proto") or "").split(",", 1)[0].strip().lower()
+        target_scheme = forwarded_proto if forwarded_proto in {"http", "https"} else request.url.scheme
+        return RedirectResponse(
+            url=str(request.url.replace(scheme=target_scheme, netloc=canonical_host_clean)),
+            status_code=308,
+        )
 
     @app.middleware("http")
     async def attach_request_id(request: Request, call_next: CallNext):
