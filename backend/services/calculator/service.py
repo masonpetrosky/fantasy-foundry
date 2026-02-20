@@ -33,6 +33,27 @@ ROTO_PITCHER_CATEGORY_FIELDS: tuple[tuple[str, str, bool], ...] = (
     ("roto_pit_qs", "QS", False),
     ("roto_pit_svh", "SVH", False),
 )
+CALCULATOR_RESULT_STAT_EXPORT_ORDER: tuple[str, ...] = (
+    "R",
+    "RBI",
+    "HR",
+    "SB",
+    "AVG",
+    "OBP",
+    "SLG",
+    "OPS",
+    "H",
+    "BB",
+    "2B",
+    "TB",
+    "W",
+    "K",
+    "SV",
+    "ERA",
+    "WHIP",
+    "QS",
+    "SVH",
+)
 
 
 class CalculateRequest(BaseModel):
@@ -157,6 +178,7 @@ class CalculateRequest(BaseModel):
 class CalculateExportRequest(CalculateRequest):
     format: Literal["csv", "xlsx"] = "csv"
     include_explanations: bool = False
+    export_columns: list[str] | None = None
 
 
 @dataclass(slots=True)
@@ -207,6 +229,40 @@ class CalculatorService:
         self._ctx = ctx
         self.calculate_request_model = CalculateRequest
         self.calculate_export_request_model = CalculateExportRequest
+
+    @staticmethod
+    def _value_col_sort_key(col: str) -> tuple[int, int | str]:
+        suffix = col.split("_", 1)[1] if "_" in col else col
+        return (0, int(suffix)) if str(suffix).isdigit() else (1, suffix)
+
+    def _default_export_columns(self, rows: list[dict]) -> list[str]:
+        seen: set[str] = set()
+        available: list[str] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            for raw_key in row.keys():
+                col = str(raw_key or "").strip()
+                if not col or col in seen:
+                    continue
+                seen.add(col)
+                available.append(col)
+
+        if not available:
+            return ["Player", "DynastyValue", "Age", "Team", "Pos"]
+
+        available_set = set(available)
+        year_cols = sorted(
+            [col for col in available if col.startswith("Value_")],
+            key=self._value_col_sort_key,
+        )
+        stat_cols = [col for col in CALCULATOR_RESULT_STAT_EXPORT_ORDER if col in available_set]
+
+        ordered: list[str] = []
+        for col in ["Player", "DynastyValue", "Age", "Team", "Pos", *stat_cols, *year_cols]:
+            if col in available_set and col not in ordered:
+                ordered.append(col)
+        return ordered
 
     def _run_calculate_request(self, req: CalculateRequest, *, source: str) -> dict:
         started = time.perf_counter()
@@ -512,14 +568,26 @@ class CalculatorService:
         payload = req.model_dump()
         export_format = str(payload.pop("format", "csv")).strip().lower()
         include_explanations = bool(payload.pop("include_explanations", False))
+        requested_export_columns = payload.pop("export_columns", None)
         calc_req = CalculateRequest(**payload)
         result = self._run_calculate_request(calc_req, source="sync-export")
+        result_rows = list(result.get("data", []))
         explain_rows = self._ctx.flatten_explanations_for_export(result.get("explanations", {})) if include_explanations else None
         return self._ctx.tabular_export_response(
-            result.get("data", []),
+            result_rows,
             filename_base=f"dynasty-rankings-{calc_req.scoring_mode}",
             file_format="xlsx" if export_format == "xlsx" else "csv",
             explain_rows=explain_rows,
+            selected_columns=requested_export_columns,
+            default_columns=self._default_export_columns(result_rows),
+            required_columns=["Player", "DynastyValue"],
+            disallowed_columns=[
+                self._ctx.player_key_col,
+                self._ctx.player_entity_key_col,
+                "DynastyMatchStatus",
+                "RawDynastyValue",
+                "minor_eligible",
+            ],
         )
 
     def create_calculate_dynasty_job(self, req: CalculateRequest, request: Request):

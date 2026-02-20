@@ -26,7 +26,7 @@ import io
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from threading import Lock
@@ -34,6 +34,8 @@ from typing import Any, Literal
 from uuid import uuid4
 
 import pandas as pd
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
@@ -116,6 +118,94 @@ PROJECTION_TEXT_SORT_COLS = {"Player", "Team", "Pos", "Type", "Years"}
 PLAYER_KEY_COL = "PlayerKey"
 PLAYER_ENTITY_KEY_COL = "PlayerEntityKey"
 PLAYER_KEY_PATTERN = re.compile(r"[^a-z0-9]+")
+EXPORT_INTERNAL_COLUMN_BLOCKLIST = {
+    PLAYER_KEY_COL,
+    PLAYER_ENTITY_KEY_COL,
+    "DynastyMatchStatus",
+    "RawDynastyValue",
+    "minor_eligible",
+}
+CALCULATOR_RESULT_STAT_EXPORT_ORDER = (
+    "R",
+    "RBI",
+    "HR",
+    "SB",
+    "AVG",
+    "OBP",
+    "SLG",
+    "OPS",
+    "H",
+    "BB",
+    "2B",
+    "TB",
+    "W",
+    "K",
+    "SV",
+    "ERA",
+    "WHIP",
+    "QS",
+    "SVH",
+)
+EXPORT_HEADER_LABEL_OVERRIDES = {
+    "Type": "Side",
+    "ProjectionsUsed": "Proj Count",
+    "OldestProjectionDate": "Oldest Proj Date",
+    "DynastyValue": "Dynasty Value",
+    "RawDynastyValue": "Raw Dynasty Value",
+    "YearValue": "Year Value",
+    "DiscountFactor": "Discount Factor",
+    "DiscountedContribution": "Discounted Contribution",
+    "HittingPoints": "Hitting Points",
+    "PitchingPoints": "Pitching Points",
+    "SelectedPoints": "Selected Points",
+    "HittingRulePoints": "Hitting Rule Points",
+    "PitchingRulePoints": "Pitching Rule Points",
+    "Years": "Years",
+    "PitH": "P H",
+    "PitHR": "P HR",
+    "PitBB": "P BB",
+}
+EXPORT_THREE_DECIMAL_COLS = {"AVG", "OBP", "SLG", "OPS"}
+EXPORT_TWO_DECIMAL_COLS = {
+    "DynastyValue",
+    "RawDynastyValue",
+    "YearValue",
+    "DiscountFactor",
+    "DiscountedContribution",
+    "HittingPoints",
+    "PitchingPoints",
+    "SelectedPoints",
+    "ERA",
+    "WHIP",
+}
+EXPORT_WHOLE_NUMBER_COLS = {
+    "AB",
+    "R",
+    "HR",
+    "RBI",
+    "SB",
+    "IP",
+    "W",
+    "K",
+    "SVH",
+    "QS",
+    "G",
+    "H",
+    "2B",
+    "3B",
+    "BB",
+    "SO",
+    "GS",
+    "L",
+    "PitBB",
+    "SV",
+    "PitH",
+    "PitHR",
+    "ER",
+    "TB",
+}
+EXPORT_INTEGER_COLS = {"Rank", "Year", "Age", "ProjectionsUsed"}
+EXPORT_DATE_COLS = {"OldestProjectionDate"}
 COMMON_HITTER_SLOT_DEFAULTS = {
     "C": 1,
     "1B": 1,
@@ -1922,27 +2012,313 @@ def _flatten_explanations_for_export(explanations: dict[str, dict]) -> list[dict
     return rows
 
 
+def _coerce_export_column_tokens(value: list[str] | tuple[str, ...] | set[str] | str | None) -> list[str]:
+    if value is None:
+        return []
+
+    raw_tokens: list[object]
+    if isinstance(value, str):
+        raw_tokens = [value]
+    elif isinstance(value, (list, tuple, set)):
+        raw_tokens = list(value)
+    else:
+        return []
+
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in raw_tokens:
+        for token in str(raw or "").split(","):
+            col = token.strip()
+            if not col or col in seen:
+                continue
+            seen.add(col)
+            out.append(col)
+    return out
+
+
+def _ordered_columns_from_rows(rows: list[dict]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for raw_key in row.keys():
+            col = str(raw_key or "").strip()
+            if not col or col in seen:
+                continue
+            seen.add(col)
+            ordered.append(col)
+    return ordered
+
+
+def _resolve_export_columns(
+    *,
+    available_columns: list[str],
+    requested_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
+    default_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
+    required_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
+    disallowed_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
+) -> list[str]:
+    available = _coerce_export_column_tokens(available_columns)
+    available_set = set(available)
+    disallowed_set = set(_coerce_export_column_tokens(disallowed_columns))
+
+    def _select(source: list[str] | tuple[str, ...] | set[str] | str | None) -> list[str]:
+        selected: list[str] = []
+        seen_local: set[str] = set()
+        for col in _coerce_export_column_tokens(source):
+            if col in seen_local or col in disallowed_set or col not in available_set:
+                continue
+            seen_local.add(col)
+            selected.append(col)
+        return selected
+
+    requested = _select(requested_columns)
+    if not requested:
+        requested = _select(default_columns)
+    if not requested:
+        requested = _select(available)
+
+    required = _select(required_columns)
+    required_set = set(required)
+    resolved = required + [col for col in requested if col not in required_set]
+    if resolved:
+        return resolved
+
+    return [col for col in available if col not in disallowed_set]
+
+
+def _export_column_label(col: str) -> str:
+    text = str(col or "").strip()
+    if text.startswith("Value_"):
+        suffix = text.split("_", 1)[1].strip() if "_" in text else ""
+        return f"{suffix} Dyn Value" if suffix else text
+    return EXPORT_HEADER_LABEL_OVERRIDES.get(text, text)
+
+
+def _is_missing_export_value(value: object) -> bool:
+    if value is None:
+        return True
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _export_rounding_decimals(col: str) -> int | None:
+    if col.startswith("Value_"):
+        return 2
+    if col in EXPORT_THREE_DECIMAL_COLS:
+        return 3
+    if col in EXPORT_TWO_DECIMAL_COLS:
+        return 2
+    if col in EXPORT_WHOLE_NUMBER_COLS or col in EXPORT_INTEGER_COLS:
+        return 0
+    return None
+
+
+def _round_export_value(value: object, decimals: int) -> object:
+    if isinstance(value, bool):
+        return value
+    if _is_missing_export_value(value):
+        return None
+    parsed = _as_float(value)
+    if parsed is None:
+        return value
+    if decimals <= 0:
+        return int(round(parsed))
+    return round(parsed, decimals)
+
+
+def _coerce_export_date_value(value: object) -> object:
+    if _is_missing_export_value(value):
+        return None
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return value
+    return parsed.date()
+
+
+def _xlsx_number_format_for_decimals(decimals: int) -> str:
+    if decimals <= 0:
+        return "#,##0"
+    if decimals == 1:
+        return "#,##0.0"
+    if decimals == 2:
+        return "#,##0.00"
+    return "#,##0.000"
+
+
+def _xlsx_apply_table_formatting(
+    ws,
+    df: pd.DataFrame,
+    *,
+    decimals_by_col: dict[str, int] | None = None,
+    date_cols: set[str] | None = None,
+) -> None:
+    if ws.max_row < 1 or ws.max_column < 1:
+        return
+
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+
+    header_fill = PatternFill(fill_type="solid", fgColor="EEF3F8")
+    header_font = Font(bold=True)
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    decimals_by_col = decimals_by_col or {}
+    date_cols = date_cols or set()
+
+    for col_idx, col_name in enumerate(df.columns, start=1):
+        col_letter = get_column_letter(col_idx)
+        sample_values = [str(col_name)]
+        for value in df[col_name].head(200).tolist():
+            if _is_missing_export_value(value):
+                continue
+            sample_values.append(str(value))
+        width = min(48, max(8, max((len(text) for text in sample_values), default=8) + 2))
+        ws.column_dimensions[col_letter].width = width
+
+        decimals = decimals_by_col.get(col_name)
+        if decimals is not None:
+            number_format = _xlsx_number_format_for_decimals(decimals)
+            for row_idx in range(2, ws.max_row + 1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                value = cell.value
+                if value is None or isinstance(value, bool):
+                    continue
+                parsed = _as_float(value)
+                if parsed is None:
+                    continue
+                cell.value = int(round(parsed)) if decimals <= 0 else round(parsed, decimals)
+                cell.number_format = number_format
+            continue
+
+        if col_name in date_cols:
+            for row_idx in range(2, ws.max_row + 1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                if isinstance(cell.value, (datetime, date)):
+                    cell.number_format = "yyyy-mm-dd"
+
+
+def _prepare_data_export_frame(
+    rows: list[dict],
+    *,
+    selected_columns: list[str],
+) -> tuple[pd.DataFrame, dict[str, int], set[str]]:
+    frame = pd.DataFrame.from_records(rows)
+    for col in selected_columns:
+        if col not in frame.columns:
+            frame[col] = None
+    frame = frame.reindex(columns=selected_columns)
+
+    decimals_by_display: dict[str, int] = {}
+    display_date_cols: set[str] = set()
+    rename_map: dict[str, str] = {}
+
+    for col in selected_columns:
+        if col in EXPORT_DATE_COLS and col in frame.columns:
+            frame[col] = frame[col].map(_coerce_export_date_value)
+            display_date_cols.add(_export_column_label(col))
+
+        decimals = _export_rounding_decimals(col)
+        if decimals is not None and col in frame.columns:
+            frame[col] = frame[col].map(lambda value, d=decimals: _round_export_value(value, d))
+            decimals_by_display[_export_column_label(col)] = decimals
+
+        rename_map[col] = _export_column_label(col)
+
+    frame = frame.rename(columns=rename_map)
+    return frame, decimals_by_display, display_date_cols
+
+
+def _prepare_explainability_export_frame(rows: list[dict]) -> tuple[pd.DataFrame, dict[str, int], set[str]]:
+    frame = pd.DataFrame.from_records(rows)
+    decimals_by_col: dict[str, int] = {}
+    date_cols: set[str] = set()
+    for col in list(frame.columns):
+        if col in EXPORT_DATE_COLS:
+            frame[col] = frame[col].map(_coerce_export_date_value)
+            date_cols.add(col)
+        decimals = _export_rounding_decimals(col)
+        if decimals is not None:
+            frame[col] = frame[col].map(lambda value, d=decimals: _round_export_value(value, d))
+            decimals_by_col[col] = decimals
+    return frame, decimals_by_col, date_cols
+
+
+def _default_calculator_export_columns(rows: list[dict]) -> list[str]:
+    available = _ordered_columns_from_rows(rows)
+    if not available:
+        return ["Player", "DynastyValue", "Age", "Team", "Pos"]
+
+    available_set = set(available)
+    year_cols = sorted(
+        [col for col in available if col.startswith("Value_")],
+        key=_value_col_sort_key,
+    )
+    stat_cols = [col for col in CALCULATOR_RESULT_STAT_EXPORT_ORDER if col in available_set]
+
+    ordered: list[str] = []
+    for col in ["Player", "DynastyValue", "Age", "Team", "Pos", *stat_cols, *year_cols]:
+        if col in available_set and col not in ordered:
+            ordered.append(col)
+    return ordered
+
+
 def _tabular_export_response(
     rows: list[dict],
     *,
     filename_base: str,
     file_format: Literal["csv", "xlsx"],
     explain_rows: list[dict] | None = None,
+    selected_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
+    default_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
+    required_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
+    disallowed_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
 ) -> StreamingResponse:
+    available_columns = _ordered_columns_from_rows(rows)
+    resolved_columns = _resolve_export_columns(
+        available_columns=available_columns,
+        requested_columns=selected_columns,
+        default_columns=default_columns,
+        required_columns=required_columns,
+        disallowed_columns=disallowed_columns,
+    )
+    data_df, data_decimals, data_date_cols = _prepare_data_export_frame(
+        rows,
+        selected_columns=resolved_columns,
+    )
+
     if file_format == "csv":
-        df = pd.DataFrame.from_records(rows)
-        payload = df.to_csv(index=False).encode("utf-8")
+        payload = data_df.to_csv(index=False).encode("utf-8")
         content_type = "text/csv; charset=utf-8"
         extension = "csv"
     else:
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            pd.DataFrame.from_records(rows).to_excel(writer, index=False, sheet_name="Data")
+            data_df.to_excel(writer, index=False, sheet_name="Data")
+            _xlsx_apply_table_formatting(
+                writer.sheets["Data"],
+                data_df,
+                decimals_by_col=data_decimals,
+                date_cols=data_date_cols,
+            )
             if explain_rows:
-                pd.DataFrame.from_records(explain_rows).to_excel(
+                explain_df, explain_decimals, explain_date_cols = _prepare_explainability_export_frame(explain_rows)
+                explain_df.to_excel(
                     writer,
                     index=False,
                     sheet_name="Explainability",
+                )
+                _xlsx_apply_table_formatting(
+                    writer.sheets["Explainability"],
+                    explain_df,
+                    decimals_by_col=explain_decimals,
+                    date_cols=explain_date_cols,
                 )
         payload = output.getvalue()
         content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -2911,14 +3287,20 @@ def export_calculate_dynasty_values(req: CalculateExportRequest, request: Reques
     payload = req.model_dump()
     export_format = str(payload.pop("format", "csv")).strip().lower()
     include_explanations = bool(payload.pop("include_explanations", False))
+    requested_export_columns = payload.pop("export_columns", None)
     calc_req = CalculateRequest(**payload)
     result = _run_calculate_request(calc_req, source="sync-export")
+    result_rows = list(result.get("data", []))
     explain_rows = _flatten_explanations_for_export(result.get("explanations", {})) if include_explanations else None
     return _tabular_export_response(
-        result.get("data", []),
+        result_rows,
         filename_base=f"dynasty-rankings-{calc_req.scoring_mode}",
         file_format="xlsx" if export_format == "xlsx" else "csv",
         explain_rows=explain_rows,
+        selected_columns=requested_export_columns,
+        default_columns=_default_calculator_export_columns(result_rows),
+        required_columns=["Player", "DynastyValue"],
+        disallowed_columns=EXPORT_INTERNAL_COLUMN_BLOCKLIST,
     )
 
 

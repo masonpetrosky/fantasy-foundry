@@ -132,6 +132,7 @@ def build_projections_router(
         include_dynasty: bool = True,
         sort_col: Optional[str] = None,
         sort_dir: Literal["asc", "desc"] = "desc",
+        columns: Optional[str] = None,
     ):
         return projection_export_handler(
             dataset=dataset,
@@ -147,6 +148,7 @@ def build_projections_router(
             include_dynasty=include_dynasty,
             sort_col=sort_col,
             sort_dir=sort_dir,
+            columns=columns,
         )
 
     return router

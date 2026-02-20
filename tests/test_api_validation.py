@@ -4,6 +4,7 @@ import sys
 import time
 import re
 import json
+import io
 import tempfile
 import ipaddress
 from collections import deque
@@ -11,6 +12,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pandas as pd
+from openpyxl import load_workbook
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
@@ -2113,6 +2115,90 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertIn("text/csv", response.headers.get("content-type", ""))
         self.assertIn("Player", response.text)
 
+    def test_projection_export_csv_respects_columns_and_drops_internal_fields(self) -> None:
+        sample_rows = [
+            {
+                "Player": "Jane Roe",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "DynastyValue": 5.126,
+                "AVG": 0.2894,
+                "PlayerKey": "jane-roe",
+                "PlayerEntityKey": "jane-roe",
+                "DynastyMatchStatus": "matched",
+            }
+        ]
+        with patch.object(app_module, "BAT_DATA", sample_rows), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            app_module.PROJECTION_SERVICE.clear_caches()
+            response = self.client.get(
+                "/api/projections/export/bat",
+                params={
+                    "format": "csv",
+                    "include_dynasty": "false",
+                    "columns": "Player,DynastyValue,AVG,PlayerKey,DynastyMatchStatus",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        lines = response.text.splitlines()
+        self.assertGreaterEqual(len(lines), 2)
+        self.assertEqual(lines[0], "Player,Dynasty Value,AVG")
+        self.assertNotIn("PlayerKey", lines[0])
+        self.assertNotIn("DynastyMatchStatus", lines[0])
+        self.assertIn("5.13", lines[1])
+        self.assertIn("0.289", lines[1])
+
+    def test_calculate_export_csv_respects_export_columns_and_drops_internal_fields(self) -> None:
+        fake_result = {
+            "total": 1,
+            "settings": {},
+            "data": [
+                {
+                    "Player": "Jane Roe",
+                    "Team": "SEA",
+                    "Pos": "OF",
+                    "Age": 26,
+                    "DynastyValue": 7.126,
+                    "RawDynastyValue": 8.555,
+                    "PlayerKey": "jane-roe",
+                    "PlayerEntityKey": "jane-roe",
+                    "DynastyMatchStatus": "matched",
+                    "minor_eligible": False,
+                    "Value_2026": 2.345,
+                }
+            ],
+            "explanations": {},
+        }
+        with patch.object(app_module, "_run_calculate_request", return_value=fake_result):
+            response = self.client.post(
+                "/api/calculate/export",
+                json={
+                    "format": "csv",
+                    "export_columns": [
+                        "Player",
+                        "DynastyValue",
+                        "Team",
+                        "RawDynastyValue",
+                        "PlayerKey",
+                        "Value_2026",
+                    ],
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        lines = response.text.splitlines()
+        self.assertGreaterEqual(len(lines), 2)
+        self.assertEqual(lines[0], "Player,Dynasty Value,Team,2026 Dyn Value")
+        self.assertNotIn("RawDynastyValue", lines[0])
+        self.assertNotIn("PlayerKey", lines[0])
+        self.assertIn("7.13", lines[1])
+        self.assertIn("2.35", lines[1])
+
     def test_calculate_export_xlsx_endpoint(self) -> None:
         fake_out = pd.DataFrame(
             [
@@ -2161,6 +2247,16 @@ class CalculatorValidationTests(unittest.TestCase):
             response.headers.get("content-type", ""),
         )
         self.assertTrue(response.content.startswith(b"PK"))
+        workbook = load_workbook(io.BytesIO(response.content))
+        self.assertIn("Data", workbook.sheetnames)
+        self.assertIn("Explainability", workbook.sheetnames)
+        data_headers = [cell.value for cell in next(workbook["Data"].iter_rows(min_row=1, max_row=1))]
+        self.assertIn("Dynasty Value", data_headers)
+        self.assertNotIn("PlayerKey", data_headers)
+        self.assertNotIn("PlayerEntityKey", data_headers)
+        self.assertNotIn("DynastyMatchStatus", data_headers)
+        self.assertNotIn("RawDynastyValue", data_headers)
+        self.assertNotIn("minor_eligible", data_headers)
 
     def test_rate_limit_enforced_for_sync_calculate(self) -> None:
         with patch.object(app_module, "CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE", 1), patch.object(

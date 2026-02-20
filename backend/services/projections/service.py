@@ -9,6 +9,8 @@ import pandas as pd
 from fastapi import HTTPException
 
 ProjectionDataset = Literal["all", "bat", "pitch"]
+PROJECTION_HITTER_CORE_EXPORT_COLS: tuple[str, ...] = ("AB", "R", "HR", "RBI", "SB", "AVG", "OPS")
+PROJECTION_PITCHER_CORE_EXPORT_COLS: tuple[str, ...] = ("IP", "W", "K", "SV", "ERA", "WHIP", "QS")
 
 
 @dataclass(slots=True)
@@ -222,6 +224,115 @@ class ProjectionService:
     @staticmethod
     def _normalize_filter_value(value: str | None) -> str:
         return (value or "").strip()
+
+    @staticmethod
+    def _value_col_sort_key(col: str) -> tuple[int, int | str]:
+        suffix = col.split("_", 1)[1] if "_" in col else col
+        return (0, int(suffix)) if str(suffix).isdigit() else (1, suffix)
+
+    @staticmethod
+    def _ordered_unique(cols: list[str]) -> list[str]:
+        seen: set[str] = set()
+        out: list[str] = []
+        for col in cols:
+            name = str(col or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            out.append(name)
+        return out
+
+    def _parse_export_columns(self, value: str | None) -> list[str]:
+        if not value:
+            return []
+        tokens = [token.strip() for token in str(value).split(",")]
+        return self._ordered_unique([token for token in tokens if token])
+
+    def _default_projection_export_columns(
+        self,
+        rows: list[dict],
+        *,
+        dataset: ProjectionDataset,
+        career_totals: bool,
+    ) -> list[str]:
+        available = self._ordered_unique([str(key) for row in rows if isinstance(row, dict) for key in row.keys()])
+        if not available:
+            return ["Player", "Team", "Pos", "Age", "DynastyValue"]
+
+        available_set = set(available)
+        season_col = "Years" if career_totals else "Year"
+        dynasty_cols = sorted(
+            [col for col in available if col.startswith("Value_")],
+            key=self._value_col_sort_key,
+        )
+        identity_cols = ["Player", "Team", "Pos", "Age", "DynastyValue"]
+
+        if dataset == "bat":
+            desired = self._ordered_unique(
+                [
+                    *identity_cols,
+                    *PROJECTION_HITTER_CORE_EXPORT_COLS,
+                    *dynasty_cols,
+                    "OBP",
+                    "G",
+                    "H",
+                    "2B",
+                    "3B",
+                    "BB",
+                    "SO",
+                    "ProjectionsUsed",
+                    "OldestProjectionDate",
+                    season_col,
+                ]
+            )
+        elif dataset == "pitch":
+            desired = self._ordered_unique(
+                [
+                    *identity_cols,
+                    *PROJECTION_PITCHER_CORE_EXPORT_COLS,
+                    *dynasty_cols,
+                    "G",
+                    "GS",
+                    "L",
+                    "BB",
+                    "H",
+                    "HR",
+                    "ER",
+                    "SVH",
+                    "ProjectionsUsed",
+                    "OldestProjectionDate",
+                    season_col,
+                ]
+            )
+        else:
+            desired = self._ordered_unique(
+                [
+                    *identity_cols,
+                    *PROJECTION_HITTER_CORE_EXPORT_COLS,
+                    *PROJECTION_PITCHER_CORE_EXPORT_COLS,
+                    *dynasty_cols,
+                    "OBP",
+                    "G",
+                    "H",
+                    "2B",
+                    "3B",
+                    "BB",
+                    "SO",
+                    "GS",
+                    "L",
+                    "PitBB",
+                    "PitH",
+                    "PitHR",
+                    "ER",
+                    "SVH",
+                    "ProjectionsUsed",
+                    "OldestProjectionDate",
+                    season_col,
+                    "Type",
+                ]
+            )
+
+        return [col for col in desired if col in available_set]
 
     def _position_sort_key(self, token: str) -> tuple[int, str]:
         order_map = {pos: idx for idx, pos in enumerate(self._ctx.position_display_order)}
@@ -918,6 +1029,7 @@ class ProjectionService:
         include_dynasty: bool = True,
         sort_col: Optional[str] = None,
         sort_dir: Literal["asc", "desc"] = "desc",
+        columns: Optional[str] = None,
     ):
         self._ctx.refresh_data_if_needed()
         validated_sort_col = self._validate_sort_col(sort_col, dataset=dataset)
@@ -955,8 +1067,24 @@ class ProjectionService:
                 )
             )
 
+        requested_export_columns = self._parse_export_columns(columns)
+        default_export_columns = self._default_projection_export_columns(
+            rows,
+            dataset=dataset,
+            career_totals=career_totals,
+        )
         return self._ctx.tabular_export_response(
             rows,
             filename_base=f"projections-{dataset}",
             file_format=file_format,
+            selected_columns=requested_export_columns,
+            default_columns=default_export_columns,
+            required_columns=["Player"],
+            disallowed_columns=[
+                self._ctx.player_key_col,
+                self._ctx.player_entity_key_col,
+                "DynastyMatchStatus",
+                "RawDynastyValue",
+                "minor_eligible",
+            ],
         )

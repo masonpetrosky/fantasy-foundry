@@ -516,6 +516,7 @@ export function ProjectionsExplorer({ apiBase, meta, dataVersion, watchlist, set
     params.set("include_dynasty", "true");
     params.set("sort_col", sortCol);
     params.set("sort_dir", sortDir);
+    if (cols.length > 0) params.set("columns", cols.join(","));
     params.set("format", format);
     const href = `${API}/api/projections/export/${endpointTab}?${params.toString()}`;
 

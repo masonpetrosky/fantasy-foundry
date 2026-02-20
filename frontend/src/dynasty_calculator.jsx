@@ -270,6 +270,7 @@ export function DynastyCalculator({ apiBase, meta, presets, setPresets, watchlis
           ...payload.payload,
           format,
           include_explanations: format === "xlsx",
+          export_columns: visibleRankCols,
         }),
       });
       if (!response.ok) {
