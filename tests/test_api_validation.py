@@ -64,64 +64,171 @@ class YearCoercionTests(unittest.TestCase):
         self.assertIsNone(app_module._coerce_record_year(True))
 
 
-class ProjectionConfidenceAdjustmentTests(unittest.TestCase):
-    def test_multiplier_downweights_uncertain_positive_upside(self) -> None:
-        row = {
-            "DynastyValue": 12.5,
-            "ProjectionsUsed": 1,
-            "Age": 22,
-            "minor_eligible": True,
-            "Pos": "1B",
-            "Value_2026": -1.0,
-        }
-        context_entry = {"projections_used": 1, "ab": 0.0, "ip": 0.0, "pos": "1B"}
+class DynastyValuePenaltyRemovalTests(unittest.TestCase):
+    def setUp(self) -> None:
+        app_module._calculate_common_dynasty_frame_cached.cache_clear()
+        app_module._calculate_points_dynasty_frame_cached.cache_clear()
 
-        multiplier = app_module._projection_confidence_multiplier(
-            row,
-            context_entry=context_entry,
-            start_year=2026,
+    def test_common_cache_frame_keeps_calculated_values_without_post_scaling(self) -> None:
+        fake_out = pd.DataFrame(
+            [
+                {
+                    "Player": "Prospect One",
+                    "Team": "ATL",
+                    "Pos": "OF",
+                    "Age": 22,
+                    "DynastyValue": 12.5,
+                    "RawDynastyValue": 14.0,
+                    "ProjectionsUsed": 1,
+                    "minor_eligible": True,
+                    "Value_2026": 8.0,
+                }
+            ]
         )
 
-        self.assertLess(multiplier, 1.0)
-        self.assertGreaterEqual(multiplier, 0.55)
+        class FakeSettings:
+            def __init__(self, **kwargs) -> None:
+                self.kwargs = kwargs
 
-    def test_multiplier_keeps_negative_non_pitcher_values_intact(self) -> None:
-        row = {
-            "DynastyValue": -1.3,
-            "ProjectionsUsed": 1,
-            "Age": 27,
-            "minor_eligible": False,
-            "Pos": "OF",
-            "Value_2026": -0.8,
-        }
-        context_entry = {"projections_used": 1, "ab": 140.0, "ip": 0.0, "pos": "OF"}
+        def fake_calculate(*args, **kwargs):
+            return fake_out.copy(deep=True)
 
-        multiplier = app_module._projection_confidence_multiplier(
-            row,
-            context_entry=context_entry,
-            start_year=2026,
+        fake_module = types.SimpleNamespace(
+            CommonDynastyRotoSettings=FakeSettings,
+            calculate_common_dynasty_values=fake_calculate,
         )
 
-        self.assertEqual(multiplier, 1.0)
+        with patch.dict(sys.modules, {"dynasty_roto_values": fake_module}):
+            out = app_module._calculate_common_dynasty_frame_cached(
+                teams=12,
+                sims=300,
+                horizon=1,
+                discount=0.94,
+                hit_c=1,
+                hit_1b=1,
+                hit_2b=1,
+                hit_3b=1,
+                hit_ss=1,
+                hit_ci=1,
+                hit_mi=1,
+                hit_of=5,
+                hit_ut=1,
+                pit_p=9,
+                pit_sp=0,
+                pit_rp=0,
+                bench=6,
+                minors=0,
+                ir=0,
+                ip_min=1000.0,
+                ip_max=None,
+                two_way="sum",
+                start_year=2026,
+                recent_projections=1,
+            )
 
-    def test_multiplier_applies_mild_uplift_to_durable_negative_sp(self) -> None:
-        row = {
-            "DynastyValue": -2.1,
-            "ProjectionsUsed": 1,
-            "Age": 30,
-            "minor_eligible": False,
-            "Pos": "SP",
-            "Value_2026": -0.9,
-        }
-        context_entry = {"projections_used": 1, "ab": 0.0, "ip": 158.0, "pos": "SP"}
+        row = out.iloc[0]
+        self.assertEqual(float(row["DynastyValue"]), 12.5)
+        self.assertEqual(float(row["RawDynastyValue"]), 14.0)
+        self.assertEqual(float(row["Value_2026"]), 8.0)
 
-        multiplier = app_module._projection_confidence_multiplier(
-            row,
-            context_entry=context_entry,
-            start_year=2026,
-        )
+    def test_points_cache_frame_uses_raw_replacement_math_without_confidence_penalty(self) -> None:
+        bat_rows = [
+            {
+                "Player": "Hitter A",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "Age": 22,
+                "AB": 50,
+                "H": 10,
+                "2B": 0,
+                "3B": 0,
+                "HR": 0,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "ProjectionsUsed": 1,
+                "PlayerKey": "hitter-a",
+                "PlayerEntityKey": "hitter-a",
+            },
+            {
+                "Player": "Hitter B",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "Age": 30,
+                "AB": 50,
+                "H": 4,
+                "2B": 0,
+                "3B": 0,
+                "HR": 0,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "ProjectionsUsed": 1,
+                "PlayerKey": "hitter-b",
+                "PlayerEntityKey": "hitter-b",
+            },
+        ]
 
-        self.assertEqual(multiplier, 0.92)
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(app_module, "PIT_DATA", []), patch.object(
+            app_module,
+            "META",
+            {"years": [2026]},
+        ):
+            out = app_module._calculate_points_dynasty_frame_cached(
+                teams=1,
+                horizon=1,
+                discount=1.0,
+                hit_c=0,
+                hit_1b=0,
+                hit_2b=0,
+                hit_3b=0,
+                hit_ss=0,
+                hit_ci=0,
+                hit_mi=0,
+                hit_of=1,
+                hit_ut=0,
+                pit_p=0,
+                pit_sp=0,
+                pit_rp=0,
+                bench=1,
+                minors=0,
+                ir=0,
+                two_way="sum",
+                start_year=2026,
+                recent_projections=3,
+                pts_hit_1b=1.0,
+                pts_hit_2b=0.0,
+                pts_hit_3b=0.0,
+                pts_hit_hr=0.0,
+                pts_hit_r=0.0,
+                pts_hit_rbi=0.0,
+                pts_hit_sb=0.0,
+                pts_hit_bb=0.0,
+                pts_hit_so=0.0,
+                pts_pit_ip=0.0,
+                pts_pit_w=0.0,
+                pts_pit_l=0.0,
+                pts_pit_k=0.0,
+                pts_pit_sv=0.0,
+                pts_pit_svh=0.0,
+                pts_pit_h=0.0,
+                pts_pit_er=0.0,
+                pts_pit_bb=0.0,
+            )
+
+        rows_by_player = {str(row["Player"]): row for _, row in out.iterrows()}
+        self.assertEqual(float(rows_by_player["Hitter A"]["Value_2026"]), 10.0)
+        self.assertEqual(float(rows_by_player["Hitter A"]["RawDynastyValue"]), 10.0)
+        self.assertEqual(float(rows_by_player["Hitter A"]["DynastyValue"]), 6.0)
+        self.assertEqual(float(rows_by_player["Hitter B"]["Value_2026"]), 4.0)
+        self.assertEqual(float(rows_by_player["Hitter B"]["RawDynastyValue"]), 4.0)
+        self.assertEqual(float(rows_by_player["Hitter B"]["DynastyValue"]), 0.0)
 
 
 class ProjectionEndpointValidationTests(unittest.TestCase):
