@@ -269,6 +269,8 @@ def calculator_guardrails_payload(
     calculator_sync_rate_limit_per_minute: int,
     calculator_job_create_rate_limit_per_minute: int,
     calculator_job_status_rate_limit_per_minute: int,
+    projection_rate_limit_per_minute: int,
+    projection_export_rate_limit_per_minute: int,
     calculator_max_active_jobs_per_ip: int,
 ) -> dict:
     return {
@@ -296,5 +298,7 @@ def calculator_guardrails_payload(
         "rate_limit_sync_per_minute": calculator_sync_rate_limit_per_minute,
         "rate_limit_job_create_per_minute": calculator_job_create_rate_limit_per_minute,
         "rate_limit_job_status_per_minute": calculator_job_status_rate_limit_per_minute,
+        "rate_limit_projections_per_minute": projection_rate_limit_per_minute,
+        "rate_limit_projection_exports_per_minute": projection_export_rate_limit_per_minute,
         "max_active_jobs_per_ip": calculator_max_active_jobs_per_ip,
     }

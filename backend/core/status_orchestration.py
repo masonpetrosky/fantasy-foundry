@@ -17,6 +17,12 @@ class StatusOrchestrationContext:
     meta_getter: Callable[[], dict[str, Any]]
     calculator_guardrails_payload: Callable[[], dict[str, Any]]
     projection_freshness_getter: Callable[[], dict[str, Any]]
+    environment: str
+    cors_allow_origins: tuple[str, ...]
+    trust_x_forwarded_for: bool
+    trusted_proxy_cidrs: tuple[str, ...]
+    require_calculate_auth: bool
+    calculate_api_keys_configured: bool
     calculator_prewarm_lock: Any
     calculator_prewarm_state: dict[str, Any]
     api_no_cache_headers: dict[str, str]
@@ -34,6 +40,12 @@ class StatusOrchestrationContext:
     calc_result_cache_lock: Any
     cleanup_local_result_cache: Callable[[float | None], None]
     calc_result_cache: dict[str, tuple[float, dict]]
+    rate_limit_bucket_count_getter: Callable[[], int]
+    calculator_sync_rate_limit_per_minute: int
+    calculator_job_create_rate_limit_per_minute: int
+    calculator_job_status_rate_limit_per_minute: int
+    projection_rate_limit_per_minute: int
+    projection_export_rate_limit_per_minute: int
     redis_url: str
     bat_data_getter: Callable[[], list[dict]]
     pit_data_getter: Callable[[], list[dict]]
@@ -98,6 +110,23 @@ def dynasty_lookup_cache_health_payload(*, ctx: StatusOrchestrationContext) -> d
     return payload
 
 
+def _job_status_counts(*, ctx: StatusOrchestrationContext) -> dict[str, int]:
+    with ctx.calculator_job_lock:
+        ctx.cleanup_calculation_jobs(None)
+        counts = {"queued": 0, "running": 0, "completed": 0, "failed": 0, ctx.calc_job_cancelled_status: 0}
+        for job in ctx.calculator_jobs.values():
+            status = str(job.get("status") or "").strip().lower()
+            if status in counts:
+                counts[status] += 1
+    return counts
+
+
+def _local_result_cache_entries(*, ctx: StatusOrchestrationContext) -> int:
+    with ctx.calc_result_cache_lock:
+        ctx.cleanup_local_result_cache(None)
+        return len(ctx.calc_result_cache)
+
+
 def get_meta(request: Request, *, ctx: StatusOrchestrationContext):
     ctx.refresh_data_if_needed()
     payload = build_meta_payload(ctx=ctx)
@@ -122,18 +151,8 @@ def get_version(request: Request, *, ctx: StatusOrchestrationContext):
 
 def get_health(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
     ctx.refresh_data_if_needed()
-
-    with ctx.calculator_job_lock:
-        ctx.cleanup_calculation_jobs(None)
-        job_status_counts = {"queued": 0, "running": 0, "completed": 0, "failed": 0, ctx.calc_job_cancelled_status: 0}
-        for job in ctx.calculator_jobs.values():
-            status = str(job.get("status") or "").strip().lower()
-            if status in job_status_counts:
-                job_status_counts[status] += 1
-
-    with ctx.calc_result_cache_lock:
-        ctx.cleanup_local_result_cache(None)
-        local_result_cache_entries = len(ctx.calc_result_cache)
+    job_status_counts = _job_status_counts(ctx=ctx)
+    local_result_cache_entries = _local_result_cache_entries(ctx=ctx)
 
     with ctx.calculator_prewarm_lock:
         prewarm = dict(ctx.calculator_prewarm_state)
@@ -155,6 +174,49 @@ def get_health(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
             "redis_configured": bool(ctx.redis_url),
         },
         "calculator_prewarm": prewarm,
+        "timestamp": ctx.iso_now(),
+    }
+
+
+def get_ops(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
+    ctx.refresh_data_if_needed()
+    job_status_counts = _job_status_counts(ctx=ctx)
+    local_result_cache_entries = _local_result_cache_entries(ctx=ctx)
+
+    return {
+        "status": "ok",
+        "build": {
+            "build_id": ctx.app_build_id,
+            "commit_sha": ctx.deploy_commit_sha or None,
+            "built_at": ctx.app_build_at,
+            "environment": ctx.environment,
+        },
+        "data": {
+            "version": ctx.current_data_version(),
+            "projection_freshness": dict(ctx.projection_freshness_getter()),
+            "dynasty_lookup_cache": dynasty_lookup_cache_health_payload(ctx=ctx),
+        },
+        "runtime": {
+            "cors_allow_origins": list(ctx.cors_allow_origins),
+            "trust_x_forwarded_for": ctx.trust_x_forwarded_for,
+            "trusted_proxy_cidrs": list(ctx.trusted_proxy_cidrs),
+            "require_calculate_auth": ctx.require_calculate_auth,
+            "calculate_api_keys_configured": ctx.calculate_api_keys_configured,
+            "redis_configured": bool(ctx.redis_url),
+            "rate_limit_backend": "redis" if ctx.redis_url else "local",
+        },
+        "rate_limits": {
+            "calculate_sync_per_minute": ctx.calculator_sync_rate_limit_per_minute,
+            "calculate_job_create_per_minute": ctx.calculator_job_create_rate_limit_per_minute,
+            "calculate_job_status_per_minute": ctx.calculator_job_status_rate_limit_per_minute,
+            "projections_read_per_minute": ctx.projection_rate_limit_per_minute,
+            "projections_export_per_minute": ctx.projection_export_rate_limit_per_minute,
+        },
+        "queues": {
+            "jobs": {"total": sum(job_status_counts.values()), **job_status_counts},
+            "local_rate_limit_buckets": ctx.rate_limit_bucket_count_getter(),
+            "local_result_cache_entries": local_result_cache_entries,
+        },
         "timestamp": ctx.iso_now(),
     }
 

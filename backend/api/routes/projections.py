@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 
 
 ProjectionResponseHandler = Callable[..., dict[str, Any]]
@@ -20,6 +20,7 @@ def build_projections_router(
 
     @router.get("/api/projections/all")
     def get_all_projections(
+        request: Request,
         player: Optional[str] = None,
         team: Optional[str] = None,
         player_keys: Optional[str] = None,
@@ -49,10 +50,12 @@ def build_projections_router(
             sort_dir=sort_dir,
             limit=limit,
             offset=offset,
+            request=request,
         )
 
     @router.get("/api/projections/bat")
     def get_bat_projections(
+        request: Request,
         player: Optional[str] = None,
         team: Optional[str] = None,
         player_keys: Optional[str] = None,
@@ -82,10 +85,12 @@ def build_projections_router(
             sort_dir=sort_dir,
             limit=limit,
             offset=offset,
+            request=request,
         )
 
     @router.get("/api/projections/pitch")
     def get_pitch_projections(
+        request: Request,
         player: Optional[str] = None,
         team: Optional[str] = None,
         player_keys: Optional[str] = None,
@@ -115,10 +120,12 @@ def build_projections_router(
             sort_dir=sort_dir,
             limit=limit,
             offset=offset,
+            request=request,
         )
 
     @router.get("/api/projections/export/{dataset}")
     def export_projections(
+        request: Request,
         dataset: Literal["all", "bat", "pitch"],
         file_format: Literal["csv", "xlsx"] = Query(default="csv", alias="format"),
         player: Optional[str] = None,
@@ -149,6 +156,7 @@ def build_projections_router(
             sort_col=sort_col,
             sort_dir=sort_dir,
             columns=columns,
+            request=request,
         )
 
     return router

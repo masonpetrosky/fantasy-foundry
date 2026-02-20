@@ -139,6 +139,7 @@ from backend.core.status_orchestration import (
     etag_matches as core_etag_matches,
     get_health as core_get_health,
     get_meta as core_get_meta,
+    get_ops as core_get_ops,
     get_ready as core_get_ready,
     get_version as core_get_version,
     payload_etag as core_payload_etag,
@@ -372,6 +373,7 @@ COMMON_DEFAULT_MINOR_SLOTS = 0
 COMMON_HITTER_STARTER_SLOTS_PER_TEAM = sum(COMMON_HITTER_SLOT_DEFAULTS.values())
 COMMON_PITCHER_STARTER_SLOTS_PER_TEAM = sum(COMMON_PITCHER_SLOT_DEFAULTS.values())
 SETTINGS = load_settings_from_env()
+APP_ENVIRONMENT = SETTINGS.environment
 CALCULATOR_JOB_TTL_SECONDS = SETTINGS.calculator_job_ttl_seconds
 CALCULATOR_JOB_MAX_ENTRIES = SETTINGS.calculator_job_max_entries
 CALCULATOR_JOB_WORKERS = SETTINGS.calculator_job_workers
@@ -380,6 +382,8 @@ CALCULATOR_REQUEST_TIMEOUT_SECONDS = SETTINGS.calculator_request_timeout_seconds
 CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE = SETTINGS.calculator_sync_rate_limit_per_minute
 CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE = SETTINGS.calculator_job_create_rate_limit_per_minute
 CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE = SETTINGS.calculator_job_status_rate_limit_per_minute
+PROJECTION_RATE_LIMIT_PER_MINUTE = SETTINGS.projection_rate_limit_per_minute
+PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE = SETTINGS.projection_export_rate_limit_per_minute
 CALCULATOR_MAX_ACTIVE_JOBS_PER_IP = SETTINGS.calculator_max_active_jobs_per_ip
 CALC_RESULT_CACHE_TTL_SECONDS = SETTINGS.calc_result_cache_ttl_seconds
 CALC_RESULT_CACHE_MAX_ENTRIES = SETTINGS.calc_result_cache_max_entries
@@ -453,6 +457,26 @@ def _parse_calculate_api_key_identities(raw: str) -> dict[str, str]:
 
 
 CALCULATE_API_KEY_IDENTITIES = _parse_calculate_api_key_identities(CALCULATE_API_KEYS_RAW)
+
+
+def _validate_runtime_configuration() -> None:
+    if APP_ENVIRONMENT != "production":
+        return
+
+    errors: list[str] = []
+    if "*" in set(CORS_ALLOW_ORIGINS):
+        errors.append("FF_CORS_ALLOW_ORIGINS must not contain '*' when FF_ENV=production.")
+    if TRUST_X_FORWARDED_FOR and not TRUSTED_PROXY_NETWORKS:
+        errors.append(
+            "FF_TRUST_X_FORWARDED_FOR=1 requires explicit FF_TRUSTED_PROXY_CIDRS when FF_ENV=production."
+        )
+    if REQUIRE_CALCULATE_AUTH and not CALCULATE_API_KEY_IDENTITIES:
+        errors.append(
+            "FF_REQUIRE_CALCULATE_AUTH=1 requires FF_CALCULATE_API_KEYS to be configured when FF_ENV=production."
+        )
+
+    if errors:
+        raise RuntimeError("Invalid production runtime configuration:\n- " + "\n- ".join(errors))
 
 
 def _extract_calculate_api_key(request: Request | None) -> str | None:
@@ -756,6 +780,14 @@ def _cleanup_rate_limit_buckets_locked(*, now: float, window_start: float) -> No
     )
 
 
+def _rate_limit_exceeded(action: str) -> HTTPException:
+    return HTTPException(
+        status_code=429,
+        detail=f"Rate limit exceeded for {action}. Try again in a minute.",
+        headers={"Retry-After": "60"},
+    )
+
+
 def _enforce_rate_limit(request: Request, *, action: str, limit_per_minute: int) -> None:
     if limit_per_minute <= 0:
         return
@@ -770,10 +802,7 @@ def _enforce_rate_limit(request: Request, *, action: str, limit_per_minute: int)
             if count == 1:
                 redis_client.expire(redis_key, 120)
             if count > limit_per_minute:
-                raise HTTPException(
-                    status_code=429,
-                    detail=f"Rate limit exceeded for {action}. Try again in a minute.",
-                )
+                raise _rate_limit_exceeded(action)
             return
         except HTTPException:
             raise
@@ -787,11 +816,13 @@ def _enforce_rate_limit(request: Request, *, action: str, limit_per_minute: int)
         bucket = REQUEST_RATE_LIMIT_BUCKETS[bucket_key]
         _prune_rate_limit_bucket(bucket, window_start=window_start)
         if len(bucket) >= limit_per_minute:
-            raise HTTPException(
-                status_code=429,
-                detail=f"Rate limit exceeded for {action}. Try again in a minute.",
-            )
+            raise _rate_limit_exceeded(action)
         bucket.append(now)
+
+
+def _rate_limit_bucket_count() -> int:
+    with REQUEST_RATE_LIMIT_LOCK:
+        return len(REQUEST_RATE_LIMIT_BUCKETS)
 
 
 def _calc_result_cache_key(settings: dict[str, Any]) -> str:
@@ -1394,6 +1425,8 @@ def _calculator_guardrails_payload() -> dict:
         calculator_sync_rate_limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,
         calculator_job_create_rate_limit_per_minute=CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE,
         calculator_job_status_rate_limit_per_minute=CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE,
+        projection_rate_limit_per_minute=PROJECTION_RATE_LIMIT_PER_MINUTE,
+        projection_export_rate_limit_per_minute=PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE,
         calculator_max_active_jobs_per_ip=CALCULATOR_MAX_ACTIVE_JOBS_PER_IP,
     )
 
@@ -1694,6 +1727,7 @@ def _log_precomputed_dynasty_lookup_cache_status() -> None:
 
 
 _log_precomputed_dynasty_lookup_cache_status()
+_validate_runtime_configuration()
 
 # ---------------------------------------------------------------------------
 # App
@@ -1706,6 +1740,7 @@ app = create_app(
     cors_allow_origins=CORS_ALLOW_ORIGINS,
     refresh_data_if_needed=_refresh_data_if_needed,
     current_data_version=_current_data_version,
+    client_identity_resolver=_client_ip,
     enable_startup_calc_prewarm=ENABLE_STARTUP_CALC_PREWARM,
     prewarm_default_calculation_caches=_prewarm_default_calculation_caches,
     calculator_job_executor=CALCULATOR_JOB_EXECUTOR,
@@ -1790,12 +1825,22 @@ def get_ready():
     return core_get_ready(ctx=_status_orchestration_context())
 
 
+def get_ops():
+    return core_get_ops(ctx=_status_orchestration_context())
+
+
 def _status_orchestration_context() -> StatusOrchestrationContext:
     return StatusOrchestrationContext(
         refresh_data_if_needed=_refresh_data_if_needed,
         meta_getter=lambda: META,
         calculator_guardrails_payload=_calculator_guardrails_payload,
         projection_freshness_getter=lambda: PROJECTION_FRESHNESS,
+        environment=APP_ENVIRONMENT,
+        cors_allow_origins=tuple(CORS_ALLOW_ORIGINS),
+        trust_x_forwarded_for=TRUST_X_FORWARDED_FOR,
+        trusted_proxy_cidrs=tuple(str(network) for network in TRUSTED_PROXY_NETWORKS),
+        require_calculate_auth=REQUIRE_CALCULATE_AUTH,
+        calculate_api_keys_configured=bool(CALCULATE_API_KEY_IDENTITIES),
         calculator_prewarm_lock=CALCULATOR_PREWARM_LOCK,
         calculator_prewarm_state=CALCULATOR_PREWARM_STATE,
         api_no_cache_headers=API_NO_CACHE_HEADERS,
@@ -1813,6 +1858,12 @@ def _status_orchestration_context() -> StatusOrchestrationContext:
         calc_result_cache_lock=CALC_RESULT_CACHE_LOCK,
         cleanup_local_result_cache=_cleanup_local_result_cache,
         calc_result_cache=CALC_RESULT_CACHE,
+        rate_limit_bucket_count_getter=_rate_limit_bucket_count,
+        calculator_sync_rate_limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,
+        calculator_job_create_rate_limit_per_minute=CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE,
+        calculator_job_status_rate_limit_per_minute=CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE,
+        projection_rate_limit_per_minute=PROJECTION_RATE_LIMIT_PER_MINUTE,
+        projection_export_rate_limit_per_minute=PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE,
         redis_url=REDIS_URL,
         bat_data_getter=lambda: BAT_DATA,
         pit_data_getter=lambda: PIT_DATA,
@@ -1868,6 +1919,80 @@ def _run_calculation_job(job_id: str, req_payload: dict) -> None:
     )
 
 
+def projection_response(
+    dataset: Literal["all", "bat", "pitch"],
+    *,
+    request: Request,
+    player: str | None,
+    team: str | None,
+    player_keys: str | None,
+    year: int | None,
+    years: str | None,
+    pos: str | None,
+    dynasty_years: str | None,
+    career_totals: bool,
+    include_dynasty: bool,
+    sort_col: str | None,
+    sort_dir: Literal["asc", "desc"],
+    limit: int,
+    offset: int,
+) -> dict[str, Any]:
+    _enforce_rate_limit(request, action="proj-read", limit_per_minute=PROJECTION_RATE_LIMIT_PER_MINUTE)
+    return PROJECTION_SERVICE.projection_response(
+        dataset,
+        player=player,
+        team=team,
+        player_keys=player_keys,
+        year=year,
+        years=years,
+        pos=pos,
+        dynasty_years=dynasty_years,
+        career_totals=career_totals,
+        include_dynasty=include_dynasty,
+        sort_col=sort_col,
+        sort_dir=sort_dir,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def export_projections(
+    *,
+    request: Request,
+    dataset: Literal["all", "bat", "pitch"],
+    file_format: Literal["csv", "xlsx"] = "csv",
+    player: str | None = None,
+    team: str | None = None,
+    player_keys: str | None = None,
+    year: int | None = None,
+    years: str | None = None,
+    pos: str | None = None,
+    dynasty_years: str | None = None,
+    career_totals: bool = False,
+    include_dynasty: bool = True,
+    sort_col: str | None = None,
+    sort_dir: Literal["asc", "desc"] = "desc",
+    columns: str | None = None,
+):
+    _enforce_rate_limit(request, action="proj-export", limit_per_minute=PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE)
+    return PROJECTION_SERVICE.export_projections(
+        dataset=dataset,
+        file_format=file_format,
+        player=player,
+        team=team,
+        player_keys=player_keys,
+        year=year,
+        years=years,
+        pos=pos,
+        dynasty_years=dynasty_years,
+        career_totals=career_totals,
+        include_dynasty=include_dynasty,
+        sort_col=sort_col,
+        sort_dir=sort_dir,
+        columns=columns,
+    )
+
+
 def calculate_dynasty_values(req: CalculateRequest, request: Request):
     return core_calculate_dynasty_values(
         req,
@@ -1919,12 +2044,13 @@ app.include_router(
         version_handler=get_version,
         health_handler=get_health,
         ready_handler=get_ready,
+        ops_handler=get_ops,
     )
 )
 app.include_router(
     build_projections_router(
-        projection_response_handler=PROJECTION_SERVICE.projection_response,
-        projection_export_handler=PROJECTION_SERVICE.export_projections,
+        projection_response_handler=projection_response,
+        projection_export_handler=export_projections,
     )
 )
 app.include_router(

@@ -68,8 +68,10 @@ dynasty-site/
 ## Local Development
 
 ### Prerequisites
-- Python 3.10+
-- Node.js 20+ (for frontend build)
+- Python 3.12+
+- Node.js 22+ (for frontend build)
+
+Version pins are included in `.python-version` and `.nvmrc` for local parity with CI.
 
 ### Setup
 ```bash
@@ -231,6 +233,7 @@ All three support Dockerfiles out of the box:
 
 | Variable | Default | Description |
 | --- | --- | --- |
+| `FF_ENV` | `development` | Runtime mode (`development` or `production`). Production mode enforces stricter startup safety checks. |
 | `FF_CALC_JOB_TTL_SECONDS` | `1800` | Retention window for completed/failed/cancelled async calculator jobs. |
 | `FF_CALC_JOB_MAX_ENTRIES` | `256` | Max in-memory async job records retained before pruning. |
 | `FF_CALC_JOB_WORKERS` | `2` | Thread pool size for async calculator jobs. |
@@ -239,6 +242,8 @@ All three support Dockerfiles out of the box:
 | `FF_CALC_SYNC_RATE_LIMIT_PER_MINUTE` | `30` | Sync calculator request limit per identity per minute. |
 | `FF_CALC_JOB_CREATE_RATE_LIMIT_PER_MINUTE` | `15` | Async calculator job-create limit per identity per minute. |
 | `FF_CALC_JOB_STATUS_RATE_LIMIT_PER_MINUTE` | `240` | Async calculator job status/cancel limit per identity per minute. |
+| `FF_PROJ_RATE_LIMIT_PER_MINUTE` | `120` | Projections read endpoint limit per identity per minute. |
+| `FF_EXPORT_RATE_LIMIT_PER_MINUTE` | `30` | Projections export endpoint limit per identity per minute. |
 | `FF_CALC_MAX_ACTIVE_JOBS_PER_IP` | `2` | Max queued/running async jobs per client IP. |
 | `FF_CALC_RESULT_CACHE_TTL_SECONDS` | `1800` | TTL for calculator result cache entries. |
 | `FF_CALC_RESULT_CACHE_MAX_ENTRIES` | `256` | Max local calculator result cache entries before LRU pruning. |
@@ -255,12 +260,18 @@ When `FF_REQUIRE_CALCULATE_AUTH=1`, calculate routes return:
 - HTTP `401` for missing/invalid API keys
 - HTTP `503` if auth is required but `FF_CALCULATE_API_KEYS` is not configured
 
+When `FF_ENV=production`, startup fails fast for unsafe config combinations:
+- wildcard CORS (`FF_CORS_ALLOW_ORIGINS=*`)
+- trusted forwarded-chain mode without explicit trusted proxies (`FF_TRUST_X_FORWARDED_FOR=1` and empty `FF_TRUSTED_PROXY_CIDRS`)
+- required calculator auth without configured API keys (`FF_REQUIRE_CALCULATE_AUTH=1` and empty `FF_CALCULATE_API_KEYS`)
+
 ## API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/health` | Runtime health summary (projection row counts, cache/job stats) |
 | GET | `/api/ready` | Readiness probe (returns HTTP 503 when required startup prerequisites are not ready) |
+| GET | `/api/ops` | Operational diagnostics (runtime mode, limiter/cache posture, queue/cache stats, and non-secret config flags) |
 | GET | `/api/version` | Build metadata (`build_id`, commit SHA, build timestamp) |
 | GET | `/api/meta` | Filter options (teams, years, positions) |
 | GET | `/api/projections/all` | Combined hitter+pitcher rows (query params: player, team, player_keys, year, years, pos, dynasty_years, career_totals, include_dynasty, sort_col, sort_dir, limit, offset) |

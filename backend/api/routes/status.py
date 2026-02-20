@@ -10,6 +10,7 @@ MetaHandler = Callable[[Request], Any]
 VersionHandler = Callable[[Request], Any]
 HealthHandler = Callable[[], Any]
 ReadyHandler = Callable[[], Any]
+OpsHandler = Callable[[], Any]
 
 
 def build_status_router(
@@ -18,6 +19,7 @@ def build_status_router(
     version_handler: VersionHandler,
     health_handler: HealthHandler,
     ready_handler: ReadyHandler,
+    ops_handler: OpsHandler,
 ) -> APIRouter:
     """Create metadata/version/health routes using injected handler callables."""
     router = APIRouter(tags=["status"])
@@ -37,5 +39,9 @@ def build_status_router(
     @router.get("/api/ready")
     def get_ready():
         return ready_handler()
+
+    @router.get("/api/ops")
+    def get_ops():
+        return ops_handler()
 
     return router

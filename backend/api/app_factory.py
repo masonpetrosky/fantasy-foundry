@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from uuid import uuid4
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from threading import Thread
@@ -25,6 +26,7 @@ def create_app(
     cors_allow_origins: list[str] | tuple[str, ...],
     refresh_data_if_needed: Callable[[], None],
     current_data_version: Callable[[], str],
+    client_identity_resolver: Callable[[Request | None], str],
     enable_startup_calc_prewarm: bool,
     prewarm_default_calculation_caches: Callable[[], None],
     calculator_job_executor: Any,
@@ -54,6 +56,14 @@ def create_app(
     )
 
     @app.middleware("http")
+    async def attach_request_id(request: Request, call_next: CallNext):
+        request_id = str(request.headers.get("x-request-id") or "").strip() or uuid4().hex
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers.setdefault("X-Request-Id", request_id)
+        return response
+
+    @app.middleware("http")
     async def attach_build_header(request: Request, call_next: CallNext):
         if request.url.path.startswith("/api/"):
             refresh_data_if_needed()
@@ -79,6 +89,13 @@ def create_app(
         if not request.url.path.startswith("/api/"):
             return await call_next(request)
 
+        route_group = request.url.path.split("/", 3)[2] if request.url.path.count("/") >= 2 else "unknown"
+        request_id = str(getattr(request.state, "request_id", "")).strip() or str(
+            request.headers.get("x-request-id") or ""
+        ).strip()
+        if not request_id:
+            request_id = "unknown"
+
         started = time.perf_counter()
         response = None
         try:
@@ -88,12 +105,14 @@ def create_app(
             duration_ms = round((time.perf_counter() - started) * 1000.0, 1)
             status_code = response.status_code if response is not None else 500
             request_logger.info(
-                "api_request method=%s path=%s status=%s duration_ms=%s client_ip=%s",
+                "api_request request_id=%s method=%s path=%s route_group=%s status=%s duration_ms=%s client_identity=%s",
+                request_id,
                 request.method,
                 request.url.path,
+                route_group,
                 status_code,
                 duration_ms,
-                request.client.host if request.client else "unknown",
+                client_identity_resolver(request),
             )
 
     return app

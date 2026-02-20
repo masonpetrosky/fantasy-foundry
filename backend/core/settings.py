@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Literal, cast
+
+
+APP_ENVIRONMENTS = {"development", "production"}
 
 
 def _get_bool(name: str, default: bool) -> bool:
@@ -43,8 +47,16 @@ def _parse_cors_allow_origins(raw: str | None) -> tuple[str, ...]:
     return origins or ("*",)
 
 
+def _parse_environment(raw: str | None) -> Literal["development", "production"]:
+    text = str(raw or "").strip().lower()
+    if text in APP_ENVIRONMENTS:
+        return cast(Literal["development", "production"], text)
+    return "development"
+
+
 @dataclass(frozen=True)
 class AppSettings:
+    environment: Literal["development", "production"]
     calculator_job_ttl_seconds: int
     calculator_job_max_entries: int
     calculator_job_workers: int
@@ -53,6 +65,8 @@ class AppSettings:
     calculator_sync_rate_limit_per_minute: int
     calculator_job_create_rate_limit_per_minute: int
     calculator_job_status_rate_limit_per_minute: int
+    projection_rate_limit_per_minute: int
+    projection_export_rate_limit_per_minute: int
     calculator_max_active_jobs_per_ip: int
     calc_result_cache_ttl_seconds: int
     calc_result_cache_max_entries: int
@@ -70,6 +84,7 @@ def load_settings_from_env() -> AppSettings:
     """Build immutable runtime settings from environment variables."""
 
     return AppSettings(
+        environment=_parse_environment(os.getenv("FF_ENV")),
         calculator_job_ttl_seconds=_get_int("FF_CALC_JOB_TTL_SECONDS", default=1800, minimum=60),
         calculator_job_max_entries=_get_int("FF_CALC_JOB_MAX_ENTRIES", default=256, minimum=10),
         calculator_job_workers=_get_int("FF_CALC_JOB_WORKERS", default=2, minimum=1),
@@ -82,6 +97,8 @@ def load_settings_from_env() -> AppSettings:
         calculator_job_status_rate_limit_per_minute=_get_int(
             "FF_CALC_JOB_STATUS_RATE_LIMIT_PER_MINUTE", default=240, minimum=1
         ),
+        projection_rate_limit_per_minute=_get_int("FF_PROJ_RATE_LIMIT_PER_MINUTE", default=120, minimum=1),
+        projection_export_rate_limit_per_minute=_get_int("FF_EXPORT_RATE_LIMIT_PER_MINUTE", default=30, minimum=1),
         calculator_max_active_jobs_per_ip=_get_int("FF_CALC_MAX_ACTIVE_JOBS_PER_IP", default=2, minimum=1),
         calc_result_cache_ttl_seconds=_get_int("FF_CALC_RESULT_CACHE_TTL_SECONDS", default=1800, minimum=30),
         calc_result_cache_max_entries=_get_int("FF_CALC_RESULT_CACHE_MAX_ENTRIES", default=256, minimum=10),
