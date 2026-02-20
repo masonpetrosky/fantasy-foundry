@@ -925,8 +925,13 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         try:
             with patch.object(
                 app_module,
-                "_load_precomputed_default_dynasty_lookup",
-                return_value=precomputed,
+                "_inspect_precomputed_default_dynasty_lookup",
+                return_value=app_module.DynastyLookupCacheInspection(
+                    status="ready",
+                    expected_version="fresh-version",
+                    found_version="fresh-version",
+                    lookup=precomputed,
+                ),
             ), patch.object(app_module, "_calculate_common_dynasty_frame_cached") as calculate_mock:
                 actual = app_module._get_default_dynasty_lookup()
         finally:
@@ -957,6 +962,66 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
 
         self.assertIsNone(loaded)
 
+    def test_load_precomputed_dynasty_lookup_prefers_cache_data_version_key(self) -> None:
+        payload = {
+            "cache_data_version": "fresh-version",
+            "data_version": "stale-version",
+            "lookup_by_entity": {"entity-a": {"DynastyValue": 4.2}},
+            "lookup_by_player_key": {"player-a": {"DynastyValue": 4.2}},
+            "ambiguous_player_keys": [],
+            "year_cols": ["Value_2026"],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_path = Path(tmpdir) / "dynasty_lookup.json"
+            cache_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            with patch.object(app_module, "DYNASTY_LOOKUP_CACHE_PATH", cache_path), patch.object(
+                app_module,
+                "_current_data_version",
+                return_value="fresh-version",
+            ), patch.object(app_module.os, "getenv", return_value=""):
+                loaded = app_module._load_precomputed_default_dynasty_lookup()
+
+        self.assertIsNotNone(loaded)
+
+    def test_compute_content_data_version_is_path_independent(self) -> None:
+        with tempfile.TemporaryDirectory() as first_dir, tempfile.TemporaryDirectory() as second_dir:
+            first_paths = []
+            second_paths = []
+            for name, content in (
+                ("meta.json", b'{"years":[2026]}'),
+                ("bat.json", b'[{"Player":"A","Year":2026}]'),
+                ("pitch.json", b'[{"Player":"B","Year":2026}]'),
+                ("Dynasty Baseball Projections.xlsx", b"fake-xlsx-bytes"),
+            ):
+                first_path = Path(first_dir) / name
+                second_path = Path(second_dir) / name
+                first_path.write_bytes(content)
+                second_path.write_bytes(content)
+                first_paths.append(first_path)
+                second_paths.append(second_path)
+
+            with patch.object(app_module, "BASE_DIR", Path(first_dir).parent):
+                first_version = app_module._compute_content_data_version(tuple(first_paths))
+            with patch.object(app_module, "BASE_DIR", Path(second_dir).parent):
+                second_version = app_module._compute_content_data_version(tuple(second_paths))
+
+        self.assertEqual(first_version, second_version)
+
+    def test_compute_content_data_version_changes_when_file_content_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path_a = Path(tmpdir) / "a.json"
+            path_b = Path(tmpdir) / "b.json"
+            path_a.write_text('{"value":1}', encoding="utf-8")
+            path_b.write_text('{"value":2}', encoding="utf-8")
+
+            version_before = app_module._compute_content_data_version((path_a, path_b))
+            path_b.write_text('{"value":3}', encoding="utf-8")
+            version_after = app_module._compute_content_data_version((path_a, path_b))
+
+        self.assertNotEqual(version_before, version_after)
+
     def test_large_projection_response_is_gzip_compressed(self) -> None:
         sample_rows = [
             {
@@ -983,6 +1048,30 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers.get("content-encoding"), "gzip")
         self.assertEqual(response.headers.get("vary"), "Accept-Encoding")
+
+    def test_projections_fail_fast_when_precomputed_lookup_is_required(self) -> None:
+        app_module._get_default_dynasty_lookup.cache_clear()
+        try:
+            with patch.object(
+                app_module,
+                "REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP",
+                True,
+            ), patch.object(
+                app_module,
+                "_inspect_precomputed_default_dynasty_lookup",
+                return_value=app_module.DynastyLookupCacheInspection(
+                    status="missing",
+                    expected_version="expected-version",
+                ),
+            ), patch.object(app_module, "_calculate_common_dynasty_frame_cached") as calculate_mock:
+                response = self.client.get("/api/projections/all", params={"limit": 1, "offset": 0})
+        finally:
+            app_module._get_default_dynasty_lookup.cache_clear()
+
+        self.assertEqual(response.status_code, 503)
+        payload = response.json()
+        self.assertIn("Run `python preprocess.py`", payload.get("detail", ""))
+        calculate_mock.assert_not_called()
 
     def test_projection_filters_are_cached_across_paginated_requests(self) -> None:
         sample_rows = [
@@ -1331,6 +1420,10 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(payload.get("jobs", {}).get("total"), 2)
         self.assertEqual(payload.get("jobs", {}).get("queued"), 1)
         self.assertEqual(payload.get("jobs", {}).get("failed"), 1)
+        self.assertIn("dynasty_lookup_cache", payload)
+        self.assertIn("status", payload.get("dynasty_lookup_cache", {}))
+        self.assertIn("version_expected", payload.get("dynasty_lookup_cache", {}))
+        self.assertIn("version_found", payload.get("dynasty_lookup_cache", {}))
         self.assertEqual(payload.get("result_cache", {}).get("local_entries"), 1)
         self.assertIn("timestamp", payload)
 

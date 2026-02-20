@@ -163,12 +163,15 @@ python preprocess.py
 ```
 
 `preprocess.py` now also builds `data/dynasty_lookup.json` by default so the first projections request does not need to recompute default dynasty values at runtime.
+If cache generation fails, `preprocess.py` exits non-zero so deploys do not silently ship without the precomputed lookup.
 
 If you need a faster preprocess run and are okay with a slower first projections load, you can skip cache generation:
 
 ```bash
 python preprocess.py --skip-dynasty-cache
 ```
+
+Production deployments enforce the precomputed cache by default (`FF_REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP=1`), so skipping cache generation will cause projections endpoints to return HTTP 503 until a valid `data/dynasty_lookup.json` is deployed.
 
 ## Deployment
 
@@ -202,6 +205,9 @@ The API rate limiter and async-job IP guardrails can be configured for proxy dep
   - When set, `X-Forwarded-For` is only honored if the direct peer is in this allow-list.
 - `FF_RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS` (default: `60`)  
   - Periodic cleanup interval for stale in-memory rate-limit buckets.
+- `FF_REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP` (default: `1`)  
+  - `1`/`true`: require a valid precomputed `data/dynasty_lookup.json`; projections return HTTP 503 if missing/stale/invalid.
+  - `0`/`false`: allow runtime fallback generation (slower cold-start projections responses).
 
 ## API Endpoints
 

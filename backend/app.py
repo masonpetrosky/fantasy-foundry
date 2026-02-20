@@ -25,6 +25,7 @@ import hashlib
 import io
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -212,6 +213,9 @@ CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE = max(1, int(os.getenv("FF_CALC_JOB_
 CALCULATOR_MAX_ACTIVE_JOBS_PER_IP = max(1, int(os.getenv("FF_CALC_MAX_ACTIVE_JOBS_PER_IP", "2")))
 CALC_RESULT_CACHE_TTL_SECONDS = max(30, int(os.getenv("FF_CALC_RESULT_CACHE_TTL_SECONDS", "1800")))
 CALC_RESULT_CACHE_MAX_ENTRIES = max(10, int(os.getenv("FF_CALC_RESULT_CACHE_MAX_ENTRIES", "256")))
+REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP = (
+    os.getenv("FF_REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP", "1").strip().lower() not in {"0", "false", "no"}
+)
 TRUST_X_FORWARDED_FOR = os.getenv("FF_TRUST_X_FORWARDED_FOR", "0").strip().lower() in {"1", "true", "yes", "on"}
 TRUSTED_PROXY_CIDRS_RAW = os.getenv("FF_TRUSTED_PROXY_CIDRS", "").strip()
 REDIS_URL = os.getenv("FF_REDIS_URL", "").strip()
@@ -230,6 +234,19 @@ except ValueError:
 
 IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
+
+
+class PrecomputedDynastyLookupRequiredError(RuntimeError):
+    """Raised when strict mode blocks runtime dynasty lookup generation."""
+
+
+@dataclass(frozen=True)
+class DynastyLookupCacheInspection:
+    status: Literal["ready", "missing", "stale", "invalid", "disabled"]
+    expected_version: str
+    found_version: str | None = None
+    lookup: tuple[dict[str, dict], dict[str, dict], set[str], list[str]] | None = None
+    error: str | None = None
 
 
 def _load_trusted_proxy_networks(raw: str) -> tuple[IPNetwork, ...]:
@@ -588,7 +605,36 @@ def _compute_data_signature() -> tuple[tuple[str, int | None, int | None], ...]:
     return tuple(_path_signature(path) for path in DATA_REFRESH_PATHS)
 
 
+def _stable_data_version_path_label(path: Path) -> str:
+    # Content hash must be stable across environments, so avoid absolute paths.
+    return path.name
+
+
+def _hash_file_into(path: Path, hasher: Any) -> None:
+    with path.open("rb") as fh:
+        while True:
+            chunk = fh.read(1024 * 1024)
+            if not chunk:
+                break
+            hasher.update(chunk)
+
+
+def _compute_content_data_version(paths: tuple[Path, ...]) -> str:
+    hasher = hashlib.sha256()
+    for path in paths:
+        hasher.update(_stable_data_version_path_label(path).encode("utf-8"))
+        hasher.update(b"\x00")
+        if not path.exists():
+            hasher.update(b"__missing__")
+            hasher.update(b"\x00")
+            continue
+        _hash_file_into(path, hasher)
+        hasher.update(b"\x00")
+    return hasher.hexdigest()[:12]
+
+
 _DATA_SOURCE_SIGNATURE: tuple[tuple[str, int | None, int | None], ...] | None = _compute_data_signature()
+_DATA_CONTENT_VERSION: str = _compute_content_data_version(DATA_REFRESH_PATHS)
 CALCULATOR_JOB_EXECUTOR = ThreadPoolExecutor(max_workers=CALCULATOR_JOB_WORKERS)
 CALCULATOR_JOB_LOCK = Lock()
 CALCULATOR_JOBS: dict[str, dict] = {}
@@ -611,13 +657,8 @@ REDIS_CLIENT: Any | None = None
 REDIS_CLIENT_INIT_ATTEMPTED = False
 
 
-def _data_signature_version(signature: tuple[tuple[str, int | None, int | None], ...] | None) -> str:
-    payload = json.dumps(signature or (), sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
-
-
 def _current_data_version() -> str:
-    return _data_signature_version(_DATA_SOURCE_SIGNATURE)
+    return _DATA_CONTENT_VERSION
 
 
 def _coerce_serialized_dynasty_lookup_map(raw: object) -> dict[str, dict]:
@@ -654,34 +695,54 @@ def _coerce_serialized_dynasty_lookup_map(raw: object) -> dict[str, dict]:
     return cleaned
 
 
-def _load_precomputed_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]] | None:
+def _dynasty_lookup_payload_version(payload: dict[str, object]) -> str | None:
+    cache_data_version = str(payload.get("cache_data_version") or "").strip()
+    if cache_data_version:
+        return cache_data_version
+    legacy_data_version = str(payload.get("data_version") or "").strip()
+    return legacy_data_version or None
+
+
+def _inspect_precomputed_default_dynasty_lookup() -> DynastyLookupCacheInspection:
+    expected_version = _current_data_version()
     if os.getenv("PYTEST_CURRENT_TEST"):
-        return None
+        return DynastyLookupCacheInspection(status="disabled", expected_version=expected_version)
     if not DYNASTY_LOOKUP_CACHE_PATH.exists():
-        return None
+        return DynastyLookupCacheInspection(status="missing", expected_version=expected_version)
 
     try:
         payload = json.loads(DYNASTY_LOOKUP_CACHE_PATH.read_text())
-    except Exception:
-        CALC_LOGGER.warning(
-            "failed to parse precomputed dynasty lookup cache at %s",
-            DYNASTY_LOOKUP_CACHE_PATH,
-            exc_info=True,
+    except Exception as exc:
+        return DynastyLookupCacheInspection(
+            status="invalid",
+            expected_version=expected_version,
+            error=f"Failed to parse {DYNASTY_LOOKUP_CACHE_PATH.name}: {exc}",
         )
-        return None
 
     if not isinstance(payload, dict):
-        return None
+        return DynastyLookupCacheInspection(
+            status="invalid",
+            expected_version=expected_version,
+            error=f"{DYNASTY_LOOKUP_CACHE_PATH.name} payload is not a JSON object.",
+        )
 
-    payload_data_version = str(payload.get("data_version") or "").strip()
-    current_data_version = _current_data_version()
-    if not payload_data_version or payload_data_version != current_data_version:
-        return None
+    payload_version = _dynasty_lookup_payload_version(payload)
+    if not payload_version or payload_version != expected_version:
+        return DynastyLookupCacheInspection(
+            status="stale",
+            expected_version=expected_version,
+            found_version=payload_version,
+        )
 
     lookup_by_entity = _coerce_serialized_dynasty_lookup_map(payload.get("lookup_by_entity"))
     lookup_by_player_key = _coerce_serialized_dynasty_lookup_map(payload.get("lookup_by_player_key"))
     if not lookup_by_entity and not lookup_by_player_key:
-        return None
+        return DynastyLookupCacheInspection(
+            status="invalid",
+            expected_version=expected_version,
+            found_version=payload_version,
+            error=f"{DYNASTY_LOOKUP_CACHE_PATH.name} contains no usable lookup maps.",
+        )
 
     raw_ambiguous = payload.get("ambiguous_player_keys")
     ambiguous_player_keys = {
@@ -700,7 +761,21 @@ def _load_precomputed_default_dynasty_lookup() -> tuple[dict[str, dict], dict[st
         key=_value_col_sort_key,
     )
 
-    return lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, year_cols
+    return DynastyLookupCacheInspection(
+        status="ready",
+        expected_version=expected_version,
+        found_version=payload_version,
+        lookup=(lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, year_cols),
+    )
+
+
+def _load_precomputed_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]] | None:
+    inspection = _inspect_precomputed_default_dynasty_lookup()
+    if inspection.status == "ready" and inspection.lookup is not None:
+        return inspection.lookup
+    if inspection.status == "invalid" and inspection.error:
+        CALC_LOGGER.warning(inspection.error)
+    return None
 
 
 def _reload_projection_data() -> None:
@@ -2324,9 +2399,17 @@ def _prewarm_default_calculation_caches() -> None:
 @lru_cache(maxsize=1)
 def _get_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]]:
     """Cached default dynasty values keyed by PlayerEntityKey first, then unique PlayerKey."""
-    precomputed_lookup = _load_precomputed_default_dynasty_lookup()
-    if precomputed_lookup is not None:
-        return precomputed_lookup
+    inspection = _inspect_precomputed_default_dynasty_lookup()
+    if inspection.status == "ready" and inspection.lookup is not None:
+        return inspection.lookup
+
+    if REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP and inspection.status != "disabled":
+        found_version = inspection.found_version or "missing"
+        raise PrecomputedDynastyLookupRequiredError(
+            "Precomputed dynasty lookup cache is not ready "
+            f"(status={inspection.status}, expected={inspection.expected_version}, found={found_version}). "
+            "Run `python preprocess.py` and deploy the regenerated `data/dynasty_lookup.json`."
+        )
 
     try:
         params = _default_calculation_cache_params()
@@ -2515,7 +2598,10 @@ def _attach_dynasty_values(rows: list[dict], dynasty_years: list[int] | None = N
     if not rows:
         return rows
 
-    lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, available_year_cols = _get_default_dynasty_lookup()
+    try:
+        lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, available_year_cols = _get_default_dynasty_lookup()
+    except PrecomputedDynastyLookupRequiredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     if not lookup_by_entity and not lookup_by_player_key:
         return rows
 
@@ -2577,7 +2663,7 @@ def _player_identity_by_name() -> dict[str, tuple[str, str | None]]:
 
 
 def _refresh_data_if_needed() -> None:
-    global _DATA_SOURCE_SIGNATURE
+    global _DATA_SOURCE_SIGNATURE, _DATA_CONTENT_VERSION
     current_signature = _compute_data_signature()
     if current_signature == _DATA_SOURCE_SIGNATURE:
         return
@@ -2605,6 +2691,7 @@ def _refresh_data_if_needed() -> None:
             CALC_RESULT_CACHE.clear()
             CALC_RESULT_CACHE_ORDER.clear()
         _DATA_SOURCE_SIGNATURE = current_signature
+        _DATA_CONTENT_VERSION = _compute_content_data_version(DATA_REFRESH_PATHS)
 
 
 PROJECTION_SERVICE = ProjectionService(
@@ -2688,6 +2775,22 @@ _projection_sortable_columns_for_dataset = PROJECTION_SERVICE._projection_sortab
 
 def filter_records(*args, **kwargs):
     return PROJECTION_SERVICE.filter_records(*args, **kwargs)
+
+
+def _log_precomputed_dynasty_lookup_cache_status() -> None:
+    inspection = _inspect_precomputed_default_dynasty_lookup()
+    CALC_LOGGER.info(
+        "dynasty lookup cache status=%s require_precomputed=%s expected=%s found=%s",
+        inspection.status,
+        REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP,
+        inspection.expected_version,
+        inspection.found_version or "missing",
+    )
+    if inspection.error:
+        CALC_LOGGER.warning("dynasty lookup cache error: %s", inspection.error)
+
+
+_log_precomputed_dynasty_lookup_cache_status()
 
 # ---------------------------------------------------------------------------
 # App
@@ -2877,6 +2980,19 @@ def get_version(request: Request):
     )
 
 
+def _dynasty_lookup_cache_health_payload() -> dict[str, Any]:
+    inspection = _inspect_precomputed_default_dynasty_lookup()
+    payload = {
+        "status": inspection.status,
+        "require_precomputed": REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP,
+        "version_expected": inspection.expected_version,
+        "version_found": inspection.found_version,
+    }
+    if inspection.error:
+        payload["error"] = inspection.error
+    return payload
+
+
 def get_health():
     _refresh_data_if_needed()
 
@@ -2906,6 +3022,7 @@ def get_health():
             "total": len(CALCULATOR_JOBS),
             **job_status_counts,
         },
+        "dynasty_lookup_cache": _dynasty_lookup_cache_health_payload(),
         "result_cache": {
             "local_entries": local_result_cache_entries,
             "redis_configured": bool(REDIS_URL),

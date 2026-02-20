@@ -204,12 +204,19 @@ def _build_dynasty_lookup_cache() -> tuple[int, int]:
     # Ensure app globals match the freshly-written JSON snapshots.
     backend_app._refresh_data_if_needed()
     backend_app._get_default_dynasty_lookup.cache_clear()
-
-    lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, year_cols = backend_app._get_default_dynasty_lookup()
+    strict_required = bool(getattr(backend_app, "REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP", False))
+    setattr(backend_app, "REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP", False)
+    try:
+        lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, year_cols = backend_app._get_default_dynasty_lookup()
+    finally:
+        setattr(backend_app, "REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP", strict_required)
+    cache_data_version = backend_app._current_data_version()
     payload = {
         "format_version": 1,
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
-        "data_version": backend_app._current_data_version(),
+        "cache_data_version": cache_data_version,
+        # Legacy compatibility key: retained for older deployments/tests.
+        "data_version": cache_data_version,
         "lookup_by_entity": lookup_by_entity,
         "lookup_by_player_key": lookup_by_player_key,
         "ambiguous_player_keys": sorted(str(key) for key in ambiguous_player_keys if str(key).strip()),
@@ -261,7 +268,8 @@ def main():
                 f"{DYNASTY_LOOKUP_CACHE_PATH.name} ({entity_count} entity keys, {player_key_count} player-key fallbacks)"
             )
         except Exception as exc:
-            print(f"  Warning: failed to build dynasty lookup cache: {exc}")
+            print(f"  Error: failed to build dynasty lookup cache: {exc}")
+            raise SystemExit(1) from exc
 
     print(f"  Hitters:  {len(bat):,} rows, {meta['total_hitters']} unique players")
     print(f"  Pitchers: {len(pit):,} rows, {meta['total_pitchers']} unique players")
