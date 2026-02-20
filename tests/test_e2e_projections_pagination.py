@@ -129,6 +129,7 @@ class ProjectionsPaginationE2ETests(unittest.TestCase):
 
             page.on("request", on_request)
             page.goto(self.base_url, wait_until="domcontentloaded", timeout=60000)
+            page.locator("#projections-year-filter").select_option(value=career_totals_value)
 
             page.wait_for_function(
                 """
@@ -189,7 +190,7 @@ class ProjectionsPaginationE2ETests(unittest.TestCase):
                   return !!yearSelect && yearSelect.value === expectedValue;
                 }
                 """,
-                career_totals_value,
+                arg=career_totals_value,
                 timeout=10000,
             )
 
@@ -212,7 +213,7 @@ class ProjectionsPaginationE2ETests(unittest.TestCase):
         page = self.browser.new_page()
         try:
             page.goto(self.base_url, wait_until="domcontentloaded", timeout=60000)
-            page.get_by_role("button", name="Dynasty Calculator").click()
+            page.locator(".embedded-calculator-toggle").first.click()
 
             page.route(
                 "**/api/calculate/jobs",
@@ -243,7 +244,7 @@ class ProjectionsPaginationE2ETests(unittest.TestCase):
         page = self.browser.new_page()
         try:
             page.goto(self.base_url, wait_until="domcontentloaded", timeout=60000)
-            page.get_by_role("button", name="Dynasty Calculator").click()
+            page.locator(".embedded-calculator-toggle").first.click()
 
             page.route(
                 "**/api/calculate/jobs",

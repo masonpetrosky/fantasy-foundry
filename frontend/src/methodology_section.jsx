@@ -85,7 +85,7 @@ export function MethodologySection() {
         </ul>
         <p className="methodology-note" style={{ marginBottom: 0 }}>
           Final values come directly from the valuation pipeline after projection averaging and league settings.
-          Use the <strong>Dynasty Calculator</strong> tab to run your exact league settings.
+          Use the <strong>Dynasty Calculator</strong> section in Projections to run your exact league settings.
           {" "}
           Site baseline rankings default to 12-team 5x5 roto with 22 starters, 6 bench, 0 MiLB, and 0 IL.
         </p>

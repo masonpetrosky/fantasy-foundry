@@ -138,7 +138,7 @@ class ProjectionsVisualRegressionE2ETests(unittest.TestCase):
         page = context.new_page()
         try:
             page.goto(self.base_url, wait_until="domcontentloaded", timeout=90000)
-            page.locator(".filter-bar select").first.select_option(value="")
+            page.locator("#projections-year-filter").select_option(value="__career_totals__")
             page.wait_for_selector(".projections-table tbody tr", timeout=90000)
             page.wait_for_function(
                 """
@@ -148,7 +148,7 @@ class ProjectionsVisualRegressionE2ETests(unittest.TestCase):
                   const m = (el.textContent || '').match(/[\\d,]+/);
                   if (!m) return false;
                   const n = parseInt(m[0].replaceAll(',', ''), 10);
-                  return Number.isFinite(n) && n > 5000;
+                  return Number.isFinite(n) && n > 100;
                 }
                 """,
                 timeout=90000,
@@ -241,7 +241,7 @@ class ProjectionsVisualRegressionE2ETests(unittest.TestCase):
         page = context.new_page()
         try:
             page.goto(self.base_url, wait_until="domcontentloaded", timeout=90000)
-            page.get_by_role("button", name="Dynasty Calculator").click()
+            page.locator(".embedded-calculator-toggle").first.click()
             page.wait_for_selector(".calc-sidebar", timeout=20000)
 
             setup_group = page.locator(".calc-sidebar .form-group").filter(

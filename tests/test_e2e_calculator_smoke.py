@@ -117,7 +117,7 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
 
     def _open_calculator(self, page) -> None:
         page.goto(self.base_url, wait_until="domcontentloaded", timeout=90000)
-        page.get_by_role("button", name="Dynasty Calculator").click()
+        page.locator(".embedded-calculator-toggle").first.click()
         page.wait_for_selector(".calc-sidebar", timeout=20000)
 
     def _switch_to_points_mode(self, page) -> None:
@@ -193,7 +193,7 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
             columns_button.click()
 
             columns_text = columns_button.inner_text().strip()
-            self.assertRegex(columns_text, r"^Columns \(\d+/\d+\)$")
+            self.assertRegex(columns_text, r"^(?:Table )?Columns \(\d+/\d+\)$")
 
             first_row = page.locator(".rankings-table tbody tr.clickable-row").first
             first_row.click()

@@ -1,6 +1,5 @@
 export const PRIMARY_NAV_ITEMS = [
   { key: "projections", label: "Projections" },
-  { key: "calculator", label: "Dynasty Calculator" },
   { key: "methodology", label: "Methodology" },
 ];
 
@@ -71,7 +70,7 @@ export const METHODOLOGY_FAQS = [
   {
     question: "Do I need to use the default league setup?",
     answer:
-      "No. Use the Dynasty Calculator tab to customize teams, roster slots, categories, and scoring so values match your league.",
+      "No. Use the Dynasty Calculator section in Projections to customize teams, roster slots, categories, and scoring so values match your league.",
   },
   {
     question: "How should I interpret Dynasty Value?",

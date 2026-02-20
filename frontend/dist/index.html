@@ -1133,6 +1133,63 @@ td.value-negative { color: var(--red); }
   letter-spacing: 0.06em;
 }
 
+.embedded-calculator-section {
+  margin-top: 22px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+}
+
+.embedded-calculator-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.embedded-calculator-head h2 {
+  margin: 0;
+  font-family: var(--ff-serif);
+  font-size: 1.28rem;
+  line-height: 1.25;
+  color: var(--accent);
+}
+
+.embedded-calculator-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.embedded-calculator-toggle:hover,
+.embedded-calculator-toggle.open {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+
+.embedded-calculator-note {
+  margin: 8px 0 0;
+}
+
+.embedded-calculator-content {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
 .calc-subheading {
   margin: 4px 0 10px;
   font-size: var(--fs-xs);
@@ -1757,6 +1814,19 @@ footer a { color: var(--accent-dim); text-decoration: none; }
     justify-content: flex-start;
   }
 
+  .embedded-calculator-section {
+    padding: 12px 12px 14px;
+  }
+
+  .embedded-calculator-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .embedded-calculator-toggle {
+    width: 100%;
+  }
+
   .hero-stat .number { font-size: 1.45rem; }
   .container { padding: 0 16px 56px; }
 
@@ -1951,7 +2021,7 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   .faq-item { padding: 12px 14px; }
 }
 </style>
-  <script type="module" crossorigin src="/assets/index-Nr88DZfQ.js"></script>
+  <script type="module" crossorigin src="/assets/index-DbG61o3T.js"></script>
 </head>
 <body>
 

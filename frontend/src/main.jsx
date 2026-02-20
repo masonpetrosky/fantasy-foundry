@@ -10,6 +10,7 @@ import { DynastyCalculator } from "./dynasty_calculator.jsx";
 import {
   BUILD_QUERY_PARAM,
   BUILD_STORAGE_KEY,
+  CALC_LINK_QUERY_PARAM,
   CLOUD_SYNC_DEBOUNCE_MS,
   buildCloudPreferencesPayload,
   formatAuthError,
@@ -31,7 +32,11 @@ const INDEX_BUILD_ID = (() => {
 const VERSION_POLL_INTERVAL_MS = 60000;
 
 function App() {
-  const [section, setSection] = useState("projections"); // projections | calculator | methodology
+  const [section, setSection] = useState("projections"); // projections | methodology
+  const [calculatorPanelOpen, setCalculatorPanelOpen] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return Boolean(String(params.get(CALC_LINK_QUERY_PARAM) || "").trim());
+  });
   const [meta, setMeta] = useState(null);
   const [metaError, setMetaError] = useState("");
   const [buildLabel, setBuildLabel] = useState("");
@@ -49,7 +54,7 @@ function App() {
   const versionEtagRef = useRef("");
   const accountMenuRef = useRef(null);
   const accountMenuLabel = !AUTH_SYNC_ENABLED || authUser ? "Account" : "Sign In";
-  const sectionNeedsMeta = section === "projections" || section === "calculator";
+  const sectionNeedsMeta = section === "projections";
 
   useEffect(() => {
     presetsRef.current = presets;
@@ -548,23 +553,44 @@ function App() {
             </p>
           )}
           {section === "projections" && meta && (
-            <ProjectionsExplorer
-              apiBase={API}
-              meta={meta}
-              dataVersion={dataVersion}
-              watchlist={watchlist}
-              setWatchlist={setWatchlist}
-            />
-          )}
-          {section === "calculator" && meta && (
-            <DynastyCalculator
-              apiBase={API}
-              meta={meta}
-              presets={presets}
-              setPresets={setPresets}
-              watchlist={watchlist}
-              setWatchlist={setWatchlist}
-            />
+            <>
+              <ProjectionsExplorer
+                apiBase={API}
+                meta={meta}
+                dataVersion={dataVersion}
+                watchlist={watchlist}
+                setWatchlist={setWatchlist}
+              />
+              <section className="embedded-calculator-section" aria-labelledby="embedded-calculator-heading">
+                <div className="embedded-calculator-head">
+                  <h2 id="embedded-calculator-heading">Dynasty Calculator</h2>
+                  <button
+                    type="button"
+                    className={`embedded-calculator-toggle ${calculatorPanelOpen ? "open" : ""}`.trim()}
+                    onClick={() => setCalculatorPanelOpen(current => !current)}
+                    aria-expanded={calculatorPanelOpen}
+                    aria-controls="embedded-calculator-content"
+                  >
+                    Dynasty Calculator
+                  </button>
+                </div>
+                <p className="methodology-note embedded-calculator-note">
+                  Configure your league settings and run custom dynasty rankings without leaving this tab.
+                </p>
+                {calculatorPanelOpen && (
+                  <div id="embedded-calculator-content" className="embedded-calculator-content">
+                    <DynastyCalculator
+                      apiBase={API}
+                      meta={meta}
+                      presets={presets}
+                      setPresets={setPresets}
+                      watchlist={watchlist}
+                      setWatchlist={setWatchlist}
+                    />
+                  </div>
+                )}
+              </section>
+            </>
           )}
           {section === "methodology" && <MethodologySection />}
         </div>
