@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:check": "npm run build && git diff --exit-code -- dist",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "test": "vitest run"
   },

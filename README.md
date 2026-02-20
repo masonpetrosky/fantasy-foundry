@@ -115,14 +115,18 @@ npm test
 
 ### CI Parity Check (Frontend Dist Freshness)
 ```bash
-cd frontend
-npm ci
-npm run build
-cd ..
-git diff --exit-code -- frontend/dist
+./scripts/check_frontend_dist.sh
 ```
 
-`git diff` should be clean. If it is not, commit the regenerated `frontend/dist` output.
+If the check fails, commit the added/modified/deleted files under `frontend/dist`.
+On GitHub, keep `CI / frontend-dist` as a required pull-request check before merge to `main`.
+
+Quick local check when frontend dependencies are already installed:
+
+```bash
+cd frontend
+npm run build:check
+```
 
 ### CI Parity Check (Source File Size Guardrail)
 ```bash

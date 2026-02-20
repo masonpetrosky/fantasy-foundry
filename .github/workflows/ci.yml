@@ -43,10 +43,12 @@ jobs:
 
       - name: Verify frontend/dist is up to date
         run: |
-          git diff --exit-code -- frontend/dist || (
-            echo "frontend/dist is stale. Run 'cd frontend && npm run build' and commit the updated dist artifacts.";
+          if ! git diff --quiet -- frontend/dist; then
+            echo "frontend/dist differs from a clean build (added/modified/deleted files)."
+            echo "Run './scripts/check_frontend_dist.sh', then commit the resulting frontend/dist changes."
+            git --no-pager diff --name-status -- frontend/dist
             exit 1
-          )
+          fi
 
   unit-tests:
     runs-on: ubuntu-latest
