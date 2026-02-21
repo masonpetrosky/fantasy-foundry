@@ -1,0 +1,133 @@
+/* ====== FOOTER ====== */
+
+.methodology-stack {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+.methodology-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+}
+
+.methodology-card h2 {
+  font-family: var(--ff-serif);
+  font-size: 1.68rem;
+  font-weight: 400;
+  line-height: 1.28;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+.methodology-card p {
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  line-height: var(--lh-relaxed);
+}
+
+.methodology-card ol {
+  padding-left: 18px;
+  color: var(--text-primary);
+}
+
+.methodology-card ul {
+  padding-left: 18px;
+  color: var(--text-primary);
+}
+
+.methodology-card li {
+  margin-bottom: 10px;
+}
+
+.methodology-note {
+  font-family: var(--ff-sans);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-base);
+  margin-top: 8px;
+}
+
+.app-methodology-note {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+
+.glossary-intro {
+  margin-bottom: 16px;
+}
+
+.glossary-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.glossary-item {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  padding: 14px 16px;
+}
+
+.glossary-item dt {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.glossary-item dd {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: var(--lh-relaxed);
+}
+
+.faq-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.faq-item {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  padding: 14px 16px;
+}
+
+.faq-item dt {
+  margin-bottom: 6px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.faq-item dd {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: var(--lh-relaxed);
+}
+
+footer {
+  border-top: 1px solid var(--border-subtle);
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+footer a { color: var(--accent-dim); text-decoration: none; }
+
+.build-id {
+  display: inline-block;
+  margin-left: 8px;
+  font-family: var(--ff-mono);
+  color: var(--text-secondary);
+}
+

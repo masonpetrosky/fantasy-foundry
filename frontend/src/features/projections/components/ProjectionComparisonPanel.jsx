@@ -1,7 +1,7 @@
 import React from "react";
 import { stablePlayerKeyFromRow } from "../../../app_state_storage.js";
 
-export function ProjectionComparisonPanel({
+export const ProjectionComparisonPanel = React.memo(function ProjectionComparisonPanel({
   compareRows,
   maxComparePlayers,
   comparisonColumns,
@@ -41,4 +41,4 @@ export function ProjectionComparisonPanel({
       </div>
     </div>
   );
-}
+});

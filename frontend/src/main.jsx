@@ -74,6 +74,7 @@ function App() {
   const [calculatorOverlayByPlayerKey, setCalculatorOverlayByPlayerKey] = useState({});
   const [calculatorOverlayActive, setCalculatorOverlayActive] = useState(false);
   const [calculatorOverlayJobId, setCalculatorOverlayJobId] = useState("");
+  const [calculatorOverlayDataVersion, setCalculatorOverlayDataVersion] = useState("");
   const [calculatorOverlaySummary, setCalculatorOverlaySummary] = useState(null);
   const [pendingQuickStartMode, setPendingQuickStartMode] = useState("");
   const [quickStartRunnerVersion, setQuickStartRunnerVersion] = useState(0);
@@ -132,20 +133,23 @@ function App() {
     const nextOverlay = buildCalculatorOverlayMap(result);
     const hasOverlay = Object.keys(nextOverlay).length > 0;
     const nextJobId = hasOverlay ? String(runMeta?.jobId || "").trim() : "";
+    const nextDataVersion = hasOverlay ? String(dataVersion || "").trim() : "";
     setCalculatorOverlayByPlayerKey(nextOverlay);
     setCalculatorOverlayActive(hasOverlay);
     setCalculatorOverlayJobId(nextJobId);
+    setCalculatorOverlayDataVersion(nextDataVersion);
     setCalculatorOverlaySummary(hasOverlay ? {
       scoringMode: String(settings?.scoring_mode || "").trim().toLowerCase() === "points" ? "points" : "roto",
       startYear: Number(settings?.start_year),
       horizon: Number(settings?.horizon),
     } : null);
-  }, []);
+  }, [dataVersion]);
 
   const clearCalculatorOverlay = useCallback(() => {
     setCalculatorOverlayByPlayerKey({});
     setCalculatorOverlayActive(false);
     setCalculatorOverlayJobId("");
+    setCalculatorOverlayDataVersion("");
     setCalculatorOverlaySummary(null);
   }, []);
 
@@ -408,6 +412,7 @@ function App() {
                   calculatorOverlayByPlayerKey={calculatorOverlayByPlayerKey}
                   calculatorOverlayActive={calculatorOverlayActive}
                   calculatorOverlayJobId={calculatorOverlayJobId}
+                  calculatorOverlayDataVersion={calculatorOverlayDataVersion}
                   calculatorOverlayPlayerCount={calculatorOverlayPlayerCount}
                   calculatorOverlaySummary={calculatorOverlaySummary}
                   onClearCalculatorOverlay={clearCalculatorOverlay}

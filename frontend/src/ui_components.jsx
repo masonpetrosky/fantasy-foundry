@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useId, useRef, useState } from "react";
+import { MenuButton, useMenuInteractions } from "./accessibility_components.jsx";
 
 export function ColumnChooserControl({
   columns,
@@ -11,42 +12,31 @@ export function ColumnChooserControl({
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
+  const triggerRef = useRef(null);
+  const menuId = useId();
   const optionalColumns = columns.filter(col => !requiredCols.has(col));
   const hiddenOptionalCount = optionalColumns.filter(col => hiddenCols[col]).length;
   const visibleCount = columns.length - Object.keys(hiddenCols || {}).length;
 
-  useEffect(() => {
-    const onOutsideClick = event => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setOpen(false);
-      }
-    };
-    const onEscape = event => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onOutsideClick);
-    document.addEventListener("keydown", onEscape);
-    return () => {
-      document.removeEventListener("mousedown", onOutsideClick);
-      document.removeEventListener("keydown", onEscape);
-    };
-  }, []);
+  useMenuInteractions({
+    open,
+    setOpen,
+    menuRef,
+    triggerRef,
+  });
 
   return (
     <div className="multi-select" ref={menuRef}>
-      <button
-        type="button"
+      <MenuButton
+        controlsId={menuId}
+        open={open}
+        buttonRef={triggerRef}
         className={`inline-btn ${open ? "open" : ""}`}
-        onClick={() => setOpen(value => !value)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-      >
-        {buttonLabel} ({visibleCount}/{columns.length})
-      </button>
+        onToggle={() => setOpen(value => !value)}
+        label={`${buttonLabel} (${visibleCount}/${columns.length})`}
+      />
       {open && (
-        <div className="multi-select-menu" role="listbox" aria-multiselectable="true">
+        <div id={menuId} className="multi-select-menu" role="listbox" aria-multiselectable="true">
           {onShowAllColumns && (
             <button
               type="button"

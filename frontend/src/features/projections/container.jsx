@@ -1,5 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ColumnChooserControl } from "../../ui_components.jsx";
+import {
+  MenuButton,
+  SortableHeaderCell,
+  VisuallyHidden,
+  useMenuInteractions,
+} from "../../accessibility_components.jsx";
 import {
   projectionRowKey,
   stablePlayerKeyFromRow,
@@ -26,8 +41,6 @@ import {
 import {
   useProjectionLayoutState,
 } from "./hooks/useProjectionLayoutState.js";
-import { ProjectionComparisonPanel } from "./components/ProjectionComparisonPanel.jsx";
-import { ProjectionWatchlistPanel } from "./components/ProjectionWatchlistPanel.jsx";
 import {
   CAREER_TOTALS_FILTER_VALUE,
   DEFAULT_PROJECTIONS_SORT_COL,
@@ -35,6 +48,22 @@ import {
   DEFAULT_PROJECTIONS_TAB,
   useProjectionsData,
 } from "../../hooks/useProjectionsData.js";
+import {
+  buildActiveFilterChips,
+  buildOverlayStatusMeta,
+  DEFAULT_FILTER_SUMMARY_FALLBACK,
+} from "./view_state.js";
+
+const LazyProjectionComparisonPanel = lazy(() => (
+  import("./components/ProjectionComparisonPanel.jsx").then(module => ({
+    default: module.ProjectionComparisonPanel,
+  }))
+));
+const LazyProjectionWatchlistPanel = lazy(() => (
+  import("./components/ProjectionWatchlistPanel.jsx").then(module => ({
+    default: module.ProjectionWatchlistPanel,
+  }))
+));
 export function ProjectionsExplorer({
   apiBase,
   meta,
@@ -45,6 +74,7 @@ export function ProjectionsExplorer({
   calculatorOverlayByPlayerKey,
   calculatorOverlayActive,
   calculatorOverlayJobId,
+  calculatorOverlayDataVersion,
   calculatorOverlayPlayerCount,
   calculatorOverlaySummary,
   onClearCalculatorOverlay,
@@ -69,6 +99,7 @@ export function ProjectionsExplorer({
     totalRows,
     loading,
     error,
+    pageResetNotice,
     offset,
     setOffset,
     sortCol,
@@ -81,6 +112,7 @@ export function ProjectionsExplorer({
     watchlistKeysFilter,
     selectedDynastyYears,
     retryFetch,
+    clearPageResetNotice,
   } = useProjectionsData({
     apiBase,
     meta,
@@ -101,6 +133,8 @@ export function ProjectionsExplorer({
 
   const [showPosMenu, setShowPosMenu] = useState(false);
   const posMenuRef = useRef(null);
+  const posMenuTriggerRef = useRef(null);
+  const posMenuId = useId();
 
   const resolvedCalculatorOverlayByPlayerKey = useMemo(() => (
     calculatorOverlayByPlayerKey && typeof calculatorOverlayByPlayerKey === "object" && !Array.isArray(calculatorOverlayByPlayerKey)
@@ -117,19 +151,37 @@ export function ProjectionsExplorer({
   const overlayScoringMode = String(calculatorOverlaySummary?.scoringMode || "").trim().toLowerCase();
   const overlayStartYear = Number(calculatorOverlaySummary?.startYear);
   const overlayHorizon = Number(calculatorOverlaySummary?.horizon);
-  const overlaySummaryParts = [];
-  if (overlayScoringMode === "points") {
-    overlaySummaryParts.push("Points mode");
-  } else if (overlayScoringMode === "roto") {
-    overlaySummaryParts.push("Roto mode");
-  }
-  if (Number.isFinite(overlayStartYear) && overlayStartYear > 0) {
-    overlaySummaryParts.push(`Start ${overlayStartYear}`);
-  }
-  if (Number.isFinite(overlayHorizon) && overlayHorizon > 0) {
-    overlaySummaryParts.push(`${overlayHorizon}-year horizon`);
-  }
-  const overlaySummaryText = overlaySummaryParts.length > 0 ? ` ${overlaySummaryParts.join(" · ")}.` : "";
+  const overlaySummaryParts = useMemo(() => {
+    const parts = [];
+    if (overlayScoringMode === "points") {
+      parts.push("Points mode");
+    } else if (overlayScoringMode === "roto") {
+      parts.push("Roto mode");
+    }
+    if (Number.isFinite(overlayStartYear) && overlayStartYear > 0) {
+      parts.push(`Start ${overlayStartYear}`);
+    }
+    if (Number.isFinite(overlayHorizon) && overlayHorizon > 0) {
+      parts.push(`${overlayHorizon}-year horizon`);
+    }
+    return parts;
+  }, [overlayHorizon, overlayScoringMode, overlayStartYear]);
+  const overlayStatusMeta = useMemo(() => buildOverlayStatusMeta({
+    overlaySummaryParts,
+    overlayJobId: calculatorOverlayJobId,
+    overlayAppliedDataVersion: calculatorOverlayDataVersion,
+    resolvedDataVersion: dataVersion,
+  }), [calculatorOverlayDataVersion, calculatorOverlayJobId, dataVersion, overlaySummaryParts]);
+  const activeFilterChips = useMemo(() => buildActiveFilterChips({
+    search,
+    teamFilter,
+    resolvedYearFilter,
+    posFilters,
+    watchlistOnly,
+    careerTotalsFilterValue: CAREER_TOTALS_FILTER_VALUE,
+  }), [posFilters, resolvedYearFilter, search, teamFilter, watchlistOnly]);
+  const hasActiveFilters = activeFilterChips.length > 0;
+
   const applyCalculatorOverlayToRows = useCallback(rows => {
     if (!Array.isArray(rows) || rows.length === 0) return [];
     if (!hasCalculatorOverlay) return rows;
@@ -144,17 +196,12 @@ export function ProjectionsExplorer({
     () => applyCalculatorOverlayToRows(baseData),
     [applyCalculatorOverlayToRows, baseData]
   );
-
-  useEffect(() => {
-    function handleOutsideClick(event) {
-      if (posMenuRef.current && !posMenuRef.current.contains(event.target)) {
-        setShowPosMenu(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, []);
+  useMenuInteractions({
+    open: showPosMenu,
+    setOpen: setShowPosMenu,
+    menuRef: posMenuRef,
+    triggerRef: posMenuTriggerRef,
+  });
 
   const positionOptions = useMemo(() => {
     const rawPositions = tab === "all"
@@ -295,12 +342,157 @@ export function ProjectionsExplorer({
     : tab === "pitch"
       ? [seasonCol, "DynastyValue", "IP", "W", "K", "SV", "ERA", "WHIP"]
       : [seasonCol, "DynastyValue", "AB", "R", "HR", "RBI", "SB", "IP", "W", "K", "SV", "ERA", "WHIP"];
+  const compareRowsCount = compareRows.length;
 
   function togglePosFilter(pos) {
     setPosFilters(curr => (
       curr.includes(pos) ? curr.filter(p => p !== pos) : [...curr, pos]
     ));
   }
+  const clearAllFilters = useCallback(() => {
+    setSearch("");
+    setTeamFilter("");
+    setYearFilter(CAREER_TOTALS_FILTER_VALUE);
+    setPosFilters([]);
+    setWatchlistOnly(false);
+    setSortCol(DEFAULT_PROJECTIONS_SORT_COL);
+    setSortDir(DEFAULT_PROJECTIONS_SORT_DIR);
+    setShowPosMenu(false);
+    setOffset(0);
+  }, [
+    setOffset,
+    setPosFilters,
+    setSearch,
+    setSortCol,
+    setSortDir,
+    setTeamFilter,
+    setWatchlistOnly,
+    setYearFilter,
+  ]);
+  const formatProjectionCell = useCallback((col, row) => {
+    const val = row[col];
+    if (col === "Player") return <td key={col} className="player-name">{val}</td>;
+    if (col === "Pos") return <td key={col} className="pos">{val}</td>;
+    if (col === "Team") return <td key={col} className="team">{val}</td>;
+    if (col === "DynastyValue" || col.startsWith("Value_")) {
+      if ((val == null || val === "") && col === "DynastyValue" && row.DynastyMatchStatus === "no_unique_match") {
+        return <td key={col} className="num" style={{color:"var(--text-muted)"}}>No unique match</td>;
+      }
+      const n = Number(val);
+      const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
+      return <td key={col} className={`num ${cls}`}>{fmt(val, 2)}</td>;
+    }
+    if (twoDecimalCols.has(col)) return <td key={col} className="num">{fmt(val, 2)}</td>;
+    if (threeDecimalCols.has(col)) return <td key={col} className="num">{fmt(val, 3)}</td>;
+    if (wholeNumberCols.has(col)) return <td key={col} className="num">{fmtInt(val, true)}</td>;
+    if (intCols.has(col)) return <td key={col} className="num">{fmtInt(val, col !== "Year")}</td>;
+    if (typeof val === "number") return <td key={col} className="num">{fmt(val)}</td>;
+    return <td key={col}>{val ?? "—"}</td>;
+  }, [intCols, threeDecimalCols, twoDecimalCols, wholeNumberCols]);
+  const cardRowsMarkup = useMemo(() => {
+    if (!showCards || displayedPage.length === 0) return [];
+
+    return displayedPage.map((row, idx) => {
+      const rowWatch = isRowWatched(row);
+      const compareKey = stablePlayerKeyFromRow(row);
+      const isCompared = Boolean(compareRowsByKey[compareKey]);
+      const rowWithRank = { ...row, Rank: offset + idx + 1 };
+      const cardCols = projectionCardColumnsForRow(rowWithRank);
+      const rowKey = projectionRowKey(row, offset + idx);
+
+      return (
+        <article className="projection-card" key={rowKey}>
+          <div className="projection-card-head">
+            <h4>{row.Player || "Player"}</h4>
+            <div className="projection-card-actions">
+              <button
+                type="button"
+                className={`inline-btn ${rowWatch ? "open" : ""}`.trim()}
+                onClick={() => toggleRowWatch(row)}
+              >
+                {rowWatch ? "Tracked" : "Track"}
+              </button>
+              <button
+                type="button"
+                className={`inline-btn ${isCompared ? "open" : ""}`.trim()}
+                onClick={() => toggleCompareRow(row)}
+                disabled={!isCompared && compareRowsCount >= maxComparePlayers}
+              >
+                {isCompared ? "Compared" : "Compare"}
+              </button>
+            </div>
+          </div>
+          <p className="projection-card-meta">{row.Team || "—"} · {row.Pos || "—"}</p>
+          <dl>
+            {cardCols.map(col => (
+              <div className="projection-card-stat" key={`${rowKey}-${col}`}>
+                <dt>{colLabels[col] || col}</dt>
+                <dd>{formatCellValue(col, rowWithRank[col])}</dd>
+              </div>
+            ))}
+          </dl>
+        </article>
+      );
+    });
+  }, [
+    showCards,
+    displayedPage,
+    isRowWatched,
+    compareRowsByKey,
+    offset,
+    projectionCardColumnsForRow,
+    compareRowsCount,
+    maxComparePlayers,
+    colLabels,
+    toggleRowWatch,
+    toggleCompareRow,
+  ]);
+  const tableRowsMarkup = useMemo(() => {
+    if (showCards || displayedPage.length === 0) return [];
+
+    return displayedPage.map((row, i) => {
+      const rowWatch = isRowWatched(row);
+      const compareKey = stablePlayerKeyFromRow(row);
+      const isCompared = Boolean(compareRowsByKey[compareKey]);
+      const rowKey = projectionRowKey(row, offset + i);
+
+      return (
+        <tr key={rowKey}>
+          <td className="num index-col" style={{color:"var(--text-muted)"}}>{offset + i + 1}</td>
+          {cols.map(col => formatProjectionCell(col, row))}
+          <td className="row-actions-cell">
+            <button
+              type="button"
+              className={`inline-btn ${rowWatch ? "open" : ""}`.trim()}
+              onClick={() => toggleRowWatch(row)}
+            >
+              {rowWatch ? "Tracked" : "Track"}
+            </button>
+            <button
+              type="button"
+              className={`inline-btn ${isCompared ? "open" : ""}`.trim()}
+              onClick={() => toggleCompareRow(row)}
+              disabled={!isCompared && compareRowsCount >= maxComparePlayers}
+            >
+              {isCompared ? "Compared" : "Compare"}
+            </button>
+          </td>
+        </tr>
+      );
+    });
+  }, [
+    showCards,
+    displayedPage,
+    isRowWatched,
+    compareRowsByKey,
+    offset,
+    cols,
+    formatProjectionCell,
+    toggleRowWatch,
+    toggleCompareRow,
+    compareRowsCount,
+    maxComparePlayers,
+  ]);
 
   useEffect(() => {
     const onResize = () => updateProjectionHorizontalAffordance();
@@ -333,7 +525,7 @@ export function ProjectionsExplorer({
       </div>
 
       <div className="filter-bar">
-        <label className="sr-only" htmlFor="projections-search">Search player name</label>
+        <VisuallyHidden as="label" htmlFor="projections-search">Search player name</VisuallyHidden>
         <input
           id="projections-search"
           type="text"
@@ -341,33 +533,34 @@ export function ProjectionsExplorer({
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <label className="sr-only" htmlFor="projections-year-filter">Projection year view</label>
+        <VisuallyHidden as="label" htmlFor="projections-year-filter">Projection year view</VisuallyHidden>
         <select id="projections-year-filter" value={resolvedYearFilter} onChange={e => setYearFilter(e.target.value)}>
           <option value={CAREER_TOTALS_FILTER_VALUE}>Rest of Career Totals</option>
           {meta.years.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
-        <label className="sr-only" htmlFor="projections-team-filter">Team filter</label>
+        <VisuallyHidden as="label" htmlFor="projections-team-filter">Team filter</VisuallyHidden>
         <select id="projections-team-filter" value={teamFilter} onChange={e => setTeamFilter(e.target.value)}>
           <option value="">All Teams</option>
           {meta.teams.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
         <div className="multi-select" ref={posMenuRef}>
-          <button
-            type="button"
+          <MenuButton
+            controlsId={posMenuId}
+            open={showPosMenu}
+            onToggle={() => setShowPosMenu(open => !open)}
+            buttonRef={posMenuTriggerRef}
             className={`multi-select-trigger ${showPosMenu ? "open" : ""}`}
-            onClick={() => setShowPosMenu(open => !open)}
-            aria-haspopup="listbox"
-            aria-expanded={showPosMenu}
-            aria-controls="projections-position-menu"
             aria-label="Filter positions"
+            label={(
+              <span className="multi-select-label">
+                <span>{posFilterLabel}</span>
+                <span className="multi-select-chevron" aria-hidden="true">{showPosMenu ? "▲" : "▼"}</span>
+              </span>
+            )}
           >
-            <span className="multi-select-label">
-              <span>{posFilterLabel}</span>
-              <span className="multi-select-chevron">{showPosMenu ? "▲" : "▼"}</span>
-            </span>
-          </button>
+          </MenuButton>
           {showPosMenu && (
-            <div id="projections-position-menu" className="multi-select-menu" role="listbox" aria-multiselectable="true">
+            <div id={posMenuId} className="multi-select-menu" role="listbox" aria-multiselectable="true">
               <button
                 type="button"
                 className="multi-select-clear"
@@ -429,12 +622,53 @@ export function ProjectionsExplorer({
           {exportingFormat === "xlsx" ? "Exporting XLSX..." : "Export XLSX"}
         </button>
       </div>
+      <div className="active-filter-row" role="status" aria-live="polite">
+        <span className="active-filter-label">Active filters</span>
+        <div className="active-filter-chip-row">
+          {hasActiveFilters ? activeFilterChips.map(chip => (
+            <span key={chip} className="filter-chip">{chip}</span>
+          )) : (
+            <span className="filter-chip filter-chip-empty">{DEFAULT_FILTER_SUMMARY_FALLBACK}</span>
+          )}
+        </div>
+        <button
+          type="button"
+          className="inline-btn"
+          onClick={clearAllFilters}
+          disabled={!hasActiveFilters}
+        >
+          Clear All Filters
+        </button>
+      </div>
+      {pageResetNotice && (
+        <div className="table-refresh-message page-reset-notice" role="status" aria-live="polite">
+          <span>{pageResetNotice}</span>
+          <button type="button" className="inline-btn" onClick={clearPageResetNotice}>Dismiss</button>
+        </div>
+      )}
       {hasCalculatorOverlay && (
-        <div className="table-refresh-message projections-overlay-message" role="status" aria-live="polite">
-          <span>
-            Showing calculator-adjusted dynasty values for matched players ({resolvedCalculatorOverlayPlayerCount.toLocaleString()} available).
-            {overlaySummaryText}
-          </span>
+        <div
+          className={`table-refresh-message projections-overlay-message ${overlayStatusMeta.isStale ? "warning" : ""}`.trim()}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="overlay-status-copy">
+            <span>
+              Showing calculator-adjusted dynasty values for matched players ({resolvedCalculatorOverlayPlayerCount.toLocaleString()} available).
+            </span>
+            {overlayStatusMeta.chips.length > 0 && (
+              <div className="overlay-status-chip-row" aria-label="Applied calculator overlay details">
+                {overlayStatusMeta.chips.map(chip => (
+                  <span key={chip} className="overlay-status-chip">{chip}</span>
+                ))}
+              </div>
+            )}
+            {overlayStatusMeta.isStale && (
+              <span className="overlay-stale-note">
+                Overlay source is from an older projections build. Re-run the calculator to refresh these values.
+              </span>
+            )}
+          </div>
           {typeof onClearCalculatorOverlay === "function" && (
             <button type="button" className="inline-btn" onClick={onClearCalculatorOverlay}>
               Clear applied values
@@ -456,24 +690,32 @@ export function ProjectionsExplorer({
         <button type="button" className="inline-btn" onClick={clearWatchlist} disabled={watchlistCount === 0}>
           Clear Watchlist
         </button>
-        <span className="collection-toolbar-label">Compare: {compareRows.length}/{maxComparePlayers}</span>
-        <button type="button" className="inline-btn" onClick={clearCompareRows} disabled={compareRows.length === 0}>
+        <span className="collection-toolbar-label">Compare: {compareRowsCount}/{maxComparePlayers}</span>
+        <button type="button" className="inline-btn" onClick={clearCompareRows} disabled={compareRowsCount === 0}>
           Clear Compare
         </button>
       </div>
-      <ProjectionComparisonPanel
-        compareRows={compareRows}
-        maxComparePlayers={maxComparePlayers}
-        comparisonColumns={comparisonColumns}
-        colLabels={colLabels}
-        formatCellValue={formatCellValue}
-        removeCompareRow={removeCompareRow}
-      />
-      <ProjectionWatchlistPanel
-        watchlistCount={watchlistCount}
-        watchlist={watchlist}
-        removeWatchlistEntry={removeWatchlistEntry}
-      />
+      {compareRowsCount > 0 && (
+        <Suspense fallback={null}>
+          <LazyProjectionComparisonPanel
+            compareRows={compareRows}
+            maxComparePlayers={maxComparePlayers}
+            comparisonColumns={comparisonColumns}
+            colLabels={colLabels}
+            formatCellValue={formatCellValue}
+            removeCompareRow={removeCompareRow}
+          />
+        </Suspense>
+      )}
+      {watchlistCount > 0 && (
+        <Suspense fallback={null}>
+          <LazyProjectionWatchlistPanel
+            watchlistCount={watchlistCount}
+            watchlist={watchlist}
+            removeWatchlistEntry={removeWatchlistEntry}
+          />
+        </Suspense>
+      )}
       <div className="projection-layout-controls" role="group" aria-label="Projection layout controls">
           <div className="projection-layout-row">
             <span className="label">Layout</span>
@@ -525,46 +767,7 @@ export function ProjectionsExplorer({
           ) : displayedPage.length === 0 ? (
             <div className="projection-card-empty">No results found for this page.</div>
           ) : (
-            displayedPage.map((row, idx) => {
-              const rowWatch = isRowWatched(row);
-              const compareKey = stablePlayerKeyFromRow(row);
-              const isCompared = Boolean(compareRowsByKey[compareKey]);
-              const rowWithRank = { ...row, Rank: offset + idx + 1 };
-              const cardCols = projectionCardColumnsForRow(rowWithRank);
-              return (
-                <article className="projection-card" key={projectionRowKey(row, offset + idx)}>
-                  <div className="projection-card-head">
-                    <h4>{row.Player || "Player"}</h4>
-                    <div className="projection-card-actions">
-                      <button
-                        type="button"
-                        className={`inline-btn ${rowWatch ? "open" : ""}`.trim()}
-                        onClick={() => toggleRowWatch(row)}
-                      >
-                        {rowWatch ? "Tracked" : "Track"}
-                      </button>
-                      <button
-                        type="button"
-                        className={`inline-btn ${isCompared ? "open" : ""}`.trim()}
-                        onClick={() => toggleCompareRow(row)}
-                        disabled={!isCompared && compareRows.length >= maxComparePlayers}
-                      >
-                        {isCompared ? "Compared" : "Compare"}
-                      </button>
-                    </div>
-                  </div>
-                  <p className="projection-card-meta">{row.Team || "—"} · {row.Pos || "—"}</p>
-                  <dl>
-                    {cardCols.map(col => (
-                      <div className="projection-card-stat" key={`${projectionRowKey(row, offset + idx)}-${col}`}>
-                        <dt>{colLabels[col] || col}</dt>
-                        <dd>{formatCellValue(col, rowWithRank[col])}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </article>
-              );
-            })
+            cardRowsMarkup
           )}
         </div>
       )}
@@ -593,24 +796,15 @@ export function ProjectionsExplorer({
                 <tr>
                   <th scope="col" className="index-col" style={{width:40}}>#</th>
                   {cols.map(c => (
-                    <th
+                    <SortableHeaderCell
                       key={c}
-                      scope="col"
+                      columnKey={c}
+                      label={colLabels[c] || c}
+                      sortCol={sortCol}
+                      sortDir={sortDir}
+                      onSort={handleSort}
                       className={`${sortCol === c ? "sorted" : ""}${c === "Player" ? " player-col" : ""}`.trim()}
-                      onClick={() => handleSort(c)}
-                      onKeyDown={event => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          handleSort(c);
-                        }
-                      }}
-                      tabIndex={0}
-                      aria-sort={sortCol === c ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
-                      aria-label={`Sort by ${colLabels[c] || c}`}
-                    >
-                      {colLabels[c] || c}
-                      {sortCol === c && <span className="sort-arrow">{sortDir === "asc" ? "▲" : "▼"}</span>}
-                    </th>
+                    />
                   ))}
                   <th scope="col">Actions</th>
                 </tr>
@@ -633,53 +827,7 @@ export function ProjectionsExplorer({
                 ) : displayedPage.length === 0 ? (
                   <tr><td colSpan={cols.length + 2} style={{textAlign:"center",padding:"40px",color:"var(--text-muted)"}}>No results found</td></tr>
                 ) : (
-                  displayedPage.map((row, i) => {
-                    const rowWatch = isRowWatched(row);
-                    const compareKey = stablePlayerKeyFromRow(row);
-                    const isCompared = Boolean(compareRowsByKey[compareKey]);
-                    return (
-                      <tr key={projectionRowKey(row, offset + i)}>
-                        <td className="num index-col" style={{color:"var(--text-muted)"}}>{offset + i + 1}</td>
-                        {cols.map(c => {
-                          const val = row[c];
-                          if (c === "Player") return <td key={c} className="player-name">{val}</td>;
-                          if (c === "Pos") return <td key={c} className="pos">{val}</td>;
-                          if (c === "Team") return <td key={c} className="team">{val}</td>;
-                          if (c === "DynastyValue" || c.startsWith("Value_")) {
-                            if ((val == null || val === "") && c === "DynastyValue" && row.DynastyMatchStatus === "no_unique_match") {
-                              return <td key={c} className="num" style={{color:"var(--text-muted)"}}>No unique match</td>;
-                            }
-                            const n = Number(val);
-                            const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
-                            return <td key={c} className={`num ${cls}`}>{fmt(val, 2)}</td>;
-                          }
-                          if (twoDecimalCols.has(c)) return <td key={c} className="num">{fmt(val, 2)}</td>;
-                          if (threeDecimalCols.has(c)) return <td key={c} className="num">{fmt(val, 3)}</td>;
-                          if (wholeNumberCols.has(c)) return <td key={c} className="num">{fmtInt(val, true)}</td>;
-                          if (intCols.has(c)) return <td key={c} className="num">{fmtInt(val, c !== "Year")}</td>;
-                          if (typeof val === "number") return <td key={c} className="num">{fmt(val)}</td>;
-                          return <td key={c}>{val ?? "—"}</td>;
-                        })}
-                        <td className="row-actions-cell">
-                          <button
-                            type="button"
-                            className={`inline-btn ${rowWatch ? "open" : ""}`.trim()}
-                            onClick={() => toggleRowWatch(row)}
-                          >
-                            {rowWatch ? "Tracked" : "Track"}
-                          </button>
-                          <button
-                            type="button"
-                            className={`inline-btn ${isCompared ? "open" : ""}`.trim()}
-                            onClick={() => toggleCompareRow(row)}
-                            disabled={!isCompared && compareRows.length >= maxComparePlayers}
-                          >
-                            {isCompared ? "Compared" : "Compare"}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
+                  tableRowsMarkup
                 )}
               </tbody>
             </table>

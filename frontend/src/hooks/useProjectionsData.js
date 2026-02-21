@@ -89,6 +89,7 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
   const [totalRows, setTotalRows] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [pageResetNotice, setPageResetNotice] = useState("");
   const [retryTrigger, setRetryTrigger] = useState(0);
   const [offset, setOffset] = useState(0);
   const [sortCol, setSortCol] = useState(DEFAULT_PROJECTIONS_SORT_COL);
@@ -116,6 +117,13 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
     if (careerTotalsView) return availableProjectionYears;
     return [resolvedYearFilter];
   }, [availableProjectionYears, careerTotalsView, resolvedYearFilter]);
+  const resetOffsetWithNotice = useCallback(message => {
+    setOffset(current => {
+      if (current === 0) return current;
+      setPageResetNotice(message);
+      return 0;
+    });
+  }, []);
 
   const prefetchProjectionPage = useCallback(async (endpointTab, paramsWithoutOffset, nextOffset) => {
     if (nextOffset < 0) return;
@@ -301,12 +309,24 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
     projectionCacheMapRef.current.clear();
     projectionCacheOrderRef.current = [];
     hasLoadedProjectionPageRef.current = false;
-    setOffset(0);
-  }, [resolvedDataVersion]);
+    resetOffsetWithNotice("Page reset to 1 after projections data refreshed.");
+  }, [resolvedDataVersion, resetOffsetWithNotice]);
 
   useEffect(() => {
-    setOffset(0);
-  }, [tab, search, teamFilter, watchlistOnly, watchlistKeysFilter, resolvedYearFilter, posFilters, calculatorJobId, sortCol, sortDir]);
+    resetOffsetWithNotice("Page reset to 1 after filters or sorting changed.");
+  }, [
+    tab,
+    search,
+    teamFilter,
+    watchlistOnly,
+    watchlistKeysFilter,
+    resolvedYearFilter,
+    posFilters,
+    calculatorJobId,
+    sortCol,
+    sortDir,
+    resetOffsetWithNotice,
+  ]);
 
   useEffect(() => {
     if (yearFilter !== resolvedYearFilter) {
@@ -317,6 +337,15 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
   const retryFetch = useCallback(() => {
     setRetryTrigger(n => n + 1);
   }, []);
+  const clearPageResetNotice = useCallback(() => {
+    setPageResetNotice("");
+  }, []);
+
+  useEffect(() => {
+    if (offset > 0 && pageResetNotice) {
+      setPageResetNotice("");
+    }
+  }, [offset, pageResetNotice]);
 
   return {
     tab,
@@ -336,6 +365,7 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
     totalRows,
     loading,
     error,
+    pageResetNotice,
     offset,
     setOffset,
     sortCol,
@@ -350,5 +380,6 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
     selectedDynastyYears,
     resolvedDataVersion,
     retryFetch,
+    clearPageResetNotice,
   };
 }

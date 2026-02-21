@@ -1,4 +1,15 @@
-export function ProjectionWatchlistPanel({ watchlistCount, watchlist, removeWatchlistEntry }) {
+import React, { useMemo } from "react";
+
+export const ProjectionWatchlistPanel = React.memo(function ProjectionWatchlistPanel({
+  watchlistCount,
+  watchlist,
+  removeWatchlistEntry,
+}) {
+  const sortedEntries = useMemo(() => (
+    Object.values(watchlist)
+      .sort((a, b) => String(a.player || "").localeCompare(String(b.player || "")))
+      .slice(0, 40)
+  ), [watchlist]);
   if (watchlistCount === 0) return null;
 
   return (
@@ -8,20 +19,17 @@ export function ProjectionWatchlistPanel({ watchlistCount, watchlist, removeWatc
         <span>{watchlistCount} players</span>
       </div>
       <div className="watchlist-chip-grid">
-        {Object.values(watchlist)
-          .sort((a, b) => String(a.player || "").localeCompare(String(b.player || "")))
-          .slice(0, 40)
-          .map(entry => (
-            <div key={entry.key} className="watchlist-chip">
-              <span>{entry.player}</span>
-              <small>{entry.team || "—"} · {entry.pos || "—"}</small>
-              <button type="button" onClick={() => removeWatchlistEntry(entry.key)} aria-label={`Remove ${entry.player}`}>
-                ×
-              </button>
-            </div>
-          ))}
+        {sortedEntries.map(entry => (
+          <div key={entry.key} className="watchlist-chip">
+            <span>{entry.player}</span>
+            <small>{entry.team || "—"} · {entry.pos || "—"}</small>
+            <button type="button" onClick={() => removeWatchlistEntry(entry.key)} aria-label={`Remove ${entry.player}`}>
+              ×
+            </button>
+          </div>
+        ))}
       </div>
       {watchlistCount > 40 && <p className="calc-note">Showing first 40 watchlist entries.</p>}
     </div>
   );
-}
+});
