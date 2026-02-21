@@ -13,6 +13,7 @@ def _build_test_app(canonical_host: str):
         app_build_id="test-build",
         api_no_cache_headers={},
         cors_allow_origins=("*",),
+        environment="development",
         refresh_data_if_needed=lambda: None,
         current_data_version=lambda: "test-data",
         client_identity_resolver=lambda _request: "test-client",

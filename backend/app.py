@@ -34,6 +34,11 @@ import pandas as pd
 from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from backend.api.dependencies import (
+    build_calculator_orchestration_context,
+    build_calculator_service,
+    build_status_orchestration_context,
+)
 from backend.api.app_factory import create_app
 from backend.api.routes import (
     build_calculate_router,
@@ -42,7 +47,6 @@ from backend.api.routes import (
     build_status_router,
 )
 from backend.core.jobs import (
-    active_jobs_for_ip as core_active_jobs_for_ip,
     calculation_job_public_payload as core_calculation_job_public_payload,
     cleanup_calculation_jobs as core_cleanup_calculation_jobs,
     mark_job_cancelled_locked as core_mark_job_cancelled_locked,
@@ -150,18 +154,9 @@ from backend.core.networking import (
     parse_ip_text as core_parse_ip_text,
     trusted_proxy_ip as core_trusted_proxy_ip,
 )
-from backend.core.rate_limit import (
-    cleanup_rate_limit_buckets_locked as core_cleanup_rate_limit_buckets_locked,
-    prune_rate_limit_bucket as core_prune_rate_limit_bucket,
-)
+from backend.core import runtime_infra as core_runtime_infra
 from backend.core.result_cache import (
-    cache_calculation_job_snapshot as core_cache_calculation_job_snapshot,
     calc_result_cache_key as core_calc_result_cache_key,
-    cached_calculation_job_snapshot as core_cached_calculation_job_snapshot,
-    cleanup_local_result_cache as core_cleanup_local_result_cache,
-    result_cache_get as core_result_cache_get,
-    result_cache_set as core_result_cache_set,
-    touch_local_result_cache_key as core_touch_local_result_cache_key,
 )
 from backend.core.settings import load_settings_from_env
 from backend.domain.constants import (
@@ -173,7 +168,7 @@ from backend.domain.constants import (
     ROTO_HITTER_CATEGORY_FIELDS,
     ROTO_PITCHER_CATEGORY_FIELDS,
 )
-from backend.services.calculator import CalculatorService, CalculatorServiceContext
+from backend.services.calculator import CalculatorService
 from backend.services.projections import ProjectionService, ProjectionServiceContext
 
 try:  # pragma: no cover - optional dependency
@@ -638,9 +633,7 @@ _REQUEST_RATE_LIMIT_LAST_SWEEP_TS = 0.0
 CALC_RESULT_CACHE_LOCK = Lock()
 CALC_RESULT_CACHE: dict[str, tuple[float, dict]] = {}
 CALC_RESULT_CACHE_ORDER: deque[str] = deque()
-REDIS_CLIENT_LOCK = Lock()
-REDIS_CLIENT: Any | None = None
-REDIS_CLIENT_INIT_ATTEMPTED = False
+REDIS_CLIENT_STATE = core_runtime_infra.RedisClientState(lock=Lock())
 
 
 def _current_data_version() -> str:
@@ -739,43 +732,31 @@ def _client_ip(request: Request | None) -> str:
 
 
 def _calculate_rate_limit_identity(request: Request | None) -> str:
-    if request is None:
-        return "ip:unknown"
-    state_identity = getattr(request.state, "calc_rate_limit_identity", None)
-    if state_identity:
-        return str(state_identity)
-    api_key = _extract_calculate_api_key(request)
-    if api_key and api_key in CALCULATE_API_KEY_IDENTITIES:
-        return CALCULATE_API_KEY_IDENTITIES[api_key]
-    return f"ip:{_client_ip(request)}"
+    return core_runtime_infra.calculate_rate_limit_identity(
+        request,
+        extract_calculate_api_key=_extract_calculate_api_key,
+        calculate_api_key_identities=CALCULATE_API_KEY_IDENTITIES,
+        client_ip=_client_ip,
+    )
 
 
 def _authorize_calculate_request(request: Request) -> None:
-    api_key = _extract_calculate_api_key(request)
-    if api_key and api_key in CALCULATE_API_KEY_IDENTITIES:
-        request.state.calc_rate_limit_identity = CALCULATE_API_KEY_IDENTITIES[api_key]
-        request.state.calc_api_key_authenticated = True
-        return
-
-    request.state.calc_rate_limit_identity = f"ip:{_client_ip(request)}"
-    request.state.calc_api_key_authenticated = False
-    if not REQUIRE_CALCULATE_AUTH:
-        return
-    if not CALCULATE_API_KEY_IDENTITIES:
-        raise HTTPException(
-            status_code=503,
-            detail="Calculator authentication is enabled but FF_CALCULATE_API_KEYS is not configured.",
-        )
-    raise HTTPException(status_code=401, detail="Missing or invalid API key for calculator endpoints.")
+    core_runtime_infra.authorize_calculate_request(
+        request,
+        extract_calculate_api_key=_extract_calculate_api_key,
+        calculate_api_key_identities=CALCULATE_API_KEY_IDENTITIES,
+        client_ip=_client_ip,
+        require_calculate_auth=REQUIRE_CALCULATE_AUTH,
+    )
 
 
 def _prune_rate_limit_bucket(bucket: deque[float], *, window_start: float) -> None:
-    core_prune_rate_limit_bucket(bucket, window_start=window_start)
+    core_runtime_infra.prune_rate_limit_bucket(bucket, window_start=window_start)
 
 
 def _cleanup_rate_limit_buckets_locked(*, now: float, window_start: float) -> None:
     global _REQUEST_RATE_LIMIT_LAST_SWEEP_TS
-    _REQUEST_RATE_LIMIT_LAST_SWEEP_TS = core_cleanup_rate_limit_buckets_locked(
+    _REQUEST_RATE_LIMIT_LAST_SWEEP_TS = core_runtime_infra.cleanup_rate_limit_buckets_locked(
         rate_limit_buckets=REQUEST_RATE_LIMIT_BUCKETS,
         now=now,
         window_start=window_start,
@@ -785,48 +766,33 @@ def _cleanup_rate_limit_buckets_locked(*, now: float, window_start: float) -> No
 
 
 def _rate_limit_exceeded(action: str) -> HTTPException:
-    return HTTPException(
-        status_code=429,
-        detail=f"Rate limit exceeded for {action}. Try again in a minute.",
-        headers={"Retry-After": "60"},
-    )
+    return core_runtime_infra.rate_limit_exceeded(action)
 
 
 def _enforce_rate_limit(request: Request, *, action: str, limit_per_minute: int) -> None:
-    if limit_per_minute <= 0:
-        return
-    now = time.time()
-    redis_client = _redis_client()
-    identity = _calculate_rate_limit_identity(request)
-    if redis_client is not None:
-        minute_window = int(now // 60)
-        redis_key = f"{REDIS_RATE_LIMIT_PREFIX}{action}:{identity}:{minute_window}"
-        try:
-            count = int(redis_client.incr(redis_key))
-            if count == 1:
-                redis_client.expire(redis_key, 120)
-            if count > limit_per_minute:
-                raise _rate_limit_exceeded(action)
-            return
-        except HTTPException:
-            raise
-        except Exception:
-            CALC_LOGGER.warning("failed to enforce redis-backed rate limit; falling back to local buckets", exc_info=True)
-
-    window_start = now - 60.0
-    bucket_key = (action, identity)
-    with REQUEST_RATE_LIMIT_LOCK:
-        _cleanup_rate_limit_buckets_locked(now=now, window_start=window_start)
-        bucket = REQUEST_RATE_LIMIT_BUCKETS[bucket_key]
-        _prune_rate_limit_bucket(bucket, window_start=window_start)
-        if len(bucket) >= limit_per_minute:
-            raise _rate_limit_exceeded(action)
-        bucket.append(now)
+    core_runtime_infra.enforce_rate_limit(
+        request,
+        action=action,
+        limit_per_minute=limit_per_minute,
+        redis_rate_limit_prefix=REDIS_RATE_LIMIT_PREFIX,
+        redis_client_getter=_redis_client,
+        calculate_rate_limit_identity=_calculate_rate_limit_identity,
+        request_rate_limit_lock=REQUEST_RATE_LIMIT_LOCK,
+        request_rate_limit_buckets=REQUEST_RATE_LIMIT_BUCKETS,
+        cleanup_rate_limit_buckets_locked=lambda now, window_start: _cleanup_rate_limit_buckets_locked(
+            now=now, window_start=window_start
+        ),
+        prune_rate_limit_bucket=lambda bucket, window_start: _prune_rate_limit_bucket(bucket, window_start=window_start),
+        rate_limit_exceeded=_rate_limit_exceeded,
+        logger=CALC_LOGGER,
+    )
 
 
 def _rate_limit_bucket_count() -> int:
-    with REQUEST_RATE_LIMIT_LOCK:
-        return len(REQUEST_RATE_LIMIT_BUCKETS)
+    return core_runtime_infra.rate_limit_bucket_count(
+        request_rate_limit_lock=REQUEST_RATE_LIMIT_LOCK,
+        request_rate_limit_buckets=REQUEST_RATE_LIMIT_BUCKETS,
+    )
 
 
 def _calc_result_cache_key(settings: dict[str, Any]) -> str:
@@ -834,147 +800,100 @@ def _calc_result_cache_key(settings: dict[str, Any]) -> str:
 
 
 def _redis_client() -> Any | None:
-    global REDIS_CLIENT, REDIS_CLIENT_INIT_ATTEMPTED
-    if not REDIS_URL or redis_lib is None:
-        return None
-    if REDIS_CLIENT_INIT_ATTEMPTED:
-        return REDIS_CLIENT
-    with REDIS_CLIENT_LOCK:
-        if REDIS_CLIENT_INIT_ATTEMPTED:
-            return REDIS_CLIENT
-        REDIS_CLIENT_INIT_ATTEMPTED = True
-        try:
-            client = redis_lib.Redis.from_url(REDIS_URL, decode_responses=True)
-            client.ping()
-            REDIS_CLIENT = client
-            CALC_LOGGER.info("redis cache enabled for calculator results/jobs")
-        except Exception:
-            REDIS_CLIENT = None
-            CALC_LOGGER.warning("redis cache unavailable; falling back to in-memory calculator cache")
-        return REDIS_CLIENT
+    return core_runtime_infra.get_redis_client(
+        redis_url=REDIS_URL,
+        redis_lib=redis_lib,
+        state=REDIS_CLIENT_STATE,
+        logger=CALC_LOGGER,
+    )
 
 
 def _redis_active_jobs_key(client_ip: str) -> str:
-    return f"{REDIS_ACTIVE_JOBS_PREFIX}{client_ip}"
+    return core_runtime_infra.redis_active_jobs_key(redis_active_jobs_prefix=REDIS_ACTIVE_JOBS_PREFIX, client_ip=client_ip)
 
 
 def _redis_job_client_key(job_id: str) -> str:
-    return f"{REDIS_JOB_CLIENT_PREFIX}{job_id}"
+    return core_runtime_infra.redis_job_client_key(redis_job_client_prefix=REDIS_JOB_CLIENT_PREFIX, job_id=job_id)
 
 
 def _redis_job_cancel_key(job_id: str) -> str:
-    return f"{REDIS_JOB_CANCEL_PREFIX}{job_id}"
+    return core_runtime_infra.redis_job_cancel_key(redis_job_cancel_prefix=REDIS_JOB_CANCEL_PREFIX, job_id=job_id)
 
 
 def _track_active_job(job_id: str, client_ip: str) -> None:
-    redis_client = _redis_client()
-    if redis_client is None:
-        return
-    active_jobs_key = _redis_active_jobs_key(client_ip)
-    job_client_key = _redis_job_client_key(job_id)
-    try:
-        pipe = redis_client.pipeline(transaction=False)
-        pipe.sadd(active_jobs_key, job_id)
-        pipe.expire(active_jobs_key, CALCULATOR_JOB_TTL_SECONDS)
-        pipe.setex(job_client_key, CALCULATOR_JOB_TTL_SECONDS, client_ip)
-        pipe.execute()
-    except Exception:
-        CALC_LOGGER.warning("failed to track active calculator job in redis", exc_info=True)
+    core_runtime_infra.track_active_job(
+        job_id,
+        client_ip,
+        redis_client_getter=_redis_client,
+        redis_active_jobs_prefix=REDIS_ACTIVE_JOBS_PREFIX,
+        redis_job_client_prefix=REDIS_JOB_CLIENT_PREFIX,
+        calculator_job_ttl_seconds=CALCULATOR_JOB_TTL_SECONDS,
+        logger=CALC_LOGGER,
+    )
 
 
 def _job_client_ip(job_id: str) -> str | None:
-    redis_client = _redis_client()
-    if redis_client is None:
-        return None
-    try:
-        raw = redis_client.get(_redis_job_client_key(job_id))
-    except Exception:
-        CALC_LOGGER.warning("failed to lookup calculator job client ip from redis", exc_info=True)
-        return None
-    client_ip = str(raw or "").strip()
-    return client_ip or None
+    return core_runtime_infra.job_client_ip(
+        job_id,
+        redis_client_getter=_redis_client,
+        redis_job_client_prefix=REDIS_JOB_CLIENT_PREFIX,
+        logger=CALC_LOGGER,
+    )
 
 
 def _untrack_active_job(job_id: str, client_ip: str | None = None) -> None:
-    redis_client = _redis_client()
-    if redis_client is None:
-        return
-    resolved_client_ip = (client_ip or _job_client_ip(job_id) or "").strip()
-    if not resolved_client_ip:
-        return
-    active_jobs_key = _redis_active_jobs_key(resolved_client_ip)
-    try:
-        pipe = redis_client.pipeline(transaction=False)
-        pipe.srem(active_jobs_key, job_id)
-        pipe.delete(_redis_job_client_key(job_id))
-        pipe.execute()
-    except Exception:
-        CALC_LOGGER.warning("failed to untrack active calculator job in redis", exc_info=True)
+    core_runtime_infra.untrack_active_job(
+        job_id,
+        client_ip,
+        redis_client_getter=_redis_client,
+        redis_active_jobs_prefix=REDIS_ACTIVE_JOBS_PREFIX,
+        redis_job_client_prefix=REDIS_JOB_CLIENT_PREFIX,
+        job_client_ip_resolver=_job_client_ip,
+        logger=CALC_LOGGER,
+    )
 
 
 def _set_job_cancel_requested(job_id: str) -> None:
-    redis_client = _redis_client()
-    if redis_client is None:
-        return
-    try:
-        redis_client.setex(_redis_job_cancel_key(job_id), CALCULATOR_JOB_TTL_SECONDS, "1")
-    except Exception:
-        CALC_LOGGER.warning("failed to store calculator job cancellation marker in redis", exc_info=True)
+    core_runtime_infra.set_job_cancel_requested(
+        job_id,
+        redis_client_getter=_redis_client,
+        redis_job_cancel_prefix=REDIS_JOB_CANCEL_PREFIX,
+        calculator_job_ttl_seconds=CALCULATOR_JOB_TTL_SECONDS,
+        logger=CALC_LOGGER,
+    )
 
 
 def _clear_job_cancel_requested(job_id: str) -> None:
-    redis_client = _redis_client()
-    if redis_client is None:
-        return
-    try:
-        redis_client.delete(_redis_job_cancel_key(job_id))
-    except Exception:
-        CALC_LOGGER.warning("failed to clear calculator job cancellation marker in redis", exc_info=True)
+    core_runtime_infra.clear_job_cancel_requested(
+        job_id,
+        redis_client_getter=_redis_client,
+        redis_job_cancel_prefix=REDIS_JOB_CANCEL_PREFIX,
+        logger=CALC_LOGGER,
+    )
 
 
 def _job_cancel_requested(job_id: str) -> bool:
-    redis_client = _redis_client()
-    if redis_client is None:
-        return False
-    try:
-        return bool(redis_client.exists(_redis_job_cancel_key(job_id)))
-    except Exception:
-        CALC_LOGGER.warning("failed to read calculator job cancellation marker in redis", exc_info=True)
-        return False
+    return core_runtime_infra.job_cancel_requested(
+        job_id,
+        redis_client_getter=_redis_client,
+        redis_job_cancel_prefix=REDIS_JOB_CANCEL_PREFIX,
+        logger=CALC_LOGGER,
+    )
 
 
 def _active_jobs_for_ip(client_ip: str) -> int:
-    redis_client = _redis_client()
-    if redis_client is not None:
-        try:
-            active_jobs_key = _redis_active_jobs_key(client_ip)
-            members = list(redis_client.smembers(active_jobs_key))
-            if not members:
-                return 0
-
-            pipe = redis_client.pipeline(transaction=False)
-            for job_id in members:
-                pipe.exists(_redis_job_client_key(str(job_id)))
-            exists_flags = list(pipe.execute())
-
-            live_count = 0
-            stale_job_ids: list[str] = []
-            for raw_job_id, is_live in zip(members, exists_flags, strict=False):
-                job_id = str(raw_job_id)
-                if bool(is_live):
-                    live_count += 1
-                else:
-                    stale_job_ids.append(job_id)
-            if stale_job_ids:
-                redis_client.srem(active_jobs_key, *stale_job_ids)
-            return live_count
-        except Exception:
-            CALC_LOGGER.warning("failed to count active calculator jobs in redis", exc_info=True)
-    return core_active_jobs_for_ip(CALCULATOR_JOBS, client_ip)
+    return core_runtime_infra.active_jobs_for_ip(
+        client_ip,
+        redis_client_getter=_redis_client,
+        redis_active_jobs_prefix=REDIS_ACTIVE_JOBS_PREFIX,
+        redis_job_client_prefix=REDIS_JOB_CLIENT_PREFIX,
+        calculator_jobs=CALCULATOR_JOBS,
+        logger=CALC_LOGGER,
+    )
 
 
 def _cleanup_local_result_cache(now_ts: float | None = None) -> None:
-    core_cleanup_local_result_cache(
+    core_runtime_infra.cleanup_local_result_cache(
         CALC_RESULT_CACHE,
         CALC_RESULT_CACHE_ORDER,
         max_entries=CALC_RESULT_CACHE_MAX_ENTRIES,
@@ -983,13 +902,13 @@ def _cleanup_local_result_cache(now_ts: float | None = None) -> None:
 
 
 def _touch_local_result_cache_key(cache_key: str) -> None:
-    core_touch_local_result_cache_key(CALC_RESULT_CACHE_ORDER, cache_key)
+    core_runtime_infra.touch_local_result_cache_key(CALC_RESULT_CACHE_ORDER, cache_key)
 
 
 def _result_cache_get(cache_key: str) -> dict | None:
-    return core_result_cache_get(
+    return core_runtime_infra.result_cache_get(
         cache_key,
-        redis_client=_redis_client(),
+        redis_client_getter=_redis_client,
         redis_result_prefix=REDIS_RESULT_PREFIX,
         logger=CALC_LOGGER,
         local_cache=CALC_RESULT_CACHE,
@@ -1000,10 +919,10 @@ def _result_cache_get(cache_key: str) -> dict | None:
 
 
 def _result_cache_set(cache_key: str, payload: dict) -> None:
-    core_result_cache_set(
+    core_runtime_infra.result_cache_set(
         cache_key,
         payload,
-        redis_client=_redis_client(),
+        redis_client_getter=_redis_client,
         redis_result_prefix=REDIS_RESULT_PREFIX,
         cache_ttl_seconds=CALC_RESULT_CACHE_TTL_SECONDS,
         logger=CALC_LOGGER,
@@ -1015,9 +934,9 @@ def _result_cache_set(cache_key: str, payload: dict) -> None:
 
 
 def _cache_calculation_job_snapshot(job: dict) -> None:
-    core_cache_calculation_job_snapshot(
+    core_runtime_infra.cache_calculation_job_snapshot(
         job,
-        redis_client=_redis_client(),
+        redis_client_getter=_redis_client,
         redis_job_prefix=REDIS_JOB_PREFIX,
         job_ttl_seconds=CALCULATOR_JOB_TTL_SECONDS,
         logger=CALC_LOGGER,
@@ -1026,9 +945,9 @@ def _cache_calculation_job_snapshot(job: dict) -> None:
 
 
 def _cached_calculation_job_snapshot(job_id: str) -> dict | None:
-    return core_cached_calculation_job_snapshot(
+    return core_runtime_infra.cached_calculation_job_snapshot(
         job_id,
-        redis_client=_redis_client(),
+        redis_client_getter=_redis_client,
         redis_job_prefix=REDIS_JOB_PREFIX,
         logger=CALC_LOGGER,
     )
@@ -1705,48 +1624,46 @@ PROJECTION_SERVICE = ProjectionService(
     )
 )
 def _calculator_service_from_globals() -> CalculatorService:
-    return CalculatorService(
-        CalculatorServiceContext(
-            refresh_data_if_needed=_refresh_data_if_needed,
-            coerce_meta_years=_coerce_meta_years,
-            get_meta=lambda: META,
-            calc_result_cache_key=_calc_result_cache_key,
-            result_cache_get=_result_cache_get,
-            result_cache_set=_result_cache_set,
-            calculate_common_dynasty_frame_cached=_calculate_common_dynasty_frame_cached,
-            calculate_points_dynasty_frame_cached=_calculate_points_dynasty_frame_cached,
-            roto_category_settings_from_dict=_roto_category_settings_from_dict,
-            is_user_fixable_calculation_error=_is_user_fixable_calculation_error,
-            player_identity_by_name=_player_identity_by_name,
-            normalize_player_key=_normalize_player_key,
-            player_key_col=PLAYER_KEY_COL,
-            player_entity_key_col=PLAYER_ENTITY_KEY_COL,
-            selected_roto_categories=_selected_roto_categories,
-            start_year_roto_stats_by_entity=_start_year_roto_stats_by_entity,
-            projection_identity_key=_projection_identity_key,
-            build_calculation_explanations=_build_calculation_explanations,
-            clean_records_for_json=_clean_records_for_json,
-            flatten_explanations_for_export=_flatten_explanations_for_export,
-            tabular_export_response=_tabular_export_response,
-            calc_logger=CALC_LOGGER,
-            enforce_rate_limit=_enforce_rate_limit,
-            sync_rate_limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,
-            job_create_rate_limit_per_minute=CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE,
-            job_status_rate_limit_per_minute=CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE,
-            client_ip=_client_ip,
-            iso_now=_iso_now,
-            active_jobs_for_ip=_active_jobs_for_ip,
-            calculator_max_active_jobs_per_ip=CALCULATOR_MAX_ACTIVE_JOBS_PER_IP,
-            calculator_job_lock=CALCULATOR_JOB_LOCK,
-            calculator_jobs=CALCULATOR_JOBS,
-            cleanup_calculation_jobs=_cleanup_calculation_jobs,
-            cache_calculation_job_snapshot=_cache_calculation_job_snapshot,
-            cached_calculation_job_snapshot=_cached_calculation_job_snapshot,
-            calculation_job_public_payload=_calculation_job_public_payload,
-            mark_job_cancelled_locked=_mark_job_cancelled_locked,
-            calculator_job_executor=CALCULATOR_JOB_EXECUTOR,
-            calc_job_cancelled_status=CALC_JOB_CANCELLED_STATUS,
-        )
+    return build_calculator_service(
+        refresh_data_if_needed=_refresh_data_if_needed,
+        coerce_meta_years=_coerce_meta_years,
+        get_meta=lambda: META,
+        calc_result_cache_key=_calc_result_cache_key,
+        result_cache_get=_result_cache_get,
+        result_cache_set=_result_cache_set,
+        calculate_common_dynasty_frame_cached=_calculate_common_dynasty_frame_cached,
+        calculate_points_dynasty_frame_cached=_calculate_points_dynasty_frame_cached,
+        roto_category_settings_from_dict=_roto_category_settings_from_dict,
+        is_user_fixable_calculation_error=_is_user_fixable_calculation_error,
+        player_identity_by_name=_player_identity_by_name,
+        normalize_player_key=_normalize_player_key,
+        player_key_col=PLAYER_KEY_COL,
+        player_entity_key_col=PLAYER_ENTITY_KEY_COL,
+        selected_roto_categories=_selected_roto_categories,
+        start_year_roto_stats_by_entity=_start_year_roto_stats_by_entity,
+        projection_identity_key=_projection_identity_key,
+        build_calculation_explanations=_build_calculation_explanations,
+        clean_records_for_json=_clean_records_for_json,
+        flatten_explanations_for_export=_flatten_explanations_for_export,
+        tabular_export_response=_tabular_export_response,
+        calc_logger=CALC_LOGGER,
+        enforce_rate_limit=_enforce_rate_limit,
+        sync_rate_limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,
+        job_create_rate_limit_per_minute=CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE,
+        job_status_rate_limit_per_minute=CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE,
+        client_ip=_client_ip,
+        iso_now=_iso_now,
+        active_jobs_for_ip=_active_jobs_for_ip,
+        calculator_max_active_jobs_per_ip=CALCULATOR_MAX_ACTIVE_JOBS_PER_IP,
+        calculator_job_lock=CALCULATOR_JOB_LOCK,
+        calculator_jobs=CALCULATOR_JOBS,
+        cleanup_calculation_jobs=_cleanup_calculation_jobs,
+        cache_calculation_job_snapshot=_cache_calculation_job_snapshot,
+        cached_calculation_job_snapshot=_cached_calculation_job_snapshot,
+        calculation_job_public_payload=_calculation_job_public_payload,
+        mark_job_cancelled_locked=_mark_job_cancelled_locked,
+        calculator_job_executor=CALCULATOR_JOB_EXECUTOR,
+        calc_job_cancelled_status=CALC_JOB_CANCELLED_STATUS,
     )
 
 
@@ -1789,6 +1706,7 @@ app = create_app(
     app_build_id=APP_BUILD_ID,
     api_no_cache_headers=API_NO_CACHE_HEADERS,
     cors_allow_origins=CORS_ALLOW_ORIGINS,
+    environment=APP_ENVIRONMENT,
     refresh_data_if_needed=_refresh_data_if_needed,
     current_data_version=_current_data_version,
     client_identity_resolver=_client_ip,
@@ -1882,7 +1800,7 @@ def get_ops():
 
 
 def _status_orchestration_context() -> StatusOrchestrationContext:
-    return StatusOrchestrationContext(
+    return build_status_orchestration_context(
         refresh_data_if_needed=_refresh_data_if_needed,
         meta_getter=lambda: META,
         calculator_guardrails_payload=_calculator_guardrails_payload,
@@ -1925,7 +1843,7 @@ def _status_orchestration_context() -> StatusOrchestrationContext:
 
 
 def _calculator_orchestration_context() -> CalculatorOrchestrationContext:
-    return CalculatorOrchestrationContext(
+    return build_calculator_orchestration_context(
         calculate_request_model=CalculateRequest,
         enforce_rate_limit=_enforce_rate_limit,
         sync_rate_limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,

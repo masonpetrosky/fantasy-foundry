@@ -1,38 +1,24 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AUTH_SYNC_ENABLED, SUPABASE_PREFS_TABLE, loadSupabaseClient } from "./supabase_client.js";
+import { AUTH_SYNC_ENABLED } from "./supabase_client.js";
 import { AccountPanel } from "./account_panel.jsx";
 import { resolveApiBase } from "./api_base.js";
 import { PRIMARY_NAV_ITEMS } from "./app_content.js";
 import { MethodologySection } from "./methodology_section.jsx";
 import { ProjectionsExplorer } from "./projections_explorer.jsx";
 import { DynastyCalculator } from "./dynasty_calculator.jsx";
+import { useVersionPolling } from "./hooks/useVersionPolling.js";
+import { useAccountSync } from "./hooks/useAccountSync.js";
 import {
-  BUILD_QUERY_PARAM,
-  BUILD_STORAGE_KEY,
   CALC_LINK_QUERY_PARAM,
-  CLOUD_SYNC_DEBOUNCE_MS,
-  buildCloudPreferencesPayload,
-  calculatorPresetsEqual,
-  formatAuthError,
-  mergeCalculatorPresetsPreferLocal,
-  normalizeCloudPreferences,
   readCalculatorPresets,
   readPlayerWatchlist,
-  safeReadStorage,
-  safeWriteStorage,
   stablePlayerKeyFromRow,
   writeCalculatorPresets,
   writePlayerWatchlist,
 } from "./app_state_storage.js";
 
 const API = resolveApiBase();
-const INDEX_BUILD_ID = (() => {
-  const metaEl = document.querySelector('meta[name="ff-build-id"]');
-  const value = String(metaEl?.getAttribute("content") || "").trim();
-  return value.startsWith("__APP_BUILD_") ? "" : value;
-})();
-const VERSION_POLL_INTERVAL_MS = 60000;
 
 function buildCalculatorOverlayMap(result) {
   const rows = Array.isArray(result?.data) ? result.data : [];
@@ -67,23 +53,20 @@ function App() {
   });
   const [meta, setMeta] = useState(null);
   const [metaError, setMetaError] = useState("");
-  const [buildLabel, setBuildLabel] = useState("");
-  const [dataVersion, setDataVersion] = useState("");
+  const { buildLabel, dataVersion } = useVersionPolling(API);
   const [presets, setPresets] = useState(() => readCalculatorPresets());
   const [watchlist, setWatchlist] = useState(() => readPlayerWatchlist());
   const [calculatorSettings, setCalculatorSettings] = useState(null);
   const [calculatorOverlayByPlayerKey, setCalculatorOverlayByPlayerKey] = useState({});
   const [calculatorOverlayActive, setCalculatorOverlayActive] = useState(false);
   const [calculatorOverlayJobId, setCalculatorOverlayJobId] = useState("");
-  const [authReady, setAuthReady] = useState(!AUTH_SYNC_ENABLED);
-  const [authUser, setAuthUser] = useState(null);
-  const [authStatus, setAuthStatus] = useState("");
-  const [cloudStatus, setCloudStatus] = useState("");
-  const [cloudReadyForSave, setCloudReadyForSave] = useState(false);
+  const { authReady, authUser, authStatus, cloudStatus, signIn, signUp, signOut } = useAccountSync({
+    presets,
+    setPresets,
+    watchlist,
+    setWatchlist,
+  });
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const presetsRef = useRef(presets);
-  const watchlistRef = useRef(watchlist);
-  const versionEtagRef = useRef("");
   const accountMenuRef = useRef(null);
   const accountMenuLabel = !AUTH_SYNC_ENABLED || authUser ? "Account" : "Sign In";
   const sectionNeedsMeta = section === "projections";
@@ -103,14 +86,6 @@ function App() {
     setCalculatorOverlayActive(false);
     setCalculatorOverlayJobId("");
   }, []);
-
-  useEffect(() => {
-    presetsRef.current = presets;
-  }, [presets]);
-
-  useEffect(() => {
-    watchlistRef.current = watchlist;
-  }, [watchlist]);
 
   useEffect(() => {
     writeCalculatorPresets(presets);
@@ -142,299 +117,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    let timer = null;
-    let activeController = null;
-
-    const scheduleNextPoll = () => {
-      if (cancelled) return;
-      timer = window.setTimeout(runVersionCheck, VERSION_POLL_INTERVAL_MS);
-    };
-
-    const runVersionCheck = async () => {
-      if (cancelled) return;
-      if (activeController) activeController.abort();
-      const controller = new AbortController();
-      activeController = controller;
-      const headers = { "Cache-Control": "no-cache" };
-      if (versionEtagRef.current) {
-        headers["If-None-Match"] = versionEtagRef.current;
-      }
-
-      try {
-        const response = await fetch(`${API}/api/version`, {
-          signal: controller.signal,
-          cache: "no-store",
-          headers,
-        });
-        if (response.status === 304) return;
-        if (!response.ok) throw new Error(`Server returned ${response.status} while loading /api/version`);
-
-        const etag = String(response.headers.get("etag") || "").trim();
-        if (etag) {
-          versionEtagRef.current = etag;
-        }
-
-        const res = await response.json();
-        if (cancelled) return;
-
-        const buildId = String(res?.build_id || "").trim();
-        const resolvedDataVersion = String(res?.data_version || buildId || "").trim();
-        if (resolvedDataVersion) {
-          setDataVersion(resolvedDataVersion);
-        }
-        if (!buildId) return;
-
-        setBuildLabel(buildId.slice(0, 12));
-
-        const previousBuildId = safeReadStorage(BUILD_STORAGE_KEY);
-        const url = new URL(window.location.href);
-        const urlBuildId = String(url.searchParams.get(BUILD_QUERY_PARAM) || "").trim();
-
-        // If the currently loaded HTML build is stale (or we previously saw a
-        // different build), force one cache-busting navigation to the latest build.
-        const pageIsStale = Boolean(INDEX_BUILD_ID && INDEX_BUILD_ID !== buildId);
-        const seenBuildChange = Boolean(previousBuildId && previousBuildId !== buildId);
-        if ((pageIsStale || seenBuildChange) && urlBuildId !== buildId) {
-          url.searchParams.set(BUILD_QUERY_PARAM, buildId);
-          window.location.replace(url.toString());
-          return;
-        }
-
-        if (urlBuildId && urlBuildId !== buildId) {
-          url.searchParams.set(BUILD_QUERY_PARAM, buildId);
-          window.history.replaceState({}, "", url.toString());
-        }
-
-        safeWriteStorage(BUILD_STORAGE_KEY, buildId);
-      } catch (err) {
-        if (err?.name === "AbortError" || cancelled) return;
-        console.warn("Version check failed:", err);
-      } finally {
-        if (activeController === controller) {
-          activeController = null;
-        }
-        scheduleNextPoll();
-      }
-    };
-
-    runVersionCheck();
-
-    return () => {
-      cancelled = true;
-      if (timer) window.clearTimeout(timer);
-      if (activeController) {
-        activeController.abort();
-        activeController = null;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!AUTH_SYNC_ENABLED) return undefined;
-    let mounted = true;
-    let unsubscribe = null;
-
-    const setupAuth = async () => {
-      let client = null;
-      try {
-        client = await loadSupabaseClient();
-      } catch (error) {
-        if (!mounted) return;
-        setAuthStatus(`Account setup error: ${formatAuthError(error, "Unable to initialize account sync.")}`);
-        setAuthReady(true);
-        return;
-      }
-
-      if (!mounted || !client) {
-        if (mounted) setAuthReady(true);
-        return;
-      }
-
-      const { data: authState } = client.auth.onAuthStateChange((_event, session) => {
-        setAuthUser(session?.user || null);
-        setCloudReadyForSave(false);
-        if (!session?.user) {
-          setCloudStatus("");
-        }
-      });
-      unsubscribe = () => authState?.subscription?.unsubscribe();
-
-      const { data, error } = await client.auth.getSession();
-      if (!mounted) return;
-      if (error) {
-        setAuthStatus(`Account setup error: ${formatAuthError(error, "Unable to restore session.")}`);
-      } else if (!data?.session) {
-        setAuthStatus("Sign in to sync your presets and watchlist across devices.");
-      }
-      setAuthUser(data?.session?.user || null);
-      setAuthReady(true);
-    };
-
-    setupAuth().catch(error => {
-      if (!mounted) return;
-      setAuthStatus(`Account setup error: ${formatAuthError(error, "Unable to initialize account sync.")}`);
-      setAuthReady(true);
-    });
-
-    return () => {
-      mounted = false;
-      if (typeof unsubscribe === "function") unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!AUTH_SYNC_ENABLED || !authReady) return undefined;
-    if (!authUser?.id) {
-      setCloudReadyForSave(false);
-      return undefined;
-    }
-
-    let cancelled = false;
-    setCloudStatus("Syncing account settings...");
-    setCloudReadyForSave(false);
-
-    const loadCloudPreferences = async () => {
-      let client = null;
-      try {
-        client = await loadSupabaseClient();
-      } catch (error) {
-        if (cancelled) return;
-        setCloudStatus(`Cloud sync error: ${formatAuthError(error, "Unable to initialize account settings.")}`);
-        return;
-      }
-      if (!client || cancelled) return;
-
-      const { data, error } = await client
-        .from(SUPABASE_PREFS_TABLE)
-        .select("preferences")
-        .eq("user_id", authUser.id)
-        .maybeSingle();
-
-      if (cancelled) return;
-      if (error) {
-        setCloudStatus(`Cloud sync error: ${formatAuthError(error, "Unable to load account settings.")}`);
-        return;
-      }
-
-      if (data?.preferences) {
-        const normalized = normalizeCloudPreferences(data.preferences);
-        const mergedCalculatorPresets = mergeCalculatorPresetsPreferLocal(
-          presetsRef.current,
-          normalized.calculatorPresets
-        );
-        const shouldPersistMergedPresets = !calculatorPresetsEqual(
-          mergedCalculatorPresets,
-          normalized.calculatorPresets
-        );
-
-        setPresets(mergedCalculatorPresets);
-        setWatchlist(normalized.playerWatchlist);
-
-        if (shouldPersistMergedPresets) {
-          const mergedPayload = buildCloudPreferencesPayload({
-            calculatorPresets: mergedCalculatorPresets,
-            playerWatchlist: normalized.playerWatchlist,
-          });
-          const { error: mergeError } = await client
-            .from(SUPABASE_PREFS_TABLE)
-            .upsert(
-              {
-                user_id: authUser.id,
-                preferences: mergedPayload,
-              },
-              { onConflict: "user_id" }
-            );
-
-          if (cancelled) return;
-          if (mergeError) {
-            setCloudStatus(`Cloud sync error: ${formatAuthError(mergeError, "Unable to merge account presets.")}`);
-            return;
-          }
-          setCloudStatus("Merged local and cloud presets.");
-          setCloudReadyForSave(true);
-          return;
-        }
-
-        setCloudStatus("Loaded saved account settings.");
-        setCloudReadyForSave(true);
-        return;
-      }
-
-      const seedPayload = buildCloudPreferencesPayload({
-        calculatorPresets: presetsRef.current,
-        playerWatchlist: watchlistRef.current,
-      });
-
-      const { error: upsertError } = await client
-        .from(SUPABASE_PREFS_TABLE)
-        .upsert(
-          {
-            user_id: authUser.id,
-            preferences: seedPayload,
-          },
-          { onConflict: "user_id" }
-        );
-
-      if (cancelled) return;
-      if (upsertError) {
-        setCloudStatus(`Cloud sync error: ${formatAuthError(upsertError, "Unable to initialize account settings.")}`);
-        return;
-      }
-
-      setCloudStatus("Cloud sync enabled.");
-      setCloudReadyForSave(true);
-    };
-
-    loadCloudPreferences().catch(error => {
-      if (cancelled) return;
-      setCloudStatus(`Cloud sync error: ${formatAuthError(error, "Unexpected sync failure.")}`);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [authReady, authUser?.id]);
-
-  useEffect(() => {
-    if (!AUTH_SYNC_ENABLED || !authUser?.id || !cloudReadyForSave) return undefined;
-
-    const timer = window.setTimeout(async () => {
-      let client = null;
-      try {
-        client = await loadSupabaseClient();
-      } catch (error) {
-        setCloudStatus(`Cloud save error: ${formatAuthError(error, "Unable to initialize cloud sync.")}`);
-        return;
-      }
-      if (!client) return;
-
-      const payload = buildCloudPreferencesPayload({
-        calculatorPresets: presets,
-        playerWatchlist: watchlist,
-      });
-      const { error } = await client
-        .from(SUPABASE_PREFS_TABLE)
-        .upsert(
-          {
-            user_id: authUser.id,
-            preferences: payload,
-          },
-          { onConflict: "user_id" }
-        );
-      if (error) {
-        setCloudStatus(`Cloud save error: ${formatAuthError(error, "Unable to save settings.")}`);
-        return;
-      }
-      setCloudStatus("Saved account settings.");
-    }, CLOUD_SYNC_DEBOUNCE_MS);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [authUser?.id, cloudReadyForSave, presets, watchlist]);
-
-  useEffect(() => {
     if (!accountMenuOpen) return undefined;
 
     function handleOutsideClick(event) {
@@ -462,79 +144,6 @@ function App() {
   useEffect(() => {
     setAccountMenuOpen(false);
   }, [section]);
-
-  const signIn = useCallback(async (email, password) => {
-    if (!AUTH_SYNC_ENABLED) return;
-    const normalizedEmail = String(email || "").trim();
-    const normalizedPassword = String(password || "");
-    if (!normalizedEmail || !normalizedPassword) {
-      setAuthStatus("Sign in failed: email and password are required.");
-      return;
-    }
-    setAuthStatus("");
-    try {
-      const client = await loadSupabaseClient();
-      if (!client) return;
-      const { error } = await client.auth.signInWithPassword({
-        email: normalizedEmail,
-        password: normalizedPassword,
-      });
-      if (error) {
-        setAuthStatus(`Sign in failed: ${formatAuthError(error, "Invalid login.")}`);
-        return;
-      }
-      setAuthStatus("Signed in.");
-    } catch (error) {
-      setAuthStatus(`Sign in failed: ${formatAuthError(error, "Unable to reach account service.")}`);
-    }
-  }, []);
-
-  const signUp = useCallback(async (email, password) => {
-    if (!AUTH_SYNC_ENABLED) return;
-    const normalizedEmail = String(email || "").trim();
-    const normalizedPassword = String(password || "");
-    if (!normalizedEmail || !normalizedPassword) {
-      setAuthStatus("Sign up failed: email and password are required.");
-      return;
-    }
-    setAuthStatus("");
-    try {
-      const client = await loadSupabaseClient();
-      if (!client) return;
-      const { data, error } = await client.auth.signUp({
-        email: normalizedEmail,
-        password: normalizedPassword,
-      });
-      if (error) {
-        setAuthStatus(`Sign up failed: ${formatAuthError(error, "Unable to create account.")}`);
-        return;
-      }
-      if (data?.session) {
-        setAuthStatus("Account created. You are signed in.");
-        return;
-      }
-      setAuthStatus("Account created. Check your email to confirm your login.");
-    } catch (error) {
-      setAuthStatus(`Sign up failed: ${formatAuthError(error, "Unable to reach account service.")}`);
-    }
-  }, []);
-
-  const signOut = useCallback(async () => {
-    if (!AUTH_SYNC_ENABLED) return;
-    try {
-      const client = await loadSupabaseClient();
-      if (!client) return;
-      const { error } = await client.auth.signOut();
-      if (error) {
-        setAuthStatus(`Sign out failed: ${formatAuthError(error, "Unable to sign out.")}`);
-        return;
-      }
-      setAuthStatus("Signed out.");
-      setCloudStatus("");
-    } catch (error) {
-      setAuthStatus(`Sign out failed: ${formatAuthError(error, "Unable to reach account service.")}`);
-    }
-  }, []);
 
   return (
     <>

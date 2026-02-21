@@ -139,6 +139,16 @@ cd frontend
 npm run lint
 ```
 
+### Repository Search Hygiene
+Fast repo-wide searches should ignore generated/vendor directories by default.
+`rg` picks this up automatically through `.rgignore`.
+
+If you need to include ignored paths in a one-off search, run:
+
+```bash
+rg --no-ignore <pattern>
+```
+
 ### Unified Local Check
 ```bash
 # Runs lint + backend/frontend tests
