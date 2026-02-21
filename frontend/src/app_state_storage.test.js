@@ -1,8 +1,29 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   calculatorPresetsEqual,
   mergeCalculatorPresetsPreferLocal,
+  readCalculatorPanelOpenPreference,
+  readOnboardingDismissed,
+  writeCalculatorPanelOpenPreference,
+  writeOnboardingDismissed,
 } from "./app_state_storage.js";
+
+function withStorage(initialValues = {}) {
+  const store = { ...initialValues };
+  vi.stubGlobal("window", {
+    localStorage: {
+      getItem: vi.fn(key => (Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null)),
+      setItem: vi.fn((key, value) => {
+        store[key] = String(value);
+      }),
+    },
+  });
+  return store;
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("mergeCalculatorPresetsPreferLocal", () => {
   it("combines cloud and local presets by name", () => {
@@ -65,5 +86,39 @@ describe("calculatorPresetsEqual", () => {
         Alpha: { teams: 10, scoring_mode: "roto" },
       }
     )).toBe(false);
+  });
+});
+
+describe("calculator panel storage", () => {
+  it("returns null when no panel preference exists", () => {
+    withStorage();
+    expect(readCalculatorPanelOpenPreference()).toBeNull();
+  });
+
+  it("reads and writes panel open preference", () => {
+    const store = withStorage({ "ff:calc-panel-open:v1": "0" });
+    expect(readCalculatorPanelOpenPreference()).toBe(false);
+
+    writeCalculatorPanelOpenPreference(true);
+    expect(store["ff:calc-panel-open:v1"]).toBe("1");
+    expect(readCalculatorPanelOpenPreference()).toBe(true);
+  });
+});
+
+describe("onboarding dismissal storage", () => {
+  it("defaults to not dismissed", () => {
+    withStorage();
+    expect(readOnboardingDismissed()).toBe(false);
+  });
+
+  it("persists dismissed state as boolean", () => {
+    const store = withStorage();
+    writeOnboardingDismissed(true);
+    expect(store["ff:onboarding-dismissed:v1"]).toBe("1");
+    expect(readOnboardingDismissed()).toBe(true);
+
+    writeOnboardingDismissed(false);
+    expect(store["ff:onboarding-dismissed:v1"]).toBe("0");
+    expect(readOnboardingDismissed()).toBe(false);
   });
 });

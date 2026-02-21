@@ -101,14 +101,14 @@ describe("runCalculationJob", () => {
       "/api/calculate/jobs/job-2",
       expect.any(Object)
     );
-    expect(onStatus).toHaveBeenCalledWith(expect.stringContaining("Running Monte Carlo simulations"));
+    expect(onStatus).toHaveBeenCalledWith(expect.stringContaining("Running simulations"));
     expect(onCompleted).toHaveBeenCalledWith(
       expect.objectContaining({ total: 3 }),
       expect.objectContaining({ jobId: "job-2" })
     );
   });
 
-  it("uses points-specific status messaging for points jobs", async () => {
+  it("uses shared running status messaging for points jobs", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ job_id: "job-points", created_at: "2026-01-01T00:00:00Z" }, { status: 202 }))
       .mockResolvedValueOnce(jsonResponse({ status: "running", started_at: "2026-01-01T00:00:10Z" }))
@@ -131,7 +131,7 @@ describe("runCalculationJob", () => {
       onError: vi.fn(),
     });
 
-    expect(onStatus).toHaveBeenCalledWith(expect.stringContaining("Running points valuation"));
+    expect(onStatus).toHaveBeenCalledWith(expect.stringContaining("Running simulations"));
     expect(onCompleted).toHaveBeenCalledWith(
       expect.objectContaining({ total: 2 }),
       expect.objectContaining({ jobId: "job-points" })

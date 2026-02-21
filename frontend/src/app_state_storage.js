@@ -4,10 +4,12 @@ export const BUILD_STORAGE_KEY = "ff:lastBuildId";
 export const BUILD_QUERY_PARAM = "build";
 export const CALC_PRESETS_STORAGE_KEY = "ff:calc-presets:v1";
 export const CALC_LINK_QUERY_PARAM = "calc";
+export const CALC_PANEL_OPEN_STORAGE_KEY = "ff:calc-panel-open:v1";
 export const PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY = "ff:proj-mobile-layout-mode:v2";
 export const PROJECTION_TABLE_HIDDEN_COLS_STORAGE_KEY = "ff:proj-table-hidden-cols:v1";
 export const PROJECTION_CARD_HIDDEN_COLS_STORAGE_KEY = "ff:proj-card-hidden-cols:v1";
 export const PLAYER_WATCHLIST_STORAGE_KEY = "ff:player-watchlist:v1";
+export const ONBOARDING_DISMISSED_STORAGE_KEY = "ff:onboarding-dismissed:v1";
 export const CLOUD_SYNC_DEBOUNCE_MS = 900;
 export const CLOUD_PREFERENCES_VERSION = 1;
 export const MAX_COMPARE_PLAYERS = 4;
@@ -26,6 +28,34 @@ export function safeWriteStorage(key, value) {
   } catch {
     // Ignore browsers/storage modes that disallow localStorage writes.
   }
+}
+
+function readBooleanStorage(key) {
+  const raw = String(safeReadStorage(key) || "").trim().toLowerCase();
+  if (!raw) return null;
+  if (raw === "1" || raw === "true") return true;
+  if (raw === "0" || raw === "false") return false;
+  return null;
+}
+
+function writeBooleanStorage(key, value) {
+  safeWriteStorage(key, value ? "1" : "0");
+}
+
+export function readCalculatorPanelOpenPreference() {
+  return readBooleanStorage(CALC_PANEL_OPEN_STORAGE_KEY);
+}
+
+export function writeCalculatorPanelOpenPreference(isOpen) {
+  writeBooleanStorage(CALC_PANEL_OPEN_STORAGE_KEY, Boolean(isOpen));
+}
+
+export function readOnboardingDismissed() {
+  return readBooleanStorage(ONBOARDING_DISMISSED_STORAGE_KEY) === true;
+}
+
+export function writeOnboardingDismissed(dismissed) {
+  writeBooleanStorage(ONBOARDING_DISMISSED_STORAGE_KEY, Boolean(dismissed));
 }
 
 export function normalizePlayerKey(value) {

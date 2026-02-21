@@ -23,6 +23,57 @@ import {
   resolveRotoSlotDefaults,
 } from "./dynasty_calculator_config.js";
 
+export function buildQuickStartSettings({
+  mode,
+  settings,
+  availableYears,
+  meta,
+  rotoSlotDefaults,
+  rotoCategoryDefaults,
+  pointsSlotDefaults,
+  pointsScoringDefaults,
+}) {
+  const availableStartYear = availableYears.length > 0
+    ? availableYears[0]
+    : Number(meta?.years?.[0] ?? 2026);
+  const currentStartYear = Number(settings.start_year);
+  const startYear = availableYears.includes(currentStartYear) ? currentStartYear : availableStartYear;
+  const guardrails = meta?.calculator_guardrails || {};
+  const defaultIr = Number(guardrails.default_ir_slots);
+  const defaultMinors = Number(guardrails.default_minors_slots);
+  const commonBase = {
+    ...settings,
+    teams: 12,
+    horizon: 20,
+    discount: 0.94,
+    bench: 6,
+    minors: Number.isInteger(defaultMinors) && defaultMinors >= 0 ? defaultMinors : 0,
+    ir: Number.isInteger(defaultIr) && defaultIr >= 0 ? defaultIr : 0,
+    ip_min: 0,
+    ip_max: "",
+    two_way: "sum",
+    start_year: startYear,
+    recent_projections: 3,
+    sims: 300,
+  };
+
+  if (mode === "points") {
+    return {
+      ...commonBase,
+      scoring_mode: "points",
+      ...pointsSlotDefaults,
+      ...pointsScoringDefaults,
+    };
+  }
+
+  return {
+    ...commonBase,
+    scoring_mode: "roto",
+    ...rotoSlotDefaults,
+    ...rotoCategoryDefaults,
+  };
+}
+
 export function DynastyCalculator({
   apiBase,
   meta,
@@ -32,6 +83,7 @@ export function DynastyCalculator({
   onClearMainTableOverlay,
   mainTableOverlayActive,
   onSettingsChange,
+  onRegisterQuickStartRunner,
 }) {
   const API = String(apiBase || "").trim();
   const [settings, setSettings] = useState(() => buildDefaultCalculatorSettings(meta));
@@ -44,6 +96,7 @@ export function DynastyCalculator({
   const calcRequestSeqRef = useRef(0);
   const calcAbortControllerRef = useRef(null);
   const calcActiveJobIdRef = useRef("");
+  const quickStartRunRef = useRef(null);
 
   const availableYears = useMemo(
     () => (meta.years || []).map(Number).filter(Number.isFinite),
@@ -129,54 +182,34 @@ export function DynastyCalculator({
     ));
   }
 
-  function buildQuickStartSettings(mode) {
-    const availableStartYear = availableYears.length > 0
-      ? availableYears[0]
-      : Number(meta?.years?.[0] ?? 2026);
-    const currentStartYear = Number(settings.start_year);
-    const startYear = availableYears.includes(currentStartYear) ? currentStartYear : availableStartYear;
-    const guardrails = meta?.calculator_guardrails || {};
-    const defaultIr = Number(guardrails.default_ir_slots);
-    const defaultMinors = Number(guardrails.default_minors_slots);
-    const commonBase = {
-      ...settings,
-      teams: 12,
-      horizon: 20,
-      discount: 0.94,
-      bench: 6,
-      minors: Number.isInteger(defaultMinors) && defaultMinors >= 0 ? defaultMinors : 0,
-      ir: Number.isInteger(defaultIr) && defaultIr >= 0 ? defaultIr : 0,
-      ip_min: 0,
-      ip_max: "",
-      two_way: "sum",
-      start_year: startYear,
-      recent_projections: 3,
-      sims: 300,
-    };
-
-    if (mode === "points") {
-      return {
-        ...commonBase,
-        scoring_mode: "points",
-        ...pointsSlotDefaults,
-        ...pointsScoringDefaults,
-      };
-    }
-
-    return {
-      ...commonBase,
-      scoring_mode: "roto",
-      ...rotoSlotDefaults,
-      ...rotoCategoryDefaults,
-    };
-  }
-
   function applyQuickStartAndRun(mode) {
-    const nextSettings = buildQuickStartSettings(mode);
+    const nextSettings = buildQuickStartSettings({
+      mode,
+      settings,
+      availableYears,
+      meta,
+      rotoSlotDefaults,
+      rotoCategoryDefaults,
+      pointsSlotDefaults,
+      pointsScoringDefaults,
+    });
     setSettings(nextSettings);
     setStatus(`Applied quick start (${mode === "points" ? "12-team points" : "12-team 5x5 roto"}).`);
     run(nextSettings);
   }
+  quickStartRunRef.current = applyQuickStartAndRun;
+
+  useEffect(() => {
+    if (typeof onRegisterQuickStartRunner !== "function") return undefined;
+    onRegisterQuickStartRunner(mode => {
+      if (typeof quickStartRunRef.current === "function") {
+        quickStartRunRef.current(mode);
+      }
+    });
+    return () => {
+      onRegisterQuickStartRunner(null);
+    };
+  }, [onRegisterQuickStartRunner]);
 
   function savePreset() {
     const name = String(presetName || "").trim();
@@ -281,7 +314,7 @@ export function DynastyCalculator({
     const controller = new AbortController();
     calcAbortControllerRef.current = controller;
     setLoading(true);
-    setStatus("Submitting simulation job...");
+    setStatus("Submitting simulation...");
 
     void runCalculationJob({
       apiBase: API,
@@ -304,7 +337,7 @@ export function DynastyCalculator({
           onApplyToMainTable(result, normalizedSettings, runMeta);
         }
         setLoading(false);
-        setStatus(`Done - applied ${resolvedTotal} ranked players to the main table.`);
+        setStatus(`Applied ${resolvedTotal} players to the table.`);
       },
       onCancelled: () => {
         setLoading(false);

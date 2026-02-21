@@ -46,6 +46,8 @@ export function ProjectionsExplorer({
   calculatorOverlayActive,
   calculatorOverlayJobId,
   calculatorOverlayPlayerCount,
+  calculatorOverlaySummary,
+  onClearCalculatorOverlay,
 }) {
   const activeCalculatorJobId = calculatorOverlayActive
     ? String(calculatorOverlayJobId || "").trim()
@@ -112,6 +114,22 @@ export function ProjectionsExplorer({
     [calculatorOverlayPlayerCount, resolvedCalculatorOverlayByPlayerKey]
   );
   const hasCalculatorOverlay = Boolean(calculatorOverlayActive) && resolvedCalculatorOverlayPlayerCount > 0;
+  const overlayScoringMode = String(calculatorOverlaySummary?.scoringMode || "").trim().toLowerCase();
+  const overlayStartYear = Number(calculatorOverlaySummary?.startYear);
+  const overlayHorizon = Number(calculatorOverlaySummary?.horizon);
+  const overlaySummaryParts = [];
+  if (overlayScoringMode === "points") {
+    overlaySummaryParts.push("Points mode");
+  } else if (overlayScoringMode === "roto") {
+    overlaySummaryParts.push("Roto mode");
+  }
+  if (Number.isFinite(overlayStartYear) && overlayStartYear > 0) {
+    overlaySummaryParts.push(`Start ${overlayStartYear}`);
+  }
+  if (Number.isFinite(overlayHorizon) && overlayHorizon > 0) {
+    overlaySummaryParts.push(`${overlayHorizon}-year horizon`);
+  }
+  const overlaySummaryText = overlaySummaryParts.length > 0 ? ` ${overlaySummaryParts.join(" · ")}.` : "";
   const applyCalculatorOverlayToRows = useCallback(rows => {
     if (!Array.isArray(rows) || rows.length === 0) return [];
     if (!hasCalculatorOverlay) return rows;
@@ -413,7 +431,15 @@ export function ProjectionsExplorer({
       </div>
       {hasCalculatorOverlay && (
         <div className="table-refresh-message projections-overlay-message" role="status" aria-live="polite">
-          Showing calculator-adjusted dynasty values for matched players ({resolvedCalculatorOverlayPlayerCount.toLocaleString()} available).
+          <span>
+            Showing calculator-adjusted dynasty values for matched players ({resolvedCalculatorOverlayPlayerCount.toLocaleString()} available).
+            {overlaySummaryText}
+          </span>
+          {typeof onClearCalculatorOverlay === "function" && (
+            <button type="button" className="inline-btn" onClick={onClearCalculatorOverlay}>
+              Clear applied values
+            </button>
+          )}
         </div>
       )}
       {exportError && (

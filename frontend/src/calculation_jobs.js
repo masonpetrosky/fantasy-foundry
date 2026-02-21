@@ -39,9 +39,7 @@ export async function runCalculationJob({
     return;
   }
 
-  const runningStatusLabel = body.scoring_mode === "points"
-    ? "Running points valuation..."
-    : "Running Monte Carlo simulations...";
+  const runningStatusLabel = "Running simulations...";
   let jobId = "";
 
   try {

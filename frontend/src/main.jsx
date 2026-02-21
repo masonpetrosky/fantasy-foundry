@@ -1,24 +1,31 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AUTH_SYNC_ENABLED } from "./supabase_client.js";
 import { AccountPanel } from "./account_panel.jsx";
 import { resolveApiBase } from "./api_base.js";
 import { PRIMARY_NAV_ITEMS } from "./app_content.js";
-import { MethodologySection } from "./methodology_section.jsx";
 import { ProjectionsExplorer } from "./projections_explorer.jsx";
 import { DynastyCalculator } from "./dynasty_calculator.jsx";
 import { useVersionPolling } from "./hooks/useVersionPolling.js";
 import { useAccountSync } from "./hooks/useAccountSync.js";
 import {
   CALC_LINK_QUERY_PARAM,
+  readCalculatorPanelOpenPreference,
   readCalculatorPresets,
+  readOnboardingDismissed,
   readPlayerWatchlist,
   stablePlayerKeyFromRow,
+  writeCalculatorPanelOpenPreference,
   writeCalculatorPresets,
+  writeOnboardingDismissed,
   writePlayerWatchlist,
 } from "./app_state_storage.js";
 
 const API = resolveApiBase();
+const LazyMethodologySection = lazy(() => (
+  import("./methodology_section.jsx").then(module => ({ default: module.MethodologySection })
+  )
+));
 
 function buildCalculatorOverlayMap(result) {
   const rows = Array.isArray(result?.data) ? result.data : [];
@@ -49,8 +56,12 @@ function App() {
   const [section, setSection] = useState("projections"); // projections | methodology
   const [calculatorPanelOpen, setCalculatorPanelOpen] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return Boolean(String(params.get(CALC_LINK_QUERY_PARAM) || "").trim());
+    const hasSharedCalculatorState = Boolean(String(params.get(CALC_LINK_QUERY_PARAM) || "").trim());
+    if (hasSharedCalculatorState) return true;
+    const savedPanelOpenState = readCalculatorPanelOpenPreference();
+    return typeof savedPanelOpenState === "boolean" ? savedPanelOpenState : true;
   });
+  const [onboardingDismissed, setOnboardingDismissed] = useState(() => readOnboardingDismissed());
   const [meta, setMeta] = useState(null);
   const [metaError, setMetaError] = useState("");
   const { buildLabel, dataVersion } = useVersionPolling(API);
@@ -60,6 +71,9 @@ function App() {
   const [calculatorOverlayByPlayerKey, setCalculatorOverlayByPlayerKey] = useState({});
   const [calculatorOverlayActive, setCalculatorOverlayActive] = useState(false);
   const [calculatorOverlayJobId, setCalculatorOverlayJobId] = useState("");
+  const [calculatorOverlaySummary, setCalculatorOverlaySummary] = useState(null);
+  const [pendingQuickStartMode, setPendingQuickStartMode] = useState("");
+  const [quickStartRunnerVersion, setQuickStartRunnerVersion] = useState(0);
   const { authReady, authUser, authStatus, cloudStatus, signIn, signUp, signOut } = useAccountSync({
     presets,
     setPresets,
@@ -68,23 +82,65 @@ function App() {
   });
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef(null);
+  const calculatorSectionRef = useRef(null);
+  const quickStartRunnerRef = useRef(null);
   const accountMenuLabel = !AUTH_SYNC_ENABLED || authUser ? "Account" : "Sign In";
   const sectionNeedsMeta = section === "projections";
   const calculatorOverlayPlayerCount = Object.keys(calculatorOverlayByPlayerKey).length;
+  const showQuickStartOnboarding = sectionNeedsMeta && Boolean(meta) && !onboardingDismissed;
 
-  const applyCalculatorOverlay = useCallback((result, _settings, runMeta) => {
+  const scrollToCalculator = useCallback(() => {
+    if (!calculatorSectionRef.current) return;
+    calculatorSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const openCalculatorPanel = useCallback(() => {
+    setSection("projections");
+    setCalculatorPanelOpen(true);
+  }, []);
+
+  const requestQuickStartRun = useCallback(mode => {
+    const normalizedMode = mode === "points" ? "points" : "roto";
+    if (!onboardingDismissed) {
+      setOnboardingDismissed(true);
+      writeOnboardingDismissed(true);
+    }
+    openCalculatorPanel();
+    setPendingQuickStartMode(normalizedMode);
+    window.requestAnimationFrame(() => {
+      scrollToCalculator();
+    });
+  }, [onboardingDismissed, openCalculatorPanel, scrollToCalculator]);
+
+  const dismissQuickStartOnboarding = useCallback(() => {
+    setOnboardingDismissed(true);
+    writeOnboardingDismissed(true);
+  }, []);
+
+  const handleRegisterQuickStartRunner = useCallback(runner => {
+    quickStartRunnerRef.current = runner;
+    setQuickStartRunnerVersion(version => version + 1);
+  }, []);
+
+  const applyCalculatorOverlay = useCallback((result, settings, runMeta) => {
     const nextOverlay = buildCalculatorOverlayMap(result);
     const hasOverlay = Object.keys(nextOverlay).length > 0;
     const nextJobId = hasOverlay ? String(runMeta?.jobId || "").trim() : "";
     setCalculatorOverlayByPlayerKey(nextOverlay);
     setCalculatorOverlayActive(hasOverlay);
     setCalculatorOverlayJobId(nextJobId);
+    setCalculatorOverlaySummary(hasOverlay ? {
+      scoringMode: String(settings?.scoring_mode || "").trim().toLowerCase() === "points" ? "points" : "roto",
+      startYear: Number(settings?.start_year),
+      horizon: Number(settings?.horizon),
+    } : null);
   }, []);
 
   const clearCalculatorOverlay = useCallback(() => {
     setCalculatorOverlayByPlayerKey({});
     setCalculatorOverlayActive(false);
     setCalculatorOverlayJobId("");
+    setCalculatorOverlaySummary(null);
   }, []);
 
   useEffect(() => {
@@ -94,6 +150,10 @@ function App() {
   useEffect(() => {
     writePlayerWatchlist(watchlist);
   }, [watchlist]);
+
+  useEffect(() => {
+    writeCalculatorPanelOpenPreference(calculatorPanelOpen);
+  }, [calculatorPanelOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -144,6 +204,14 @@ function App() {
   useEffect(() => {
     setAccountMenuOpen(false);
   }, [section]);
+
+  useEffect(() => {
+    if (!pendingQuickStartMode) return;
+    if (section !== "projections" || !calculatorPanelOpen) return;
+    if (typeof quickStartRunnerRef.current !== "function") return;
+    quickStartRunnerRef.current(pendingQuickStartMode);
+    setPendingQuickStartMode("");
+  }, [calculatorPanelOpen, pendingQuickStartMode, quickStartRunnerVersion, section]);
 
   return (
     <>
@@ -234,6 +302,38 @@ function App() {
         </div>
 
         <div className="container">
+          {showQuickStartOnboarding && (
+            <section className="activation-strip" aria-label="Quick start dynasty rankings">
+              <div className="activation-strip-copy">
+                <p className="activation-strip-kicker">First time here?</p>
+                <h2>Run custom dynasty rankings in one click.</h2>
+                <p>Start with a default setup, then tune league settings as needed.</p>
+              </div>
+              <div className="activation-strip-actions" role="group" aria-label="Quick start options">
+                <button
+                  type="button"
+                  className="activation-strip-btn"
+                  onClick={() => requestQuickStartRun("roto")}
+                >
+                  Run 12-Team 5x5 Roto
+                </button>
+                <button
+                  type="button"
+                  className="activation-strip-btn"
+                  onClick={() => requestQuickStartRun("points")}
+                >
+                  Run 12-Team Points
+                </button>
+              </div>
+              <button
+                type="button"
+                className="activation-strip-dismiss"
+                onClick={dismissQuickStartOnboarding}
+              >
+                Dismiss
+              </button>
+            </section>
+          )}
           {sectionNeedsMeta && (
             <p className="methodology-note app-methodology-note">
               For glossary definitions and detailed valuation notes, open the <strong>Methodology</strong> tab.
@@ -246,7 +346,11 @@ function App() {
           )}
           {section === "projections" && meta && (
             <div className="projections-workspace">
-              <section className="embedded-calculator-section" aria-labelledby="embedded-calculator-heading">
+              <section
+                className="embedded-calculator-section"
+                aria-labelledby="embedded-calculator-heading"
+                ref={calculatorSectionRef}
+              >
                 <div className="embedded-calculator-head">
                   <h2 id="embedded-calculator-heading">Dynasty Calculator</h2>
                   <button
@@ -276,6 +380,7 @@ function App() {
                       onApplyToMainTable={applyCalculatorOverlay}
                       onClearMainTableOverlay={clearCalculatorOverlay}
                       mainTableOverlayActive={calculatorOverlayActive}
+                      onRegisterQuickStartRunner={handleRegisterQuickStartRunner}
                     />
                   </div>
                 )}
@@ -292,12 +397,32 @@ function App() {
                   calculatorOverlayActive={calculatorOverlayActive}
                   calculatorOverlayJobId={calculatorOverlayJobId}
                   calculatorOverlayPlayerCount={calculatorOverlayPlayerCount}
+                  calculatorOverlaySummary={calculatorOverlaySummary}
+                  onClearCalculatorOverlay={clearCalculatorOverlay}
                 />
               </div>
             </div>
           )}
-          {section === "methodology" && <MethodologySection />}
+          {section === "methodology" && (
+            <Suspense fallback={<p className="methodology-note">Loading methodology...</p>}>
+              <LazyMethodologySection />
+            </Suspense>
+          )}
         </div>
+        {section === "projections" && meta && (
+          <button
+            type="button"
+            className="mobile-run-cta"
+            onClick={() => {
+              openCalculatorPanel();
+              window.requestAnimationFrame(() => {
+                scrollToCalculator();
+              });
+            }}
+          >
+            Run Dynasty Rankings
+          </button>
+        )}
       </main>
 
       <footer>

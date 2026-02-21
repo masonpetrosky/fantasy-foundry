@@ -4,7 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="ff-build-id" content="__APP_BUILD_ID__">
-<title>Fantasy Foundry</title>
+<title>Fantasy Foundry | 20-Year Dynasty Baseball Projections</title>
+<meta name="description" content="Browse 2026-2045 MLB dynasty projections, configure league settings, and generate custom dynasty rankings in minutes.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Fantasy Foundry | 20-Year Dynasty Baseball Projections">
+<meta property="og:description" content="Custom dynasty rankings powered by 20-year MLB projections and league-specific scoring settings.">
+<meta property="og:url" content="https://fantasy-foundry.com">
+<meta property="og:image" content="https://fantasy-foundry.com/assets/favicon-512.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Fantasy Foundry | 20-Year Dynasty Baseball Projections">
+<meta name="twitter:description" content="Build league-specific dynasty rankings from 2026-2045 MLB projections.">
+<meta name="twitter:image" content="https://fantasy-foundry.com/assets/favicon-512.png">
 <link rel="icon" type="image/svg+xml" sizes="any" href="/assets/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png">
@@ -397,6 +407,84 @@ header {
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 32px 80px;
+}
+
+.activation-strip {
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(212, 168, 83, 0.35);
+  background: linear-gradient(145deg, rgba(212, 168, 83, 0.12), rgba(212, 168, 83, 0.04));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.activation-strip-copy h2 {
+  margin: 0;
+  font-family: var(--ff-serif);
+  font-size: 1.08rem;
+  color: var(--text-primary);
+}
+
+.activation-strip-copy p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.activation-strip-kicker {
+  margin: 0 0 2px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: var(--fs-xs);
+  font-family: var(--ff-mono);
+}
+
+.activation-strip-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.activation-strip-btn {
+  min-height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-dim);
+  background: rgba(212, 168, 83, 0.14);
+  color: var(--text-primary);
+  font-family: var(--ff-sans);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+.activation-strip-btn:hover,
+.activation-strip-btn:focus-visible {
+  border-color: var(--accent);
+  background: rgba(212, 168, 83, 0.22);
+}
+
+.activation-strip-dismiss {
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  min-height: 36px;
+  padding: 8px 10px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.activation-strip-dismiss:hover,
+.activation-strip-dismiss:focus-visible {
+  border-color: var(--accent-dim);
+  color: var(--text-primary);
 }
 
 /* ====== SECTION TABS ====== */
@@ -1228,6 +1316,20 @@ td.value-negative { color: var(--red); }
 
 .projections-overlay-message {
   margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.projections-overlay-message span {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+
+.mobile-run-cta {
+  display: none;
 }
 
 .calc-subheading {
@@ -1892,7 +1994,36 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   }
 
   .hero-stat .number { font-size: 1.45rem; }
-  .container { padding: 0 16px 56px; }
+  .container { padding: 0 16px 96px; }
+
+  .activation-strip {
+    grid-template-columns: 1fr;
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .activation-strip-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-run-cta {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: 14px;
+    z-index: 120;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    border: 1px solid var(--accent-dim);
+    border-radius: 10px;
+    background: rgba(212, 168, 83, 0.95);
+    color: #1b1f24;
+    font-size: var(--fs-md);
+    font-weight: 700;
+    box-shadow: 0 12px 22px rgba(0, 0, 0, 0.36);
+  }
 
   .section-tabs { width: 100%; }
 
@@ -2079,13 +2210,19 @@ footer a { color: var(--accent-dim); text-decoration: none; }
   .hero-stat .label { font-size: var(--fs-xs); }
   .section-tab { font-size: 0.8rem; }
   .calc-sidebar { padding: 16px; }
+  .activation-strip-copy h2 { font-size: 1rem; }
+  .mobile-run-cta {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
   .methodology-card { padding: 18px; }
   .methodology-card h2 { font-size: 1.42rem; }
   .glossary-item { padding: 12px 14px; }
   .faq-item { padding: 12px 14px; }
 }
 </style>
-  <script type="module" crossorigin src="/assets/index-zu58SDwg.js"></script>
+  <script type="module" crossorigin src="/assets/index-B_vdAY6z.js"></script>
 </head>
 <body>
 
