@@ -15,7 +15,7 @@ SOURCE_ROOTS = (
     ("frontend/src", {".js", ".jsx"}),
 )
 EXEMPT_LEGACY_FILES = {
-    Path("backend/app.py"),
+    Path("backend/runtime.py"),
     Path("backend/dynasty_roto_values.py"),
     Path("frontend/src/main.jsx"),
 }

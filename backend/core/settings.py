@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Literal, cast
 from urllib.parse import urlparse
 
-
 APP_ENVIRONMENTS = {"development", "production"}
 
 

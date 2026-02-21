@@ -7,7 +7,6 @@ from typing import Set
 
 import pandas as pd
 
-
 POSITION_SPLIT_RE = re.compile(r"[\s\/,;|+\-]+")
 
 

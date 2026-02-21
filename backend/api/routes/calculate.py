@@ -4,7 +4,6 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
-
 CalculateRequestModel = type[BaseModel]
 CalculateExportRequestModel = type[BaseModel]
 CalculateSyncHandler = Callable[[Any, Request], Any]

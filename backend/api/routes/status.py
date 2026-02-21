@@ -5,7 +5,6 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
-
 MetaHandler = Callable[[Request], Any]
 VersionHandler = Callable[[Request], Any]
 HealthHandler = Callable[[], Any]

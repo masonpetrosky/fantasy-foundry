@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 
 from backend.api.middleware import MiddlewareConfig, register_middlewares
 
+
 def create_app(
     *,
     title: str,

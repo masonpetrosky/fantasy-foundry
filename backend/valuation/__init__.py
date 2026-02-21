@@ -14,13 +14,13 @@ from .assignment import (
     validate_assigned_slots,
 )
 from .models import (
-    CommonDynastyRotoSettings,
     HIT_CATS,
     HIT_COMPONENT_COLS,
     LEAGUE_HIT_STAT_COLS,
-    LeagueSettings,
     PIT_CATS,
     PIT_COMPONENT_COLS,
+    CommonDynastyRotoSettings,
+    LeagueSettings,
 )
 from .positions import (
     eligible_hit_slots,

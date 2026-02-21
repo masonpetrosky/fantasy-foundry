@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
-
 HIT_COMPONENT_COLS = ["AB", "H", "R", "HR", "RBI", "SB", "BB", "HBP", "SF", "2B", "3B"]
 PIT_COMPONENT_COLS = ["IP", "W", "QS", "K", "SV", "SVH", "ER", "H", "BB"]
 

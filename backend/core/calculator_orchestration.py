@@ -10,7 +10,6 @@ from uuid import uuid4
 
 from fastapi import HTTPException, Request
 
-
 CalculateRequestModel = type
 RunCalculateRequest = Callable[[Any], dict]
 RunCalculationJob = Callable[[str, dict], None]

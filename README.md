@@ -24,7 +24,8 @@ A web application for browsing 20-year MLB dynasty baseball projections (2026–
 ```
 dynasty-site/
 ├── backend/
-│   ├── app.py                          # FastAPI application
+│   ├── app.py                          # FastAPI compatibility entrypoint
+│   ├── runtime.py                      # FastAPI runtime wiring + app internals
 │   ├── api/routes/                     # Route registration modules (status/projections/calculate)
 │   ├── core/settings.py                # Typed env/config loader
 │   ├── core/calculator_orchestration.py # Calculator endpoint/job orchestration helpers
@@ -39,6 +40,7 @@ dynasty-site/
 │   ├── core/result_cache.py            # Local/Redis calculator result and job snapshot cache helpers
 │   ├── core/data_refresh.py            # Data refresh/content-version/cache-inspection helpers
 │   ├── domain/constants.py             # Shared domain constants
+│   ├── services/valuation/             # Service boundary around legacy valuation entrypoints
 │   ├── dynasty_roto_values.py          # Main valuation workflow + CLI facade
 │   └── valuation/                      # Shared valuation modules (models/positions/assignment)
 ├── frontend/
@@ -46,6 +48,7 @@ dynasty-site/
 │   ├── src/                            # React source modules
 │   │   ├── main.jsx                    # App composition root + primary screens
 │   │   ├── hooks/useProjectionsData.js # Projections query/filter/cache hook
+│   │   ├── features/projections/       # Projections explorer feature container/modules
 │   │   ├── app_state_storage.js        # Local/cloud preference persistence helpers
 │   │   ├── request_helpers.js          # API error/response/debounce helper utilities
 │   │   ├── account_panel.jsx           # Account sync/auth UI

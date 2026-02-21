@@ -5,7 +5,6 @@ from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Query, Request
 
-
 ProjectionResponseHandler = Callable[..., dict[str, Any]]
 ProjectionExportHandler = Callable[..., Any]
 

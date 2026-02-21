@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 
-
 E2E_ENV_VAR = "FF_RUN_E2E"
 E2E_ENABLED_TOKENS = {"1", "true", "yes", "on"}
 E2E_FILE_PREFIX = "test_e2e_"

@@ -7,6 +7,8 @@ from typing import Callable
 
 import pandas as pd
 
+from backend.services.valuation import ValuationService
+
 
 def calculate_common_dynasty_frame(
     *,
@@ -41,8 +43,7 @@ def calculate_common_dynasty_frame(
     roto_pitcher_fields: tuple[tuple[str, str, bool], ...],
     coerce_bool_fn: Callable[..., bool],
 ) -> pd.DataFrame:
-    ensure_backend_module_path_fn()
-    from dynasty_roto_values import CommonDynastyRotoSettings, calculate_common_dynasty_values
+    valuation_service = ValuationService(ensure_backend_module_path_fn=ensure_backend_module_path_fn)
 
     hitter_categories = [
         stat_col
@@ -55,7 +56,7 @@ def calculate_common_dynasty_frame(
         if coerce_bool_fn(roto_category_settings.get(field_key), default=bool(default_value))
     ]
 
-    league_settings = CommonDynastyRotoSettings(
+    league_settings = valuation_service.build_common_roto_settings(
         n_teams=teams,
         sims_for_sgp=sims,
         horizon_years=horizon,
@@ -86,12 +87,9 @@ def calculate_common_dynasty_frame(
         pitcher_categories=tuple(pitcher_categories),
     )
 
-    return calculate_common_dynasty_values(
-        str(excel_path),
+    return valuation_service.calculate_common_dynasty_values(
+        excel_path,
         league_settings,
         start_year=start_year,
-        verbose=False,
-        return_details=False,
-        seed=0,
         recent_projections=recent_projections,
     )
