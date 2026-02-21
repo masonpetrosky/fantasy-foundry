@@ -187,7 +187,7 @@ jobs:
         run: python -m playwright install --with-deps chromium
 
       - name: Run Browser Smoke Test
-        run: FF_RUN_E2E=1 pytest -q tests/test_e2e_projections_pagination.py
+        run: FF_RUN_E2E=1 pytest -q --no-cov tests/test_e2e_projections_pagination.py
 
   e2e-tests:
     if: github.event_name == 'workflow_dispatch' && inputs.run_e2e
@@ -227,4 +227,4 @@ jobs:
         run: python -m playwright install --with-deps chromium
 
       - name: Run Browser E2E Tests
-        run: FF_RUN_E2E=1 pytest -q tests/test_e2e_projections_pagination.py tests/test_e2e_calculator_smoke.py
+        run: FF_RUN_E2E=1 pytest -q --no-cov tests/test_e2e_projections_pagination.py tests/test_e2e_calculator_smoke.py
