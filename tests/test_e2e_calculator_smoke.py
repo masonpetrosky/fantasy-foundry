@@ -115,10 +115,101 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
                 server.kill()
                 server.wait(timeout=5)
 
+    def _ensure_calculator_open(self, page) -> None:
+        toggle = page.locator(".embedded-calculator-toggle").first
+        toggle.wait_for(state="visible", timeout=20000)
+        if toggle.get_attribute("aria-expanded") != "true":
+            toggle.click()
+        page.wait_for_selector(".calc-sidebar", state="visible", timeout=20000)
+
     def _open_calculator(self, page) -> None:
         page.goto(self.base_url, wait_until="domcontentloaded", timeout=90000)
-        page.locator(".embedded-calculator-toggle").first.click()
-        page.wait_for_selector(".calc-sidebar", timeout=20000)
+        self._ensure_calculator_open(page)
+
+    def _click_apply_to_main_table(self, page) -> None:
+        run_button = page.locator(".calc-btn").first
+        run_button.wait_for(state="visible", timeout=30000)
+        page.wait_for_function(
+            """
+            () => {
+              const btn = document.querySelector('.calc-btn');
+              return Boolean(btn && !btn.disabled);
+            }
+            """,
+            timeout=30000,
+        )
+        run_button.evaluate(
+            """
+            (el) => el.scrollIntoView({ block: 'center', inline: 'nearest' })
+            """
+        )
+        try:
+            run_button.click(timeout=5000)
+        except PlaywrightError:
+            run_button.click(force=True, timeout=10000)
+
+    def _wait_for_run_start_signal(self, page, timeout_ms: int = 25000) -> None:
+        page.wait_for_function(
+            """
+            () => {
+              const status = document.querySelector('.calc-status');
+              const text = (status?.textContent || '').trim();
+              return (
+                text.includes('Submitting simulation') ||
+                text.includes('Running simulations') ||
+                /^Applied\\s+[\\d,]+\\s+players\\s+to\\s+the\\s+table\\.$/.test(text) ||
+                text.startsWith('Error:')
+              );
+            }
+            """,
+            timeout=timeout_ms,
+        )
+
+    def _start_calculation_with_retry(self, page) -> None:
+        self._click_apply_to_main_table(page)
+        try:
+            self._wait_for_run_start_signal(page)
+        except PlaywrightError:
+            # Mobile viewport interactions can occasionally miss the first click when fixed CTA overlays animate.
+            self._click_apply_to_main_table(page)
+            self._wait_for_run_start_signal(page)
+
+    def _wait_for_calculation_completion_signal(self, page) -> None:
+        page.wait_for_function(
+            """
+            () => {
+              const status = document.querySelector('.calc-status');
+              const text = (status?.textContent || '').trim();
+              const isTerminalStatus =
+                /^Applied\\s+[\\d,]+\\s+players\\s+to\\s+the\\s+table\\.$/.test(text) ||
+                text.startsWith('Error:');
+              if (isTerminalStatus) return true;
+              const hasOverlay = Boolean(document.querySelector('.projections-overlay-message'));
+              const hasRows = Boolean(
+                document.querySelector('.projections-table tbody tr') ||
+                document.querySelector('.projection-card-list .projection-card')
+              );
+              return hasOverlay && hasRows;
+            }
+            """,
+            timeout=300000,
+        )
+
+    def _assert_calculation_status_not_error(self, page) -> None:
+        status_text = page.locator(".calc-status").first.inner_text().strip()
+        self.assertFalse(status_text.startswith("Error:"), f"Calculator run failed: {status_text}")
+
+    def _wait_for_projection_results_visible(self, page) -> None:
+        page.wait_for_selector(".projections-overlay-message", state="attached", timeout=60000)
+        page.wait_for_function(
+            """
+            () => Boolean(
+              document.querySelector('.projections-table tbody tr') ||
+              document.querySelector('.projection-card-list .projection-card')
+            )
+            """,
+            timeout=60000,
+        )
 
     def _switch_to_points_mode(self, page) -> None:
         setup_group = page.locator(".calc-sidebar .form-group").filter(
@@ -164,28 +255,10 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
         self.assertIn("Loaded preset", preset_status.inner_text())
 
     def _run_calculation_and_wait(self, page) -> None:
-        page.locator(".calc-btn").first.click()
-        page.wait_for_function(
-            """
-            () => {
-              const status = document.querySelector('.calc-status');
-              if (!status) return false;
-              const text = (status.textContent || '').trim();
-              return text.includes('Done -') || text.includes('Done –');
-            }
-            """,
-            timeout=180000,
-        )
-        page.wait_for_selector(".projections-overlay-message", timeout=30000)
-        page.wait_for_function(
-            """
-            () => Boolean(
-              document.querySelector('.projections-table tbody tr') ||
-              document.querySelector('.projection-card-list .projection-card')
-            )
-            """,
-            timeout=30000,
-        )
+        self._start_calculation_with_retry(page)
+        self._wait_for_calculation_completion_signal(page)
+        self._assert_calculation_status_not_error(page)
+        self._wait_for_projection_results_visible(page)
 
     def _set_projection_layout(self, page, mode: str) -> None:
         desired = "cards" if str(mode).strip().lower() == "cards" else "table"

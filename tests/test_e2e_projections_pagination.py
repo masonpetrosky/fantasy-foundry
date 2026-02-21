@@ -117,6 +117,13 @@ class ProjectionsPaginationE2ETests(unittest.TestCase):
                 server.kill()
                 server.wait(timeout=5)
 
+    def _ensure_calculator_open(self, page) -> None:
+        toggle = page.locator(".embedded-calculator-toggle").first
+        toggle.wait_for(state="visible", timeout=20000)
+        if toggle.get_attribute("aria-expanded") != "true":
+            toggle.click()
+        page.wait_for_selector(".calc-sidebar", state="visible", timeout=20000)
+
     def test_invalid_empty_year_selection_falls_back_to_career_totals(self) -> None:
         page = self.browser.new_page()
         try:
@@ -213,7 +220,7 @@ class ProjectionsPaginationE2ETests(unittest.TestCase):
         page = self.browser.new_page()
         try:
             page.goto(self.base_url, wait_until="domcontentloaded", timeout=60000)
-            page.locator(".embedded-calculator-toggle").first.click()
+            self._ensure_calculator_open(page)
 
             page.route(
                 "**/api/calculate/jobs",
@@ -224,6 +231,7 @@ class ProjectionsPaginationE2ETests(unittest.TestCase):
                 ),
             )
 
+            page.locator(".calc-btn").first.wait_for(state="visible", timeout=20000)
             page.locator(".calc-btn").first.click()
             page.wait_for_function(
                 """
@@ -244,7 +252,7 @@ class ProjectionsPaginationE2ETests(unittest.TestCase):
         page = self.browser.new_page()
         try:
             page.goto(self.base_url, wait_until="domcontentloaded", timeout=60000)
-            page.locator(".embedded-calculator-toggle").first.click()
+            self._ensure_calculator_open(page)
 
             page.route(
                 "**/api/calculate/jobs",
@@ -255,6 +263,7 @@ class ProjectionsPaginationE2ETests(unittest.TestCase):
                 ),
             )
 
+            page.locator(".calc-btn").first.wait_for(state="visible", timeout=20000)
             page.locator(".calc-btn").first.click()
             page.wait_for_function(
                 """
