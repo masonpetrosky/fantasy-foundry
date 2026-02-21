@@ -176,6 +176,7 @@ Quick local check when frontend dependencies are already installed:
 ```bash
 cd frontend
 npm run build:check
+npm run check:asset-budget
 ```
 
 ### CI Parity Check (Source File Size Guardrail)

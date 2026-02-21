@@ -1,11 +1,14 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import "./styles/app.css";
 import { AUTH_SYNC_ENABLED } from "./supabase_client.js";
 import { AccountPanel } from "./account_panel.jsx";
 import { resolveApiBase } from "./api_base.js";
 import { PRIMARY_NAV_ITEMS } from "./app_content.js";
 import { ProjectionsExplorer } from "./projections_explorer.jsx";
 import { DynastyCalculator } from "./dynasty_calculator.jsx";
+import { trackEvent } from "./analytics.js";
+import { runQuickStartFlow } from "./quick_start.js";
 import { useVersionPolling } from "./hooks/useVersionPolling.js";
 import { useAccountSync } from "./hooks/useAccountSync.js";
 import {
@@ -84,6 +87,7 @@ function App() {
   const accountMenuRef = useRef(null);
   const calculatorSectionRef = useRef(null);
   const quickStartRunnerRef = useRef(null);
+  const quickStartImpressionTrackedRef = useRef(false);
   const accountMenuLabel = !AUTH_SYNC_ENABLED || authUser ? "Account" : "Sign In";
   const sectionNeedsMeta = section === "projections";
   const calculatorOverlayPlayerCount = Object.keys(calculatorOverlayByPlayerKey).length;
@@ -100,15 +104,17 @@ function App() {
   }, []);
 
   const requestQuickStartRun = useCallback(mode => {
-    const normalizedMode = mode === "points" ? "points" : "roto";
-    if (!onboardingDismissed) {
-      setOnboardingDismissed(true);
-      writeOnboardingDismissed(true);
-    }
-    openCalculatorPanel();
-    setPendingQuickStartMode(normalizedMode);
-    window.requestAnimationFrame(() => {
-      scrollToCalculator();
+    runQuickStartFlow({
+      mode,
+      onboardingDismissed,
+      markOnboardingDismissed: () => {
+        setOnboardingDismissed(true);
+        writeOnboardingDismissed(true);
+      },
+      openCalculatorPanel,
+      setPendingQuickStartMode,
+      scrollToCalculator,
+      scheduleFrame: window.requestAnimationFrame,
     });
   }, [onboardingDismissed, openCalculatorPanel, scrollToCalculator]);
 
@@ -213,6 +219,12 @@ function App() {
     setPendingQuickStartMode("");
   }, [calculatorPanelOpen, pendingQuickStartMode, quickStartRunnerVersion, section]);
 
+  useEffect(() => {
+    if (!showQuickStartOnboarding || quickStartImpressionTrackedRef.current) return;
+    trackEvent("quickstart_impression", { source: "onboarding_strip" });
+    quickStartImpressionTrackedRef.current = true;
+  }, [showQuickStartOnboarding]);
+
   return (
     <>
       <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -305,24 +317,24 @@ function App() {
           {showQuickStartOnboarding && (
             <section className="activation-strip" aria-label="Quick start dynasty rankings">
               <div className="activation-strip-copy">
-                <p className="activation-strip-kicker">First time here?</p>
-                <h2>Run custom dynasty rankings in one click.</h2>
-                <p>Start with a default setup, then tune league settings as needed.</p>
+                <p className="activation-strip-kicker">Recommended Start</p>
+                <h2>Generate custom dynasty rankings in one click.</h2>
+                <p>Run the default 12-team 5x5 setup first, then edit settings once results load.</p>
               </div>
               <div className="activation-strip-actions" role="group" aria-label="Quick start options">
                 <button
                   type="button"
-                  className="activation-strip-btn"
+                  className="activation-strip-btn activation-strip-btn-primary"
                   onClick={() => requestQuickStartRun("roto")}
                 >
-                  Run 12-Team 5x5 Roto
+                  Run Recommended 5x5 Roto
                 </button>
                 <button
                   type="button"
-                  className="activation-strip-btn"
+                  className="activation-strip-btn activation-strip-btn-secondary"
                   onClick={() => requestQuickStartRun("points")}
                 >
-                  Run 12-Team Points
+                  Run 12-Team Points Instead
                 </button>
               </div>
               <button

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cancelCalculationJob, runCalculationJob } from "./calculation_jobs.js";
 import { DynastyCalculatorSidebar } from "./dynasty_calculator_sidebar.jsx";
+import { trackEvent } from "./analytics.js";
 import { normalizeCalculatorRunSettingsInput } from "./calculator_submit.js";
 import {
   CALC_LINK_QUERY_PARAM,
@@ -182,9 +183,15 @@ export function DynastyCalculator({
     ));
   }
 
-  function applyQuickStartAndRun(mode) {
+  function applyQuickStartAndRun(mode, options = {}) {
+    const normalizedMode = mode === "points" ? "points" : "roto";
+    const source = String(options.source || "calculator_sidebar").trim() || "calculator_sidebar";
+    const trackQuickStartClick = options.trackClick !== false;
+    if (trackQuickStartClick) {
+      trackEvent("quickstart_click", { source, mode: normalizedMode });
+    }
     const nextSettings = buildQuickStartSettings({
-      mode,
+      mode: normalizedMode,
       settings,
       availableYears,
       meta,
@@ -194,10 +201,17 @@ export function DynastyCalculator({
       pointsScoringDefaults,
     });
     setSettings(nextSettings);
-    setStatus(`Applied quick start (${mode === "points" ? "12-team points" : "12-team 5x5 roto"}).`);
-    run(nextSettings);
+    setStatus(`Applied quick start (${normalizedMode === "points" ? "12-team points" : "12-team 5x5 roto"}).`);
+    run(nextSettings, {
+      source: "quickstart",
+      quickStartMode: normalizedMode,
+      quickStartSource: source,
+    });
   }
-  quickStartRunRef.current = applyQuickStartAndRun;
+  quickStartRunRef.current = mode => applyQuickStartAndRun(mode, {
+    source: "onboarding_strip",
+    trackClick: false,
+  });
 
   useEffect(() => {
     if (typeof onRegisterQuickStartRunner !== "function") return undefined;
@@ -292,7 +306,7 @@ export function DynastyCalculator({
     setStatus("Cleared custom calculator values from the main table.");
   }
 
-  function run(runSettings = settings) {
+  function run(runSettings = settings, runContext = {}) {
     const normalizedSettings = normalizeCalculatorRunSettingsInput(runSettings, settings);
     const payload = buildCalculatorPayload(normalizedSettings, availableYears, meta);
     if (payload.error || !payload.payload) {
@@ -313,6 +327,14 @@ export function DynastyCalculator({
 
     const controller = new AbortController();
     calcAbortControllerRef.current = controller;
+    trackEvent("calculator_run_start", {
+      source: String(runContext.source || "manual").trim() || "manual",
+      quickStartMode: runContext.quickStartMode,
+      quickStartSource: runContext.quickStartSource,
+      scoringMode: String(normalizedSettings.scoring_mode || "").trim() || "roto",
+      startYear: Number(normalizedSettings.start_year),
+      horizon: Number(normalizedSettings.horizon),
+    });
     setLoading(true);
     setStatus("Submitting simulation...");
 
@@ -336,6 +358,16 @@ export function DynastyCalculator({
         if (typeof onApplyToMainTable === "function") {
           onApplyToMainTable(result, normalizedSettings, runMeta);
         }
+        trackEvent("calculator_run_success", {
+          source: String(runContext.source || "manual").trim() || "manual",
+          quickStartMode: runContext.quickStartMode,
+          quickStartSource: runContext.quickStartSource,
+          scoringMode: String(normalizedSettings.scoring_mode || "").trim() || "roto",
+          startYear: Number(normalizedSettings.start_year),
+          horizon: Number(normalizedSettings.horizon),
+          jobId: runMeta?.jobId,
+          playerCount: resolvedTotal,
+        });
         setLoading(false);
         setStatus(`Applied ${resolvedTotal} players to the table.`);
       },

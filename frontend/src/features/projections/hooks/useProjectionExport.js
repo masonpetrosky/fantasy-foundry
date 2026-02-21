@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { trackEvent } from "../../../analytics.js";
 import { parseDownloadFilename } from "../../../download_filename.js";
 import { triggerBlobDownload } from "../../../download_helpers.js";
 import { formatApiError, readResponsePayload } from "../../../request_helpers.js";
@@ -46,6 +47,13 @@ export function useProjectionExport({
     try {
       setExportingFormat(format);
       setExportError("");
+      trackEvent("export_click", {
+        format,
+        tab: endpointTab,
+        watchlistOnly,
+        yearView: careerTotalsView ? "career_totals" : resolvedYearFilter,
+        hasCalculatorOverlay: Boolean(activeCalculatorJobId),
+      });
       const response = await fetch(href, {
         cache: "no-store",
         headers: { "Cache-Control": "no-cache" },

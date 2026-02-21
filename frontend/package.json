@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:check": "npm run build && git diff --exit-code -- dist",
+    "check:asset-budget": "../scripts/check_frontend_asset_budget.sh",
     "lint": "eslint src --max-warnings=0",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "test": "vitest run"

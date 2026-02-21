@@ -9,12 +9,18 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
+export npm_config_cache="${NPM_CONFIG_CACHE:-/tmp/fantasy-foundry-npm-cache}"
+mkdir -p "$npm_config_cache"
+
 echo "Installing frontend dependencies with npm ci..."
 cd "$FRONTEND_DIR"
 npm ci
 
 echo "Building frontend assets..."
 npm run build
+
+echo "Checking frontend entry asset budgets..."
+"$REPO_ROOT/scripts/check_frontend_asset_budget.sh"
 
 echo "Checking frontend/dist parity..."
 cd "$REPO_ROOT"

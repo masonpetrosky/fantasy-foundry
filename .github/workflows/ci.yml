@@ -41,6 +41,9 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Enforce Frontend Asset Budgets
+        run: ./scripts/check_frontend_asset_budget.sh
+
       - name: Verify frontend/dist is up to date
         run: |
           if ! git diff --quiet -- frontend/dist; then
