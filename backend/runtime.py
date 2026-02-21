@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 import json
-import hashlib
 import ipaddress
 import os
 import re
@@ -35,9 +34,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from backend.api.dependencies import (
-    build_calculator_orchestration_context,
     build_calculator_service,
-    build_status_orchestration_context,
 )
 from backend.api.app_factory import create_app
 from backend.api.routes import (
@@ -72,7 +69,6 @@ from backend.core.dynasty_lookup_orchestration import (
     resolve_projection_year_filter as core_resolve_projection_year_filter,
 )
 from backend.core.export_utils import (
-    as_float as core_as_float,
     clean_records_for_json as core_clean_records_for_json,
     default_calculator_export_columns as core_default_calculator_export_columns,
     flatten_explanations_for_export as core_flatten_explanations_for_export,
@@ -105,54 +101,42 @@ from backend.core.points_calculator import (
     stat_or_zero as core_stat_or_zero,
     valuation_years as core_valuation_years,
 )
-from backend.core.projection_utils import (
-    coerce_numeric as core_coerce_numeric,
-    coerce_record_year as core_coerce_record_year,
-    max_projection_count as core_max_projection_count,
-    merge_position_value as core_merge_position_value,
-    oldest_projection_date as core_oldest_projection_date,
-    position_sort_key as core_position_sort_key,
-    position_tokens as core_position_tokens,
-    row_team_value as core_row_team_value,
+from backend.core.runtime_projection_helpers import (
+    POSITION_DISPLAY_ORDER,
+    POSITION_TOKEN_SPLIT_RE,
+    as_float as _as_float,
+    average_recent_projection_rows as _average_recent_projection_rows,
+    coerce_meta_years as _coerce_meta_years,
+    coerce_numeric as _coerce_numeric,
+    coerce_record_year as _coerce_record_year,
+    merge_position_value as _merge_position_value,
+    normalize_player_key as _normalize_player_key,
+    normalize_team_key as _normalize_team_key,
+    position_tokens as _position_tokens,
+    projection_freshness_payload as _projection_freshness_payload,
+    row_team_value as _row_team_value,
+    value_col_sort_key as _value_col_sort_key,
+    with_player_identity_keys as _with_player_identity_keys,
 )
-from backend.core.projection_preprocessing import (
-    average_recent_projection_rows as core_average_recent_projection_rows,
-    coerce_iso_date_text as core_coerce_iso_date_text,
-    find_projection_date_col as core_find_projection_date_col,
-    normalize_player_key as core_normalize_player_key,
-    normalize_team_key as core_normalize_team_key,
-    normalize_year_key as core_normalize_year_key,
-    parse_projection_dates as core_parse_projection_dates,
-    pick_first_existing_col as core_pick_first_existing_col,
-    with_player_identity_keys as core_with_player_identity_keys,
+from backend.core.runtime_cache_job_helpers import (
+    RuntimeCacheJobHelperConfig,
+    build_runtime_cache_job_helpers,
 )
-from backend.core.calculator_orchestration import (
-    CalculatorOrchestrationContext,
-    calculate_dynasty_values as core_calculate_dynasty_values,
-    cancel_calculate_dynasty_job as core_cancel_calculate_dynasty_job,
-    create_calculate_dynasty_job as core_create_calculate_dynasty_job,
-    export_calculate_dynasty_values as core_export_calculate_dynasty_values,
-    get_calculate_dynasty_job as core_get_calculate_dynasty_job,
-    run_calculation_job as core_run_calculation_job,
+from backend.core.runtime_endpoint_handlers import (
+    RuntimeEndpointHandlerConfig,
+    build_runtime_endpoint_handlers,
 )
-from backend.core.status_orchestration import (
-    StatusOrchestrationContext,
-    build_meta_payload as core_build_meta_payload,
-    build_version_payload as core_build_version_payload,
-    dynasty_lookup_cache_health_payload as core_dynasty_lookup_cache_health_payload,
-    etag_matches as core_etag_matches,
-    get_health as core_get_health,
-    get_meta as core_get_meta,
-    get_ops as core_get_ops,
-    get_ready as core_get_ready,
-    get_version as core_get_version,
-    payload_etag as core_payload_etag,
-)
+from backend.core.runtime_orchestration_helpers import build_runtime_orchestration_helpers
 from backend.core.networking import (
     client_ip as core_client_ip,
     forwarded_for_chain as core_forwarded_for_chain,
     parse_ip_text as core_parse_ip_text,
     trusted_proxy_ip as core_trusted_proxy_ip,
+)
+from backend.core.runtime_security import (
+    extract_calculate_api_key as core_extract_calculate_api_key,
+    load_trusted_proxy_networks as core_load_trusted_proxy_networks,
+    parse_calculate_api_key_identities as core_parse_calculate_api_key_identities,
 )
 from backend.core import runtime_infra as core_runtime_infra
 from backend.core.result_cache import (
@@ -226,18 +210,11 @@ def load_json(name: str):
         return json.load(f)
 
 
-PROJECTION_DATE_COLS = ["ProjectionDate", "Date", "Updated", "LastUpdated", "Timestamp", "Created", "AsOf"]
-DERIVED_HIT_RATE_COLS = {"AVG", "OBP", "SLG", "OPS"}
-DERIVED_PIT_RATE_COLS = {"ERA", "WHIP"}
-TEAM_COL_CANDIDATES = ("Team", "MLBTeam")
 YEAR_RANGE_TOKEN_RE = re.compile(r"^(\d{4})\s*-\s*(\d{4})$")
-POSITION_TOKEN_SPLIT_RE = re.compile(r"[,\s/]+")
 PROJECTION_QUERY_CACHE_MAXSIZE = 256
-POSITION_DISPLAY_ORDER = ("C", "1B", "2B", "3B", "SS", "OF", "DH", "UT", "SP", "RP")
 ALL_TAB_HITTER_STAT_COLS = ("G", "AB", "R", "H", "2B", "3B", "HR", "RBI", "SB", "BB", "SO", "AVG", "OBP", "OPS")
 ALL_TAB_PITCH_STAT_COLS = ("GS", "IP", "W", "QS", "QA3", "L", "K", "SV", "SVH", "ERA", "WHIP", "ER")
 PROJECTION_TEXT_SORT_COLS = {"Player", "Team", "Pos", "Type", "Years"}
-PLAYER_KEY_PATTERN = re.compile(r"[^a-z0-9]+")
 EXPORT_INTERNAL_COLUMN_BLOCKLIST = {
     PLAYER_KEY_COL,
     PLAYER_ENTITY_KEY_COL,
@@ -419,41 +396,8 @@ class DynastyLookupCacheInspection:
     error: str | None = None
 
 
-def _load_trusted_proxy_networks(raw: str) -> tuple[IPNetwork, ...]:
-    networks: list[IPNetwork] = []
-    for token in raw.split(","):
-        candidate = token.strip()
-        if not candidate:
-            continue
-        try:
-            if "/" in candidate:
-                network = ipaddress.ip_network(candidate, strict=False)
-            else:
-                addr = ipaddress.ip_address(candidate)
-                suffix = "32" if isinstance(addr, ipaddress.IPv4Address) else "128"
-                network = ipaddress.ip_network(f"{addr}/{suffix}", strict=False)
-        except ValueError:
-            CALC_LOGGER.warning("ignoring invalid FF_TRUSTED_PROXY_CIDRS token: %s", candidate)
-            continue
-        networks.append(network)
-    return tuple(networks)
-
-
-TRUSTED_PROXY_NETWORKS = _load_trusted_proxy_networks(TRUSTED_PROXY_CIDRS_RAW)
-
-
-def _parse_calculate_api_key_identities(raw: str) -> dict[str, str]:
-    identities: dict[str, str] = {}
-    for token in re.split(r"[\s,]+", raw.strip()):
-        api_key = token.strip()
-        if not api_key:
-            continue
-        digest = hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:12]
-        identities[api_key] = f"api_key:{digest}"
-    return identities
-
-
-CALCULATE_API_KEY_IDENTITIES = _parse_calculate_api_key_identities(CALCULATE_API_KEYS_RAW)
+TRUSTED_PROXY_NETWORKS = core_load_trusted_proxy_networks(TRUSTED_PROXY_CIDRS_RAW, logger=CALC_LOGGER)
+CALCULATE_API_KEY_IDENTITIES = core_parse_calculate_api_key_identities(CALCULATE_API_KEYS_RAW)
 
 
 def _validate_runtime_configuration() -> None:
@@ -477,105 +421,7 @@ def _validate_runtime_configuration() -> None:
 
 
 def _extract_calculate_api_key(request: Request | None) -> str | None:
-    if request is None:
-        return None
-    direct = str(request.headers.get("x-api-key") or "").strip()
-    if direct:
-        return direct
-    auth_header = str(request.headers.get("authorization") or "").strip()
-    if auth_header.lower().startswith("bearer "):
-        token = auth_header[7:].strip()
-        return token or None
-    return None
-
-
-def _pick_first_existing_col(df: pd.DataFrame, candidates: list[str] | tuple[str, ...]) -> str | None:
-    return core_pick_first_existing_col(df, candidates)
-
-
-def _find_projection_date_col(df: pd.DataFrame) -> str | None:
-    return core_find_projection_date_col(df, projection_date_cols=PROJECTION_DATE_COLS)
-
-
-def _parse_projection_dates(values: pd.Series) -> pd.Series:
-    return core_parse_projection_dates(values)
-
-
-def _coerce_iso_date_text(value: object) -> str | None:
-    return core_coerce_iso_date_text(value)
-
-
-def _normalize_player_key(value: object) -> str:
-    return core_normalize_player_key(value, player_key_pattern=PLAYER_KEY_PATTERN)
-
-
-def _normalize_team_key(value: object) -> str:
-    return core_normalize_team_key(value)
-
-
-def _normalize_year_key(value: object) -> str:
-    return core_normalize_year_key(value)
-
-
-def _with_player_identity_keys(
-    bat_records: list[dict],
-    pit_records: list[dict],
-) -> tuple[list[dict], list[dict]]:
-    return core_with_player_identity_keys(
-        bat_records,
-        pit_records,
-        player_key_col=PLAYER_KEY_COL,
-        player_entity_key_col=PLAYER_ENTITY_KEY_COL,
-        normalize_player_key_fn=_normalize_player_key,
-        normalize_team_key_fn=_normalize_team_key,
-        normalize_year_key_fn=_normalize_year_key,
-    )
-
-
-def _average_recent_projection_rows(
-    records: list[dict],
-    *,
-    max_entries: int = 3,
-    is_hitter: bool,
-) -> list[dict]:
-    return core_average_recent_projection_rows(
-        records,
-        max_entries=max_entries,
-        is_hitter=is_hitter,
-        team_col_candidates=TEAM_COL_CANDIDATES,
-        projection_date_cols=PROJECTION_DATE_COLS,
-        derived_hit_rate_cols=DERIVED_HIT_RATE_COLS,
-        derived_pit_rate_cols=DERIVED_PIT_RATE_COLS,
-    )
-
-
-def _projection_freshness_payload(
-    bat_rows: list[dict],
-    pit_rows: list[dict],
-) -> dict[str, object]:
-    oldest_date: str | None = None
-    newest_date: str | None = None
-    rows_with_projection_date = 0
-    total_rows = len(bat_rows) + len(pit_rows)
-
-    for row in [*bat_rows, *pit_rows]:
-        date_text = _coerce_iso_date_text(row.get("OldestProjectionDate"))
-        if not date_text:
-            continue
-        rows_with_projection_date += 1
-        if oldest_date is None or date_text < oldest_date:
-            oldest_date = date_text
-        if newest_date is None or date_text > newest_date:
-            newest_date = date_text
-
-    coverage = (rows_with_projection_date / total_rows * 100.0) if total_rows else 0.0
-    return {
-        "oldest_projection_date": oldest_date,
-        "newest_projection_date": newest_date,
-        "rows_with_projection_date": rows_with_projection_date,
-        "total_rows": total_rows,
-        "date_coverage_pct": round(coverage, 1),
-    }
+    return core_extract_calculate_api_key(request)
 
 
 META = load_json("meta.json")
@@ -692,21 +538,6 @@ def _reload_projection_data() -> None:
     )
 
 
-def _coerce_meta_years(meta: dict) -> list[int]:
-    years: list[int] = []
-    for value in meta.get("years", []):
-        try:
-            years.append(int(value))
-        except (TypeError, ValueError):
-            continue
-    return sorted(set(years))
-
-
-def _value_col_sort_key(col: str) -> tuple[int, int | str]:
-    suffix = col.split("_", 1)[1] if "_" in col else col
-    return (0, int(suffix)) if suffix.isdigit() else (1, suffix)
-
-
 def _parse_ip_text(raw: str | None) -> IPAddress | None:
     return core_parse_ip_text(raw)
 
@@ -731,70 +562,6 @@ def _client_ip(request: Request | None) -> str:
     )
 
 
-def _calculate_rate_limit_identity(request: Request | None) -> str:
-    return core_runtime_infra.calculate_rate_limit_identity(
-        request,
-        extract_calculate_api_key=_extract_calculate_api_key,
-        calculate_api_key_identities=CALCULATE_API_KEY_IDENTITIES,
-        client_ip=_client_ip,
-    )
-
-
-def _authorize_calculate_request(request: Request) -> None:
-    core_runtime_infra.authorize_calculate_request(
-        request,
-        extract_calculate_api_key=_extract_calculate_api_key,
-        calculate_api_key_identities=CALCULATE_API_KEY_IDENTITIES,
-        client_ip=_client_ip,
-        require_calculate_auth=REQUIRE_CALCULATE_AUTH,
-    )
-
-
-def _prune_rate_limit_bucket(bucket: deque[float], *, window_start: float) -> None:
-    core_runtime_infra.prune_rate_limit_bucket(bucket, window_start=window_start)
-
-
-def _cleanup_rate_limit_buckets_locked(*, now: float, window_start: float) -> None:
-    global _REQUEST_RATE_LIMIT_LAST_SWEEP_TS
-    _REQUEST_RATE_LIMIT_LAST_SWEEP_TS = core_runtime_infra.cleanup_rate_limit_buckets_locked(
-        rate_limit_buckets=REQUEST_RATE_LIMIT_BUCKETS,
-        now=now,
-        window_start=window_start,
-        cleanup_interval_seconds=RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS,
-        last_sweep_ts=_REQUEST_RATE_LIMIT_LAST_SWEEP_TS,
-    )
-
-
-def _rate_limit_exceeded(action: str) -> HTTPException:
-    return core_runtime_infra.rate_limit_exceeded(action)
-
-
-def _enforce_rate_limit(request: Request, *, action: str, limit_per_minute: int) -> None:
-    core_runtime_infra.enforce_rate_limit(
-        request,
-        action=action,
-        limit_per_minute=limit_per_minute,
-        redis_rate_limit_prefix=REDIS_RATE_LIMIT_PREFIX,
-        redis_client_getter=_redis_client,
-        calculate_rate_limit_identity=_calculate_rate_limit_identity,
-        request_rate_limit_lock=REQUEST_RATE_LIMIT_LOCK,
-        request_rate_limit_buckets=REQUEST_RATE_LIMIT_BUCKETS,
-        cleanup_rate_limit_buckets_locked=lambda now, window_start: _cleanup_rate_limit_buckets_locked(
-            now=now, window_start=window_start
-        ),
-        prune_rate_limit_bucket=lambda bucket, window_start: _prune_rate_limit_bucket(bucket, window_start=window_start),
-        rate_limit_exceeded=_rate_limit_exceeded,
-        logger=CALC_LOGGER,
-    )
-
-
-def _rate_limit_bucket_count() -> int:
-    return core_runtime_infra.rate_limit_bucket_count(
-        request_rate_limit_lock=REQUEST_RATE_LIMIT_LOCK,
-        request_rate_limit_buckets=REQUEST_RATE_LIMIT_BUCKETS,
-    )
-
-
 def _calc_result_cache_key(settings: dict[str, Any]) -> str:
     return core_calc_result_cache_key(settings)
 
@@ -808,149 +575,71 @@ def _redis_client() -> Any | None:
     )
 
 
-def _redis_active_jobs_key(client_ip: str) -> str:
-    return core_runtime_infra.redis_active_jobs_key(redis_active_jobs_prefix=REDIS_ACTIVE_JOBS_PREFIX, client_ip=client_ip)
+def _get_request_rate_limit_last_sweep_ts() -> float:
+    return _REQUEST_RATE_LIMIT_LAST_SWEEP_TS
 
 
-def _redis_job_client_key(job_id: str) -> str:
-    return core_runtime_infra.redis_job_client_key(redis_job_client_prefix=REDIS_JOB_CLIENT_PREFIX, job_id=job_id)
+def _set_request_rate_limit_last_sweep_ts(value: float) -> None:
+    global _REQUEST_RATE_LIMIT_LAST_SWEEP_TS
+    _REQUEST_RATE_LIMIT_LAST_SWEEP_TS = value
 
 
-def _redis_job_cancel_key(job_id: str) -> str:
-    return core_runtime_infra.redis_job_cancel_key(redis_job_cancel_prefix=REDIS_JOB_CANCEL_PREFIX, job_id=job_id)
-
-
-def _track_active_job(job_id: str, client_ip: str) -> None:
-    core_runtime_infra.track_active_job(
-        job_id,
-        client_ip,
-        redis_client_getter=_redis_client,
+RUNTIME_CACHE_JOB_HELPERS = build_runtime_cache_job_helpers(
+    RuntimeCacheJobHelperConfig(
+        redis_url=REDIS_URL,
+        redis_lib=redis_lib,
+        redis_client_state=REDIS_CLIENT_STATE,
+        logger=CALC_LOGGER,
+        redis_rate_limit_prefix=REDIS_RATE_LIMIT_PREFIX,
+        redis_result_prefix=REDIS_RESULT_PREFIX,
+        redis_job_prefix=REDIS_JOB_PREFIX,
+        redis_job_cancel_prefix=REDIS_JOB_CANCEL_PREFIX,
         redis_active_jobs_prefix=REDIS_ACTIVE_JOBS_PREFIX,
         redis_job_client_prefix=REDIS_JOB_CLIENT_PREFIX,
         calculator_job_ttl_seconds=CALCULATOR_JOB_TTL_SECONDS,
-        logger=CALC_LOGGER,
-    )
-
-
-def _job_client_ip(job_id: str) -> str | None:
-    return core_runtime_infra.job_client_ip(
-        job_id,
-        redis_client_getter=_redis_client,
-        redis_job_client_prefix=REDIS_JOB_CLIENT_PREFIX,
-        logger=CALC_LOGGER,
-    )
-
-
-def _untrack_active_job(job_id: str, client_ip: str | None = None) -> None:
-    core_runtime_infra.untrack_active_job(
-        job_id,
-        client_ip,
-        redis_client_getter=_redis_client,
-        redis_active_jobs_prefix=REDIS_ACTIVE_JOBS_PREFIX,
-        redis_job_client_prefix=REDIS_JOB_CLIENT_PREFIX,
-        job_client_ip_resolver=_job_client_ip,
-        logger=CALC_LOGGER,
-    )
-
-
-def _set_job_cancel_requested(job_id: str) -> None:
-    core_runtime_infra.set_job_cancel_requested(
-        job_id,
-        redis_client_getter=_redis_client,
-        redis_job_cancel_prefix=REDIS_JOB_CANCEL_PREFIX,
-        calculator_job_ttl_seconds=CALCULATOR_JOB_TTL_SECONDS,
-        logger=CALC_LOGGER,
-    )
-
-
-def _clear_job_cancel_requested(job_id: str) -> None:
-    core_runtime_infra.clear_job_cancel_requested(
-        job_id,
-        redis_client_getter=_redis_client,
-        redis_job_cancel_prefix=REDIS_JOB_CANCEL_PREFIX,
-        logger=CALC_LOGGER,
-    )
-
-
-def _job_cancel_requested(job_id: str) -> bool:
-    return core_runtime_infra.job_cancel_requested(
-        job_id,
-        redis_client_getter=_redis_client,
-        redis_job_cancel_prefix=REDIS_JOB_CANCEL_PREFIX,
-        logger=CALC_LOGGER,
-    )
-
-
-def _active_jobs_for_ip(client_ip: str) -> int:
-    return core_runtime_infra.active_jobs_for_ip(
-        client_ip,
-        redis_client_getter=_redis_client,
-        redis_active_jobs_prefix=REDIS_ACTIVE_JOBS_PREFIX,
-        redis_job_client_prefix=REDIS_JOB_CLIENT_PREFIX,
+        calc_result_cache_ttl_seconds=CALC_RESULT_CACHE_TTL_SECONDS,
+        request_rate_limit_lock=REQUEST_RATE_LIMIT_LOCK,
+        request_rate_limit_buckets=REQUEST_RATE_LIMIT_BUCKETS,
+        rate_limit_bucket_cleanup_interval_seconds=RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS,
+        request_rate_limit_last_sweep_ts_getter=_get_request_rate_limit_last_sweep_ts,
+        request_rate_limit_last_sweep_ts_setter=_set_request_rate_limit_last_sweep_ts,
+        calc_result_cache_max_entries_getter=lambda: CALC_RESULT_CACHE_MAX_ENTRIES,
+        calc_result_cache_lock=CALC_RESULT_CACHE_LOCK,
+        calc_result_cache=CALC_RESULT_CACHE,
+        calc_result_cache_order=CALC_RESULT_CACHE_ORDER,
         calculator_jobs=CALCULATOR_JOBS,
-        logger=CALC_LOGGER,
+        calculate_api_key_identities_getter=lambda: CALCULATE_API_KEY_IDENTITIES,
+        extract_calculate_api_key=_extract_calculate_api_key,
+        client_ip=_client_ip,
+        require_calculate_auth_getter=lambda: REQUIRE_CALCULATE_AUTH,
+        calculation_job_public_payload_fn=lambda job: _calculation_job_public_payload(job),
+        redis_client_getter=lambda: _redis_client(),
     )
+)
 
-
-def _cleanup_local_result_cache(now_ts: float | None = None) -> None:
-    core_runtime_infra.cleanup_local_result_cache(
-        CALC_RESULT_CACHE,
-        CALC_RESULT_CACHE_ORDER,
-        max_entries=CALC_RESULT_CACHE_MAX_ENTRIES,
-        now_ts=now_ts,
-    )
-
-
-def _touch_local_result_cache_key(cache_key: str) -> None:
-    core_runtime_infra.touch_local_result_cache_key(CALC_RESULT_CACHE_ORDER, cache_key)
-
-
-def _result_cache_get(cache_key: str) -> dict | None:
-    return core_runtime_infra.result_cache_get(
-        cache_key,
-        redis_client_getter=_redis_client,
-        redis_result_prefix=REDIS_RESULT_PREFIX,
-        logger=CALC_LOGGER,
-        local_cache=CALC_RESULT_CACHE,
-        local_cache_lock=CALC_RESULT_CACHE_LOCK,
-        cleanup_local_result_cache_fn=_cleanup_local_result_cache,
-        touch_local_result_cache_key_fn=_touch_local_result_cache_key,
-    )
-
-
-def _result_cache_set(cache_key: str, payload: dict) -> None:
-    core_runtime_infra.result_cache_set(
-        cache_key,
-        payload,
-        redis_client_getter=_redis_client,
-        redis_result_prefix=REDIS_RESULT_PREFIX,
-        cache_ttl_seconds=CALC_RESULT_CACHE_TTL_SECONDS,
-        logger=CALC_LOGGER,
-        local_cache=CALC_RESULT_CACHE,
-        local_cache_lock=CALC_RESULT_CACHE_LOCK,
-        touch_local_result_cache_key_fn=_touch_local_result_cache_key,
-        cleanup_local_result_cache_fn=_cleanup_local_result_cache,
-    )
-
-
-def _cache_calculation_job_snapshot(job: dict) -> None:
-    core_runtime_infra.cache_calculation_job_snapshot(
-        job,
-        redis_client_getter=_redis_client,
-        redis_job_prefix=REDIS_JOB_PREFIX,
-        job_ttl_seconds=CALCULATOR_JOB_TTL_SECONDS,
-        logger=CALC_LOGGER,
-        calculation_job_public_payload_fn=_calculation_job_public_payload,
-    )
-
-
-def _cached_calculation_job_snapshot(job_id: str) -> dict | None:
-    return core_runtime_infra.cached_calculation_job_snapshot(
-        job_id,
-        redis_client_getter=_redis_client,
-        redis_job_prefix=REDIS_JOB_PREFIX,
-        logger=CALC_LOGGER,
-    )
+_calculate_rate_limit_identity = RUNTIME_CACHE_JOB_HELPERS.calculate_rate_limit_identity
+_authorize_calculate_request = RUNTIME_CACHE_JOB_HELPERS.authorize_calculate_request
+_prune_rate_limit_bucket = RUNTIME_CACHE_JOB_HELPERS.prune_rate_limit_bucket
+_cleanup_rate_limit_buckets_locked = RUNTIME_CACHE_JOB_HELPERS.cleanup_rate_limit_buckets_locked
+_rate_limit_exceeded = RUNTIME_CACHE_JOB_HELPERS.rate_limit_exceeded
+_enforce_rate_limit = RUNTIME_CACHE_JOB_HELPERS.enforce_rate_limit
+_rate_limit_bucket_count = RUNTIME_CACHE_JOB_HELPERS.rate_limit_bucket_count
+_redis_active_jobs_key = RUNTIME_CACHE_JOB_HELPERS.redis_active_jobs_key
+_redis_job_client_key = RUNTIME_CACHE_JOB_HELPERS.redis_job_client_key
+_redis_job_cancel_key = RUNTIME_CACHE_JOB_HELPERS.redis_job_cancel_key
+_track_active_job = RUNTIME_CACHE_JOB_HELPERS.track_active_job
+_job_client_ip = RUNTIME_CACHE_JOB_HELPERS.job_client_ip
+_untrack_active_job = RUNTIME_CACHE_JOB_HELPERS.untrack_active_job
+_set_job_cancel_requested = RUNTIME_CACHE_JOB_HELPERS.set_job_cancel_requested
+_clear_job_cancel_requested = RUNTIME_CACHE_JOB_HELPERS.clear_job_cancel_requested
+_job_cancel_requested = RUNTIME_CACHE_JOB_HELPERS.job_cancel_requested
+_active_jobs_for_ip = RUNTIME_CACHE_JOB_HELPERS.active_jobs_for_ip
+_cleanup_local_result_cache = RUNTIME_CACHE_JOB_HELPERS.cleanup_local_result_cache
+_touch_local_result_cache_key = RUNTIME_CACHE_JOB_HELPERS.touch_local_result_cache_key
+_result_cache_get = RUNTIME_CACHE_JOB_HELPERS.result_cache_get
+_result_cache_set = RUNTIME_CACHE_JOB_HELPERS.result_cache_set
+_cache_calculation_job_snapshot = RUNTIME_CACHE_JOB_HELPERS.cache_calculation_job_snapshot
+_cached_calculation_job_snapshot = RUNTIME_CACHE_JOB_HELPERS.cached_calculation_job_snapshot
 
 
 def _ensure_backend_module_path() -> None:
@@ -1257,10 +946,6 @@ def _build_calculation_explanations(out: pd.DataFrame, *, settings: dict[str, An
 
 def _clean_records_for_json(records: list[dict]) -> list[dict]:
     return core_clean_records_for_json(records)
-
-
-def _as_float(value: object) -> float | None:
-    return core_as_float(value)
 
 
 def _flatten_explanations_for_export(explanations: dict[str, dict]) -> list[dict]:
@@ -1719,296 +1404,45 @@ app = create_app(
 # ---------------------------------------------------------------------------
 # API: Metadata
 # ---------------------------------------------------------------------------
-def _meta_payload() -> dict[str, Any]:
-    return core_build_meta_payload(ctx=_status_orchestration_context())
-
-
-def get_meta(request: Request):
-    return core_get_meta(request, ctx=_status_orchestration_context())
-
-
-# ---------------------------------------------------------------------------
-# API: Projections
-# ---------------------------------------------------------------------------
-def _coerce_record_year(value: object) -> int | None:
-    return core_coerce_record_year(value)
-
-
-def _position_tokens(value: object) -> set[str]:
-    return core_position_tokens(value, split_re=POSITION_TOKEN_SPLIT_RE)
-
-
-def _position_sort_key(token: str) -> tuple[int, str]:
-    return core_position_sort_key(token, display_order=POSITION_DISPLAY_ORDER)
-
-
-def _row_team_value(row: dict) -> str:
-    return core_row_team_value(row)
-
-
-def _merge_position_value(hit_pos: object, pit_pos: object) -> str | None:
-    return core_merge_position_value(
-        hit_pos,
-        pit_pos,
-        split_re=POSITION_TOKEN_SPLIT_RE,
-        display_order=POSITION_DISPLAY_ORDER,
-    )
-
-
-def _max_projection_count(*values: object) -> int | None:
-    return core_max_projection_count(*values)
-
-
-def _oldest_projection_date(*values: object) -> str | None:
-    return core_oldest_projection_date(*values)
-
-
-def _coerce_numeric(value: object) -> float | None:
-    return core_coerce_numeric(value)
-
-
-def _version_payload() -> dict[str, Any]:
-    return core_build_version_payload(ctx=_status_orchestration_context())
-
-
-def _payload_etag(payload: dict[str, Any]) -> str:
-    return core_payload_etag(payload)
-
-
-def _etag_matches(if_none_match: str | None, current_etag: str) -> bool:
-    return core_etag_matches(if_none_match, current_etag)
-
-
-def get_version(request: Request):
-    return core_get_version(request, ctx=_status_orchestration_context())
-
-
-def _dynasty_lookup_cache_health_payload() -> dict[str, Any]:
-    return core_dynasty_lookup_cache_health_payload(ctx=_status_orchestration_context())
-
-
-def get_health():
-    return core_get_health(ctx=_status_orchestration_context())
-
-
-def get_ready():
-    return core_get_ready(ctx=_status_orchestration_context())
-
-
-def get_ops():
-    return core_get_ops(ctx=_status_orchestration_context())
-
-
-def _status_orchestration_context() -> StatusOrchestrationContext:
-    return build_status_orchestration_context(
-        refresh_data_if_needed=_refresh_data_if_needed,
-        meta_getter=lambda: META,
-        calculator_guardrails_payload=_calculator_guardrails_payload,
-        projection_freshness_getter=lambda: PROJECTION_FRESHNESS,
-        environment=APP_ENVIRONMENT,
-        cors_allow_origins=tuple(CORS_ALLOW_ORIGINS),
-        trust_x_forwarded_for=TRUST_X_FORWARDED_FOR,
-        trusted_proxy_cidrs=tuple(str(network) for network in TRUSTED_PROXY_NETWORKS),
-        canonical_host=CANONICAL_HOST,
-        require_calculate_auth=REQUIRE_CALCULATE_AUTH,
-        calculate_api_keys_configured=bool(CALCULATE_API_KEY_IDENTITIES),
-        calculator_prewarm_lock=CALCULATOR_PREWARM_LOCK,
-        calculator_prewarm_state=CALCULATOR_PREWARM_STATE,
-        api_no_cache_headers=API_NO_CACHE_HEADERS,
-        current_data_version=_current_data_version,
-        app_build_id=APP_BUILD_ID,
-        deploy_commit_sha=DEPLOY_COMMIT_SHA,
-        app_build_at=APP_BUILD_AT,
-        inspect_precomputed_default_dynasty_lookup=_inspect_precomputed_default_dynasty_lookup,
-        require_precomputed_dynasty_lookup=REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP,
-        index_path=INDEX_PATH,
-        calculator_job_lock=CALCULATOR_JOB_LOCK,
-        cleanup_calculation_jobs=_cleanup_calculation_jobs,
-        calculator_jobs=CALCULATOR_JOBS,
-        calc_job_cancelled_status=CALC_JOB_CANCELLED_STATUS,
-        calc_result_cache_lock=CALC_RESULT_CACHE_LOCK,
-        cleanup_local_result_cache=_cleanup_local_result_cache,
-        calc_result_cache=CALC_RESULT_CACHE,
-        rate_limit_bucket_count_getter=_rate_limit_bucket_count,
-        calculator_sync_rate_limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,
-        calculator_job_create_rate_limit_per_minute=CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE,
-        calculator_job_status_rate_limit_per_minute=CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE,
-        projection_rate_limit_per_minute=PROJECTION_RATE_LIMIT_PER_MINUTE,
-        projection_export_rate_limit_per_minute=PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE,
-        redis_url=REDIS_URL,
-        bat_data_getter=lambda: BAT_DATA,
-        pit_data_getter=lambda: PIT_DATA,
-        iso_now=_iso_now,
-    )
-
-
-def _calculator_orchestration_context() -> CalculatorOrchestrationContext:
-    return build_calculator_orchestration_context(
-        calculate_request_model=CalculateRequest,
-        enforce_rate_limit=_enforce_rate_limit,
-        sync_rate_limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,
-        job_create_rate_limit_per_minute=CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE,
-        job_status_rate_limit_per_minute=CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE,
-        flatten_explanations_for_export=_flatten_explanations_for_export,
-        tabular_export_response=_tabular_export_response,
-        default_calculator_export_columns=_default_calculator_export_columns,
-        export_internal_column_blocklist=EXPORT_INTERNAL_COLUMN_BLOCKLIST,
-        calc_result_cache_key=_calc_result_cache_key,
-        result_cache_get=_result_cache_get,
-        client_ip=_client_ip,
-        iso_now=_iso_now,
-        active_jobs_for_ip=_active_jobs_for_ip,
-        calculator_max_active_jobs_per_ip=CALCULATOR_MAX_ACTIVE_JOBS_PER_IP,
-        calculator_job_lock=CALCULATOR_JOB_LOCK,
-        calculator_jobs=CALCULATOR_JOBS,
-        cleanup_calculation_jobs=_cleanup_calculation_jobs,
-        cache_calculation_job_snapshot=_cache_calculation_job_snapshot,
-        cached_calculation_job_snapshot=_cached_calculation_job_snapshot,
-        calculation_job_public_payload=_calculation_job_public_payload,
-        mark_job_cancelled_locked=_mark_job_cancelled_locked,
-        calculator_job_executor=CALCULATOR_JOB_EXECUTOR,
-        calc_job_cancelled_status=CALC_JOB_CANCELLED_STATUS,
-        calc_logger=CALC_LOGGER,
-        track_active_job=_track_active_job,
-        untrack_active_job=_untrack_active_job,
-        set_job_cancel_requested=_set_job_cancel_requested,
-        clear_job_cancel_requested=_clear_job_cancel_requested,
-        job_cancel_requested=_job_cancel_requested,
-    )
+RUNTIME_ORCHESTRATION_HELPERS = build_runtime_orchestration_helpers(state=sys.modules[__name__])
+_status_orchestration_context = RUNTIME_ORCHESTRATION_HELPERS.status_orchestration_context
+_calculator_orchestration_context = RUNTIME_ORCHESTRATION_HELPERS.calculator_orchestration_context
 
 
 def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
     return _calculator_service_from_globals()._run_calculate_request(req, source=source)
 
 
-def _run_calculation_job(job_id: str, req_payload: dict) -> None:
-    core_run_calculation_job(
-        job_id,
-        req_payload,
-        ctx=_calculator_orchestration_context(),
-        run_calculate_request=_run_calculate_request,
+RUNTIME_ENDPOINT_HANDLERS = build_runtime_endpoint_handlers(
+    RuntimeEndpointHandlerConfig(
+        status_orchestration_context_getter=lambda: _status_orchestration_context(),
+        calculator_orchestration_context_getter=lambda: _calculator_orchestration_context(),
+        projection_service_getter=lambda: PROJECTION_SERVICE,
+        run_calculate_request_getter=lambda: _run_calculate_request,
+        enforce_rate_limit_getter=lambda: _enforce_rate_limit,
+        projection_rate_limit_per_minute_getter=lambda: PROJECTION_RATE_LIMIT_PER_MINUTE,
+        projection_export_rate_limit_per_minute_getter=lambda: PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE,
     )
+)
 
-
-def projection_response(
-    dataset: Literal["all", "bat", "pitch"],
-    *,
-    request: Request,
-    player: str | None,
-    team: str | None,
-    player_keys: str | None,
-    year: int | None,
-    years: str | None,
-    pos: str | None,
-    dynasty_years: str | None,
-    career_totals: bool,
-    include_dynasty: bool,
-    calculator_job_id: str | None,
-    sort_col: str | None,
-    sort_dir: Literal["asc", "desc"],
-    limit: int,
-    offset: int,
-) -> dict[str, Any]:
-    _enforce_rate_limit(request, action="proj-read", limit_per_minute=PROJECTION_RATE_LIMIT_PER_MINUTE)
-    return PROJECTION_SERVICE.projection_response(
-        dataset,
-        player=player,
-        team=team,
-        player_keys=player_keys,
-        year=year,
-        years=years,
-        pos=pos,
-        dynasty_years=dynasty_years,
-        career_totals=career_totals,
-        include_dynasty=include_dynasty,
-        calculator_job_id=calculator_job_id,
-        sort_col=sort_col,
-        sort_dir=sort_dir,
-        limit=limit,
-        offset=offset,
-    )
-
-
-def export_projections(
-    *,
-    request: Request,
-    dataset: Literal["all", "bat", "pitch"],
-    file_format: Literal["csv", "xlsx"] = "csv",
-    player: str | None = None,
-    team: str | None = None,
-    player_keys: str | None = None,
-    year: int | None = None,
-    years: str | None = None,
-    pos: str | None = None,
-    dynasty_years: str | None = None,
-    career_totals: bool = False,
-    include_dynasty: bool = True,
-    calculator_job_id: str | None = None,
-    sort_col: str | None = None,
-    sort_dir: Literal["asc", "desc"] = "desc",
-    columns: str | None = None,
-):
-    _enforce_rate_limit(request, action="proj-export", limit_per_minute=PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE)
-    return PROJECTION_SERVICE.export_projections(
-        dataset=dataset,
-        file_format=file_format,
-        player=player,
-        team=team,
-        player_keys=player_keys,
-        year=year,
-        years=years,
-        pos=pos,
-        dynasty_years=dynasty_years,
-        career_totals=career_totals,
-        include_dynasty=include_dynasty,
-        calculator_job_id=calculator_job_id,
-        sort_col=sort_col,
-        sort_dir=sort_dir,
-        columns=columns,
-    )
-
-
-def calculate_dynasty_values(req: CalculateRequest, request: Request):
-    return core_calculate_dynasty_values(
-        req,
-        request,
-        ctx=_calculator_orchestration_context(),
-        run_calculate_request=_run_calculate_request,
-    )
-
-
-def export_calculate_dynasty_values(req: CalculateExportRequest, request: Request):
-    return core_export_calculate_dynasty_values(
-        req,
-        request,
-        ctx=_calculator_orchestration_context(),
-        run_calculate_request=_run_calculate_request,
-    )
-
-
-def create_calculate_dynasty_job(req: CalculateRequest, request: Request):
-    return core_create_calculate_dynasty_job(
-        req,
-        request,
-        ctx=_calculator_orchestration_context(),
-        run_calculation_job=_run_calculation_job,
-    )
-
-
-def get_calculate_dynasty_job(job_id: str, request: Request):
-    return core_get_calculate_dynasty_job(
-        job_id,
-        request,
-        ctx=_calculator_orchestration_context(),
-    )
-
-
-def cancel_calculate_dynasty_job(job_id: str, request: Request):
-    return core_cancel_calculate_dynasty_job(
-        job_id,
-        request,
-        ctx=_calculator_orchestration_context(),
-    )
+_meta_payload = RUNTIME_ENDPOINT_HANDLERS.meta_payload
+get_meta = RUNTIME_ENDPOINT_HANDLERS.get_meta
+_version_payload = RUNTIME_ENDPOINT_HANDLERS.version_payload
+_payload_etag = RUNTIME_ENDPOINT_HANDLERS.payload_etag
+_etag_matches = RUNTIME_ENDPOINT_HANDLERS.etag_matches
+get_version = RUNTIME_ENDPOINT_HANDLERS.get_version
+_dynasty_lookup_cache_health_payload = RUNTIME_ENDPOINT_HANDLERS.dynasty_lookup_cache_health_payload
+get_health = RUNTIME_ENDPOINT_HANDLERS.get_health
+get_ready = RUNTIME_ENDPOINT_HANDLERS.get_ready
+get_ops = RUNTIME_ENDPOINT_HANDLERS.get_ops
+_run_calculation_job = RUNTIME_ENDPOINT_HANDLERS.run_calculation_job
+projection_response = RUNTIME_ENDPOINT_HANDLERS.projection_response
+export_projections = RUNTIME_ENDPOINT_HANDLERS.export_projections
+calculate_dynasty_values = RUNTIME_ENDPOINT_HANDLERS.calculate_dynasty_values
+export_calculate_dynasty_values = RUNTIME_ENDPOINT_HANDLERS.export_calculate_dynasty_values
+create_calculate_dynasty_job = RUNTIME_ENDPOINT_HANDLERS.create_calculate_dynasty_job
+get_calculate_dynasty_job = RUNTIME_ENDPOINT_HANDLERS.get_calculate_dynasty_job
+cancel_calculate_dynasty_job = RUNTIME_ENDPOINT_HANDLERS.cancel_calculate_dynasty_job
 
 
 # Route registration is centralized into dedicated route modules so app.py keeps

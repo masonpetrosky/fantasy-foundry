@@ -12,3 +12,11 @@ select = ["F", "E9", "I"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+check_untyped_defs = true
+follow_imports = "silent"
+show_error_codes = true
+pretty = true

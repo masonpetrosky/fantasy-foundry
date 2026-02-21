@@ -142,6 +142,11 @@ cd frontend
 npm run lint
 ```
 
+### Type Checking
+```bash
+mypy backend/api/middleware.py backend/core/settings.py backend/core/networking.py backend/core/rate_limit.py backend/core/result_cache.py backend/core/jobs.py backend/core/data_refresh.py
+```
+
 ### Repository Search Hygiene
 Fast repo-wide searches should ignore generated/vendor directories by default.
 `rg` picks this up automatically through `.rgignore`.
@@ -154,7 +159,7 @@ rg --no-ignore <pattern>
 
 ### Unified Local Check
 ```bash
-# Runs lint + backend/frontend tests
+# Runs lint + backend/frontend tests + backend type checks
 make check
 ```
 
