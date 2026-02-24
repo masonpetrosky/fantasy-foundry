@@ -890,6 +890,9 @@ def common_apply_pitching_bounds(
     totals: Dict[str, float],
     lg: CommonDynastyRotoSettings,
     rep_rates: Optional[Dict[str, float]],
+    *,
+    fill_to_ip_max: bool = True,
+    enforce_ip_min: bool = True,
 ) -> Dict[str, float]:
     """Apply optional IP cap/fill and IP-min qualification to common-mode pitching totals."""
     out = {k: float(totals.get(k, 0.0)) for k in PIT_COMPONENT_COLS}
@@ -906,7 +909,7 @@ def common_apply_pitching_bounds(
             ip = ip_cap
 
         # If under cap, assume streamable replacement innings.
-        if ip < ip_cap and rep_rates is not None:
+        if fill_to_ip_max and ip < ip_cap and rep_rates is not None:
             add = ip_cap - ip
             out["IP"] = ip_cap
             for col in ["W", "QS", "K", "SV", "SVH", "ER", "H", "BB"]:
@@ -917,11 +920,42 @@ def common_apply_pitching_bounds(
     out["WHIP"] = team_whip(out["H"], out["BB"], ip)
 
     # Optional IP minimum qualification rule (default OFF)
-    if lg.ip_min and lg.ip_min > 0 and ip < lg.ip_min:
+    if enforce_ip_min and lg.ip_min and lg.ip_min > 0 and ip < lg.ip_min:
         out["ERA"] = 99.0
         out["WHIP"] = 5.0
 
     return out
+
+
+def _coerce_non_negative_float(value: object) -> float:
+    """Best-effort numeric coercion for IP/share guards."""
+    number = pd.to_numeric(value, errors="coerce")
+    if pd.isna(number):
+        return 0.0
+    return float(max(number, 0.0))
+
+
+def _apply_low_volume_ratio_guard(
+    delta: Dict[str, float],
+    *,
+    pit_categories: List[str],
+    pitcher_ip: float,
+    slot_ip_reference: float,
+    min_share_for_positive_ratio_credit: float = 0.50,
+) -> None:
+    """Prevent tiny-volume pitchers from earning positive ERA/WHIP credit."""
+    slot_ip = _coerce_non_negative_float(slot_ip_reference)
+    player_ip = _coerce_non_negative_float(pitcher_ip)
+    if slot_ip <= 0.0:
+        return
+
+    share = player_ip / slot_ip
+    if share >= float(min_share_for_positive_ratio_credit):
+        return
+
+    for cat in COMMON_REVERSED_PITCH_CATS:
+        if cat in pit_categories and float(delta.get(cat, 0.0)) > 0.0:
+            delta[cat] = 0.0
 
 
 # ----------------------------
@@ -1157,9 +1191,16 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
     base_hit_cats = common_hit_category_totals({col: float(base_hit_tot[col]) for col in HIT_COMPONENT_COLS})
 
     base_pit_tot = ctx["base_pit_tot"]
-    base_pit_bounded = dict(ctx["base_pit_bounded"])
-    base_pit_cats = common_pitch_category_totals(base_pit_bounded)
     rep_rates = ctx.get("rep_rates")
+    # For individual-player swap values, use real projected innings (no IP-max fill).
+    base_pit_bounded = common_apply_pitching_bounds(
+        {col: float(base_pit_tot[col]) for col in PIT_COMPONENT_COLS},
+        lg,
+        rep_rates,
+        fill_to_ip_max=False,
+        enforce_ip_min=True,
+    )
+    base_pit_cats = common_pitch_category_totals(base_pit_bounded)
 
     sgp_hit = ctx["sgp_hit"]
     sgp_pit = ctx["sgp_pit"]
@@ -1238,6 +1279,8 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                 {col: float(new_tot[col]) for col in PIT_COMPONENT_COLS},
                 lg,
                 rep_rates,
+                fill_to_ip_max=False,
+                enforce_ip_min=True,
             )
 
             new_pit_cats = common_pitch_category_totals(new_tot_bounded)
@@ -1249,6 +1292,12 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                     delta[cat] = base_val - new_val
                 else:
                     delta[cat] = new_val - base_val
+            _apply_low_volume_ratio_guard(
+                delta,
+                pit_categories=pit_categories,
+                pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
+                slot_ip_reference=_coerce_non_negative_float(b.get("IP", 0.0)),
+            )
 
             val = 0.0
             for c in pit_categories:
@@ -1432,8 +1481,20 @@ def compute_year_player_values_vs_replacement(
                 base_raw[col] = base_raw[col] - float(b_avg[col]) + float(b_rep[col])
                 new_raw[col] = new_raw[col] - float(b_avg[col]) + float(row.get(col, 0.0))
 
-            base_bounded = common_apply_pitching_bounds(base_raw, lg, rep_rates)
-            new_bounded = common_apply_pitching_bounds(new_raw, lg, rep_rates)
+            new_bounded = common_apply_pitching_bounds(
+                new_raw,
+                lg,
+                rep_rates,
+                fill_to_ip_max=False,
+                enforce_ip_min=True,
+            )
+            base_bounded = common_apply_pitching_bounds(
+                base_raw,
+                lg,
+                rep_rates,
+                fill_to_ip_max=False,
+                enforce_ip_min=True,
+            )
 
             base_pit_cats = common_pitch_category_totals(base_bounded)
             new_pit_cats = common_pitch_category_totals(new_bounded)
@@ -1445,6 +1506,12 @@ def compute_year_player_values_vs_replacement(
                     delta[cat] = base_val - new_val
                 else:
                     delta[cat] = new_val - base_val
+            _apply_low_volume_ratio_guard(
+                delta,
+                pit_categories=pit_categories,
+                pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
+                slot_ip_reference=_coerce_non_negative_float(b_avg.get("IP", 0.0)),
+            )
 
             val = 0.0
             for c in pit_categories:
