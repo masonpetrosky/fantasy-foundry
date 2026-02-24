@@ -1192,14 +1192,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
 
     base_pit_tot = ctx["base_pit_tot"]
     rep_rates = ctx.get("rep_rates")
-    # For individual-player swap values, use real projected innings (no IP-max fill).
-    base_pit_bounded = common_apply_pitching_bounds(
-        {col: float(base_pit_tot[col]) for col in PIT_COMPONENT_COLS},
-        lg,
-        rep_rates,
-        fill_to_ip_max=False,
-        enforce_ip_min=True,
-    )
+    base_pit_bounded = dict(ctx["base_pit_bounded"])
     base_pit_cats = common_pitch_category_totals(base_pit_bounded)
 
     sgp_hit = ctx["sgp_hit"]
@@ -1279,8 +1272,6 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                 {col: float(new_tot[col]) for col in PIT_COMPONENT_COLS},
                 lg,
                 rep_rates,
-                fill_to_ip_max=False,
-                enforce_ip_min=True,
             )
 
             new_pit_cats = common_pitch_category_totals(new_tot_bounded)
@@ -1485,15 +1476,11 @@ def compute_year_player_values_vs_replacement(
                 new_raw,
                 lg,
                 rep_rates,
-                fill_to_ip_max=False,
-                enforce_ip_min=True,
             )
             base_bounded = common_apply_pitching_bounds(
                 base_raw,
                 lg,
                 rep_rates,
-                fill_to_ip_max=False,
-                enforce_ip_min=True,
             )
 
             base_pit_cats = common_pitch_category_totals(base_bounded)
