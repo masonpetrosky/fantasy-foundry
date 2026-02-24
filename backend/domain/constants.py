@@ -35,6 +35,11 @@ CALCULATOR_RESULT_POINTS_EXPORT_ORDER: tuple[str, ...] = (
     "PitchingBestSlot",
     "HittingValue",
     "PitchingValue",
+    "HittingAssignmentSlot",
+    "PitchingAssignmentSlot",
+    "HittingAssignmentValue",
+    "PitchingAssignmentValue",
+    "KeepDropValue",
 )
 
 ROTO_HITTER_CATEGORY_FIELDS: tuple[tuple[str, str, bool], ...] = (

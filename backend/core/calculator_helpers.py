@@ -147,6 +147,15 @@ def build_calculation_explanations(
             year_value = numeric_or_zero_fn(row_data.get(year_col))
             discount_factor = float(discount) ** idx
             discounted = year_value * discount_factor
+            if scoring_mode == "points":
+                points_detail = points_by_year.get(str(year_token))
+                if isinstance(points_detail, dict):
+                    detail_discount_factor = points_detail.get("discount_factor")
+                    if detail_discount_factor is not None:
+                        discount_factor = numeric_or_zero_fn(detail_discount_factor)
+                    detail_discounted = points_detail.get("discounted_contribution")
+                    if detail_discounted is not None:
+                        discounted = numeric_or_zero_fn(detail_discounted)
 
             year_entry: dict[str, Any] = {
                 "year": year_token,

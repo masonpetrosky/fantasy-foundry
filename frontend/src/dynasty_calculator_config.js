@@ -62,6 +62,11 @@ export const POINTS_RESULT_SUMMARY_FIELDS = [
   { key: "PitchingBestSlot", label: "Pitching Best Slot", type: "slot" },
   { key: "HittingValue", label: "Hitting Value", type: "number" },
   { key: "PitchingValue", label: "Pitching Value", type: "number" },
+  { key: "HittingAssignmentSlot", label: "Hitting Assignment Slot", type: "slot" },
+  { key: "PitchingAssignmentSlot", label: "Pitching Assignment Slot", type: "slot" },
+  { key: "HittingAssignmentValue", label: "Hitting Assignment Value", type: "number" },
+  { key: "PitchingAssignmentValue", label: "Pitching Assignment Value", type: "number" },
+  { key: "KeepDropValue", label: "Keep/Drop Value", type: "number" },
 ];
 export const POINTS_RESULT_SUMMARY_COLS = POINTS_RESULT_SUMMARY_FIELDS.map(field => field.key);
 export const POINTS_RESULT_NUMERIC_COLS = new Set(

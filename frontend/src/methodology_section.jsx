@@ -69,15 +69,23 @@ export function MethodologySection() {
             <code>pitcher_points = sum(stat * pts_pit_*)</code>.
           </li>
           <li>
-            Slot value is replacement-relative:
+            Slot value is replacement-relative with start-year anchored baselines:
             {" "}
             <code>slot_value = player_points - replacement_points_for_slot</code>.
+          </li>
+          <li>
+            Per-year points use a slot-constrained assignment so players compete for finite roster capacity.
+          </li>
+          <li>
+            Points-mode centering uses active lineup slots only (bench/minors/IL do not change the replacement cutoff).
           </li>
           <li>
             Two-way handling uses your setting: <code>sum</code> adds both sides, <code>max</code> keeps the higher side.
           </li>
           <li>
-            <code>RawDynastyValue = sum(Value_y * discount_factor(y))</code>.
+            Multi-year value uses keep/drop optimization:
+            {" "}
+            <code>F[i] = max(0, Value_i + discount ** gap * F[i+1])</code>.
           </li>
           <li>
             Points mode is deterministic and does not use Monte Carlo simulation or <code>ip_min</code>/<code>ip_max</code> rules.

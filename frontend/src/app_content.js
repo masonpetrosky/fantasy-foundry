@@ -27,7 +27,7 @@ export const GLOSSARY_TERMS = [
   {
     term: "Dynasty Value",
     definition:
-      "A multi-year estimate of player worth that weighs present production, future seasons, and risk instead of only one season.",
+      "A multi-year estimate of player worth that weighs present production, future seasons, and replacement context instead of only one season.",
   },
   {
     term: "Positional Scarcity",
@@ -90,6 +90,6 @@ export const METHODOLOGY_FAQS = [
   {
     question: "Why might a player with strong stats rank lower than expected?",
     answer:
-      "Multi-year value accounts for projection horizon, discounting, risk, and position/role context, not just one-season counting stats.",
+      "Multi-year value accounts for projection horizon, discounting, replacement context, and slot constraints, not just one-season counting stats.",
   },
 ];

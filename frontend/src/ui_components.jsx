@@ -147,10 +147,20 @@ export function ExplainabilityCard({
     ["Hitting Points", points.hitting_points],
     ["Pitching Points", points.pitching_points],
     ["Selected Points", points.selected_points],
+    ["Selected Side", points.selected_side],
     ["Hitting Best Slot", points.hitting_best_slot],
     ["Pitching Best Slot", points.pitching_best_slot],
     ["Hitting Value", points.hitting_value],
     ["Pitching Value", points.pitching_value],
+    ["Hitting Assignment Slot", points.hitting_assignment_slot],
+    ["Pitching Assignment Slot", points.pitching_assignment_slot],
+    ["Hitting Assignment Value", points.hitting_assignment_value],
+    ["Pitching Assignment Value", points.pitching_assignment_value],
+    ["Hitting Assignment Replacement", points.hitting_assignment_replacement],
+    ["Pitching Assignment Replacement", points.pitching_assignment_replacement],
+    ["Keep/Drop Value", points.keep_drop_value],
+    ["Keep/Drop Hold Value", points.keep_drop_hold_value],
+    ["Keep/Drop Keep", points.keep_drop_keep],
   ];
 
   return (

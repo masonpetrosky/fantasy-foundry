@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import heapq
 from dataclasses import dataclass
 from typing import Callable
 
@@ -32,6 +33,24 @@ class PointsCalculatorContext:
     points_hitter_eligible_slots: Callable[[object], set[str]]
     points_pitcher_eligible_slots: Callable[[object], set[str]]
     points_slot_replacement: Callable[..., dict[str, float]]
+
+
+@dataclass(slots=True)
+class KeepDropResult:
+    raw_total: float
+    continuation_values: list[float]
+    hold_values: list[float]
+    keep_flags: list[bool]
+    discount_factors: list[float]
+    discounted_contributions: list[float]
+
+
+@dataclass(slots=True)
+class _FlowEdge:
+    to: int
+    rev: int
+    capacity: int
+    cost: int
 
 
 def stat_or_zero(row: dict | None, key: str, *, as_float_fn: Callable[[object], float | None]) -> float:
@@ -265,6 +284,260 @@ def points_slot_replacement(
     return baselines
 
 
+def _best_slot_surplus(
+    *,
+    points: float,
+    eligible_slots: set[str],
+    replacement_by_slot: dict[str, float],
+) -> tuple[float | None, str | None, float | None]:
+    best_value: float | None = None
+    best_slot: str | None = None
+    best_replacement: float | None = None
+    for slot in sorted(eligible_slots):
+        replacement_points = float(replacement_by_slot.get(slot, 0.0))
+        value = float(points - replacement_points)
+        if best_value is None or value > best_value:
+            best_value = value
+            best_slot = slot
+            best_replacement = replacement_points
+    return best_value, best_slot, best_replacement
+
+
+def _slot_capacity_by_league(slot_counts: dict[str, int], *, teams: int) -> dict[str, int]:
+    league_teams = max(int(teams), 1)
+    return {
+        slot: league_teams * max(int(count), 0)
+        for slot, count in sorted(slot_counts.items())
+        if int(count) > 0
+    }
+
+
+def optimize_points_slot_assignment(
+    entries: list[dict[str, object]],
+    *,
+    replacement_by_slot: dict[str, float],
+    slot_capacity: dict[str, int],
+) -> dict[str, dict[str, float | str]]:
+    normalized_slot_capacity = {
+        str(slot): max(int(capacity), 0)
+        for slot, capacity in slot_capacity.items()
+        if int(capacity) > 0
+    }
+    if not normalized_slot_capacity:
+        return {}
+
+    player_rows: dict[str, dict[str, object]] = {}
+    for entry in entries:
+        player_id = str(entry.get("player_id") or "").strip()
+        if not player_id:
+            continue
+        try:
+            points = float(entry.get("points") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        raw_slots = entry.get("slots")
+        if isinstance(raw_slots, set):
+            slots = {str(slot) for slot in raw_slots}
+        elif isinstance(raw_slots, (list, tuple)):
+            slots = {str(slot) for slot in raw_slots}
+        else:
+            continue
+        eligible_slots = {
+            slot
+            for slot in slots
+            if slot in normalized_slot_capacity and normalized_slot_capacity[slot] > 0
+        }
+        if not eligible_slots:
+            continue
+
+        existing = player_rows.get(player_id)
+        if existing is None or float(existing.get("points") or 0.0) < points:
+            player_rows[player_id] = {"points": points, "slots": eligible_slots}
+
+    if not player_rows:
+        return {}
+
+    player_ids = sorted(player_rows.keys())
+    slot_names = sorted(normalized_slot_capacity.keys())
+    source = 0
+    first_player_node = 1
+    first_slot_node = first_player_node + len(player_ids)
+    sink = first_slot_node + len(slot_names)
+    node_count = sink + 1
+    graph: list[list[_FlowEdge]] = [[] for _ in range(node_count)]
+
+    def add_edge(from_node: int, to_node: int, capacity: int, cost: int) -> None:
+        forward = _FlowEdge(to=to_node, rev=len(graph[to_node]), capacity=capacity, cost=cost)
+        backward = _FlowEdge(to=from_node, rev=len(graph[from_node]), capacity=0, cost=-cost)
+        graph[from_node].append(forward)
+        graph[to_node].append(backward)
+
+    slot_node_by_name = {
+        slot: first_slot_node + idx
+        for idx, slot in enumerate(slot_names)
+    }
+    player_node_by_id = {
+        player_id: first_player_node + idx
+        for idx, player_id in enumerate(player_ids)
+    }
+
+    for slot in slot_names:
+        add_edge(slot_node_by_name[slot], sink, normalized_slot_capacity[slot], 0)
+    for player_id in player_ids:
+        player_node = player_node_by_id[player_id]
+        add_edge(source, player_node, 1, 0)
+
+    player_edges: dict[str, list[tuple[str, int, int]]] = {}
+    scale = 1000.0
+
+    for player_id in player_ids:
+        player_node = player_node_by_id[player_id]
+        row = player_rows[player_id]
+        points = float(row["points"])
+        slots = set(row["slots"]) if isinstance(row["slots"], set) else set()
+        for slot in sorted(slots):
+            replacement_points = float(replacement_by_slot.get(slot, 0.0))
+            surplus = points - replacement_points
+            if surplus <= 1e-9:
+                continue
+            scaled_surplus = int(round(surplus * scale))
+            if scaled_surplus <= 0:
+                continue
+            edge_idx = len(graph[player_node])
+            add_edge(player_node, slot_node_by_name[slot], 1, -scaled_surplus)
+            player_edges.setdefault(player_id, []).append((slot, edge_idx, player_node))
+
+    if not player_edges:
+        return {}
+
+    inf = 10**18
+    potentials = [0] * node_count
+
+    while True:
+        dist = [inf] * node_count
+        parent_node = [-1] * node_count
+        parent_edge_idx = [-1] * node_count
+        dist[source] = 0
+        pq: list[tuple[int, int]] = [(0, source)]
+
+        while pq:
+            cur_dist, node = heapq.heappop(pq)
+            if cur_dist != dist[node]:
+                continue
+            for edge_idx, edge in enumerate(graph[node]):
+                if edge.capacity <= 0:
+                    continue
+                next_node = edge.to
+                next_dist = cur_dist + edge.cost + potentials[node] - potentials[next_node]
+                if next_dist < dist[next_node]:
+                    dist[next_node] = next_dist
+                    parent_node[next_node] = node
+                    parent_edge_idx[next_node] = edge_idx
+                    heapq.heappush(pq, (next_dist, next_node))
+
+        if dist[sink] == inf:
+            break
+
+        path_cost = dist[sink] + potentials[sink] - potentials[source]
+        if path_cost >= 0:
+            break
+
+        for node_idx, node_dist in enumerate(dist):
+            if node_dist < inf:
+                potentials[node_idx] += node_dist
+
+        cursor = sink
+        while cursor != source:
+            prev = parent_node[cursor]
+            if prev < 0:
+                break
+            edge_idx = parent_edge_idx[cursor]
+            edge = graph[prev][edge_idx]
+            edge.capacity -= 1
+            reverse = graph[cursor][edge.rev]
+            reverse.capacity += 1
+            cursor = prev
+
+    assignments: dict[str, dict[str, float | str]] = {}
+    for player_id in player_ids:
+        edges = player_edges.get(player_id, [])
+        if not edges:
+            continue
+        points = float(player_rows[player_id]["points"])
+        for slot, edge_idx, player_node in edges:
+            edge = graph[player_node][edge_idx]
+            if edge.capacity != 0:
+                continue
+            replacement_points = float(replacement_by_slot.get(slot, 0.0))
+            assignments[player_id] = {
+                "slot": slot,
+                "points": points,
+                "replacement": replacement_points,
+                "value": points - replacement_points,
+            }
+            break
+
+    return assignments
+
+
+def dynasty_keep_or_drop_values(values: list[float], years: list[int], *, discount: float) -> KeepDropResult:
+    if len(values) != len(years):
+        raise ValueError("values and years must have the same length.")
+    if not values:
+        return KeepDropResult(
+            raw_total=0.0,
+            continuation_values=[],
+            hold_values=[],
+            keep_flags=[],
+            discount_factors=[],
+            discounted_contributions=[],
+        )
+
+    annual_discount = float(discount)
+    count = len(values)
+    continuation_values = [0.0] * count
+    hold_values = [0.0] * count
+    keep_flags = [False] * count
+
+    for idx in range(count - 1, -1, -1):
+        future = 0.0
+        if idx < count - 1:
+            gap = max(1, int(years[idx + 1]) - int(years[idx]))
+            future = (annual_discount ** gap) * continuation_values[idx + 1]
+        candidate = float(values[idx]) + future
+        hold_values[idx] = float(candidate)
+        if candidate > 0:
+            continuation_values[idx] = float(candidate)
+            keep_flags[idx] = True
+
+    discount_factors = [1.0] * count
+    for idx in range(1, count):
+        gap = max(1, int(years[idx]) - int(years[idx - 1]))
+        discount_factors[idx] = discount_factors[idx - 1] * (annual_discount ** gap)
+
+    discounted_contributions = [0.0] * count
+    active = bool(keep_flags[0])
+    if active:
+        discounted_contributions[0] = float(values[0]) * discount_factors[0]
+    for idx in range(1, count):
+        if not active:
+            break
+        if keep_flags[idx]:
+            discounted_contributions[idx] = float(values[idx]) * discount_factors[idx]
+        else:
+            active = False
+
+    raw_total = float(continuation_values[0]) if keep_flags[0] else 0.0
+    return KeepDropResult(
+        raw_total=raw_total,
+        continuation_values=continuation_values,
+        hold_values=hold_values,
+        keep_flags=keep_flags,
+        discount_factors=discount_factors,
+        discounted_contributions=discounted_contributions,
+    )
+
+
 def calculate_points_dynasty_frame(
     *,
     ctx: PointsCalculatorContext,
@@ -363,7 +636,7 @@ def calculate_points_dynasty_frame(
         pair = bucket.setdefault(year, {"hit": None, "pit": None})
         pair["pit"] = row
 
-    roster_slots_per_team = (
+    active_slots_per_team = (
         hit_c
         + hit_1b
         + hit_2b
@@ -376,11 +649,10 @@ def calculate_points_dynasty_frame(
         + pit_p
         + pit_sp
         + pit_rp
-        + bench
-        + minors
-        + ir
     )
-    replacement_rank = max(1, teams * max(1, roster_slots_per_team))
+    # Points mode values only active lineup slots, so centering must use the
+    # same active-slot roster depth (excluding bench/minors/IL).
+    replacement_rank = max(1, teams * max(1, active_slots_per_team))
     hitter_slot_counts = {
         "C": int(hit_c),
         "1B": int(hit_1b),
@@ -407,6 +679,8 @@ def calculate_points_dynasty_frame(
     year_hit_entries: dict[int, list[dict[str, object]]] = {}
     year_pit_entries: dict[int, list[dict[str, object]]] = {}
     player_raw_totals: dict[str, float] = {}
+    empty_hit_breakdown = ctx.calculate_hitter_points_breakdown(None, scoring)
+    empty_pit_breakdown = ctx.calculate_pitcher_points_breakdown(None, scoring)
 
     for player_id, per_year in rows_by_player.items():
         if not per_year:
@@ -484,7 +758,6 @@ def calculate_points_dynasty_frame(
                 "pit_points": pit_points,
                 "hit_slots": set(hit_slots),
                 "pit_slots": set(pit_slots),
-                "selected_raw_points": float(selected_raw_points),
             }
 
         per_player_year[player_id] = year_map
@@ -543,95 +816,151 @@ def calculate_points_dynasty_frame(
                 n_replacement=n_replacement,
             )
 
+    hitter_slot_capacity = _slot_capacity_by_league(hitter_slot_counts, teams=teams)
+    pitcher_slot_capacity = _slot_capacity_by_league(pitcher_slot_counts, teams=teams)
+    year_hit_assignments = {
+        year: optimize_points_slot_assignment(
+            year_hit_entries.get(year, []),
+            replacement_by_slot=year_hit_replacement.get(year, {}),
+            slot_capacity=hitter_slot_capacity,
+        )
+        for year in valuation_year_set
+    }
+    year_pit_assignments = {
+        year: optimize_points_slot_assignment(
+            year_pit_entries.get(year, []),
+            replacement_by_slot=year_pit_replacement.get(year, {}),
+            slot_capacity=pitcher_slot_capacity,
+        )
+        for year in valuation_year_set
+    }
+
     result_rows: list[dict] = []
     for player_id, meta_row in player_meta.items():
         row_out: dict[str, object] = dict(meta_row)
         row_out["_ExplainPointsByYear"] = {}
+        year_details: list[dict[str, object]] = []
 
-        raw_total = 0.0
-        for year_offset, year in enumerate(valuation_year_set):
+        for year in valuation_year_set:
             info = per_player_year.get(player_id, {}).get(year, {})
-
             hit_points = float(info.get("hit_points", 0.0))
             pit_points = float(info.get("pit_points", 0.0))
             hit_slots = set(info.get("hit_slots", set()))
             pit_slots = set(info.get("pit_slots", set()))
-            hit_breakdown = (
-                info.get("hit_breakdown")
-                if isinstance(info.get("hit_breakdown"), dict)
-                else ctx.calculate_hitter_points_breakdown(None, scoring)
-            )
-            pit_breakdown = (
-                info.get("pit_breakdown")
-                if isinstance(info.get("pit_breakdown"), dict)
-                else ctx.calculate_pitcher_points_breakdown(None, scoring)
-            )
+            hit_breakdown = info.get("hit_breakdown") if isinstance(info.get("hit_breakdown"), dict) else empty_hit_breakdown
+            pit_breakdown = info.get("pit_breakdown") if isinstance(info.get("pit_breakdown"), dict) else empty_pit_breakdown
 
             hit_repl_map = year_hit_replacement.get(year, {})
             pit_repl_map = year_pit_replacement.get(year, {})
+            hit_best_value, hit_best_slot, hit_best_replacement = _best_slot_surplus(
+                points=hit_points,
+                eligible_slots=hit_slots,
+                replacement_by_slot=hit_repl_map,
+            )
+            pit_best_value, pit_best_slot, pit_best_replacement = _best_slot_surplus(
+                points=pit_points,
+                eligible_slots=pit_slots,
+                replacement_by_slot=pit_repl_map,
+            )
 
-            hit_best_value: float | None = None
-            hit_best_slot: str | None = None
-            hit_best_replacement: float | None = None
-            for slot in sorted(hit_slots):
-                replacement_points = float(hit_repl_map.get(slot, 0.0))
-                value = hit_points - replacement_points
-                if hit_best_value is None or value > hit_best_value:
-                    hit_best_value = float(value)
-                    hit_best_slot = slot
-                    hit_best_replacement = replacement_points
+            hit_assignment = year_hit_assignments.get(year, {}).get(player_id)
+            pit_assignment = year_pit_assignments.get(year, {}).get(player_id)
+            hit_assigned_slot = str(hit_assignment.get("slot")) if isinstance(hit_assignment, dict) else None
+            pit_assigned_slot = str(pit_assignment.get("slot")) if isinstance(pit_assignment, dict) else None
+            hit_assigned_value = float(hit_assignment.get("value", 0.0)) if isinstance(hit_assignment, dict) else 0.0
+            pit_assigned_value = float(pit_assignment.get("value", 0.0)) if isinstance(pit_assignment, dict) else 0.0
+            hit_assigned_points = float(hit_assignment.get("points", 0.0)) if isinstance(hit_assignment, dict) else 0.0
+            pit_assigned_points = float(pit_assignment.get("points", 0.0)) if isinstance(pit_assignment, dict) else 0.0
+            hit_assigned_replacement = float(hit_assignment.get("replacement", 0.0)) if isinstance(hit_assignment, dict) else 0.0
+            pit_assigned_replacement = float(pit_assignment.get("replacement", 0.0)) if isinstance(pit_assignment, dict) else 0.0
 
-            pit_best_value: float | None = None
-            pit_best_slot: str | None = None
-            pit_best_replacement: float | None = None
-            for slot in sorted(pit_slots):
-                replacement_points = float(pit_repl_map.get(slot, 0.0))
-                value = pit_points - replacement_points
-                if pit_best_value is None or value > pit_best_value:
-                    pit_best_value = float(value)
-                    pit_best_slot = slot
-                    pit_best_replacement = replacement_points
-
-            selected_raw_points = 0.0
-            if hit_best_value is not None and pit_best_value is not None:
-                if two_way == "sum":
-                    year_points = hit_best_value + pit_best_value
-                    selected_raw_points = hit_points + pit_points
-                elif hit_best_value >= pit_best_value:
-                    year_points = hit_best_value
-                    selected_raw_points = hit_points
-                else:
-                    year_points = pit_best_value
-                    selected_raw_points = pit_points
-            elif hit_best_value is not None:
-                year_points = hit_best_value
-                selected_raw_points = hit_points
-            elif pit_best_value is not None:
-                year_points = pit_best_value
-                selected_raw_points = pit_points
+            selected_side = "none"
+            if two_way == "sum":
+                year_points = hit_assigned_value + pit_assigned_value
+                selected_raw_points = hit_assigned_points + pit_assigned_points
+                if year_points > 0:
+                    selected_side = "sum"
             else:
-                year_points = 0.0
-                selected_raw_points = 0.0
+                if hit_assigned_value > pit_assigned_value:
+                    year_points = hit_assigned_value
+                    selected_raw_points = hit_assigned_points
+                    selected_side = "hitting"
+                elif pit_assigned_value > hit_assigned_value:
+                    year_points = pit_assigned_value
+                    selected_raw_points = pit_assigned_points
+                    selected_side = "pitching"
+                elif hit_assigned_value > 0:
+                    year_points = hit_assigned_value
+                    selected_raw_points = hit_assigned_points
+                    selected_side = "hitting"
+                else:
+                    year_points = 0.0
+                    selected_raw_points = 0.0
 
-            row_out[f"Value_{year}"] = year_points
-            discount_factor = float(discount) ** year_offset
-            discounted_value = year_points * discount_factor
-            raw_total += discounted_value
+            year_details.append(
+                {
+                    "year": year,
+                    "hitting_points": hit_points,
+                    "pitching_points": pit_points,
+                    "hitting_replacement": hit_best_replacement,
+                    "pitching_replacement": pit_best_replacement,
+                    "hitting_best_slot": hit_best_slot,
+                    "pitching_best_slot": pit_best_slot,
+                    "hitting_value": hit_best_value,
+                    "pitching_value": pit_best_value,
+                    "hitting_assignment_slot": hit_assigned_slot,
+                    "pitching_assignment_slot": pit_assigned_slot,
+                    "hitting_assignment_value": hit_assigned_value,
+                    "pitching_assignment_value": pit_assigned_value,
+                    "hitting_assignment_replacement": hit_assigned_replacement,
+                    "pitching_assignment_replacement": pit_assigned_replacement,
+                    "selected_side": selected_side,
+                    "selected_raw_points": float(selected_raw_points),
+                    "selected_points": float(year_points),
+                    "hitting": hit_breakdown,
+                    "pitching": pit_breakdown,
+                }
+            )
+
+        selected_values = [float(detail["selected_points"]) for detail in year_details]
+        keep_drop = dynasty_keep_or_drop_values(selected_values, valuation_year_set, discount=float(discount))
+
+        for idx, detail in enumerate(year_details):
+            year = int(detail["year"])
+            row_out[f"Value_{year}"] = float(detail["selected_points"])
             row_out["_ExplainPointsByYear"][str(year)] = {
-                "hitting_points": round(hit_points, 4),
-                "pitching_points": round(pit_points, 4),
-                "hitting_replacement": round(float(hit_best_replacement), 4) if hit_best_replacement is not None else None,
-                "pitching_replacement": round(float(pit_best_replacement), 4) if pit_best_replacement is not None else None,
-                "hitting_best_slot": hit_best_slot,
-                "pitching_best_slot": pit_best_slot,
-                "hitting_value": round(float(hit_best_value), 4) if hit_best_value is not None else None,
-                "pitching_value": round(float(pit_best_value), 4) if pit_best_value is not None else None,
-                "selected_raw_points": round(float(selected_raw_points), 4),
-                "selected_points": round(float(year_points), 4),
-                "discount_factor": round(float(discount_factor), 6),
-                "discounted_contribution": round(float(discounted_value), 4),
-                "hitting": hit_breakdown,
-                "pitching": pit_breakdown,
+                "hitting_points": round(float(detail["hitting_points"]), 4),
+                "pitching_points": round(float(detail["pitching_points"]), 4),
+                "hitting_replacement": round(float(detail["hitting_replacement"]), 4)
+                if detail["hitting_replacement"] is not None
+                else None,
+                "pitching_replacement": round(float(detail["pitching_replacement"]), 4)
+                if detail["pitching_replacement"] is not None
+                else None,
+                "hitting_best_slot": detail["hitting_best_slot"],
+                "pitching_best_slot": detail["pitching_best_slot"],
+                "hitting_value": round(float(detail["hitting_value"]), 4) if detail["hitting_value"] is not None else None,
+                "pitching_value": round(float(detail["pitching_value"]), 4) if detail["pitching_value"] is not None else None,
+                "hitting_assignment_slot": detail["hitting_assignment_slot"],
+                "pitching_assignment_slot": detail["pitching_assignment_slot"],
+                "hitting_assignment_value": round(float(detail["hitting_assignment_value"]), 4),
+                "pitching_assignment_value": round(float(detail["pitching_assignment_value"]), 4),
+                "hitting_assignment_replacement": round(float(detail["hitting_assignment_replacement"]), 4)
+                if detail["hitting_assignment_slot"] is not None
+                else None,
+                "pitching_assignment_replacement": round(float(detail["pitching_assignment_replacement"]), 4)
+                if detail["pitching_assignment_slot"] is not None
+                else None,
+                "selected_side": detail["selected_side"],
+                "selected_raw_points": round(float(detail["selected_raw_points"]), 4),
+                "selected_points": round(float(detail["selected_points"]), 4),
+                "discount_factor": round(float(keep_drop.discount_factors[idx]), 6),
+                "discounted_contribution": round(float(keep_drop.discounted_contributions[idx]), 4),
+                "keep_drop_value": round(float(keep_drop.continuation_values[idx]), 4),
+                "keep_drop_hold_value": round(float(keep_drop.hold_values[idx]), 4),
+                "keep_drop_keep": bool(keep_drop.keep_flags[idx]),
+                "hitting": detail["hitting"],
+                "pitching": detail["pitching"],
             }
 
         start_year_points = row_out["_ExplainPointsByYear"].get(str(start_year), {})
@@ -643,8 +972,13 @@ def calculate_points_dynasty_frame(
             row_out["PitchingBestSlot"] = start_year_points.get("pitching_best_slot")
             row_out["HittingValue"] = start_year_points.get("hitting_value")
             row_out["PitchingValue"] = start_year_points.get("pitching_value")
+            row_out["HittingAssignmentSlot"] = start_year_points.get("hitting_assignment_slot")
+            row_out["PitchingAssignmentSlot"] = start_year_points.get("pitching_assignment_slot")
+            row_out["HittingAssignmentValue"] = start_year_points.get("hitting_assignment_value")
+            row_out["PitchingAssignmentValue"] = start_year_points.get("pitching_assignment_value")
+            row_out["KeepDropValue"] = start_year_points.get("keep_drop_value")
 
-        row_out["RawDynastyValue"] = float(raw_total)
+        row_out["RawDynastyValue"] = float(keep_drop.raw_total)
         result_rows.append(row_out)
 
     if not result_rows:

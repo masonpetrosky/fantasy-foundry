@@ -225,12 +225,134 @@ class DynastyValuePenaltyRemovalTests(unittest.TestCase):
             )
 
         rows_by_player = {str(row["Player"]): row for _, row in out.iterrows()}
-        self.assertEqual(float(rows_by_player["Hitter A"]["Value_2026"]), 10.0)
-        self.assertEqual(float(rows_by_player["Hitter A"]["RawDynastyValue"]), 10.0)
-        self.assertEqual(float(rows_by_player["Hitter A"]["DynastyValue"]), 6.0)
-        self.assertEqual(float(rows_by_player["Hitter B"]["Value_2026"]), 4.0)
-        self.assertEqual(float(rows_by_player["Hitter B"]["RawDynastyValue"]), 4.0)
-        self.assertEqual(float(rows_by_player["Hitter B"]["DynastyValue"]), 0.0)
+        self.assertEqual(float(rows_by_player["Hitter A"]["Value_2026"]), 6.0)
+        self.assertEqual(float(rows_by_player["Hitter A"]["RawDynastyValue"]), 6.0)
+        self.assertEqual(float(rows_by_player["Hitter A"]["DynastyValue"]), 0.0)
+        self.assertEqual(float(rows_by_player["Hitter B"]["Value_2026"]), 0.0)
+        self.assertEqual(float(rows_by_player["Hitter B"]["RawDynastyValue"]), 0.0)
+        self.assertEqual(float(rows_by_player["Hitter B"]["DynastyValue"]), -6.0)
+
+    def test_points_centering_ignores_bench_minors_and_ir_slots(self) -> None:
+        bat_rows = [
+            {
+                "Player": "Hitter A",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "Age": 24,
+                "AB": 50,
+                "H": 10,
+                "2B": 0,
+                "3B": 0,
+                "HR": 0,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "PlayerKey": "hitter-a",
+                "PlayerEntityKey": "hitter-a",
+            },
+            {
+                "Player": "Hitter B",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "Age": 25,
+                "AB": 50,
+                "H": 8,
+                "2B": 0,
+                "3B": 0,
+                "HR": 0,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "PlayerKey": "hitter-b",
+                "PlayerEntityKey": "hitter-b",
+            },
+            {
+                "Player": "Hitter C",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "Age": 26,
+                "AB": 50,
+                "H": 6,
+                "2B": 0,
+                "3B": 0,
+                "HR": 0,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "PlayerKey": "hitter-c",
+                "PlayerEntityKey": "hitter-c",
+            },
+        ]
+
+        calc_kwargs = {
+            "teams": 1,
+            "horizon": 1,
+            "discount": 1.0,
+            "hit_c": 0,
+            "hit_1b": 0,
+            "hit_2b": 0,
+            "hit_3b": 0,
+            "hit_ss": 0,
+            "hit_ci": 0,
+            "hit_mi": 0,
+            "hit_of": 1,
+            "hit_ut": 0,
+            "pit_p": 0,
+            "pit_sp": 0,
+            "pit_rp": 0,
+            "two_way": "sum",
+            "start_year": 2026,
+            "recent_projections": 3,
+            "pts_hit_1b": 1.0,
+            "pts_hit_2b": 0.0,
+            "pts_hit_3b": 0.0,
+            "pts_hit_hr": 0.0,
+            "pts_hit_r": 0.0,
+            "pts_hit_rbi": 0.0,
+            "pts_hit_sb": 0.0,
+            "pts_hit_bb": 0.0,
+            "pts_hit_so": 0.0,
+            "pts_pit_ip": 0.0,
+            "pts_pit_w": 0.0,
+            "pts_pit_l": 0.0,
+            "pts_pit_k": 0.0,
+            "pts_pit_sv": 0.0,
+            "pts_pit_svh": 0.0,
+            "pts_pit_h": 0.0,
+            "pts_pit_er": 0.0,
+            "pts_pit_bb": 0.0,
+        }
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(app_module, "PIT_DATA", []), patch.object(
+            app_module,
+            "META",
+            {"years": [2026]},
+        ):
+            shallow = app_module._calculate_points_dynasty_frame_cached(
+                **calc_kwargs,
+                bench=0,
+                minors=0,
+                ir=0,
+            )
+            deep = app_module._calculate_points_dynasty_frame_cached(
+                **calc_kwargs,
+                bench=8,
+                minors=12,
+                ir=6,
+            )
+
+        shallow_values = {str(row["Player"]): float(row["DynastyValue"]) for _, row in shallow.iterrows()}
+        deep_values = {str(row["Player"]): float(row["DynastyValue"]) for _, row in deep.iterrows()}
+        self.assertEqual(shallow_values, deep_values)
 
 
 class ProjectionEndpointValidationTests(unittest.TestCase):
@@ -2121,6 +2243,11 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(high_row["PitchingBestSlot"], "P")
         self.assertEqual(high_row["HittingValue"], 40.0)
         self.assertEqual(high_row["PitchingValue"], 0.0)
+        self.assertEqual(high_row["HittingAssignmentSlot"], "OF")
+        self.assertIsNone(high_row["PitchingAssignmentSlot"])
+        self.assertEqual(high_row["HittingAssignmentValue"], 40.0)
+        self.assertEqual(high_row["PitchingAssignmentValue"], 0.0)
+        self.assertEqual(high_row["KeepDropValue"], 40.0)
 
     def test_points_mode_applies_position_eligibility_for_year_values(self) -> None:
         bat_rows = [
@@ -2428,6 +2555,11 @@ class CalculatorValidationTests(unittest.TestCase):
                     "PitchingBestSlot": "P",
                     "HittingValue": 19.2,
                     "PitchingValue": 0.0,
+                    "HittingAssignmentSlot": "OF",
+                    "PitchingAssignmentSlot": None,
+                    "HittingAssignmentValue": 19.2,
+                    "PitchingAssignmentValue": 0.0,
+                    "KeepDropValue": 17.9,
                     "Value_2026": 2.345,
                 }
             ],
@@ -2444,7 +2576,9 @@ class CalculatorValidationTests(unittest.TestCase):
             (
                 "Player,Dynasty Value,Age,Team,Pos,Hitting Points,Pitching Points,"
                 "Selected Points,Hitting Best Slot,Pitching Best Slot,Hitting Value,"
-                "Pitching Value,2026 Dyn Value"
+                "Pitching Value,Hitting Assignment Slot,Pitching Assignment Slot,"
+                "Hitting Assignment Value,Pitching Assignment Value,Keep/Drop Value,"
+                "2026 Dyn Value"
             ),
         )
         self.assertIn("22.4", lines[1])
