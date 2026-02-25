@@ -124,8 +124,14 @@ Without these env vars, the site continues to work with local-only browser stora
 
 ### Running Tests
 ```bash
-# Backend unit/integration suite
+# Backend full suite
 pytest -q
+
+# Backend fast suite (matches required PR CI lane)
+pytest -q -m "not full_regression"
+
+# Backend high-cost regression lane (scheduled + manual CI)
+pytest -q -m "full_regression" --no-cov
 
 # Frontend unit tests
 cd frontend
@@ -163,7 +169,7 @@ rg --no-ignore <pattern>
 
 ### Unified Local Check
 ```bash
-# Runs lint + backend/frontend tests + backend type checks
+# Runs lint + backend fast suite + frontend tests + backend type checks
 make check
 ```
 

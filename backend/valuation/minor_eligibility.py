@@ -402,7 +402,10 @@ def _resolve_minor_eligibility_by_year(
         out = inferred.copy()
     else:
         merged = inferred.merge(explicit, on=["Player", "Year"], how="outer", suffixes=("_infer", "_input"))
-        merged["minor_eligible"] = merged["minor_eligible_input"].combine_first(merged["minor_eligible_infer"])
+        # Prefer explicit input flags; fall back to inferred values when explicit is missing.
+        input_flags = merged["minor_eligible_input"]
+        inferred_flags = merged["minor_eligible_infer"]
+        merged["minor_eligible"] = input_flags.where(input_flags.notna(), inferred_flags)
         out = merged[["Player", "Year", "minor_eligible"]].copy()
 
     if out.empty:

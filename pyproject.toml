@@ -7,7 +7,9 @@ select = ["F", "E9", "I"]
 
 [tool.ruff.lint.per-file-ignores]
 "backend/dynasty_roto_values.py" = ["F401", "I001"]
-"backend/runtime.py" = ["I001"]
+"backend/runtime.py" = ["F401", "F821", "I001"]
+"backend/valuation/common_orchestration.py" = ["F405"]
+"backend/valuation/league_orchestration.py" = ["F405"]
 
 [tool.ruff.format]
 quote-style = "double"

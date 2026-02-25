@@ -7,6 +7,7 @@ import argparse
 import pandas as pd
 
 try:
+    from backend.valuation import xlsx_formatting as _xlsx_fmt
     from backend.valuation.cli_args import (
         discount_arg,
         non_negative_float_arg,
@@ -18,8 +19,8 @@ try:
     from backend.valuation.common_orchestration import calculate_common_dynasty_values
     from backend.valuation.league_orchestration import calculate_league_dynasty_values
     from backend.valuation.models import CommonDynastyRotoSettings, LeagueSettings
-    from backend.valuation import xlsx_formatting as _xlsx_fmt
 except ImportError:  # pragma: no cover - direct script execution fallback
+    from valuation import xlsx_formatting as _xlsx_fmt
     from valuation.cli_args import (
         discount_arg,
         non_negative_float_arg,
@@ -31,7 +32,6 @@ except ImportError:  # pragma: no cover - direct script execution fallback
     from valuation.common_orchestration import calculate_common_dynasty_values
     from valuation.league_orchestration import calculate_league_dynasty_values
     from valuation.models import CommonDynastyRotoSettings, LeagueSettings
-    from valuation import xlsx_formatting as _xlsx_fmt
 
 
 def _build_parser() -> argparse.ArgumentParser:

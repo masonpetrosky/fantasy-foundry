@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: "17 6 * * *"
   workflow_dispatch:
     inputs:
       run_e2e:
@@ -12,9 +14,15 @@ on:
         required: false
         default: false
         type: boolean
+      run_full_regression:
+        description: "Run high-cost full regression backend tests"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   frontend-dist:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -54,6 +62,7 @@ jobs:
           fi
 
   lint:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -90,6 +99,7 @@ jobs:
         run: npm run lint
 
   dependency-audit:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -126,6 +136,7 @@ jobs:
         run: node ../scripts/check_npm_audit_direct.mjs
 
   typecheck:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -147,6 +158,7 @@ jobs:
         run: mypy backend/api/middleware.py backend/core/settings.py backend/core/networking.py backend/core/rate_limit.py backend/core/result_cache.py backend/core/jobs.py backend/core/data_refresh.py
 
   unit-tests:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -168,9 +180,32 @@ jobs:
           pip install -r requirements.txt pytest pytest-cov
 
       - name: Run Unit + Integration Test Suite
-        run: pytest -q
+        run: pytest -q -m "not full_regression"
+
+  full-regression-tests:
+    if: github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_full_regression)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Backend Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest pytest-cov
+
+      - name: Run High-Cost Full Regression Tests
+        run: pytest -q -m "full_regression" --no-cov
 
   data-artifacts:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -199,6 +234,7 @@ jobs:
           fi
 
   docker-build:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -210,7 +246,7 @@ jobs:
         run: docker build -t fantasy-foundry:ci .
 
   e2e-smoke:
-    if: github.event_name != 'workflow_dispatch' || inputs.run_e2e
+    if: github.event_name != 'schedule' && (github.event_name != 'workflow_dispatch' || inputs.run_e2e)
     runs-on: ubuntu-latest
     timeout-minutes: 25
 

@@ -1,5 +1,7 @@
 import unittest
 
+import pytest
+
 from backend.dynasty_roto_values import (
     CommonDynastyRotoSettings,
     _active_common_pitch_categories,
@@ -103,6 +105,7 @@ class CommonPitcherBoundsRegressionTests(unittest.TestCase):
         self.assertEqual(float(delta["ERA"]), 1.2)
         self.assertEqual(float(delta["WHIP"]), 0.4)
 
+    @pytest.mark.full_regression
     def test_low_ip_regression_kollar_does_not_rank_above_lodolo(self) -> None:
         _calculate_common_dynasty_frame_cached.cache_clear()
         settings = {
@@ -159,6 +162,7 @@ class CommonPitcherBoundsRegressionTests(unittest.TestCase):
         lodolo_value = float(rows.loc["nick-lodolo", "DynastyValue"])
         self.assertLessEqual(kollar_value, lodolo_value)
 
+    @pytest.mark.full_regression
     def test_low_ip_regression_kollar_does_not_rank_above_reynaldo_lopez(self) -> None:
         _calculate_common_dynasty_frame_cached.cache_clear()
         settings = {

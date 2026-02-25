@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 import backend.app as app_module
@@ -74,6 +75,7 @@ class ApiContractShapeTests(unittest.TestCase):
         self.assertIn("checks", payload)
         self.assertIn("timestamp", payload)
 
+    @pytest.mark.full_regression
     def test_projections_endpoint_contract_shape(self) -> None:
         response = self.client.get("/api/projections/all", params={"limit": 2, "offset": 0})
 
