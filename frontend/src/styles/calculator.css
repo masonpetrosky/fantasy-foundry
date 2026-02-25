@@ -70,6 +70,17 @@
   color: var(--text-primary);
 }
 
+.calc-beginner-note {
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(212, 168, 83, 0.35);
+  background: linear-gradient(145deg, rgba(212, 168, 83, 0.12), rgba(212, 168, 83, 0.03));
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-base);
+}
+
 .calc-section {
   border-top: 1px solid var(--border-subtle);
   padding-top: 14px;
@@ -311,6 +322,7 @@
   font-family: var(--ff-sans);
   font-size: var(--fs-md);
   outline: none;
+  scroll-margin-top: 112px;
 }
 
 .form-group input:focus,
@@ -405,6 +417,10 @@
 
 .calc-note-links {
   margin-bottom: 10px;
+}
+
+.calc-advanced-hint {
+  margin: -2px 0 0;
 }
 
 .calc-method-link {

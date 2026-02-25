@@ -14,6 +14,7 @@ export function ColumnChooserControl({
   const menuRef = useRef(null);
   const triggerRef = useRef(null);
   const menuId = useId();
+  const triggerId = `${menuId}-trigger`;
   const optionalColumns = columns.filter(col => !requiredCols.has(col));
   const hiddenOptionalCount = optionalColumns.filter(col => hiddenCols[col]).length;
   const visibleCount = columns.length - Object.keys(hiddenCols || {}).length;
@@ -31,12 +32,18 @@ export function ColumnChooserControl({
         controlsId={menuId}
         open={open}
         buttonRef={triggerRef}
+        id={triggerId}
         className={`inline-btn ${open ? "open" : ""}`}
         onToggle={() => setOpen(value => !value)}
         label={`${buttonLabel} (${visibleCount}/${columns.length})`}
       />
       {open && (
-        <div id={menuId} className="multi-select-menu" role="listbox" aria-multiselectable="true">
+        <div
+          id={menuId}
+          className="multi-select-menu"
+          role="group"
+          aria-labelledby={triggerId}
+        >
           {onShowAllColumns && (
             <button
               type="button"

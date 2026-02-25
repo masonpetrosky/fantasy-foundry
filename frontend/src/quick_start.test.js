@@ -22,7 +22,6 @@ describe("quick_start", () => {
   });
 
   it("tracks onboarding quick start click and runs the flow callbacks", () => {
-    const markOnboardingDismissed = vi.fn();
     const openCalculatorPanel = vi.fn();
     const setPendingQuickStartMode = vi.fn();
     const scrollToCalculator = vi.fn();
@@ -31,8 +30,7 @@ describe("quick_start", () => {
 
     const mode = runQuickStartFlow({
       mode: "points",
-      onboardingDismissed: false,
-      markOnboardingDismissed,
+      source: "hero_cta",
       openCalculatorPanel,
       setPendingQuickStartMode,
       scrollToCalculator,
@@ -41,16 +39,19 @@ describe("quick_start", () => {
     });
 
     expect(mode).toBe("points");
-    expect(trackEventMock).toHaveBeenNthCalledWith(1, "ff_onboarding_cta_click", {
-      source: "onboarding_strip",
+    expect(trackEventMock).toHaveBeenNthCalledWith(1, "ff_quickstart_cta_click", {
+      source: "hero_cta",
       mode: "points",
     });
-    expect(trackEventMock).toHaveBeenNthCalledWith(2, "quickstart_click", {
-      source: "onboarding_strip",
+    expect(trackEventMock).toHaveBeenNthCalledWith(2, "ff_onboarding_cta_click", {
+      source: "hero_cta",
       mode: "points",
     });
-    expect(markOnboardingDismissed).toHaveBeenCalledTimes(1);
-    expect(openCalculatorPanel).toHaveBeenCalledTimes(1);
+    expect(trackEventMock).toHaveBeenNthCalledWith(3, "quickstart_click", {
+      source: "hero_cta",
+      mode: "points",
+    });
+    expect(openCalculatorPanel).toHaveBeenCalledWith("hero_cta");
     expect(setPendingQuickStartMode).toHaveBeenCalledWith("points");
     expect(scheduleFrame).toHaveBeenCalledTimes(1);
     expect(scrollToCalculator).toHaveBeenCalledTimes(1);

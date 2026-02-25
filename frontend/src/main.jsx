@@ -6,7 +6,7 @@ import { AccountPanel } from "./account_panel.jsx";
 import { resolveApiBase } from "./api_base.js";
 import { PRIMARY_NAV_ITEMS } from "./app_content.js";
 import { ProjectionsExplorer } from "./projections_explorer.jsx";
-import { setAnalyticsContext } from "./analytics.js";
+import { setAnalyticsContext, trackEvent } from "./analytics.js";
 import { ErrorBoundary } from "./error_boundary.jsx";
 import { formatIsoDateLabel, resolveProjectionWindow } from "./formatting_utils.js";
 import { useCalculatorOverlay } from "./hooks/useCalculatorOverlay.js";
@@ -20,18 +20,23 @@ import {
   readCalculatorPresets,
   readLastSuccessfulCalcRun,
   readPlayerWatchlist,
+  readSessionFirstRunLandingTimestamp,
   writeCalculatorPanelOpenPreference,
   writeCalculatorPresets,
   writeLastSuccessfulCalcRun,
+  writeSessionFirstRunLandingTimestamp,
   writePlayerWatchlist,
 } from "./app_state_storage.js";
 
 const API = resolveApiBase();
+const ACTIVATION_SPRINT_ENABLED = String(import.meta.env.VITE_FF_ACTIVATION_SPRINT_V1 || "1").trim() !== "0";
+const loadMethodologySectionModule = () => import("./methodology_section.jsx");
+const loadDynastyCalculatorModule = () => import("./dynasty_calculator.jsx");
 const LazyMethodologySection = lazy(() => (
-  import("./methodology_section.jsx").then(module => ({ default: module.MethodologySection }))
+  loadMethodologySectionModule().then(module => ({ default: module.MethodologySection }))
 ));
 const LazyDynastyCalculator = lazy(() => (
-  import("./dynasty_calculator.jsx").then(module => ({ default: module.DynastyCalculator }))
+  loadDynastyCalculatorModule().then(module => ({ default: module.DynastyCalculator }))
 ));
 
 function App() {
@@ -70,6 +75,9 @@ function App() {
   const accountMenuRef = useRef(null);
   const calculatorSectionRef = useRef(null);
   const calculatorHeadingRef = useRef(null);
+  const calculatorPanelOpenSourceRef = useRef("");
+  const previousCalculatorPanelOpenRef = useRef(calculatorPanelOpen);
+  const landingTrackedRef = useRef(false);
   const accountMenuLabel = !AUTH_SYNC_ENABLED || authUser ? "Account" : "Sign In";
   const sectionNeedsMeta = section === "projections";
   const projectionFreshness = useMemo(() => (
@@ -93,20 +101,28 @@ function App() {
     calculatorSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  const focusCalculatorHeading = useCallback(() => {
+  const focusFirstCalculatorInput = useCallback(() => {
+    const firstInput = document.getElementById("calc-teams-input");
+    if (firstInput && typeof firstInput.focus === "function") {
+      firstInput.focus({ preventScroll: true });
+      return;
+    }
     if (!calculatorHeadingRef.current || typeof calculatorHeadingRef.current.focus !== "function") return;
     calculatorHeadingRef.current.focus({ preventScroll: true });
   }, []);
 
-  const openCalculatorPanel = useCallback(() => {
+  const openCalculatorPanel = useCallback((source = "app_action") => {
+    calculatorPanelOpenSourceRef.current = String(source || "").trim() || "app_action";
     setSection("projections");
     setCalculatorPanelOpen(true);
   }, []);
 
   const {
     showQuickStartOnboarding,
+    showQuickStartReminder,
     requestQuickStartRun,
     dismissQuickStartOnboarding,
+    reopenQuickStartOnboarding,
     handleRegisterQuickStartRunner,
   } = useQuickStart({
     meta,
@@ -115,7 +131,7 @@ function App() {
     lastSuccessfulCalcRun,
     openCalculatorPanel,
     scrollToCalculator,
-    focusCalculatorHeading,
+    focusCalculatorHeading: focusFirstCalculatorInput,
   });
 
   const handleCalculationSuccess = useCallback(summary => {
@@ -149,6 +165,38 @@ function App() {
       scoring_mode: resolvedScoringMode,
     });
   }, [authUser, dataVersion, resolvedScoringMode, section]);
+
+  useEffect(() => {
+    if (landingTrackedRef.current) return;
+    landingTrackedRef.current = true;
+    const hasPriorRun = Boolean(readLastSuccessfulCalcRun());
+    const existingLandingTs = readSessionFirstRunLandingTimestamp();
+    if (!existingLandingTs) {
+      writeSessionFirstRunLandingTimestamp(Date.now());
+    }
+    trackEvent("ff_landing_view", {
+      source: "app_boot",
+      is_first_run: !hasPriorRun,
+      section,
+    });
+  }, [section]);
+
+  useEffect(() => {
+    const wasOpen = previousCalculatorPanelOpenRef.current;
+    if (!wasOpen && calculatorPanelOpen) {
+      trackEvent("ff_calculator_panel_open", {
+        source: calculatorPanelOpenSourceRef.current || "panel_toggle",
+      });
+      calculatorPanelOpenSourceRef.current = "";
+    }
+    previousCalculatorPanelOpenRef.current = calculatorPanelOpen;
+  }, [calculatorPanelOpen]);
+
+  useEffect(() => {
+    if (!ACTIVATION_SPRINT_ENABLED) return;
+    if (section !== "projections" || !meta) return;
+    void loadDynastyCalculatorModule();
+  }, [meta, section]);
 
   useEffect(() => {
     writeCalculatorPresets(presets);
@@ -273,6 +321,24 @@ function App() {
         <div className="hero fade-up">
           <h1>The Only <em>20-Year</em><br />Dynasty Baseball Projections</h1>
           <p>Comprehensive player projections from 2026 through 2045. Browse the data, configure your league settings, and generate personalized dynasty rankings.</p>
+          {sectionNeedsMeta && meta && ACTIVATION_SPRINT_ENABLED && (
+            <div className="hero-actions fade-up fade-up-1" role="group" aria-label="Quick start dynasty rankings">
+              <button
+                type="button"
+                className="hero-cta hero-cta-primary"
+                onClick={() => requestQuickStartRun("roto", { source: "hero_cta" })}
+              >
+                Run Recommended 5x5 Roto
+              </button>
+              <button
+                type="button"
+                className="hero-cta hero-cta-secondary"
+                onClick={() => requestQuickStartRun("points", { source: "hero_cta" })}
+              >
+                Run 12-Team Points
+              </button>
+            </div>
+          )}
           {meta && (
             <>
               <p className="hero-freshness" role="status">
@@ -297,25 +363,25 @@ function App() {
         </div>
 
         <div className="container">
-          {showQuickStartOnboarding && (
+          {showQuickStartOnboarding && ACTIVATION_SPRINT_ENABLED && (
             <section className="activation-strip" aria-label="Quick start dynasty rankings">
               <div className="activation-strip-copy">
                 <p className="activation-strip-kicker">Recommended Start</p>
-                <h2>Generate custom dynasty rankings in one click.</h2>
-                <p>Run the default 12-team 5x5 setup first, then edit settings once results load.</p>
+                <h2>Generate your first custom dynasty rankings now.</h2>
+                <p>Run the default 12-team 5x5 setup, then fine-tune league settings after results load.</p>
               </div>
               <div className="activation-strip-actions" role="group" aria-label="Quick start options">
                 <button
                   type="button"
                   className="activation-strip-btn activation-strip-btn-primary"
-                  onClick={() => requestQuickStartRun("roto")}
+                  onClick={() => requestQuickStartRun("roto", { source: "activation_strip" })}
                 >
                   Run Recommended 5x5 Roto
                 </button>
                 <button
                   type="button"
                   className="activation-strip-btn activation-strip-btn-secondary"
-                  onClick={() => requestQuickStartRun("points")}
+                  onClick={() => requestQuickStartRun("points", { source: "activation_strip" })}
                 >
                   Run 12-Team Points Instead
                 </button>
@@ -327,6 +393,27 @@ function App() {
               >
                 Dismiss
               </button>
+            </section>
+          )}
+          {showQuickStartReminder && ACTIVATION_SPRINT_ENABLED && (
+            <section className="activation-reminder" aria-label="Quick start reminder">
+              <p>Quick start is hidden. Reopen it or run the default setup now.</p>
+              <div className="activation-reminder-actions">
+                <button
+                  type="button"
+                  className="inline-btn"
+                  onClick={reopenQuickStartOnboarding}
+                >
+                  Reopen Quick Start
+                </button>
+                <button
+                  type="button"
+                  className="inline-btn activation-reminder-run"
+                  onClick={() => requestQuickStartRun("roto", { source: "activation_reminder" })}
+                >
+                  Run Recommended 5x5 Roto
+                </button>
+              </div>
             </section>
           )}
           {sectionNeedsMeta && meta && (
@@ -349,14 +436,21 @@ function App() {
                   type="button"
                   className="inline-btn"
                   onClick={() => {
-                    openCalculatorPanel();
+                    openCalculatorPanel("last_run_review");
                     window.requestAnimationFrame(() => {
                       scrollToCalculator();
-                      focusCalculatorHeading();
+                      focusFirstCalculatorInput();
                     });
                   }}
                 >
                   Review calculator settings
+                </button>
+                <button
+                  type="button"
+                  className="inline-btn"
+                  onClick={() => requestQuickStartRun(lastSuccessfulCalcRun.scoringMode, { source: "last_success_rerun" })}
+                >
+                  Run this setup again
                 </button>
               </div>
             </section>
@@ -402,7 +496,15 @@ function App() {
                   <button
                     type="button"
                     className={`embedded-calculator-toggle ${calculatorPanelOpen ? "open" : ""}`.trim()}
-                    onClick={() => setCalculatorPanelOpen(current => !current)}
+                    onClick={() => {
+                      setCalculatorPanelOpen(current => {
+                        const nextValue = !current;
+                        if (nextValue) {
+                          calculatorPanelOpenSourceRef.current = "panel_toggle";
+                        }
+                        return nextValue;
+                      });
+                    }}
                     aria-expanded={calculatorPanelOpen}
                     aria-controls="embedded-calculator-content"
                   >
@@ -443,6 +545,7 @@ function App() {
                   dataVersion={dataVersion}
                   watchlist={watchlist}
                   setWatchlist={setWatchlist}
+                  hasSuccessfulCalcRun={Boolean(lastSuccessfulCalcRun)}
                   activeCalculatorSettings={calculatorSettings}
                   calculatorOverlayByPlayerKey={calculatorOverlayByPlayerKey}
                   calculatorOverlayActive={calculatorOverlayActive}
@@ -466,10 +569,10 @@ function App() {
             type="button"
             className="mobile-run-cta"
             onClick={() => {
-              openCalculatorPanel();
+              openCalculatorPanel("mobile_cta");
               window.requestAnimationFrame(() => {
                 scrollToCalculator();
-                focusCalculatorHeading();
+                focusFirstCalculatorInput();
               });
             }}
           >

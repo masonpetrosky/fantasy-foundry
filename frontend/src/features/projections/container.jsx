@@ -72,6 +72,7 @@ export function ProjectionsExplorer({
   dataVersion,
   watchlist,
   setWatchlist,
+  hasSuccessfulCalcRun,
   activeCalculatorSettings,
   calculatorOverlayByPlayerKey,
   calculatorOverlayActive,
@@ -299,6 +300,7 @@ export function ProjectionsExplorer({
       ? [seasonCol, "DynastyValue", "IP", "W", "K", "SV", "ERA", "WHIP"]
       : [seasonCol, "DynastyValue", "AB", "R", "HR", "RBI", "SB", "IP", "W", "K", "SV", "ERA", "WHIP"];
   const compareRowsCount = compareRows.length;
+  const showCollectionsWorkspace = Boolean(hasSuccessfulCalcRun) || watchlistCount > 0 || compareRowsCount > 0;
 
   const formatProjectionCell = useCallback((col, row) => {
     const val = row[col];
@@ -568,40 +570,48 @@ export function ProjectionsExplorer({
           Export failed. {exportError}
         </div>
       )}
-      <div className="collection-toolbar" role="group" aria-label="Watchlist and comparison actions">
-        <span className="collection-toolbar-label">Watchlist: {watchlistCount}</span>
-        <span className="collection-toolbar-label">View: {watchlistOnly ? "Watchlist" : "All Players"}</span>
-        <button type="button" className="inline-btn" onClick={exportWatchlistCsv} disabled={watchlistCount === 0}>
-          Export Watchlist CSV
-        </button>
-        <button type="button" className="inline-btn" onClick={clearWatchlist} disabled={watchlistCount === 0}>
-          Clear Watchlist
-        </button>
-        <span className="collection-toolbar-label">Compare: {compareRowsCount}/{maxComparePlayers}</span>
-        <button type="button" className="inline-btn" onClick={clearCompareRows} disabled={compareRowsCount === 0}>
-          Clear Compare
-        </button>
-      </div>
-      {compareRowsCount > 0 && (
-        <Suspense fallback={null}>
-          <LazyProjectionComparisonPanel
-            compareRows={compareRows}
-            maxComparePlayers={maxComparePlayers}
-            comparisonColumns={comparisonColumns}
-            colLabels={colLabels}
-            formatCellValue={formatCellValue}
-            removeCompareRow={removeCompareRow}
-          />
-        </Suspense>
-      )}
-      {watchlistCount > 0 && (
-        <Suspense fallback={null}>
-          <LazyProjectionWatchlistPanel
-            watchlistCount={watchlistCount}
-            watchlist={watchlist}
-            removeWatchlistEntry={removeWatchlistEntry}
-          />
-        </Suspense>
+      {showCollectionsWorkspace ? (
+        <>
+          <div className="collection-toolbar" role="group" aria-label="Watchlist and comparison actions">
+            <span className="collection-toolbar-label">Watchlist: {watchlistCount}</span>
+            <span className="collection-toolbar-label">View: {watchlistOnly ? "Watchlist" : "All Players"}</span>
+            <button type="button" className="inline-btn" onClick={exportWatchlistCsv} disabled={watchlistCount === 0}>
+              Export Watchlist CSV
+            </button>
+            <button type="button" className="inline-btn" onClick={clearWatchlist} disabled={watchlistCount === 0}>
+              Clear Watchlist
+            </button>
+            <span className="collection-toolbar-label">Compare: {compareRowsCount}/{maxComparePlayers}</span>
+            <button type="button" className="inline-btn" onClick={clearCompareRows} disabled={compareRowsCount === 0}>
+              Clear Compare
+            </button>
+          </div>
+          {compareRowsCount > 0 && (
+            <Suspense fallback={null}>
+              <LazyProjectionComparisonPanel
+                compareRows={compareRows}
+                maxComparePlayers={maxComparePlayers}
+                comparisonColumns={comparisonColumns}
+                colLabels={colLabels}
+                formatCellValue={formatCellValue}
+                removeCompareRow={removeCompareRow}
+              />
+            </Suspense>
+          )}
+          {watchlistCount > 0 && (
+            <Suspense fallback={null}>
+              <LazyProjectionWatchlistPanel
+                watchlistCount={watchlistCount}
+                watchlist={watchlist}
+                removeWatchlistEntry={removeWatchlistEntry}
+              />
+            </Suspense>
+          )}
+        </>
+      ) : (
+        <div className="collection-toolbar collection-toolbar-hint" role="note">
+          Run dynasty rankings first to unlock your watchlist and comparison workspace.
+        </div>
       )}
       <div className="projection-layout-controls" role="group" aria-label="Projection layout controls">
           <div className="projection-layout-row">

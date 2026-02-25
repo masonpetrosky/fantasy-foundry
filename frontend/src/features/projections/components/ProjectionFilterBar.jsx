@@ -46,6 +46,7 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
   const posMenuRef = useRef(null);
   const posMenuTriggerRef = useRef(null);
   const posMenuId = useId();
+  const posMenuTriggerId = `${posMenuId}-trigger`;
 
   useMenuInteractions({
     open: showPosMenu,
@@ -166,6 +167,7 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
             open={showPosMenu}
             onToggle={() => setShowPosMenu(open => !open)}
             buttonRef={posMenuTriggerRef}
+            id={posMenuTriggerId}
             className={`multi-select-trigger ${showPosMenu ? "open" : ""}`}
             aria-label="Filter positions"
             label={(
@@ -177,7 +179,12 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
           >
           </MenuButton>
           {showPosMenu && (
-            <div id={posMenuId} className="multi-select-menu" role="listbox" aria-multiselectable="true">
+            <div
+              id={posMenuId}
+              className="multi-select-menu"
+              role="group"
+              aria-labelledby={posMenuTriggerId}
+            >
               <button
                 type="button"
                 className="multi-select-clear"

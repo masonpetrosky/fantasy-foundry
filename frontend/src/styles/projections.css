@@ -276,6 +276,15 @@
   margin: 0 0 12px;
 }
 
+.collection-toolbar-hint {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  padding: 9px 10px;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
 .collection-toolbar-label {
   font-size: var(--fs-xs);
   color: var(--text-muted);

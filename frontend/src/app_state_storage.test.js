@@ -1,19 +1,28 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   calculatorPresetsEqual,
+  FIRST_RUN_STATE_DISMISSED_PRE_SUCCESS,
+  FIRST_RUN_STATE_NEW,
   mergeCalculatorPresetsPreferLocal,
+  readFirstRunState,
   readLastSuccessfulCalcRun,
   readCalculatorPanelOpenPreference,
   readOnboardingDismissed,
+  readSessionFirstRunLandingTimestamp,
+  readSessionFirstRunSuccessRecorded,
   readProjectionFilterPresets,
+  writeFirstRunState,
   writeLastSuccessfulCalcRun,
   writeCalculatorPanelOpenPreference,
   writeOnboardingDismissed,
+  writeSessionFirstRunLandingTimestamp,
+  writeSessionFirstRunSuccessRecorded,
   writeProjectionFilterPresets,
 } from "./app_state_storage.js";
 
 function withStorage(initialValues = {}) {
   const store = { ...initialValues };
+  const sessionStore = {};
   vi.stubGlobal("window", {
     localStorage: {
       getItem: vi.fn(key => (Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null)),
@@ -24,8 +33,17 @@ function withStorage(initialValues = {}) {
         delete store[key];
       }),
     },
+    sessionStorage: {
+      getItem: vi.fn(key => (Object.prototype.hasOwnProperty.call(sessionStore, key) ? sessionStore[key] : null)),
+      setItem: vi.fn((key, value) => {
+        sessionStore[key] = String(value);
+      }),
+      removeItem: vi.fn(key => {
+        delete sessionStore[key];
+      }),
+    },
   });
-  return store;
+  return { store, sessionStore };
 }
 
 afterEach(() => {
@@ -103,7 +121,7 @@ describe("calculator panel storage", () => {
   });
 
   it("reads and writes panel open preference", () => {
-    const store = withStorage({ "ff:calc-panel-open:v1": "0" });
+    const { store } = withStorage({ "ff:calc-panel-open:v1": "0" });
     expect(readCalculatorPanelOpenPreference()).toBe(false);
 
     writeCalculatorPanelOpenPreference(true);
@@ -119,7 +137,7 @@ describe("onboarding dismissal storage", () => {
   });
 
   it("persists dismissed state as boolean", () => {
-    const store = withStorage();
+    const { store } = withStorage();
     writeOnboardingDismissed(true);
     expect(store["ff:onboarding-dismissed:v1"]).toBe("1");
     expect(readOnboardingDismissed()).toBe(true);
@@ -130,9 +148,43 @@ describe("onboarding dismissal storage", () => {
   });
 });
 
+describe("first-run state storage", () => {
+  it("defaults to new and migrates from legacy onboarding dismissal", () => {
+    withStorage();
+    expect(readFirstRunState()).toBe(FIRST_RUN_STATE_NEW);
+
+    withStorage({ "ff:onboarding-dismissed:v1": "1" });
+    expect(readFirstRunState()).toBe(FIRST_RUN_STATE_DISMISSED_PRE_SUCCESS);
+  });
+
+  it("persists first-run state values", () => {
+    const { store } = withStorage();
+    writeFirstRunState(FIRST_RUN_STATE_DISMISSED_PRE_SUCCESS);
+    expect(store["ff:first-run-state:v1"]).toBe(FIRST_RUN_STATE_DISMISSED_PRE_SUCCESS);
+    expect(store["ff:onboarding-dismissed:v1"]).toBe("1");
+
+    writeFirstRunState(FIRST_RUN_STATE_NEW);
+    expect(store["ff:first-run-state:v1"]).toBe(FIRST_RUN_STATE_NEW);
+    expect(store["ff:onboarding-dismissed:v1"]).toBe("0");
+  });
+});
+
+describe("session first-run metrics storage", () => {
+  it("stores and reads landing timestamp and first-success flag", () => {
+    const { sessionStore } = withStorage();
+    writeSessionFirstRunLandingTimestamp(1700001234567);
+    writeSessionFirstRunSuccessRecorded(true);
+
+    expect(readSessionFirstRunLandingTimestamp()).toBe(1700001234567);
+    expect(readSessionFirstRunSuccessRecorded()).toBe(true);
+    expect(sessionStore["ff:first-run-session-landing-ts:v1"]).toBe("1700001234567");
+    expect(sessionStore["ff:first-run-session-success:v1"]).toBe("1");
+  });
+});
+
 describe("last successful calculator run storage", () => {
   it("round-trips a normalized run summary", () => {
-    const store = withStorage();
+    const { store } = withStorage();
     writeLastSuccessfulCalcRun({
       scoringMode: "points",
       teams: "12",
@@ -161,7 +213,7 @@ describe("last successful calculator run storage", () => {
 
 describe("projection filter preset storage", () => {
   it("stores and loads one normalized custom preset", () => {
-    const store = withStorage();
+    const { store } = withStorage();
     writeProjectionFilterPresets({
       custom: {
         tab: "bat",

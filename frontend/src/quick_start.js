@@ -6,8 +6,7 @@ export function normalizeQuickStartMode(mode) {
 
 export function runQuickStartFlow({
   mode,
-  onboardingDismissed,
-  markOnboardingDismissed,
+  source = "activation_strip",
   openCalculatorPanel,
   setPendingQuickStartMode,
   scrollToCalculator,
@@ -15,14 +14,12 @@ export function runQuickStartFlow({
   scheduleFrame,
 }) {
   const normalizedMode = normalizeQuickStartMode(mode);
-  trackEvent("ff_onboarding_cta_click", { source: "onboarding_strip", mode: normalizedMode });
-  trackEvent("quickstart_click", { source: "onboarding_strip", mode: normalizedMode });
-
-  if (!onboardingDismissed && typeof markOnboardingDismissed === "function") {
-    markOnboardingDismissed();
-  }
+  const resolvedSource = String(source || "").trim() || "activation_strip";
+  trackEvent("ff_quickstart_cta_click", { source: resolvedSource, mode: normalizedMode });
+  trackEvent("ff_onboarding_cta_click", { source: resolvedSource, mode: normalizedMode });
+  trackEvent("quickstart_click", { source: resolvedSource, mode: normalizedMode });
   if (typeof openCalculatorPanel === "function") {
-    openCalculatorPanel();
+    openCalculatorPanel(resolvedSource);
   }
   if (typeof setPendingQuickStartMode === "function") {
     setPendingQuickStartMode(normalizedMode);

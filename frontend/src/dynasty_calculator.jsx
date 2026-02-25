@@ -8,6 +8,9 @@ import {
   decodeCalculatorSettings,
   encodeCalculatorSettings,
   mergeKnownCalculatorSettings,
+  readSessionFirstRunLandingTimestamp,
+  readSessionFirstRunSuccessRecorded,
+  writeSessionFirstRunSuccessRecorded,
 } from "./app_state_storage.js";
 import {
   HITTER_SLOT_FIELDS,
@@ -197,6 +200,7 @@ export function DynastyCalculator({
     const source = String(options.source || "calculator_sidebar").trim() || "calculator_sidebar";
     const trackQuickStartClick = options.trackClick !== false;
     if (trackQuickStartClick) {
+      trackEvent("ff_quickstart_cta_click", { source, mode: normalizedMode });
       trackEvent("quickstart_click", { source, mode: normalizedMode });
     }
     const nextSettings = buildQuickStartSettings({
@@ -218,7 +222,7 @@ export function DynastyCalculator({
     });
   }
   quickStartRunRef.current = mode => applyQuickStartAndRun(mode, {
-    source: "onboarding_strip",
+    source: "activation_strip",
     trackClick: false,
   });
 
@@ -344,6 +348,15 @@ export function DynastyCalculator({
       startYear: Number(normalizedSettings.start_year),
       horizon: Number(normalizedSettings.horizon),
     });
+    trackEvent("ff_calculation_submit", {
+      source: String(runContext.source || "manual").trim() || "manual",
+      scoring_mode: String(normalizedSettings.scoring_mode || "").trim() || "roto",
+      start_year: Number(normalizedSettings.start_year),
+      horizon: Number(normalizedSettings.horizon),
+      teams: Number(normalizedSettings.teams),
+      quickstart_mode: runContext.quickStartMode || "",
+      quickstart_source: runContext.quickStartSource || "",
+    });
     setLoading(true);
     setStatus("Submitting simulation...");
 
@@ -363,6 +376,15 @@ export function DynastyCalculator({
           : Array.isArray(result?.data)
             ? result.data.length
             : 0;
+        const sessionHadSuccess = readSessionFirstRunSuccessRecorded();
+        const sessionLandingTs = readSessionFirstRunLandingTimestamp();
+        const resolvedTimeToFirstSuccess = !sessionHadSuccess && Number.isFinite(sessionLandingTs)
+          ? Math.max(0, Date.now() - Number(sessionLandingTs))
+          : null;
+        if (!sessionHadSuccess) {
+          writeSessionFirstRunSuccessRecorded(true);
+        }
+        const firstSuccessfulRun = !firstSuccessTrackedRef.current;
         setLastRunTotal(resolvedTotal);
         if (typeof onCalculationSuccess === "function") {
           onCalculationSuccess({
@@ -376,7 +398,7 @@ export function DynastyCalculator({
         if (typeof onApplyToMainTable === "function") {
           onApplyToMainTable(result, normalizedSettings, runMeta);
         }
-        if (!firstSuccessTrackedRef.current) {
+        if (firstSuccessfulRun) {
           firstSuccessTrackedRef.current = true;
           trackEvent("ff_calculator_first_success", {
             source: String(runContext.source || "manual").trim() || "manual",
@@ -387,6 +409,19 @@ export function DynastyCalculator({
             player_count: resolvedTotal,
           });
         }
+        trackEvent("ff_calculation_success", {
+          source: String(runContext.source || "manual").trim() || "manual",
+          scoring_mode: String(normalizedSettings.scoring_mode || "").trim() || "roto",
+          start_year: Number(normalizedSettings.start_year),
+          horizon: Number(normalizedSettings.horizon),
+          teams: Number(normalizedSettings.teams),
+          player_count: resolvedTotal,
+          job_id: runMeta?.jobId || "",
+          is_first_run: firstSuccessfulRun,
+          time_to_first_success_ms: resolvedTimeToFirstSuccess,
+          quickstart_mode: runContext.quickStartMode || "",
+          quickstart_source: runContext.quickStartSource || "",
+        });
         trackEvent("calculator_run_success", {
           source: String(runContext.source || "manual").trim() || "manual",
           quickStartMode: runContext.quickStartMode,
@@ -407,6 +442,16 @@ export function DynastyCalculator({
       onError: message => {
         setLoading(false);
         setStatus(`Error: ${message}`);
+        trackEvent("ff_calculation_error", {
+          source: String(runContext.source || "manual").trim() || "manual",
+          scoring_mode: String(normalizedSettings.scoring_mode || "").trim() || "roto",
+          start_year: Number(normalizedSettings.start_year),
+          horizon: Number(normalizedSettings.horizon),
+          teams: Number(normalizedSettings.teams),
+          error_message: String(message || "").trim() || "Calculation failed",
+          quickstart_mode: runContext.quickStartMode || "",
+          quickstart_source: runContext.quickStartSource || "",
+        });
       },
     }).finally(() => {
       if (calcAbortControllerRef.current === controller) {

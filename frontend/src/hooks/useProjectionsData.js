@@ -8,7 +8,7 @@ export const CAREER_TOTALS_FILTER_VALUE = "__career_totals__";
 
 const PROJECTION_PAGE_CACHE_MAX = 80;
 const PROJECTION_SEARCH_DEBOUNCE_MS = 220;
-const PROJECTION_INITIAL_FETCH_DELAY_MS = 220;
+const PROJECTION_INITIAL_FETCH_DELAY_MS = 0;
 
 function projectionCacheGet(cacheMapRef, cacheOrderRef, cacheKey) {
   const cached = cacheMapRef.current.get(cacheKey);

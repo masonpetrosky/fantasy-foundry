@@ -51,6 +51,7 @@ export function DynastyCalculatorSidebar({
     openMethodologyGlossary,
   } = actions;
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(Boolean(hasSuccessfulRun));
+  const beginnerMode = !hasSuccessfulRun && !showAdvancedSettings;
 
   useEffect(() => {
     if (!hasSuccessfulRun) return;
@@ -87,6 +88,11 @@ export function DynastyCalculatorSidebar({
           <strong>{totalPlayersPerTeam} slots</strong>
         </div>
       </div>
+      {beginnerMode && (
+        <div className="calc-beginner-note" role="status" aria-live="polite">
+          Beginner mode is active. Start with quick run defaults, then open advanced controls to tune scoring and depth.
+        </div>
+      )}
 
       <div className="calc-section">
         <p className="calc-section-title">Quick Start</p>
@@ -125,8 +131,15 @@ export function DynastyCalculatorSidebar({
 
         <div className="form-row">
           <div className="form-group">
-            <label>Teams</label>
-            <input type="number" value={settings.teams} onChange={e => update("teams", e.target.value)} min="2" max="30" />
+            <label htmlFor="calc-teams-input">Teams</label>
+            <input
+              id="calc-teams-input"
+              type="number"
+              value={settings.teams}
+              onChange={e => update("teams", e.target.value)}
+              min="2"
+              max="30"
+            />
           </div>
           <div className="form-group">
             <label>Start Year</label>
@@ -142,24 +155,6 @@ export function DynastyCalculatorSidebar({
             <input type="number" value={settings.horizon} onChange={e => update("horizon", e.target.value)} min="1" max="20" />
           </div>
           <div className="form-group">
-            <label>
-              Discount
-              <span
-                className="field-help"
-                tabIndex={0}
-                role="note"
-                aria-label="Discount help"
-                title="Applies a yearly value multiplier. Example: 0.94 means each future season is worth 94% of the previous season."
-              >
-                ?
-              </span>
-            </label>
-            <input type="number" value={settings.discount} onChange={e => update("discount", e.target.value)} min="0.5" max="1" step="0.01" />
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
             <label>Setup</label>
             <select
               value={settings.scoring_mode}
@@ -169,140 +164,172 @@ export function DynastyCalculatorSidebar({
               <option value="points">Points Focused</option>
             </select>
           </div>
-          <div className="form-group">
-            <label>
-              Two-Way Value
-              <span
-                className="field-help"
-                tabIndex={0}
-                role="note"
-                aria-label="Two-Way Value help"
-                title="Sum H + P combines both sides for two-way players. Best of H/P keeps whichever side grades higher."
-              >
-                ?
-              </span>
-            </label>
-            <select value={settings.two_way} onChange={e => update("two_way", e.target.value)}>
-              <option value="sum">Sum H + P</option>
-              <option value="max">Best of H/P</option>
-            </select>
-          </div>
         </div>
         <p className="calc-note">Switching setup applies the recommended slot defaults for that format.</p>
 
-        <div className="form-row">
-          <div className="form-group">
-            <label>Simulations</label>
-            <input
-              type="number"
-              value={settings.sims}
-              onChange={e => update("sims", e.target.value)}
-              min="50"
-              max="1000"
-              step="50"
-              disabled={isPointsMode}
-            />
-          </div>
-          <div className="form-group">
-            <label>
-              Recent Proj.
-              <span
-                className="field-help"
-                tabIndex={0}
-                role="note"
-                aria-label="Recent projections help"
-                title="Number of newest projection sets averaged per player-year (1-10). Higher values smooth volatility."
-              >
-                ?
-              </span>
-            </label>
-            <input type="number" value={settings.recent_projections} onChange={e => update("recent_projections", e.target.value)} min="1" max="10" />
-          </div>
-        </div>
-        {isPointsMode && <p className="calc-note">Points mode ignores the simulations setting and scores directly from projected totals.</p>}
+        {showAdvancedSettings && (
+          <>
+            <div className="form-row">
+              <div className="form-group">
+                <label>
+                  Discount
+                  <span
+                    className="field-help"
+                    tabIndex={0}
+                    role="note"
+                    aria-label="Discount help"
+                    title="Applies a yearly value multiplier. Example: 0.94 means each future season is worth 94% of the previous season."
+                  >
+                    ?
+                  </span>
+                </label>
+                <input type="number" value={settings.discount} onChange={e => update("discount", e.target.value)} min="0.5" max="1" step="0.01" />
+              </div>
+              <div className="form-group">
+                <label>
+                  Two-Way Value
+                  <span
+                    className="field-help"
+                    tabIndex={0}
+                    role="note"
+                    aria-label="Two-Way Value help"
+                    title="Sum H + P combines both sides for two-way players. Best of H/P keeps whichever side grades higher."
+                  >
+                    ?
+                  </span>
+                </label>
+                <select value={settings.two_way} onChange={e => update("two_way", e.target.value)}>
+                  <option value="sum">Sum H + P</option>
+                  <option value="max">Best of H/P</option>
+                </select>
+              </div>
+            </div>
 
-        <div className="form-row">
-          <div className="form-group">
-            <label>IP Min</label>
-            <input
-              type="number"
-              value={settings.ip_min}
-              onChange={e => update("ip_min", e.target.value)}
-              min="0"
-              step="100"
-              disabled={isPointsMode}
-            />
-          </div>
-          <div className="form-group">
-            <label>IP Max</label>
-            <input
-              type="text"
-              value={settings.ip_max}
-              onChange={e => update("ip_max", e.target.value)}
-              placeholder="none"
-              disabled={isPointsMode}
-            />
-          </div>
-        </div>
-        {isPointsMode && <p className="calc-note">IP min/max constraints only apply in roto mode.</p>}
+            <div className="form-row">
+              <div className="form-group">
+                <label>Simulations</label>
+                <input
+                  type="number"
+                  value={settings.sims}
+                  onChange={e => update("sims", e.target.value)}
+                  min="50"
+                  max="1000"
+                  step="50"
+                  disabled={isPointsMode}
+                />
+              </div>
+              <div className="form-group">
+                <label>
+                  Recent Proj.
+                  <span
+                    className="field-help"
+                    tabIndex={0}
+                    role="note"
+                    aria-label="Recent projections help"
+                    title="Number of newest projection sets averaged per player-year (1-10). Higher values smooth volatility."
+                  >
+                    ?
+                  </span>
+                </label>
+                <input type="number" value={settings.recent_projections} onChange={e => update("recent_projections", e.target.value)} min="1" max="10" />
+              </div>
+            </div>
+            {isPointsMode && <p className="calc-note">Points mode ignores the simulations setting and scores directly from projected totals.</p>}
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>IP Min</label>
+                <input
+                  type="number"
+                  value={settings.ip_min}
+                  onChange={e => update("ip_min", e.target.value)}
+                  min="0"
+                  step="100"
+                  disabled={isPointsMode}
+                />
+              </div>
+              <div className="form-group">
+                <label>IP Max</label>
+                <input
+                  type="text"
+                  value={settings.ip_max}
+                  onChange={e => update("ip_max", e.target.value)}
+                  placeholder="none"
+                  disabled={isPointsMode}
+                />
+              </div>
+            </div>
+            {isPointsMode && <p className="calc-note">IP min/max constraints only apply in roto mode.</p>}
+          </>
+        )}
       </div>
 
-      <div className="calc-section">
-        <p className="calc-section-title">Presets And Sharing</p>
-        <div className="form-row">
-          <div className="form-group">
-            <label>Preset Name</label>
-            <input
-              type="text"
-              value={presetName}
-              placeholder="e.g. 12-team H2H Points"
-              onChange={e => setPresetName(e.target.value)}
-            />
-          </div>
-          <div className="form-group">
-            <label>Preset Actions</label>
-            <button type="button" className="calc-secondary-btn" onClick={savePreset} disabled={!canSavePreset}>
-              Save / Update Preset
-            </button>
-          </div>
-        </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label>Saved Presets</label>
-            <select
-              value={selectedPresetName}
-              onChange={e => selectPreset(e.target.value)}
-            >
-              <option value="">Select Preset</option>
-              {Object.keys(presets).sort((a, b) => a.localeCompare(b)).map(name => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Share</label>
-            <button type="button" className="calc-secondary-btn" onClick={copyShareLink}>
-              Copy Share Link
-            </button>
-          </div>
-        </div>
-        {presetStatus && (
-          <p
-            className={`calc-preset-status ${presetStatusIsError ? "error" : ""}`.trim()}
-            role={presetStatusIsError ? "alert" : "status"}
-            aria-live="polite"
-          >
-            {presetStatus}
+      {!showAdvancedSettings && (
+        <div className="calc-section">
+          <p className="calc-note calc-advanced-hint">
+            Advanced controls include discounts, two-way handling, simulations, presets, and scoring-detail overrides.
           </p>
-        )}
-        {selectedPresetName && (
-          <div className="calc-inline-actions calc-inline-actions-single">
-            <button type="button" className="calc-secondary-btn danger" onClick={() => deletePreset(selectedPresetName)}>
-              Delete Selected Preset
-            </button>
+        </div>
+      )}
+
+      {showAdvancedSettings && (
+        <div className="calc-section">
+          <p className="calc-section-title">Presets And Sharing</p>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Preset Name</label>
+              <input
+                type="text"
+                value={presetName}
+                placeholder="e.g. 12-team H2H Points"
+                onChange={e => setPresetName(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>Preset Actions</label>
+              <button type="button" className="calc-secondary-btn" onClick={savePreset} disabled={!canSavePreset}>
+                Save / Update Preset
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Saved Presets</label>
+              <select
+                value={selectedPresetName}
+                onChange={e => selectPreset(e.target.value)}
+              >
+                <option value="">Select Preset</option>
+                {Object.keys(presets).sort((a, b) => a.localeCompare(b)).map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Share</label>
+              <button type="button" className="calc-secondary-btn" onClick={copyShareLink}>
+                Copy Share Link
+              </button>
+            </div>
+          </div>
+          {presetStatus && (
+            <p
+              className={`calc-preset-status ${presetStatusIsError ? "error" : ""}`.trim()}
+              role={presetStatusIsError ? "alert" : "status"}
+              aria-live="polite"
+            >
+              {presetStatus}
+            </p>
+          )}
+          {selectedPresetName && (
+            <div className="calc-inline-actions calc-inline-actions-single">
+              <button type="button" className="calc-secondary-btn danger" onClick={() => deletePreset(selectedPresetName)}>
+                Delete Selected Preset
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="calc-section">
         <p className="calc-section-title">Advanced Settings</p>

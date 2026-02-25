@@ -274,9 +274,52 @@ header {
   color: var(--text-secondary);
   font-size: 1.17rem;
   max-width: 650px;
-  margin: 0 auto 40px;
+  margin: 0 auto 24px;
   font-weight: 400;
   line-height: var(--lh-relaxed);
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 auto 20px;
+}
+
+.hero-cta {
+  min-height: 40px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  padding: 9px 14px;
+  font-family: var(--ff-sans);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.hero-cta-primary {
+  border-color: rgba(212, 168, 83, 0.55);
+  background: linear-gradient(145deg, rgba(212, 168, 83, 0.25), rgba(212, 168, 83, 0.12));
+}
+
+.hero-cta-primary:hover,
+.hero-cta-primary:focus-visible {
+  border-color: var(--accent);
+  background: linear-gradient(145deg, rgba(212, 168, 83, 0.33), rgba(212, 168, 83, 0.2));
+}
+
+.hero-cta-secondary {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.hero-cta-secondary:hover,
+.hero-cta-secondary:focus-visible {
+  border-color: var(--accent-dim);
+  color: var(--text-primary);
 }
 
 .hero-freshness {
@@ -411,6 +454,37 @@ header {
   color: var(--text-primary);
 }
 
+.activation-reminder {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+  background: var(--bg-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.activation-reminder p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  flex: 1 1 260px;
+}
+
+.activation-reminder-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.activation-reminder-run {
+  border-color: rgba(212, 168, 83, 0.45);
+  color: var(--accent);
+}
+
 .app-freshness-banner {
   margin-bottom: 12px;
 }
@@ -440,6 +514,9 @@ header {
 
 .calc-last-success-actions {
   margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .error-boundary-panel {

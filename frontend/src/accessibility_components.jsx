@@ -10,6 +10,7 @@ export function MenuButton({
   open,
   onToggle,
   buttonRef,
+  hasPopup = "menu",
   className,
   label,
   children,
@@ -21,7 +22,7 @@ export function MenuButton({
       ref={buttonRef}
       className={className}
       onClick={onToggle}
-      aria-haspopup="listbox"
+      aria-haspopup={hasPopup}
       aria-expanded={open}
       aria-controls={controlsId}
       {...buttonProps}
