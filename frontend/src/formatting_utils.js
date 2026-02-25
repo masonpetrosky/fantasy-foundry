@@ -34,3 +34,29 @@ export function parsePosTokens(posValue) {
     .map(token => token.trim())
     .filter(Boolean);
 }
+
+export function formatIsoDateLabel(value) {
+  const text = String(value || "").trim();
+  if (!text) return "Unknown";
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return text;
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+export function resolveProjectionWindow(meta) {
+  const years = Array.isArray(meta?.years)
+    ? meta.years.map(Number).filter(Number.isFinite)
+    : [];
+  const metaStart = Number(meta?.projection_window_start);
+  const metaEnd = Number(meta?.projection_window_end);
+  const start = Number.isFinite(metaStart) ? metaStart : (years.length > 0 ? Math.min(...years) : null);
+  const end = Number.isFinite(metaEnd) ? metaEnd : (years.length > 0 ? Math.max(...years) : null);
+  const seasons = Number.isFinite(start) && Number.isFinite(end) && end >= start
+    ? end - start + 1
+    : null;
+  return { start, end, seasons };
+}

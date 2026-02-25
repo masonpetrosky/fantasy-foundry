@@ -7,9 +7,12 @@ import { resolveApiBase } from "./api_base.js";
 import { PRIMARY_NAV_ITEMS } from "./app_content.js";
 import { ProjectionsExplorer } from "./projections_explorer.jsx";
 import { DynastyCalculator } from "./dynasty_calculator.jsx";
-import { setAnalyticsContext, trackEvent } from "./analytics.js";
+import { setAnalyticsContext } from "./analytics.js";
 import { ErrorBoundary } from "./error_boundary.jsx";
-import { runQuickStartFlow } from "./quick_start.js";
+import { formatIsoDateLabel, resolveProjectionWindow } from "./formatting_utils.js";
+import { useCalculatorOverlay } from "./hooks/useCalculatorOverlay.js";
+import { useMetadata } from "./hooks/useMetadata.js";
+import { useQuickStart } from "./hooks/useQuickStart.js";
 import { useVersionPolling } from "./hooks/useVersionPolling.js";
 import { useAccountSync } from "./hooks/useAccountSync.js";
 import {
@@ -17,13 +20,10 @@ import {
   readCalculatorPanelOpenPreference,
   readCalculatorPresets,
   readLastSuccessfulCalcRun,
-  readOnboardingDismissed,
   readPlayerWatchlist,
-  stablePlayerKeyFromRow,
   writeCalculatorPanelOpenPreference,
   writeCalculatorPresets,
   writeLastSuccessfulCalcRun,
-  writeOnboardingDismissed,
   writePlayerWatchlist,
 } from "./app_state_storage.js";
 
@@ -31,57 +31,6 @@ const API = resolveApiBase();
 const LazyMethodologySection = lazy(() => (
   import("./methodology_section.jsx").then(module => ({ default: module.MethodologySection }))
 ));
-
-function buildCalculatorOverlayMap(result) {
-  const rows = Array.isArray(result?.data) ? result.data : [];
-  const byPlayerKey = {};
-
-  rows.forEach(row => {
-    const key = stablePlayerKeyFromRow(row);
-    if (!key) return;
-
-    const overlayRow = {};
-    if (row?.DynastyValue != null && row?.DynastyValue !== "") {
-      overlayRow.DynastyValue = row.DynastyValue;
-    }
-    Object.keys(row || {}).forEach(col => {
-      if (!col.startsWith("Value_")) return;
-      const value = row[col];
-      if (value == null || value === "") return;
-      overlayRow[col] = value;
-    });
-    if (Object.keys(overlayRow).length === 0) return;
-    byPlayerKey[key] = overlayRow;
-  });
-
-  return byPlayerKey;
-}
-
-function formatIsoDateLabel(value) {
-  const text = String(value || "").trim();
-  if (!text) return "Unknown";
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) return text;
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function resolveProjectionWindow(meta) {
-  const years = Array.isArray(meta?.years)
-    ? meta.years.map(Number).filter(Number.isFinite)
-    : [];
-  const metaStart = Number(meta?.projection_window_start);
-  const metaEnd = Number(meta?.projection_window_end);
-  const start = Number.isFinite(metaStart) ? metaStart : (years.length > 0 ? Math.min(...years) : null);
-  const end = Number.isFinite(metaEnd) ? metaEnd : (years.length > 0 ? Math.max(...years) : null);
-  const seasons = Number.isFinite(start) && Number.isFinite(end) && end >= start
-    ? end - start + 1
-    : null;
-  return { start, end, seasons };
-}
 
 function App() {
   const [section, setSection] = useState("projections"); // projections | methodology
@@ -92,24 +41,23 @@ function App() {
     const savedPanelOpenState = readCalculatorPanelOpenPreference();
     return typeof savedPanelOpenState === "boolean" ? savedPanelOpenState : true;
   });
-  const [onboardingDismissed, setOnboardingDismissed] = useState(() => readOnboardingDismissed());
-  const [meta, setMeta] = useState(null);
-  const [metaError, setMetaError] = useState("");
-  const [metaLoading, setMetaLoading] = useState(true);
-  const [metaRequestNonce, setMetaRequestNonce] = useState(0);
+  const { meta, metaError, metaLoading, retryMetaLoad } = useMetadata(API);
   const [lastSuccessfulCalcRun, setLastSuccessfulCalcRun] = useState(() => readLastSuccessfulCalcRun());
   const [pendingMethodologyAnchor, setPendingMethodologyAnchor] = useState("");
   const { buildLabel, dataVersion } = useVersionPolling(API);
   const [presets, setPresets] = useState(() => readCalculatorPresets());
   const [watchlist, setWatchlist] = useState(() => readPlayerWatchlist());
   const [calculatorSettings, setCalculatorSettings] = useState(null);
-  const [calculatorOverlayByPlayerKey, setCalculatorOverlayByPlayerKey] = useState({});
-  const [calculatorOverlayActive, setCalculatorOverlayActive] = useState(false);
-  const [calculatorOverlayJobId, setCalculatorOverlayJobId] = useState("");
-  const [calculatorOverlayDataVersion, setCalculatorOverlayDataVersion] = useState("");
-  const [calculatorOverlaySummary, setCalculatorOverlaySummary] = useState(null);
-  const [pendingQuickStartMode, setPendingQuickStartMode] = useState("");
-  const [quickStartRunnerVersion, setQuickStartRunnerVersion] = useState(0);
+  const {
+    calculatorOverlayByPlayerKey,
+    calculatorOverlayActive,
+    calculatorOverlayJobId,
+    calculatorOverlayDataVersion,
+    calculatorOverlaySummary,
+    calculatorOverlayPlayerCount,
+    applyCalculatorOverlay,
+    clearCalculatorOverlay,
+  } = useCalculatorOverlay(dataVersion);
   const { authReady, authUser, authStatus, cloudStatus, signIn, signUp, signOut } = useAccountSync({
     presets,
     setPresets,
@@ -120,12 +68,8 @@ function App() {
   const accountMenuRef = useRef(null);
   const calculatorSectionRef = useRef(null);
   const calculatorHeadingRef = useRef(null);
-  const quickStartRunnerRef = useRef(null);
-  const quickStartImpressionTrackedRef = useRef(false);
   const accountMenuLabel = !AUTH_SYNC_ENABLED || authUser ? "Account" : "Sign In";
   const sectionNeedsMeta = section === "projections";
-  const calculatorOverlayPlayerCount = Object.keys(calculatorOverlayByPlayerKey).length;
-  const showQuickStartOnboarding = sectionNeedsMeta && Boolean(meta) && !onboardingDismissed && !lastSuccessfulCalcRun;
   const projectionFreshness = useMemo(() => (
     meta?.projection_freshness && typeof meta.projection_freshness === "object" ? meta.projection_freshness : {}
   ), [meta]);
@@ -157,35 +101,20 @@ function App() {
     setCalculatorPanelOpen(true);
   }, []);
 
-  const retryMetaLoad = useCallback(() => {
-    setMetaRequestNonce(value => value + 1);
-  }, []);
-
-  const requestQuickStartRun = useCallback(mode => {
-    runQuickStartFlow({
-      mode,
-      onboardingDismissed,
-      markOnboardingDismissed: () => {
-        setOnboardingDismissed(true);
-        writeOnboardingDismissed(true);
-      },
-      openCalculatorPanel,
-      setPendingQuickStartMode,
-      scrollToCalculator,
-      focusCalculator: focusCalculatorHeading,
-      scheduleFrame: window.requestAnimationFrame,
-    });
-  }, [focusCalculatorHeading, onboardingDismissed, openCalculatorPanel, scrollToCalculator]);
-
-  const dismissQuickStartOnboarding = useCallback(() => {
-    setOnboardingDismissed(true);
-    writeOnboardingDismissed(true);
-  }, []);
-
-  const handleRegisterQuickStartRunner = useCallback(runner => {
-    quickStartRunnerRef.current = runner;
-    setQuickStartRunnerVersion(version => version + 1);
-  }, []);
+  const {
+    showQuickStartOnboarding,
+    requestQuickStartRun,
+    dismissQuickStartOnboarding,
+    handleRegisterQuickStartRunner,
+  } = useQuickStart({
+    meta,
+    section,
+    calculatorPanelOpen,
+    lastSuccessfulCalcRun,
+    openCalculatorPanel,
+    scrollToCalculator,
+    focusCalculatorHeading,
+  });
 
   const handleCalculationSuccess = useCallback(summary => {
     const teams = Number(summary?.teams);
@@ -210,30 +139,6 @@ function App() {
     setPendingMethodologyAnchor(nextAnchor);
   }, []);
 
-  const applyCalculatorOverlay = useCallback((result, settings, runMeta) => {
-    const nextOverlay = buildCalculatorOverlayMap(result);
-    const hasOverlay = Object.keys(nextOverlay).length > 0;
-    const nextJobId = hasOverlay ? String(runMeta?.jobId || "").trim() : "";
-    const nextDataVersion = hasOverlay ? String(dataVersion || "").trim() : "";
-    setCalculatorOverlayByPlayerKey(nextOverlay);
-    setCalculatorOverlayActive(hasOverlay);
-    setCalculatorOverlayJobId(nextJobId);
-    setCalculatorOverlayDataVersion(nextDataVersion);
-    setCalculatorOverlaySummary(hasOverlay ? {
-      scoringMode: String(settings?.scoring_mode || "").trim().toLowerCase() === "points" ? "points" : "roto",
-      startYear: Number(settings?.start_year),
-      horizon: Number(settings?.horizon),
-    } : null);
-  }, [dataVersion]);
-
-  const clearCalculatorOverlay = useCallback(() => {
-    setCalculatorOverlayByPlayerKey({});
-    setCalculatorOverlayActive(false);
-    setCalculatorOverlayJobId("");
-    setCalculatorOverlayDataVersion("");
-    setCalculatorOverlaySummary(null);
-  }, []);
-
   useEffect(() => {
     setAnalyticsContext({
       section,
@@ -254,34 +159,6 @@ function App() {
   useEffect(() => {
     writeCalculatorPanelOpenPreference(calculatorPanelOpen);
   }, [calculatorPanelOpen]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setMetaLoading(true);
-    setMetaError("");
-    fetch(`${API}/api/meta`, { signal: controller.signal })
-      .then(r => {
-        if (!r.ok) {
-          throw new Error(`Server returned ${r.status} while loading /api/meta.`);
-        }
-        return r.json();
-      })
-      .then(res => {
-        setMeta(res);
-        setMetaLoading(false);
-      })
-      .catch(err => {
-        if (err?.name === "AbortError") return;
-        const message = String(err?.message || "").trim();
-        setMetaError(message || "Failed to load metadata.");
-        setMetaLoading(false);
-        trackEvent("meta_load_error", { message: message || "unknown", section: "projections" });
-        console.error(err);
-      });
-    return () => {
-      controller.abort();
-    };
-  }, [metaRequestNonce]);
 
   useEffect(() => {
     if (!accountMenuOpen) return undefined;
@@ -311,20 +188,6 @@ function App() {
   useEffect(() => {
     setAccountMenuOpen(false);
   }, [section]);
-
-  useEffect(() => {
-    if (!pendingQuickStartMode) return;
-    if (section !== "projections" || !calculatorPanelOpen) return;
-    if (typeof quickStartRunnerRef.current !== "function") return;
-    quickStartRunnerRef.current(pendingQuickStartMode);
-    setPendingQuickStartMode("");
-  }, [calculatorPanelOpen, pendingQuickStartMode, quickStartRunnerVersion, section]);
-
-  useEffect(() => {
-    if (!showQuickStartOnboarding || quickStartImpressionTrackedRef.current) return;
-    trackEvent("quickstart_impression", { source: "onboarding_strip" });
-    quickStartImpressionTrackedRef.current = true;
-  }, [showQuickStartOnboarding]);
 
   useEffect(() => {
     if (section !== "methodology" || !pendingMethodologyAnchor) return undefined;
