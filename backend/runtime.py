@@ -440,6 +440,9 @@ EXPORT_INTERNAL_COLUMN_BLOCKLIST = {
     "minor_eligible",
 }
 SETTINGS = load_settings_from_env()
+if SETTINGS.environment == "production":
+    from backend.core.structured_logging import configure_structured_logging
+    configure_structured_logging()
 APP_ENVIRONMENT = SETTINGS.environment
 CALCULATOR_JOB_TTL_SECONDS = SETTINGS.calculator_job_ttl_seconds
 CALCULATOR_JOB_MAX_ENTRIES = SETTINGS.calculator_job_max_entries

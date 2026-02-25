@@ -1,0 +1,15 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.7
+    hooks:
+      - id: ruff
+        args: [check, backend, tests, preprocess.py, scripts]
+      - id: ruff-format
+        args: [backend, tests, preprocess.py, scripts]
+  - repo: local
+    hooks:
+      - id: check-ruff-per-file-ignores
+        name: check ruff per-file ignores
+        entry: python scripts/check_ruff_per_file_ignores.py
+        language: python
+        pass_filenames: false

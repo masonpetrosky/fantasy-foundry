@@ -13,6 +13,17 @@ from fastapi.responses import StreamingResponse
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def sanitize_cell_value(value: object) -> object:
+    """Prefix dangerous formula characters in string values to prevent CSV/XLSX injection."""
+    if not isinstance(value, str):
+        return value
+    if value and value[0] in _FORMULA_PREFIXES:
+        return f"'{value}"
+    return value
+
 
 def as_float(value: object) -> float | None:
     try:
@@ -328,6 +339,9 @@ def prepare_data_export_frame(
         rename_map[col] = display_name
 
     frame = frame.rename(columns=rename_map)
+    for col in frame.columns:
+        if frame[col].dtype == object:
+            frame[col] = frame[col].map(sanitize_cell_value)
     return frame, decimals_by_display, display_date_cols
 
 
@@ -357,6 +371,9 @@ def prepare_explainability_export_frame(
         if decimals is not None:
             frame[col] = frame[col].map(lambda value, d=decimals: round_export_value(value, d))
             decimals_by_col[col] = decimals
+    for col in frame.columns:
+        if frame[col].dtype == object:
+            frame[col] = frame[col].map(sanitize_cell_value)
     return frame, decimals_by_col, date_cols
 
 

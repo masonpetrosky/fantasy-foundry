@@ -118,11 +118,11 @@ class _FakeRedis:
 class _FailingRedis(_FakeRedis):
     def incr(self, key: str) -> int:
         _ = key
-        raise RuntimeError("boom")
+        raise ConnectionError("boom")
 
     def smembers(self, key: str):
         _ = key
-        raise RuntimeError("boom")
+        raise ConnectionError("boom")
 
 
 class _RedisLibSuccess:
@@ -148,7 +148,7 @@ class _RedisLibFailure:
 
 class _RedisLibFailureClient:
     def ping(self) -> None:
-        raise RuntimeError("unavailable")
+        raise ConnectionError("unavailable")
 
 
 class RuntimeInfraTests(unittest.TestCase):

@@ -64,7 +64,7 @@ def get_redis_client(
             client.ping()
             state.client = client
             logger.info("redis cache enabled for calculator results/jobs")
-        except Exception:
+        except (ConnectionError, TimeoutError, OSError):
             state.client = None
             logger.warning("redis cache unavailable; falling back to in-memory calculator cache")
         return state.client
@@ -176,7 +176,7 @@ def enforce_rate_limit(
             return
         except HTTPException:
             raise
-        except Exception:
+        except (ConnectionError, TimeoutError, OSError):
             logger.warning("failed to enforce redis-backed rate limit; falling back to local buckets", exc_info=True)
 
     window_start = now - 60.0
@@ -228,7 +228,7 @@ def track_active_job(
         pipe.expire(active_jobs_key, calculator_job_ttl_seconds)
         pipe.setex(job_client_key, calculator_job_ttl_seconds, client_ip)
         pipe.execute()
-    except Exception:
+    except (ConnectionError, TimeoutError, OSError):
         logger.warning("failed to track active calculator job in redis", exc_info=True)
 
 
@@ -244,7 +244,7 @@ def job_client_ip(
         return None
     try:
         raw = redis_client.get(redis_job_client_key(redis_job_client_prefix=redis_job_client_prefix, job_id=job_id))
-    except Exception:
+    except (ConnectionError, TimeoutError, OSError):
         logger.warning("failed to lookup calculator job client ip from redis", exc_info=True)
         return None
     client_ip = str(raw or "").strip()
@@ -273,7 +273,7 @@ def untrack_active_job(
         pipe.srem(active_jobs_key, job_id)
         pipe.delete(redis_job_client_key(redis_job_client_prefix=redis_job_client_prefix, job_id=job_id))
         pipe.execute()
-    except Exception:
+    except (ConnectionError, TimeoutError, OSError):
         logger.warning("failed to untrack active calculator job in redis", exc_info=True)
 
 
@@ -294,7 +294,7 @@ def set_job_cancel_requested(
             calculator_job_ttl_seconds,
             "1",
         )
-    except Exception:
+    except (ConnectionError, TimeoutError, OSError):
         logger.warning("failed to store calculator job cancellation marker in redis", exc_info=True)
 
 
@@ -310,7 +310,7 @@ def clear_job_cancel_requested(
         return
     try:
         redis_client.delete(redis_job_cancel_key(redis_job_cancel_prefix=redis_job_cancel_prefix, job_id=job_id))
-    except Exception:
+    except (ConnectionError, TimeoutError, OSError):
         logger.warning("failed to clear calculator job cancellation marker in redis", exc_info=True)
 
 
@@ -326,7 +326,7 @@ def job_cancel_requested(
         return False
     try:
         return bool(redis_client.exists(redis_job_cancel_key(redis_job_cancel_prefix=redis_job_cancel_prefix, job_id=job_id)))
-    except Exception:
+    except (ConnectionError, TimeoutError, OSError):
         logger.warning("failed to read calculator job cancellation marker in redis", exc_info=True)
         return False
 
@@ -364,7 +364,7 @@ def active_jobs_for_ip(
             if stale_job_ids:
                 redis_client.srem(active_jobs_key, *stale_job_ids)
             return live_count
-        except Exception:
+        except (ConnectionError, TimeoutError, OSError):
             logger.warning("failed to count active calculator jobs in redis", exc_info=True)
     return core_active_jobs_for_ip(calculator_jobs, client_ip)
 

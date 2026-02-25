@@ -78,6 +78,7 @@
   .primary-nav-btn {
     font-size: 0.8rem;
     padding: 8px 12px;
+    min-height: 44px;
   }
 
   .account-menu {
@@ -452,11 +453,13 @@
   .primary-nav-btn {
     font-size: var(--fs-xs);
     padding: 7px 10px;
+    min-height: 44px;
   }
 
   .account-menu-btn {
     padding: 7px 9px;
     font-size: var(--fs-xs);
+    min-height: 44px;
   }
 
   .account-menu-pill {

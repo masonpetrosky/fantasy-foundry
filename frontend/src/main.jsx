@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles/app.css";
 import { AUTH_SYNC_ENABLED } from "./supabase_client.js";
@@ -8,53 +8,53 @@ import { PRIMARY_NAV_ITEMS } from "./app_content.js";
 import { ProjectionsExplorer } from "./projections_explorer.jsx";
 import { setAnalyticsContext, trackEvent } from "./analytics.js";
 import { ErrorBoundary } from "./error_boundary.jsx";
+import { FeatureErrorBoundary } from "./feature_error_boundary.jsx";
 import { formatIsoDateLabel, resolveProjectionWindow } from "./formatting_utils.js";
 import { useCalculatorOverlay } from "./hooks/useCalculatorOverlay.js";
+import { useCalculatorState } from "./hooks/useCalculatorState.js";
 import { useMetadata } from "./hooks/useMetadata.js";
 import { useQuickStart } from "./hooks/useQuickStart.js";
 import { useVersionPolling } from "./hooks/useVersionPolling.js";
 import { useAccountSync } from "./hooks/useAccountSync.js";
 import {
-  CALC_LINK_QUERY_PARAM,
-  readCalculatorPanelOpenPreference,
-  readCalculatorPresets,
   readLastSuccessfulCalcRun,
   readPlayerWatchlist,
   readSessionFirstRunLandingTimestamp,
-  writeCalculatorPanelOpenPreference,
-  writeCalculatorPresets,
-  writeLastSuccessfulCalcRun,
   writeSessionFirstRunLandingTimestamp,
   writePlayerWatchlist,
 } from "./app_state_storage.js";
 
 const API = resolveApiBase();
 const ACTIVATION_SPRINT_ENABLED = String(import.meta.env.VITE_FF_ACTIVATION_SPRINT_V1 || "1").trim() !== "0";
-const loadMethodologySectionModule = () => import("./methodology_section.jsx");
-const loadDynastyCalculatorModule = () => import("./dynasty_calculator.jsx");
 const LazyMethodologySection = lazy(() => (
-  loadMethodologySectionModule().then(module => ({ default: module.MethodologySection }))
+  import("./methodology_section.jsx").then(module => ({ default: module.MethodologySection }))
 ));
 const LazyDynastyCalculator = lazy(() => (
-  loadDynastyCalculatorModule().then(module => ({ default: module.DynastyCalculator }))
+  import("./dynasty_calculator.jsx").then(module => ({ default: module.DynastyCalculator }))
 ));
 
 function App() {
   const [section, setSection] = useState("projections"); // projections | methodology
-  const [calculatorPanelOpen, setCalculatorPanelOpen] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    const hasSharedCalculatorState = Boolean(String(params.get(CALC_LINK_QUERY_PARAM) || "").trim());
-    if (hasSharedCalculatorState) return true;
-    const savedPanelOpenState = readCalculatorPanelOpenPreference();
-    return typeof savedPanelOpenState === "boolean" ? savedPanelOpenState : true;
-  });
   const { meta, metaError, metaLoading, retryMetaLoad } = useMetadata(API);
-  const [lastSuccessfulCalcRun, setLastSuccessfulCalcRun] = useState(() => readLastSuccessfulCalcRun());
-  const [pendingMethodologyAnchor, setPendingMethodologyAnchor] = useState("");
   const { buildLabel, dataVersion } = useVersionPolling(API);
-  const [presets, setPresets] = useState(() => readCalculatorPresets());
+  const {
+    calculatorPanelOpen,
+    setCalculatorPanelOpen,
+    calculatorSettings,
+    setCalculatorSettings,
+    lastSuccessfulCalcRun,
+    presets,
+    setPresets,
+    calculatorSectionRef,
+    calculatorHeadingRef,
+    calculatorPanelOpenSourceRef,
+    scrollToCalculator,
+    focusFirstCalculatorInput,
+    openCalculatorPanel,
+    handleCalculationSuccess,
+    openMethodologyGlossary,
+  } = useCalculatorState({ section, setSection, meta });
   const [watchlist, setWatchlist] = useState(() => readPlayerWatchlist());
-  const [calculatorSettings, setCalculatorSettings] = useState(null);
   const {
     calculatorOverlayByPlayerKey,
     calculatorOverlayActive,
@@ -73,10 +73,6 @@ function App() {
   });
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef(null);
-  const calculatorSectionRef = useRef(null);
-  const calculatorHeadingRef = useRef(null);
-  const calculatorPanelOpenSourceRef = useRef("");
-  const previousCalculatorPanelOpenRef = useRef(calculatorPanelOpen);
   const landingTrackedRef = useRef(false);
   const accountMenuLabel = !AUTH_SYNC_ENABLED || authUser ? "Account" : "Sign In";
   const sectionNeedsMeta = section === "projections";
@@ -96,27 +92,6 @@ function App() {
       ? "roto"
       : "unknown";
 
-  const scrollToCalculator = useCallback(() => {
-    if (!calculatorSectionRef.current) return;
-    calculatorSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
-
-  const focusFirstCalculatorInput = useCallback(() => {
-    const firstInput = document.getElementById("calc-teams-input");
-    if (firstInput && typeof firstInput.focus === "function") {
-      firstInput.focus({ preventScroll: true });
-      return;
-    }
-    if (!calculatorHeadingRef.current || typeof calculatorHeadingRef.current.focus !== "function") return;
-    calculatorHeadingRef.current.focus({ preventScroll: true });
-  }, []);
-
-  const openCalculatorPanel = useCallback((source = "app_action") => {
-    calculatorPanelOpenSourceRef.current = String(source || "").trim() || "app_action";
-    setSection("projections");
-    setCalculatorPanelOpen(true);
-  }, []);
-
   const {
     showQuickStartOnboarding,
     showQuickStartReminder,
@@ -134,29 +109,6 @@ function App() {
     scrollToCalculator,
     focusCalculatorHeading: focusFirstCalculatorInput,
   });
-
-  const handleCalculationSuccess = useCallback(summary => {
-    const teams = Number(summary?.teams);
-    const horizon = Number(summary?.horizon);
-    if (!Number.isFinite(teams) || teams <= 0 || !Number.isFinite(horizon) || horizon <= 0) return;
-    const nextSummary = {
-      scoringMode: String(summary?.scoringMode || "").trim().toLowerCase() === "points" ? "points" : "roto",
-      teams: Math.round(teams),
-      horizon: Math.round(horizon),
-      startYear: Number.isFinite(Number(summary?.startYear)) ? Math.round(Number(summary.startYear)) : null,
-      playerCount: Number.isFinite(Number(summary?.playerCount)) ? Math.max(0, Math.round(Number(summary.playerCount))) : 0,
-      completedAt: new Date().toISOString(),
-    };
-    setLastSuccessfulCalcRun(nextSummary);
-    writeLastSuccessfulCalcRun(nextSummary);
-  }, []);
-
-  const openMethodologyGlossary = useCallback(anchorId => {
-    const nextAnchor = String(anchorId || "").trim();
-    if (!nextAnchor) return;
-    setSection("methodology");
-    setPendingMethodologyAnchor(nextAnchor);
-  }, []);
 
   useEffect(() => {
     setAnalyticsContext({
@@ -183,33 +135,8 @@ function App() {
   }, [section]);
 
   useEffect(() => {
-    const wasOpen = previousCalculatorPanelOpenRef.current;
-    if (!wasOpen && calculatorPanelOpen) {
-      trackEvent("ff_calculator_panel_open", {
-        source: calculatorPanelOpenSourceRef.current || "panel_toggle",
-      });
-      calculatorPanelOpenSourceRef.current = "";
-    }
-    previousCalculatorPanelOpenRef.current = calculatorPanelOpen;
-  }, [calculatorPanelOpen]);
-
-  useEffect(() => {
-    if (!ACTIVATION_SPRINT_ENABLED) return;
-    if (section !== "projections" || !meta) return;
-    void loadDynastyCalculatorModule();
-  }, [meta, section]);
-
-  useEffect(() => {
-    writeCalculatorPresets(presets);
-  }, [presets]);
-
-  useEffect(() => {
     writePlayerWatchlist(watchlist);
   }, [watchlist]);
-
-  useEffect(() => {
-    writeCalculatorPanelOpenPreference(calculatorPanelOpen);
-  }, [calculatorPanelOpen]);
 
   useEffect(() => {
     if (!accountMenuOpen) return undefined;
@@ -239,18 +166,6 @@ function App() {
   useEffect(() => {
     setAccountMenuOpen(false);
   }, [section]);
-
-  useEffect(() => {
-    if (section !== "methodology" || !pendingMethodologyAnchor) return undefined;
-    const raf = window.requestAnimationFrame(() => {
-      const target = document.getElementById(pendingMethodologyAnchor);
-      if (target && typeof target.scrollIntoView === "function") {
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-      setPendingMethodologyAnchor("");
-    });
-    return () => window.cancelAnimationFrame(raf);
-  }, [pendingMethodologyAnchor, section]);
 
   return (
     <>
@@ -507,6 +422,7 @@ function App() {
                 </p>
                 {calculatorPanelOpen && (
                   <div id="embedded-calculator-content" className="embedded-calculator-content">
+                    <FeatureErrorBoundary featureName="Dynasty Calculator">
                     <Suspense fallback={<p className="methodology-note">Loading calculator...</p>}>
                       <LazyDynastyCalculator
                         apiBase={API}
@@ -523,10 +439,12 @@ function App() {
                         onOpenMethodologyGlossary={openMethodologyGlossary}
                       />
                     </Suspense>
+                    </FeatureErrorBoundary>
                   </div>
                 )}
               </section>
               <div className="projections-content">
+                <FeatureErrorBoundary featureName="Projections Explorer">
                 <ProjectionsExplorer
                   apiBase={API}
                   meta={meta}
@@ -543,6 +461,7 @@ function App() {
                   calculatorOverlaySummary={calculatorOverlaySummary}
                   onClearCalculatorOverlay={clearCalculatorOverlay}
                 />
+                </FeatureErrorBoundary>
               </div>
             </div>
           )}

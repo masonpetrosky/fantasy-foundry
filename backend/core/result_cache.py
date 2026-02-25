@@ -69,7 +69,7 @@ def result_cache_get(
                 parsed = json.loads(raw)
                 if isinstance(parsed, dict):
                     return parsed
-        except Exception:
+        except (ConnectionError, TimeoutError, OSError, ValueError):
             logger.warning("failed to read calculator result cache from redis", exc_info=True)
 
     now = time.time()
@@ -106,7 +106,7 @@ def result_cache_set(
                 cache_ttl_seconds,
                 json.dumps(payload, separators=(",", ":"), sort_keys=True),
             )
-        except Exception:
+        except (ConnectionError, TimeoutError, OSError):
             logger.warning("failed to write calculator result cache to redis", exc_info=True)
 
     expires_at = time.time() + cache_ttl_seconds
@@ -133,7 +133,7 @@ def cache_calculation_job_snapshot(
             job_ttl_seconds,
             json.dumps(calculation_job_public_payload_fn(job), separators=(",", ":"), sort_keys=True),
         )
-    except Exception:
+    except (ConnectionError, TimeoutError, OSError):
         logger.warning("failed to cache calculator job payload in redis", exc_info=True)
 
 
@@ -148,7 +148,7 @@ def cached_calculation_job_snapshot(
         return None
     try:
         raw = redis_client.get(f"{redis_job_prefix}{job_id}")
-    except Exception:
+    except (ConnectionError, TimeoutError, OSError):
         logger.warning("failed to read calculator job payload from redis", exc_info=True)
         return None
     if not raw:
