@@ -293,6 +293,15 @@ FF_RUN_E2E=1 pytest -q tests/test_e2e_projections_pagination.py tests/test_e2e_c
 
 ### Updating Projections
 
+Single-player manual ingest workflow (GPT-generated projections):
+- Quick guide: [`docs/projection-ingest-runbook.md`](docs/projection-ingest-runbook.md)
+- Prompt template: [`docs/templates/gpt-single-player-projection-prompt.md`](docs/templates/gpt-single-player-projection-prompt.md)
+- Quick path:
+  1. Fill `[Player]`, `[Position]`, and `[Team]` in the prompt template and run it in GPT.
+  2. Download the generated `.xlsx` and append the 2026-2045 rows into `data/Dynasty Baseball Projections.xlsx` (`Bat`/`Pitch` sheets).
+  3. Manually fill `Minor`, `Fantrax Roster`/`Roster`, and `Date` for the appended rows.
+  4. Run `python preprocess.py`.
+
 When you update the Excel file, re-run the preprocessing to regenerate the JSON data files:
 
 ```bash
