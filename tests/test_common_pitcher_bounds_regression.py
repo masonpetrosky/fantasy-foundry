@@ -40,7 +40,7 @@ class CommonPitcherBoundsRegressionTests(unittest.TestCase):
         self.assertAlmostEqual(float(unfilled["IP"]), 100.0, places=6)
         self.assertGreater(float(filled["W"]), float(unfilled["W"]))
 
-    def test_low_volume_ratio_guard_blocks_positive_ratio_credit(self) -> None:
+    def test_low_volume_ratio_guard_scales_positive_ratio_credit(self) -> None:
         delta = {"ERA": 1.2, "WHIP": 0.6, "K": 0.4}
         _apply_low_volume_ratio_guard(
             delta,
@@ -52,11 +52,23 @@ class CommonPitcherBoundsRegressionTests(unittest.TestCase):
         self.assertEqual(float(delta["WHIP"]), 0.0)
         self.assertEqual(float(delta["K"]), 0.4)
 
+        mid_volume_delta = {"ERA": 1.3, "WHIP": 0.65, "K": 0.3}
+        _apply_low_volume_ratio_guard(
+            mid_volume_delta,
+            pit_categories=["W", "K", "ERA", "WHIP"],
+            pitcher_ip=44.0,
+            slot_ip_reference=80.0,
+        )
+        expected_scale = (0.55 - 0.35) / (1.0 - 0.35)
+        self.assertAlmostEqual(float(mid_volume_delta["ERA"]), 1.3 * expected_scale, places=6)
+        self.assertAlmostEqual(float(mid_volume_delta["WHIP"]), 0.65 * expected_scale, places=6)
+        self.assertEqual(float(mid_volume_delta["K"]), 0.3)
+
         high_volume_delta = {"ERA": 1.2, "WHIP": 0.6}
         _apply_low_volume_ratio_guard(
             high_volume_delta,
             pit_categories=["ERA", "WHIP"],
-            pitcher_ip=60.0,
+            pitcher_ip=80.0,
             slot_ip_reference=80.0,
         )
         self.assertEqual(float(high_volume_delta["ERA"]), 1.2)
@@ -117,6 +129,62 @@ class CommonPitcherBoundsRegressionTests(unittest.TestCase):
         kollar_value = float(rows.loc["jared-kollar", "DynastyValue"])
         lodolo_value = float(rows.loc["nick-lodolo", "DynastyValue"])
         self.assertLessEqual(kollar_value, lodolo_value)
+
+    def test_low_ip_regression_kollar_does_not_rank_above_reynaldo_lopez(self) -> None:
+        _calculate_common_dynasty_frame_cached.cache_clear()
+        settings = {
+            "roto_hit_r": True,
+            "roto_hit_rbi": True,
+            "roto_hit_hr": True,
+            "roto_hit_sb": True,
+            "roto_hit_avg": True,
+            "roto_hit_obp": False,
+            "roto_hit_slg": False,
+            "roto_hit_ops": True,
+            "roto_hit_h": False,
+            "roto_hit_bb": False,
+            "roto_hit_2b": False,
+            "roto_hit_tb": False,
+            "roto_pit_w": True,
+            "roto_pit_k": True,
+            "roto_pit_sv": False,
+            "roto_pit_era": True,
+            "roto_pit_whip": True,
+            "roto_pit_qs": False,
+            "roto_pit_qa3": True,
+            "roto_pit_svh": True,
+        }
+        out = _calculate_common_dynasty_frame_cached(
+            teams=12,
+            sims=300,
+            horizon=20,
+            discount=0.94,
+            hit_c=2,
+            hit_1b=1,
+            hit_2b=1,
+            hit_3b=1,
+            hit_ss=1,
+            hit_ci=1,
+            hit_mi=1,
+            hit_of=5,
+            hit_ut=1,
+            pit_p=3,
+            pit_sp=3,
+            pit_rp=3,
+            bench=15,
+            minors=20,
+            ir=8,
+            ip_min=1000.0,
+            ip_max=1500.0,
+            two_way="sum",
+            start_year=2026,
+            recent_projections=3,
+            **settings,
+        )
+        rows = out.set_index("PlayerEntityKey")
+        kollar_value = float(rows.loc["jared-kollar", "DynastyValue"])
+        lopez_value = float(rows.loc["reynaldo-lopez", "DynastyValue"])
+        self.assertLessEqual(kollar_value, lopez_value)
 
 
 if __name__ == "__main__":

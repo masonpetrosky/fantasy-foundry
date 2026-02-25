@@ -941,21 +941,41 @@ def _apply_low_volume_ratio_guard(
     pit_categories: List[str],
     pitcher_ip: float,
     slot_ip_reference: float,
-    min_share_for_positive_ratio_credit: float = 0.50,
+    min_share_for_positive_ratio_credit: float = 0.35,
+    full_share_for_positive_ratio_credit: float = 1.00,
 ) -> None:
-    """Prevent tiny-volume pitchers from earning positive ERA/WHIP credit."""
+    """Scale positive ERA/WHIP credit based on projected innings share.
+
+    For ratio categories where lower is better (ERA/WHIP), small-IP pitchers can
+    otherwise receive outsized positive credit. We apply a piecewise scale:
+      - share <= min_share_for_positive_ratio_credit: no positive ratio credit
+      - share >= full_share_for_positive_ratio_credit: full positive ratio credit
+      - otherwise: linearly scale positive ratio credit between the two bounds
+    """
     slot_ip = _coerce_non_negative_float(slot_ip_reference)
     player_ip = _coerce_non_negative_float(pitcher_ip)
     if slot_ip <= 0.0:
         return
 
     share = player_ip / slot_ip
-    if share >= float(min_share_for_positive_ratio_credit):
+    min_share = float(min_share_for_positive_ratio_credit)
+    full_share = float(full_share_for_positive_ratio_credit)
+
+    if full_share <= min_share:
+        scale = 1.0 if share >= full_share else 0.0
+    elif share <= min_share:
+        scale = 0.0
+    elif share >= full_share:
+        scale = 1.0
+    else:
+        scale = (share - min_share) / (full_share - min_share)
+
+    if scale >= 1.0:
         return
 
     for cat in COMMON_REVERSED_PITCH_CATS:
         if cat in pit_categories and float(delta.get(cat, 0.0)) > 0.0:
-            delta[cat] = 0.0
+            delta[cat] = float(delta[cat]) * scale
 
 
 # ----------------------------
@@ -2819,14 +2839,28 @@ def league_compute_year_player_values(ctx: dict, lg: LeagueSettings) -> Tuple[pd
             # Lower is better for ERA/WHIP => improvement = base - new
             delta_ERA = float(base_pit_capped["ERA"] - new_capped["ERA"])
             delta_WHIP = float(base_pit_capped["WHIP"] - new_capped["WHIP"])
+            delta = {
+                "W": delta_W,
+                "K": delta_K,
+                "SVH": delta_SVH,
+                "QA3": delta_QA3,
+                "ERA": delta_ERA,
+                "WHIP": delta_WHIP,
+            }
+            _apply_low_volume_ratio_guard(
+                delta,
+                pit_categories=["W", "K", "SVH", "QA3", "ERA", "WHIP"],
+                pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
+                slot_ip_reference=_coerce_non_negative_float(b.get("IP", 0.0)),
+            )
 
             val = (
-                (delta_W / sgp_pit["W"] if sgp_pit["W"] else 0.0)
-                + (delta_K / sgp_pit["K"] if sgp_pit["K"] else 0.0)
-                + (delta_SVH / sgp_pit["SVH"] if sgp_pit["SVH"] else 0.0)
-                + (delta_QA3 / sgp_pit["QA3"] if sgp_pit["QA3"] else 0.0)
-                + (delta_ERA / sgp_pit["ERA"] if sgp_pit["ERA"] else 0.0)
-                + (delta_WHIP / sgp_pit["WHIP"] if sgp_pit["WHIP"] else 0.0)
+                (delta["W"] / sgp_pit["W"] if sgp_pit["W"] else 0.0)
+                + (delta["K"] / sgp_pit["K"] if sgp_pit["K"] else 0.0)
+                + (delta["SVH"] / sgp_pit["SVH"] if sgp_pit["SVH"] else 0.0)
+                + (delta["QA3"] / sgp_pit["QA3"] if sgp_pit["QA3"] else 0.0)
+                + (delta["ERA"] / sgp_pit["ERA"] if sgp_pit["ERA"] else 0.0)
+                + (delta["WHIP"] / sgp_pit["WHIP"] if sgp_pit["WHIP"] else 0.0)
             )
 
             if val > best_val:
@@ -3067,14 +3101,28 @@ def league_compute_year_player_values_vs_replacement(
             # Lower is better for ERA/WHIP
             delta_ERA = float(base_capped["ERA"] - new_capped["ERA"])
             delta_WHIP = float(base_capped["WHIP"] - new_capped["WHIP"])
+            delta = {
+                "W": delta_W,
+                "K": delta_K,
+                "SVH": delta_SVH,
+                "QA3": delta_QA3,
+                "ERA": delta_ERA,
+                "WHIP": delta_WHIP,
+            }
+            _apply_low_volume_ratio_guard(
+                delta,
+                pit_categories=["W", "K", "SVH", "QA3", "ERA", "WHIP"],
+                pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
+                slot_ip_reference=_coerce_non_negative_float(b_avg.get("IP", 0.0)),
+            )
 
             val = (
-                (delta_W / sgp_pit["W"] if sgp_pit["W"] else 0.0)
-                + (delta_K / sgp_pit["K"] if sgp_pit["K"] else 0.0)
-                + (delta_SVH / sgp_pit["SVH"] if sgp_pit["SVH"] else 0.0)
-                + (delta_QA3 / sgp_pit["QA3"] if sgp_pit["QA3"] else 0.0)
-                + (delta_ERA / sgp_pit["ERA"] if sgp_pit["ERA"] else 0.0)
-                + (delta_WHIP / sgp_pit["WHIP"] if sgp_pit["WHIP"] else 0.0)
+                (delta["W"] / sgp_pit["W"] if sgp_pit["W"] else 0.0)
+                + (delta["K"] / sgp_pit["K"] if sgp_pit["K"] else 0.0)
+                + (delta["SVH"] / sgp_pit["SVH"] if sgp_pit["SVH"] else 0.0)
+                + (delta["QA3"] / sgp_pit["QA3"] if sgp_pit["QA3"] else 0.0)
+                + (delta["ERA"] / sgp_pit["ERA"] if sgp_pit["ERA"] else 0.0)
+                + (delta["WHIP"] / sgp_pit["WHIP"] if sgp_pit["WHIP"] else 0.0)
             )
 
             if val > best_val:
