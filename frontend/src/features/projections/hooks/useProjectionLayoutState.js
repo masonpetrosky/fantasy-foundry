@@ -5,12 +5,26 @@ import {
   safeWriteStorage,
 } from "../../../app_state_storage.js";
 
-const MOBILE_BREAKPOINT_QUERY = "(max-width: 768px)";
+export const MOBILE_BREAKPOINT_QUERY = "(max-width: 768px)";
 
-function readInitialMobileLayoutMode() {
+export function readInitialMobileLayoutMode() {
   const saved = String(safeReadStorage(PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY) || "").trim().toLowerCase();
   if (saved === "cards" || saved === "table") return saved;
   return window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches ? "cards" : "table";
+}
+
+export function resolveProjectionHorizontalAffordance(el, isMobileViewport) {
+  if (!el || !isMobileViewport) {
+    return {
+      canScrollLeft: false,
+      canScrollRight: false,
+    };
+  }
+  const maxLeft = Math.max(0, el.scrollWidth - el.clientWidth);
+  return {
+    canScrollLeft: el.scrollLeft > 2,
+    canScrollRight: el.scrollLeft < maxLeft - 2,
+  };
 }
 
 export function useProjectionLayoutState() {
@@ -24,14 +38,9 @@ export function useProjectionLayoutState() {
 
   const updateProjectionHorizontalAffordance = useCallback(() => {
     const el = projectionTableScrollRef.current;
-    if (!el || !isMobileViewport) {
-      setCanScrollLeft(false);
-      setCanScrollRight(false);
-      return;
-    }
-    const maxLeft = Math.max(0, el.scrollWidth - el.clientWidth);
-    setCanScrollLeft(el.scrollLeft > 2);
-    setCanScrollRight(el.scrollLeft < maxLeft - 2);
+    const next = resolveProjectionHorizontalAffordance(el, isMobileViewport);
+    setCanScrollLeft(next.canScrollLeft);
+    setCanScrollRight(next.canScrollRight);
   }, [isMobileViewport]);
 
   const handleProjectionTableScroll = useCallback(() => {

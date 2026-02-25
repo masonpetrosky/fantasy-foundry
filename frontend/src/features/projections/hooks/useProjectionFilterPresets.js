@@ -11,6 +11,66 @@ import {
 } from "../../../hooks/useProjectionsData.js";
 import { trackEvent } from "../../../analytics.js";
 
+export function defaultProjectionFilterPreset(tab = DEFAULT_PROJECTIONS_TAB, watchlistOnly = false) {
+  return {
+    tab,
+    search: "",
+    teamFilter: "",
+    yearFilter: CAREER_TOTALS_FILTER_VALUE,
+    posFilters: [],
+    watchlistOnly: Boolean(watchlistOnly),
+    sortCol: DEFAULT_PROJECTIONS_SORT_COL,
+    sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
+  };
+}
+
+export function projectionFilterPresetValuesForKey({
+  presetKey,
+  projectionFilterPresets,
+}) {
+  const key = String(presetKey || "").trim().toLowerCase();
+  if (!key) return null;
+  if (key === "all") return defaultProjectionFilterPreset(DEFAULT_PROJECTIONS_TAB, false);
+  if (key === "watchlist") return defaultProjectionFilterPreset(DEFAULT_PROJECTIONS_TAB, true);
+  if (key === "hitters") return defaultProjectionFilterPreset("bat", false);
+  if (key === "pitchers") return defaultProjectionFilterPreset("pitch", false);
+  if (key === "custom") return projectionFilterPresets?.custom || null;
+  return null;
+}
+
+export function matchesProjectionFilterPreset(filterState, preset) {
+  if (!preset) return false;
+  return (
+    filterState.tab === (preset.tab || DEFAULT_PROJECTIONS_TAB)
+    && filterState.search === (preset.search || "")
+    && filterState.teamFilter === (preset.teamFilter || "")
+    && filterState.resolvedYearFilter === (preset.yearFilter || CAREER_TOTALS_FILTER_VALUE)
+    && filterState.watchlistOnly === Boolean(preset.watchlistOnly)
+    && filterState.sortCol === (preset.sortCol || DEFAULT_PROJECTIONS_SORT_COL)
+    && filterState.sortDir === (preset.sortDir || DEFAULT_PROJECTIONS_SORT_DIR)
+    && JSON.stringify(filterState.posFilters) === JSON.stringify(Array.isArray(preset.posFilters) ? preset.posFilters : [])
+  );
+}
+
+export function resolveActiveProjectionPresetKey(filterState, projectionFilterPresets) {
+  if (matchesProjectionFilterPreset(filterState, defaultProjectionFilterPreset(DEFAULT_PROJECTIONS_TAB, false))) {
+    return "all";
+  }
+  if (matchesProjectionFilterPreset(filterState, defaultProjectionFilterPreset(DEFAULT_PROJECTIONS_TAB, true))) {
+    return "watchlist";
+  }
+  if (matchesProjectionFilterPreset(filterState, defaultProjectionFilterPreset("bat", false))) {
+    return "hitters";
+  }
+  if (matchesProjectionFilterPreset(filterState, defaultProjectionFilterPreset("pitch", false))) {
+    return "pitchers";
+  }
+  if (projectionFilterPresets?.custom && matchesProjectionFilterPreset(filterState, projectionFilterPresets.custom)) {
+    return "custom";
+  }
+  return "";
+}
+
 export function useProjectionFilterPresets({ filterActions, filterState, setShowPosMenu }) {
   const [projectionFilterPresets, setProjectionFilterPresets] = useState(() => readProjectionFilterPresets());
 
@@ -43,56 +103,14 @@ export function useProjectionFilterPresets({ filterActions, filterState, setShow
       filterActions.setOffset(0);
     };
 
-    if (key === "all") {
-      applyPresetValues({
-        tab: DEFAULT_PROJECTIONS_TAB,
-        search: "",
-        teamFilter: "",
-        yearFilter: CAREER_TOTALS_FILTER_VALUE,
-        posFilters: [],
-        watchlistOnly: false,
-        sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-        sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-      });
-    } else if (key === "watchlist") {
-      applyPresetValues({
-        tab: DEFAULT_PROJECTIONS_TAB,
-        search: "",
-        teamFilter: "",
-        yearFilter: CAREER_TOTALS_FILTER_VALUE,
-        posFilters: [],
-        watchlistOnly: true,
-        sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-        sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-      });
-    } else if (key === "hitters") {
-      applyPresetValues({
-        tab: "bat",
-        search: "",
-        teamFilter: "",
-        yearFilter: CAREER_TOTALS_FILTER_VALUE,
-        posFilters: [],
-        watchlistOnly: false,
-        sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-        sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-      });
-    } else if (key === "pitchers") {
-      applyPresetValues({
-        tab: "pitch",
-        search: "",
-        teamFilter: "",
-        yearFilter: CAREER_TOTALS_FILTER_VALUE,
-        posFilters: [],
-        watchlistOnly: false,
-        sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-        sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-      });
-    } else if (key === "custom") {
-      if (!projectionFilterPresets?.custom) return;
-      applyPresetValues(projectionFilterPresets.custom);
-    } else {
+    const presetValues = projectionFilterPresetValuesForKey({
+      presetKey: key,
+      projectionFilterPresets,
+    });
+    if (!presetValues) {
       return;
     }
+    applyPresetValues(presetValues);
 
     trackEvent("ff_projection_filter_preset_apply", {
       preset: key,
@@ -121,69 +139,7 @@ export function useProjectionFilterPresets({ filterActions, filterState, setShow
   }, [filterState]);
 
   const activeProjectionPresetKey = useMemo(() => {
-    const matchesPreset = preset => (
-      filterState.tab === (preset.tab || DEFAULT_PROJECTIONS_TAB)
-      && filterState.search === (preset.search || "")
-      && filterState.teamFilter === (preset.teamFilter || "")
-      && filterState.resolvedYearFilter === (preset.yearFilter || CAREER_TOTALS_FILTER_VALUE)
-      && filterState.watchlistOnly === Boolean(preset.watchlistOnly)
-      && filterState.sortCol === (preset.sortCol || DEFAULT_PROJECTIONS_SORT_COL)
-      && filterState.sortDir === (preset.sortDir || DEFAULT_PROJECTIONS_SORT_DIR)
-      && JSON.stringify(filterState.posFilters) === JSON.stringify(Array.isArray(preset.posFilters) ? preset.posFilters : [])
-    );
-
-    if (matchesPreset({
-      tab: DEFAULT_PROJECTIONS_TAB,
-      search: "",
-      teamFilter: "",
-      yearFilter: CAREER_TOTALS_FILTER_VALUE,
-      posFilters: [],
-      watchlistOnly: false,
-      sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-      sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-    })) {
-      return "all";
-    }
-    if (matchesPreset({
-      tab: DEFAULT_PROJECTIONS_TAB,
-      search: "",
-      teamFilter: "",
-      yearFilter: CAREER_TOTALS_FILTER_VALUE,
-      posFilters: [],
-      watchlistOnly: true,
-      sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-      sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-    })) {
-      return "watchlist";
-    }
-    if (matchesPreset({
-      tab: "bat",
-      search: "",
-      teamFilter: "",
-      yearFilter: CAREER_TOTALS_FILTER_VALUE,
-      posFilters: [],
-      watchlistOnly: false,
-      sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-      sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-    })) {
-      return "hitters";
-    }
-    if (matchesPreset({
-      tab: "pitch",
-      search: "",
-      teamFilter: "",
-      yearFilter: CAREER_TOTALS_FILTER_VALUE,
-      posFilters: [],
-      watchlistOnly: false,
-      sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-      sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-    })) {
-      return "pitchers";
-    }
-    if (projectionFilterPresets?.custom && matchesPreset(projectionFilterPresets.custom)) {
-      return "custom";
-    }
-    return "";
+    return resolveActiveProjectionPresetKey(filterState, projectionFilterPresets);
   }, [filterState, projectionFilterPresets]);
 
   useEffect(() => {

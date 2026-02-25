@@ -15,13 +15,13 @@ Continue reducing `frontend/src/features/projections/container.jsx` to orchestra
 - [x] Core view state moved to `frontend/src/features/projections/view_state.js`.
 - [x] Hook module surface established under `frontend/src/features/projections/hooks/`.
 - [x] Component module surface established under `frontend/src/features/projections/components/`.
-- [ ] Extract remaining export pipeline state/actions into hook-only module.
-- [ ] Extract remaining watchlist/comparison overlay wiring into dedicated composition hooks.
-- [ ] Limit container responsibilities to:
+- [x] Extract remaining export pipeline state/actions into hook-only module.
+- [x] Extract remaining watchlist/comparison overlay wiring into dedicated composition hooks.
+- [x] Limit container responsibilities to:
   - screen-level orchestration
   - composition of hooks/components
   - top-level side-effect coordination
-- [ ] Add focused tests for each extracted hook:
+- [x] Add focused tests for each extracted hook:
   - column visibility persistence
   - layout state behavior
   - filter preset behavior
@@ -31,4 +31,3 @@ Continue reducing `frontend/src/features/projections/container.jsx` to orchestra
 - `cd frontend && npm test` passes.
 - `cd frontend && npm run lint` passes.
 - Existing projections user flows remain behaviorally equivalent.
-

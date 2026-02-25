@@ -3,13 +3,16 @@ import React, { useMemo } from "react";
 export const ProjectionWatchlistPanel = React.memo(function ProjectionWatchlistPanel({
   watchlistCount,
   watchlist,
+  watchlistEntries,
   removeWatchlistEntry,
 }) {
   const sortedEntries = useMemo(() => (
-    Object.values(watchlist)
-      .sort((a, b) => String(a.player || "").localeCompare(String(b.player || "")))
-      .slice(0, 40)
-  ), [watchlist]);
+    Array.isArray(watchlistEntries)
+      ? watchlistEntries
+      : Object.values(watchlist)
+        .sort((a, b) => String(a.player || "").localeCompare(String(b.player || "")))
+        .slice(0, 40)
+  ), [watchlist, watchlistEntries]);
   if (watchlistCount === 0) return null;
 
   return (

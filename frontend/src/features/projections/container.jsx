@@ -31,17 +31,23 @@ import {
   useProjectionCollections,
 } from "./hooks/useProjectionCollections.js";
 import {
-  useProjectionExport,
-} from "./hooks/useProjectionExport.js";
-import {
   useProjectionLayoutState,
 } from "./hooks/useProjectionLayoutState.js";
 import {
   useProjectionOverlay,
 } from "./hooks/useProjectionOverlay.js";
 import {
+  useProjectionComparisonComposition,
+} from "./hooks/useProjectionComparisonComposition.js";
+import {
+  useProjectionExportPipeline,
+} from "./hooks/useProjectionExportPipeline.js";
+import {
   useProjectionFilterPresets,
 } from "./hooks/useProjectionFilterPresets.js";
+import {
+  useProjectionWatchlistComposition,
+} from "./hooks/useProjectionWatchlistComposition.js";
 import {
   CAREER_TOTALS_FILTER_VALUE,
   DEFAULT_PROJECTIONS_SORT_COL,
@@ -192,24 +198,40 @@ export function ProjectionsExplorer({
   } = useProjectionFilterPresets({ filterActions, filterState, setShowPosMenu });
 
   const page = data;
+  const collections = useProjectionCollections({
+    watchlist,
+    setWatchlist,
+    data,
+  });
   const {
     watchlistCount,
-    compareRowsByKey,
-    compareRows,
+    watchlist: resolvedWatchlist,
+    sortedWatchlistEntries,
     isRowWatched,
     toggleRowWatch,
     removeWatchlistEntry,
     clearWatchlist,
     exportWatchlistCsv,
-    toggleCompareRow,
     quickAddRow,
-    clearCompareRows,
-    removeCompareRow,
-    maxComparePlayers,
-  } = useProjectionCollections({
+    workspaceHasWatchlistActivity,
+  } = useProjectionWatchlistComposition({
+    collections,
     watchlist,
-    setWatchlist,
-    data,
+  });
+  const {
+    compareRowsByKey,
+    compareRows,
+    compareRowsCount,
+    maxComparePlayers,
+    toggleCompareRow,
+    removeCompareRow,
+    clearCompareRows,
+    comparisonColumns,
+    workspaceHasComparisonActivity,
+  } = useProjectionComparisonComposition({
+    collections,
+    tab,
+    seasonCol: careerTotalsView ? "Years" : "Year",
   });
 
   function handleSort(col) {
@@ -247,7 +269,8 @@ export function ProjectionsExplorer({
     exportError,
     exportingFormat,
     exportCurrentProjections,
-  } = useProjectionExport({
+    clearExportError,
+  } = useProjectionExportPipeline({
     apiBase,
     tab,
     search,
@@ -296,13 +319,9 @@ export function ProjectionsExplorer({
     : canScrollLeft && canScrollRight
       ? "← Swipe both directions for more columns →"
       : "← Swipe right to return";
-  const comparisonColumns = tab === "bat"
-    ? [seasonCol, "DynastyValue", "AB", "R", "HR", "RBI", "SB", "AVG"]
-    : tab === "pitch"
-      ? [seasonCol, "DynastyValue", "IP", "W", "K", "SV", "ERA", "WHIP"]
-      : [seasonCol, "DynastyValue", "AB", "R", "HR", "RBI", "SB", "IP", "W", "K", "SV", "ERA", "WHIP"];
-  const compareRowsCount = compareRows.length;
-  const showCollectionsWorkspace = Boolean(hasSuccessfulCalcRun) || watchlistCount > 0 || compareRowsCount > 0;
+  const showCollectionsWorkspace = Boolean(hasSuccessfulCalcRun)
+    || workspaceHasWatchlistActivity
+    || workspaceHasComparisonActivity;
 
   const formatProjectionCell = useCallback((col, row) => {
     const val = row[col];
@@ -597,7 +616,8 @@ export function ProjectionsExplorer({
       />
       {exportError && (
         <div className="table-refresh-message error" role="status" aria-live="polite">
-          Export failed. {exportError}
+          <span>Export failed. {exportError}</span>
+          <button type="button" className="inline-btn" onClick={clearExportError}>Dismiss</button>
         </div>
       )}
       {lastRefreshedLabel && (
@@ -637,7 +657,8 @@ export function ProjectionsExplorer({
             <Suspense fallback={null}>
               <LazyProjectionWatchlistPanel
                 watchlistCount={watchlistCount}
-                watchlist={watchlist}
+                watchlist={resolvedWatchlist}
+                watchlistEntries={sortedWatchlistEntries}
                 removeWatchlistEntry={removeWatchlistEntry}
               />
             </Suspense>
