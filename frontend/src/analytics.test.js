@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildAnalyticsPayload, trackEvent } from "./analytics.js";
+import {
+  buildAnalyticsPayload,
+  resetAnalyticsContext,
+  setAnalyticsContext,
+  trackEvent,
+} from "./analytics.js";
 
 describe("analytics", () => {
   const originalWindow = globalThis.window;
 
   afterEach(() => {
+    resetAnalyticsContext();
     if (typeof originalWindow === "undefined") {
       delete globalThis.window;
     } else {
@@ -22,12 +28,17 @@ describe("analytics", () => {
     });
 
     expect(payload?.event).toBe("quickstart_click");
-    expect(payload?.properties).toEqual({
+    expect(payload?.properties).toMatchObject({
       source: "onboarding_strip",
       mode: "roto",
       attempts: 2,
       enabled: true,
+      is_signed_in: false,
+      scoring_mode: "unknown",
+      section: "unknown",
+      data_version: "unknown",
     });
+    expect(payload?.properties.session_id).toMatch(/^ffs-/);
     expect(typeof payload?.timestamp).toBe("number");
   });
 
@@ -47,10 +58,26 @@ describe("analytics", () => {
       CustomEvent: MockCustomEvent,
     };
 
+    setAnalyticsContext({
+      section: "projections",
+      scoring_mode: "points",
+      is_signed_in: true,
+      data_version: "v-test",
+    });
     const payload = trackEvent("export_click", { format: "csv", tab: "all" });
 
     expect(payload?.event).toBe("export_click");
-    expect(dataLayer).toEqual([{ event: "export_click", format: "csv", tab: "all" }]);
+    expect(dataLayer).toHaveLength(1);
+    expect(dataLayer[0]).toMatchObject({
+      event: "export_click",
+      format: "csv",
+      tab: "all",
+      section: "projections",
+      scoring_mode: "points",
+      is_signed_in: true,
+      data_version: "v-test",
+    });
+    expect(dataLayer[0].session_id).toMatch(/^ffs-/);
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
     expect(dispatchEvent.mock.calls[0][0].name).toBe("ff:analytics");
     expect(dispatchEvent.mock.calls[0][0].detail.event).toBe("export_click");

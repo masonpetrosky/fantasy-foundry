@@ -3,6 +3,15 @@ export const PRIMARY_NAV_ITEMS = [
   { key: "methodology", label: "Methodology" },
 ];
 
+export function glossaryTermAnchorId(term) {
+  const slug = String(term || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `glossary-term-${slug || "term"}`;
+}
+
 export const GLOSSARY_TERMS = [
   {
     term: "5x5 Roto",

@@ -80,11 +80,14 @@ export function DynastyCalculator({
   meta,
   presets,
   setPresets,
+  hasSuccessfulRun,
   onApplyToMainTable,
+  onCalculationSuccess,
   onClearMainTableOverlay,
   mainTableOverlayActive,
   onSettingsChange,
   onRegisterQuickStartRunner,
+  onOpenMethodologyGlossary,
 }) {
   const API = String(apiBase || "").trim();
   const [settings, setSettings] = useState(() => buildDefaultCalculatorSettings(meta));
@@ -98,6 +101,7 @@ export function DynastyCalculator({
   const calcAbortControllerRef = useRef(null);
   const calcActiveJobIdRef = useRef("");
   const quickStartRunRef = useRef(null);
+  const firstSuccessTrackedRef = useRef(Boolean(hasSuccessfulRun));
 
   const availableYears = useMemo(
     () => (meta.years || []).map(Number).filter(Number.isFinite),
@@ -121,6 +125,11 @@ export function DynastyCalculator({
       setSettings(prev => ({ ...prev, start_year: availableYears[0] }));
     }
   }, [availableYears, settings.start_year]);
+
+  useEffect(() => {
+    if (!hasSuccessfulRun) return;
+    firstSuccessTrackedRef.current = true;
+  }, [hasSuccessfulRun]);
 
   useEffect(() => {
     if (typeof onSettingsChange !== "function") return;
@@ -355,8 +364,28 @@ export function DynastyCalculator({
             ? result.data.length
             : 0;
         setLastRunTotal(resolvedTotal);
+        if (typeof onCalculationSuccess === "function") {
+          onCalculationSuccess({
+            scoringMode: String(normalizedSettings.scoring_mode || "").trim().toLowerCase() === "points" ? "points" : "roto",
+            startYear: Number(normalizedSettings.start_year),
+            horizon: Number(normalizedSettings.horizon),
+            teams: Number(normalizedSettings.teams),
+            playerCount: resolvedTotal,
+          });
+        }
         if (typeof onApplyToMainTable === "function") {
           onApplyToMainTable(result, normalizedSettings, runMeta);
+        }
+        if (!firstSuccessTrackedRef.current) {
+          firstSuccessTrackedRef.current = true;
+          trackEvent("ff_calculator_first_success", {
+            source: String(runContext.source || "manual").trim() || "manual",
+            scoring_mode: String(normalizedSettings.scoring_mode || "").trim() || "roto",
+            start_year: Number(normalizedSettings.start_year),
+            horizon: Number(normalizedSettings.horizon),
+            teams: Number(normalizedSettings.teams),
+            player_count: resolvedTotal,
+          });
         }
         trackEvent("calculator_run_success", {
           source: String(runContext.source || "manual").trim() || "manual",
@@ -431,6 +460,7 @@ export function DynastyCalculator({
     totalPlayersPerTeam,
     validationError,
     validationWarning,
+    hasSuccessfulRun: Boolean(hasSuccessfulRun) || firstSuccessTrackedRef.current,
   };
 
   const sidebarActions = {
@@ -447,6 +477,7 @@ export function DynastyCalculator({
     selectPreset,
     setPresetName,
     update,
+    openMethodologyGlossary: onOpenMethodologyGlossary,
   };
 
   return (

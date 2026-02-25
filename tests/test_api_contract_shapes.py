@@ -24,6 +24,18 @@ class ApiContractShapeTests(unittest.TestCase):
         self.assertIn("projection_freshness", payload)
         self.assertIsInstance(payload["projection_freshness"], dict)
 
+    def test_meta_endpoint_contract_shape(self) -> None:
+        with patch.object(app_module, "_refresh_data_if_needed", return_value=None):
+            response = self.client.get("/api/meta")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("calculator_guardrails", payload)
+        self.assertIn("projection_freshness", payload)
+        self.assertIn("last_projection_update", payload)
+        self.assertIn("projection_window_start", payload)
+        self.assertIn("projection_window_end", payload)
+
     def test_health_endpoint_contract_shape(self) -> None:
         with patch.object(app_module, "_refresh_data_if_needed", return_value=None):
             response = self.client.get("/api/health")

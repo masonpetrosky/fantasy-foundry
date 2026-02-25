@@ -5,9 +5,11 @@ export const BUILD_QUERY_PARAM = "build";
 export const CALC_PRESETS_STORAGE_KEY = "ff:calc-presets:v1";
 export const CALC_LINK_QUERY_PARAM = "calc";
 export const CALC_PANEL_OPEN_STORAGE_KEY = "ff:calc-panel-open:v1";
+export const CALC_LAST_SUCCESSFUL_RUN_STORAGE_KEY = "ff:last-successful-calc-run:v1";
 export const PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY = "ff:proj-mobile-layout-mode:v2";
 export const PROJECTION_TABLE_HIDDEN_COLS_STORAGE_KEY = "ff:proj-table-hidden-cols:v1";
 export const PROJECTION_CARD_HIDDEN_COLS_STORAGE_KEY = "ff:proj-card-hidden-cols:v1";
+export const PROJECTION_FILTER_PRESETS_STORAGE_KEY = "ff:proj-filter-presets:v1";
 export const PLAYER_WATCHLIST_STORAGE_KEY = "ff:player-watchlist:v1";
 export const ONBOARDING_DISMISSED_STORAGE_KEY = "ff:onboarding-dismissed:v1";
 export const CLOUD_SYNC_DEBOUNCE_MS = 900;
@@ -56,6 +58,62 @@ export function readOnboardingDismissed() {
 
 export function writeOnboardingDismissed(dismissed) {
   writeBooleanStorage(ONBOARDING_DISMISSED_STORAGE_KEY, Boolean(dismissed));
+}
+
+function coercePositiveInt(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const rounded = Math.round(n);
+  return rounded > 0 ? rounded : null;
+}
+
+function normalizeCalcSuccessfulRun(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const scoringMode = String(raw.scoringMode || "").trim().toLowerCase() === "points" ? "points" : "roto";
+  const teams = coercePositiveInt(raw.teams);
+  const horizon = coercePositiveInt(raw.horizon);
+  const startYear = coercePositiveInt(raw.startYear);
+  const playerCount = Math.max(0, Number.isFinite(Number(raw.playerCount)) ? Math.round(Number(raw.playerCount)) : 0);
+  const completedAtRaw = String(raw.completedAt || "").trim();
+  const completedAtDate = completedAtRaw ? new Date(completedAtRaw) : null;
+  const completedAt = completedAtDate && !Number.isNaN(completedAtDate.getTime())
+    ? completedAtDate.toISOString()
+    : new Date().toISOString();
+
+  if (!teams || !horizon) return null;
+
+  return {
+    scoringMode,
+    teams,
+    horizon,
+    startYear: startYear || null,
+    playerCount,
+    completedAt,
+  };
+}
+
+export function readLastSuccessfulCalcRun() {
+  const raw = safeReadStorage(CALC_LAST_SUCCESSFUL_RUN_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return normalizeCalcSuccessfulRun(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+export function writeLastSuccessfulCalcRun(summary) {
+  const normalized = normalizeCalcSuccessfulRun(summary);
+  if (!normalized) return;
+  safeWriteStorage(CALC_LAST_SUCCESSFUL_RUN_STORAGE_KEY, JSON.stringify(normalized));
+}
+
+export function clearLastSuccessfulCalcRun() {
+  try {
+    window.localStorage.removeItem(CALC_LAST_SUCCESSFUL_RUN_STORAGE_KEY);
+  } catch {
+    // Ignore browsers/storage modes that disallow localStorage writes.
+  }
 }
 
 export function normalizePlayerKey(value) {
@@ -189,6 +247,54 @@ export function readPlayerWatchlist() {
 
 export function writePlayerWatchlist(watchlist) {
   safeWriteStorage(PLAYER_WATCHLIST_STORAGE_KEY, JSON.stringify(normalizePlayerWatchlistEntries(watchlist)));
+}
+
+function normalizeProjectionFilterPreset(rawPreset) {
+  if (!rawPreset || typeof rawPreset !== "object" || Array.isArray(rawPreset)) return null;
+  const rawTab = String(rawPreset.tab || "").trim().toLowerCase();
+  const tab = rawTab === "bat" || rawTab === "pitch" ? rawTab : "all";
+  const rawSortDir = String(rawPreset.sortDir || "").trim().toLowerCase();
+  const sortDir = rawSortDir === "asc" ? "asc" : "desc";
+  const posFilters = Array.isArray(rawPreset.posFilters)
+    ? rawPreset.posFilters
+      .map(value => String(value || "").trim())
+      .filter(Boolean)
+    : [];
+
+  return {
+    tab,
+    search: String(rawPreset.search || "").trim(),
+    teamFilter: String(rawPreset.teamFilter || "").trim(),
+    yearFilter: String(rawPreset.yearFilter || "").trim(),
+    posFilters: Array.from(new Set(posFilters)),
+    watchlistOnly: Boolean(rawPreset.watchlistOnly),
+    sortCol: String(rawPreset.sortCol || "").trim(),
+    sortDir,
+  };
+}
+
+function normalizeProjectionFilterPresetBundle(rawBundle) {
+  if (!rawBundle || typeof rawBundle !== "object" || Array.isArray(rawBundle)) {
+    return { custom: null };
+  }
+  return {
+    custom: normalizeProjectionFilterPreset(rawBundle.custom),
+  };
+}
+
+export function readProjectionFilterPresets() {
+  const raw = safeReadStorage(PROJECTION_FILTER_PRESETS_STORAGE_KEY);
+  if (!raw) return { custom: null };
+  try {
+    return normalizeProjectionFilterPresetBundle(JSON.parse(raw));
+  } catch {
+    return { custom: null };
+  }
+}
+
+export function writeProjectionFilterPresets(rawBundle) {
+  const normalized = normalizeProjectionFilterPresetBundle(rawBundle);
+  safeWriteStorage(PROJECTION_FILTER_PRESETS_STORAGE_KEY, JSON.stringify(normalized));
 }
 
 export function readHiddenColumnOverridesByTab(storageKey) {

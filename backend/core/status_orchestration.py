@@ -56,7 +56,16 @@ class StatusOrchestrationContext:
 def build_meta_payload(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
     payload = dict(ctx.meta_getter())
     payload["calculator_guardrails"] = ctx.calculator_guardrails_payload()
-    payload["projection_freshness"] = dict(ctx.projection_freshness_getter())
+    projection_freshness = dict(ctx.projection_freshness_getter())
+    payload["projection_freshness"] = projection_freshness
+    raw_years = payload.get("years", [])
+    parsed_years = sorted(
+        {int(value) for value in raw_years if isinstance(value, (int, str)) and str(value).isdigit()}
+    ) if isinstance(raw_years, list) else []
+    payload["projection_window_start"] = parsed_years[0] if parsed_years else None
+    payload["projection_window_end"] = parsed_years[-1] if parsed_years else None
+    newest_projection_date = str(projection_freshness.get("newest_projection_date") or "").strip()
+    payload["last_projection_update"] = newest_projection_date or None
     with ctx.calculator_prewarm_lock:
         payload["calculator_prewarm"] = dict(ctx.calculator_prewarm_state)
     return payload

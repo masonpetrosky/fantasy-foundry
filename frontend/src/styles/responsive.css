@@ -108,6 +108,11 @@
     max-width: none;
   }
 
+  .hero-freshness {
+    margin: -12px 0 24px;
+    max-width: none;
+  }
+
   .hero-stats {
     gap: 16px 24px;
     justify-content: flex-start;
@@ -139,6 +144,16 @@
     grid-template-columns: 1fr;
   }
 
+  .calc-last-success-summary,
+  .meta-error-panel {
+    padding: 12px;
+  }
+
+  .meta-error-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .mobile-run-cta {
     position: fixed;
     left: 16px;
@@ -167,6 +182,15 @@
   }
 
   .filter-bar { gap: 10px; }
+
+  .filter-preset-row {
+    gap: 6px;
+  }
+
+  .filter-preset-row .inline-btn {
+    flex: 1 1 calc(50% - 6px);
+    text-align: center;
+  }
 
   .filter-bar input[type="text"],
   .filter-bar select,
@@ -204,6 +228,9 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--bg-secondary);
+    position: sticky;
+    top: 72px;
+    z-index: 40;
   }
 
   .projection-layout-row {
@@ -238,6 +265,7 @@
     border-radius: 5px;
     min-height: 34px;
     touch-action: manipulation;
+    min-width: 104px;
   }
 
   .projection-view-btn.active {

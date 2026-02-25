@@ -2,10 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   calculatorPresetsEqual,
   mergeCalculatorPresetsPreferLocal,
+  readLastSuccessfulCalcRun,
   readCalculatorPanelOpenPreference,
   readOnboardingDismissed,
+  readProjectionFilterPresets,
+  writeLastSuccessfulCalcRun,
   writeCalculatorPanelOpenPreference,
   writeOnboardingDismissed,
+  writeProjectionFilterPresets,
 } from "./app_state_storage.js";
 
 function withStorage(initialValues = {}) {
@@ -15,6 +19,9 @@ function withStorage(initialValues = {}) {
       getItem: vi.fn(key => (Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null)),
       setItem: vi.fn((key, value) => {
         store[key] = String(value);
+      }),
+      removeItem: vi.fn(key => {
+        delete store[key];
       }),
     },
   });
@@ -120,5 +127,71 @@ describe("onboarding dismissal storage", () => {
     writeOnboardingDismissed(false);
     expect(store["ff:onboarding-dismissed:v1"]).toBe("0");
     expect(readOnboardingDismissed()).toBe(false);
+  });
+});
+
+describe("last successful calculator run storage", () => {
+  it("round-trips a normalized run summary", () => {
+    const store = withStorage();
+    writeLastSuccessfulCalcRun({
+      scoringMode: "points",
+      teams: "12",
+      horizon: "15",
+      startYear: "2027",
+      playerCount: 381,
+      completedAt: "2026-02-25T10:00:00Z",
+    });
+
+    expect(store["ff:last-successful-calc-run:v1"]).toBeTruthy();
+    expect(readLastSuccessfulCalcRun()).toEqual({
+      scoringMode: "points",
+      teams: 12,
+      horizon: 15,
+      startYear: 2027,
+      playerCount: 381,
+      completedAt: "2026-02-25T10:00:00.000Z",
+    });
+  });
+
+  it("returns null for invalid payloads", () => {
+    withStorage({ "ff:last-successful-calc-run:v1": "{\"teams\":0}" });
+    expect(readLastSuccessfulCalcRun()).toBeNull();
+  });
+});
+
+describe("projection filter preset storage", () => {
+  it("stores and loads one normalized custom preset", () => {
+    const store = withStorage();
+    writeProjectionFilterPresets({
+      custom: {
+        tab: "bat",
+        search: "  julio ",
+        teamFilter: "SEA",
+        yearFilter: "2028",
+        posFilters: ["OF", "OF", "DH", ""],
+        watchlistOnly: true,
+        sortCol: "DynastyValue",
+        sortDir: "asc",
+      },
+    });
+
+    expect(store["ff:proj-filter-presets:v1"]).toBeTruthy();
+    expect(readProjectionFilterPresets()).toEqual({
+      custom: {
+        tab: "bat",
+        search: "julio",
+        teamFilter: "SEA",
+        yearFilter: "2028",
+        posFilters: ["OF", "DH"],
+        watchlistOnly: true,
+        sortCol: "DynastyValue",
+        sortDir: "asc",
+      },
+    });
+  });
+
+  it("falls back to null custom preset on malformed storage", () => {
+    withStorage({ "ff:proj-filter-presets:v1": "{bad json" });
+    expect(readProjectionFilterPresets()).toEqual({ custom: null });
   });
 });

@@ -26,6 +26,7 @@ describe("quick_start", () => {
     const openCalculatorPanel = vi.fn();
     const setPendingQuickStartMode = vi.fn();
     const scrollToCalculator = vi.fn();
+    const focusCalculator = vi.fn();
     const scheduleFrame = vi.fn(callback => callback());
 
     const mode = runQuickStartFlow({
@@ -35,11 +36,16 @@ describe("quick_start", () => {
       openCalculatorPanel,
       setPendingQuickStartMode,
       scrollToCalculator,
+      focusCalculator,
       scheduleFrame,
     });
 
     expect(mode).toBe("points");
-    expect(trackEventMock).toHaveBeenCalledWith("quickstart_click", {
+    expect(trackEventMock).toHaveBeenNthCalledWith(1, "ff_onboarding_cta_click", {
+      source: "onboarding_strip",
+      mode: "points",
+    });
+    expect(trackEventMock).toHaveBeenNthCalledWith(2, "quickstart_click", {
       source: "onboarding_strip",
       mode: "points",
     });
@@ -48,5 +54,6 @@ describe("quick_start", () => {
     expect(setPendingQuickStartMode).toHaveBeenCalledWith("points");
     expect(scheduleFrame).toHaveBeenCalledTimes(1);
     expect(scrollToCalculator).toHaveBeenCalledTimes(1);
+    expect(focusCalculator).toHaveBeenCalledTimes(1);
   });
 });

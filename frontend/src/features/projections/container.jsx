@@ -17,8 +17,11 @@ import {
 } from "../../accessibility_components.jsx";
 import {
   projectionRowKey,
+  readProjectionFilterPresets,
   stablePlayerKeyFromRow,
+  writeProjectionFilterPresets,
 } from "../../app_state_storage.js";
+import { trackEvent } from "../../analytics.js";
 import {
   INT_COLS,
   THREE_DECIMAL_COLS,
@@ -135,6 +138,9 @@ export function ProjectionsExplorer({
   const posMenuRef = useRef(null);
   const posMenuTriggerRef = useRef(null);
   const posMenuId = useId();
+  const [projectionFilterPresets, setProjectionFilterPresets] = useState(() => readProjectionFilterPresets());
+  const [showOverlayWhy, setShowOverlayWhy] = useState(false);
+  const emptyStateTrackedRef = useRef("");
 
   const resolvedCalculatorOverlayByPlayerKey = useMemo(() => (
     calculatorOverlayByPlayerKey && typeof calculatorOverlayByPlayerKey === "object" && !Array.isArray(calculatorOverlayByPlayerKey)
@@ -239,6 +245,7 @@ export function ProjectionsExplorer({
     clearWatchlist,
     exportWatchlistCsv,
     toggleCompareRow,
+    quickAddRow,
     clearCompareRows,
     removeCompareRow,
     maxComparePlayers,
@@ -349,6 +356,7 @@ export function ProjectionsExplorer({
       curr.includes(pos) ? curr.filter(p => p !== pos) : [...curr, pos]
     ));
   }
+
   const clearAllFilters = useCallback(() => {
     setSearch("");
     setTeamFilter("");
@@ -368,6 +376,187 @@ export function ProjectionsExplorer({
     setTeamFilter,
     setWatchlistOnly,
     setYearFilter,
+  ]);
+
+  const applyProjectionFilterPreset = useCallback((presetKey, source = "toolbar") => {
+    const key = String(presetKey || "").trim().toLowerCase();
+    if (!key) return;
+
+    const applyPresetValues = values => {
+      setTab(values.tab || DEFAULT_PROJECTIONS_TAB);
+      setSearch(values.search || "");
+      setTeamFilter(values.teamFilter || "");
+      setYearFilter(values.yearFilter || CAREER_TOTALS_FILTER_VALUE);
+      setPosFilters(Array.isArray(values.posFilters) ? values.posFilters : []);
+      setWatchlistOnly(Boolean(values.watchlistOnly));
+      setSortCol(values.sortCol || DEFAULT_PROJECTIONS_SORT_COL);
+      setSortDir(values.sortDir || DEFAULT_PROJECTIONS_SORT_DIR);
+      setShowPosMenu(false);
+      setOffset(0);
+    };
+
+    if (key === "all") {
+      applyPresetValues({
+        tab: DEFAULT_PROJECTIONS_TAB,
+        search: "",
+        teamFilter: "",
+        yearFilter: CAREER_TOTALS_FILTER_VALUE,
+        posFilters: [],
+        watchlistOnly: false,
+        sortCol: DEFAULT_PROJECTIONS_SORT_COL,
+        sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
+      });
+    } else if (key === "watchlist") {
+      applyPresetValues({
+        tab: DEFAULT_PROJECTIONS_TAB,
+        search: "",
+        teamFilter: "",
+        yearFilter: CAREER_TOTALS_FILTER_VALUE,
+        posFilters: [],
+        watchlistOnly: true,
+        sortCol: DEFAULT_PROJECTIONS_SORT_COL,
+        sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
+      });
+    } else if (key === "hitters") {
+      applyPresetValues({
+        tab: "bat",
+        search: "",
+        teamFilter: "",
+        yearFilter: CAREER_TOTALS_FILTER_VALUE,
+        posFilters: [],
+        watchlistOnly: false,
+        sortCol: DEFAULT_PROJECTIONS_SORT_COL,
+        sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
+      });
+    } else if (key === "pitchers") {
+      applyPresetValues({
+        tab: "pitch",
+        search: "",
+        teamFilter: "",
+        yearFilter: CAREER_TOTALS_FILTER_VALUE,
+        posFilters: [],
+        watchlistOnly: false,
+        sortCol: DEFAULT_PROJECTIONS_SORT_COL,
+        sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
+      });
+    } else if (key === "custom") {
+      if (!projectionFilterPresets?.custom) return;
+      applyPresetValues(projectionFilterPresets.custom);
+    } else {
+      return;
+    }
+
+    trackEvent("ff_projection_filter_preset_apply", {
+      preset: key,
+      source,
+      watchlist_only: key === "watchlist",
+    });
+  }, [
+    projectionFilterPresets,
+    setOffset,
+    setPosFilters,
+    setSearch,
+    setSortCol,
+    setSortDir,
+    setTab,
+    setTeamFilter,
+    setWatchlistOnly,
+    setYearFilter,
+  ]);
+
+  const saveCustomProjectionPreset = useCallback(() => {
+    const customPreset = {
+      tab,
+      search,
+      teamFilter,
+      yearFilter: resolvedYearFilter,
+      posFilters,
+      watchlistOnly,
+      sortCol,
+      sortDir,
+    };
+    setProjectionFilterPresets({ custom: customPreset });
+    trackEvent("ff_projection_filter_preset_apply", {
+      preset: "custom_save",
+      source: "toolbar",
+      watchlist_only: watchlistOnly,
+    });
+  }, [posFilters, resolvedYearFilter, search, sortCol, sortDir, tab, teamFilter, watchlistOnly]);
+
+  const activeProjectionPresetKey = useMemo(() => {
+    const matchesPreset = preset => (
+      tab === (preset.tab || DEFAULT_PROJECTIONS_TAB)
+      && search === (preset.search || "")
+      && teamFilter === (preset.teamFilter || "")
+      && resolvedYearFilter === (preset.yearFilter || CAREER_TOTALS_FILTER_VALUE)
+      && watchlistOnly === Boolean(preset.watchlistOnly)
+      && sortCol === (preset.sortCol || DEFAULT_PROJECTIONS_SORT_COL)
+      && sortDir === (preset.sortDir || DEFAULT_PROJECTIONS_SORT_DIR)
+      && JSON.stringify(posFilters) === JSON.stringify(Array.isArray(preset.posFilters) ? preset.posFilters : [])
+    );
+
+    if (matchesPreset({
+      tab: DEFAULT_PROJECTIONS_TAB,
+      search: "",
+      teamFilter: "",
+      yearFilter: CAREER_TOTALS_FILTER_VALUE,
+      posFilters: [],
+      watchlistOnly: false,
+      sortCol: DEFAULT_PROJECTIONS_SORT_COL,
+      sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
+    })) {
+      return "all";
+    }
+    if (matchesPreset({
+      tab: DEFAULT_PROJECTIONS_TAB,
+      search: "",
+      teamFilter: "",
+      yearFilter: CAREER_TOTALS_FILTER_VALUE,
+      posFilters: [],
+      watchlistOnly: true,
+      sortCol: DEFAULT_PROJECTIONS_SORT_COL,
+      sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
+    })) {
+      return "watchlist";
+    }
+    if (matchesPreset({
+      tab: "bat",
+      search: "",
+      teamFilter: "",
+      yearFilter: CAREER_TOTALS_FILTER_VALUE,
+      posFilters: [],
+      watchlistOnly: false,
+      sortCol: DEFAULT_PROJECTIONS_SORT_COL,
+      sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
+    })) {
+      return "hitters";
+    }
+    if (matchesPreset({
+      tab: "pitch",
+      search: "",
+      teamFilter: "",
+      yearFilter: CAREER_TOTALS_FILTER_VALUE,
+      posFilters: [],
+      watchlistOnly: false,
+      sortCol: DEFAULT_PROJECTIONS_SORT_COL,
+      sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
+    })) {
+      return "pitchers";
+    }
+    if (projectionFilterPresets?.custom && matchesPreset(projectionFilterPresets.custom)) {
+      return "custom";
+    }
+    return "";
+  }, [
+    posFilters,
+    projectionFilterPresets,
+    resolvedYearFilter,
+    search,
+    sortCol,
+    sortDir,
+    tab,
+    teamFilter,
+    watchlistOnly,
   ]);
   const formatProjectionCell = useCallback((col, row) => {
     const val = row[col];
@@ -420,6 +609,15 @@ export function ProjectionsExplorer({
               >
                 {isCompared ? "Compared" : "Compare"}
               </button>
+              <button
+                type="button"
+                className={`inline-btn ${rowWatch && isCompared ? "open" : ""}`.trim()}
+                onClick={() => quickAddRow(row)}
+                disabled={!isCompared && !rowWatch && compareRowsCount >= maxComparePlayers}
+                aria-label="Quick add to watchlist and compare"
+              >
+                {rowWatch && isCompared ? "Quick Added" : "Quick +"}
+              </button>
             </div>
           </div>
           <p className="projection-card-meta">{row.Team || "—"} · {row.Pos || "—"}</p>
@@ -446,6 +644,7 @@ export function ProjectionsExplorer({
     colLabels,
     toggleRowWatch,
     toggleCompareRow,
+    quickAddRow,
   ]);
   const tableRowsMarkup = useMemo(() => {
     if (showCards || displayedPage.length === 0) return [];
@@ -476,6 +675,15 @@ export function ProjectionsExplorer({
             >
               {isCompared ? "Compared" : "Compare"}
             </button>
+            <button
+              type="button"
+              className={`inline-btn ${rowWatch && isCompared ? "open" : ""}`.trim()}
+              onClick={() => quickAddRow(row)}
+              disabled={!isCompared && !rowWatch && compareRowsCount >= maxComparePlayers}
+              aria-label="Quick add to watchlist and compare"
+            >
+              {rowWatch && isCompared ? "Quick Added" : "Quick +"}
+            </button>
           </td>
         </tr>
       );
@@ -490,6 +698,7 @@ export function ProjectionsExplorer({
     formatProjectionCell,
     toggleRowWatch,
     toggleCompareRow,
+    quickAddRow,
     compareRowsCount,
     maxComparePlayers,
   ]);
@@ -499,6 +708,38 @@ export function ProjectionsExplorer({
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [updateProjectionHorizontalAffordance]);
+
+  useEffect(() => {
+    writeProjectionFilterPresets(projectionFilterPresets);
+  }, [projectionFilterPresets]);
+
+  useEffect(() => {
+    if (!hasCalculatorOverlay) {
+      setShowOverlayWhy(false);
+    }
+  }, [hasCalculatorOverlay]);
+
+  useEffect(() => {
+    if (loading || error || displayedPage.length > 0) return;
+    const marker = [
+      tab,
+      resolvedYearFilter,
+      teamFilter,
+      watchlistOnly ? "watchlist" : "all",
+      search.trim(),
+      posFilters.join(","),
+    ].join("|");
+    if (emptyStateTrackedRef.current === marker) return;
+    emptyStateTrackedRef.current = marker;
+    trackEvent("ff_projection_empty_state_seen", {
+      tab,
+      watchlist_only: watchlistOnly,
+      has_search: Boolean(search.trim()),
+      has_team_filter: Boolean(teamFilter),
+      has_pos_filters: posFilters.length > 0,
+      year_view: resolvedYearFilter,
+    });
+  }, [displayedPage.length, error, loading, posFilters, resolvedYearFilter, search, tab, teamFilter, watchlistOnly]);
 
   useEffect(() => {
     const raf = window.requestAnimationFrame(() => updateProjectionHorizontalAffordance());
@@ -516,12 +757,79 @@ export function ProjectionsExplorer({
     updateProjectionHorizontalAffordance();
   }, [tab, mobileLayoutMode, isMobileViewport, updateProjectionHorizontalAffordance]);
 
+  const emptyStateActions = (
+    <div className="empty-state-actions">
+      <button type="button" className="inline-btn" onClick={clearAllFilters} disabled={!hasActiveFilters}>
+        Clear Filters
+      </button>
+      <button type="button" className="inline-btn" onClick={() => applyProjectionFilterPreset("all", "empty_state")}>
+        Show All Players
+      </button>
+      <button type="button" className="inline-btn" onClick={() => setSearch("Rodriguez")}>
+        Try Example Search
+      </button>
+      {resolvedYearFilter !== CAREER_TOTALS_FILTER_VALUE && (
+        <button type="button" className="inline-btn" onClick={() => setYearFilter(CAREER_TOTALS_FILTER_VALUE)}>
+          Switch To Career Totals
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div className="fade-up fade-up-1">
       <div className="section-tabs">
         <button className={`section-tab ${tab==="all"?"active":""}`} onClick={() => {setTab(DEFAULT_PROJECTIONS_TAB); setSortCol(DEFAULT_PROJECTIONS_SORT_COL); setSortDir(DEFAULT_PROJECTIONS_SORT_DIR); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="all"}>All</button>
         <button className={`section-tab ${tab==="bat"?"active":""}`} onClick={() => {setTab("bat"); setSortCol(DEFAULT_PROJECTIONS_SORT_COL); setSortDir(DEFAULT_PROJECTIONS_SORT_DIR); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="bat"}>Hitters</button>
         <button className={`section-tab ${tab==="pitch"?"active":""}`} onClick={() => {setTab("pitch"); setSortCol(DEFAULT_PROJECTIONS_SORT_COL); setSortDir(DEFAULT_PROJECTIONS_SORT_DIR); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="pitch"}>Pitchers</button>
+      </div>
+
+      <div className="filter-preset-row" role="group" aria-label="Projection filter presets">
+        <span className="filter-preset-label">Presets</span>
+        <button
+          type="button"
+          className={`inline-btn ${activeProjectionPresetKey === "all" ? "open" : ""}`.trim()}
+          onClick={() => applyProjectionFilterPreset("all")}
+        >
+          All
+        </button>
+        <button
+          type="button"
+          className={`inline-btn ${activeProjectionPresetKey === "watchlist" ? "open" : ""}`.trim()}
+          onClick={() => applyProjectionFilterPreset("watchlist")}
+          disabled={watchlistCount === 0}
+        >
+          My Watchlist
+        </button>
+        <button
+          type="button"
+          className={`inline-btn ${activeProjectionPresetKey === "hitters" ? "open" : ""}`.trim()}
+          onClick={() => applyProjectionFilterPreset("hitters")}
+        >
+          Hitters
+        </button>
+        <button
+          type="button"
+          className={`inline-btn ${activeProjectionPresetKey === "pitchers" ? "open" : ""}`.trim()}
+          onClick={() => applyProjectionFilterPreset("pitchers")}
+        >
+          Pitchers
+        </button>
+        <button
+          type="button"
+          className={`inline-btn ${activeProjectionPresetKey === "custom" ? "open" : ""}`.trim()}
+          onClick={() => applyProjectionFilterPreset("custom")}
+          disabled={!projectionFilterPresets?.custom}
+        >
+          Custom
+        </button>
+        <button
+          type="button"
+          className="inline-btn"
+          onClick={saveCustomProjectionPreset}
+        >
+          Save Current As Custom
+        </button>
       </div>
 
       <div className="filter-bar">
@@ -668,6 +976,18 @@ export function ProjectionsExplorer({
                 Overlay source is from an older projections build. Re-run the calculator to refresh these values.
               </span>
             )}
+            <button
+              type="button"
+              className="inline-btn overlay-why-btn"
+              onClick={() => setShowOverlayWhy(current => !current)}
+            >
+              {showOverlayWhy ? "Hide why this changed" : "Why this changed"}
+            </button>
+            {showOverlayWhy && (
+              <p className="overlay-why-copy">
+                Calculator overlays re-rank players using your league setup (teams, roster depth, scoring mode, and horizon) instead of baseline site defaults.
+              </p>
+            )}
           </div>
           {typeof onClearCalculatorOverlay === "function" && (
             <button type="button" className="inline-btn" onClick={onClearCalculatorOverlay}>
@@ -718,7 +1038,10 @@ export function ProjectionsExplorer({
       )}
       <div className="projection-layout-controls" role="group" aria-label="Projection layout controls">
           <div className="projection-layout-row">
-            <span className="label">Layout</span>
+            <span className="label">
+              Layout
+              {isMobileViewport ? ` · Viewing ${mobileLayoutMode === "cards" ? "Cards" : "Table"}` : ""}
+            </span>
             <div className="projection-view-toggle">
               <button
                 type="button"
@@ -726,7 +1049,7 @@ export function ProjectionsExplorer({
                 onClick={() => setMobileLayoutMode("cards")}
                 aria-pressed={mobileLayoutMode === "cards"}
               >
-                Cards
+                Card View
               </button>
               <button
                 type="button"
@@ -734,7 +1057,7 @@ export function ProjectionsExplorer({
                 onClick={() => setMobileLayoutMode("table")}
                 aria-pressed={mobileLayoutMode === "table"}
               >
-                Table
+                Table View
               </button>
             </div>
           </div>
@@ -765,7 +1088,10 @@ export function ProjectionsExplorer({
           ) : error && displayedPage.length === 0 ? (
             <div className="projection-card-empty">Unable to load projections. {error}{" "}<button type="button" className="inline-btn" onClick={retryFetch}>Retry</button></div>
           ) : displayedPage.length === 0 ? (
-            <div className="projection-card-empty">No results found for this page.</div>
+            <div className="projection-card-empty">
+              <p>No projections matched these filters.</p>
+              {emptyStateActions}
+            </div>
           ) : (
             cardRowsMarkup
           )}
@@ -825,7 +1151,12 @@ export function ProjectionsExplorer({
                     </td>
                   </tr>
                 ) : displayedPage.length === 0 ? (
-                  <tr><td colSpan={cols.length + 2} style={{textAlign:"center",padding:"40px",color:"var(--text-muted)"}}>No results found</td></tr>
+                  <tr>
+                    <td colSpan={cols.length + 2} style={{ textAlign: "center", padding: "34px", color: "var(--text-muted)" }}>
+                      <p style={{ marginBottom: "12px" }}>No projections matched these filters.</p>
+                      {emptyStateActions}
+                    </td>
+                  </tr>
                 ) : (
                   tableRowsMarkup
                 )}

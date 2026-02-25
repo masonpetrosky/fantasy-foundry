@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { trackEvent } from "../../../analytics.js";
 import {
   MAX_COMPARE_PLAYERS,
   buildWatchlistCsv,
@@ -101,6 +102,29 @@ export function useProjectionCollections({ watchlist, setWatchlist, data }) {
     });
   }, []);
 
+  const quickAddRow = useCallback(row => {
+    const key = stablePlayerKeyFromRow(row);
+    const nextEntry = playerWatchEntryFromRow(row);
+    const alreadyWatched = Boolean(watchlist[key]);
+    if (!alreadyWatched) {
+      setWatchlist(current => ({ ...current, [nextEntry.key]: nextEntry }));
+    }
+
+    const alreadyCompared = Boolean(compareRowsByKey[key]);
+    const compareAtCapacity = Object.keys(compareRowsByKey).length >= MAX_COMPARE_PLAYERS;
+    const addedCompare = !alreadyCompared && !compareAtCapacity;
+    if (addedCompare) {
+      setCompareRowsByKey(current => ({ ...current, [key]: row }));
+    }
+
+    trackEvent("ff_compare_quick_add", {
+      player_key: key,
+      added_watchlist: !alreadyWatched,
+      added_compare: addedCompare,
+      compare_capacity_reached: !alreadyCompared && compareAtCapacity,
+    });
+  }, [compareRowsByKey, setWatchlist, watchlist]);
+
   return {
     watchlistCount,
     compareRowsByKey,
@@ -111,6 +135,7 @@ export function useProjectionCollections({ watchlist, setWatchlist, data }) {
     clearWatchlist,
     exportWatchlistCsv,
     toggleCompareRow,
+    quickAddRow,
     clearCompareRows,
     removeCompareRow,
     maxComparePlayers: MAX_COMPARE_PLAYERS,

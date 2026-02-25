@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   POINTS_BATTING_FIELDS,
   POINTS_PITCHING_FIELDS,
@@ -8,6 +8,7 @@ import {
   SLOT_INPUT_MIN,
   coerceBooleanSetting,
 } from "./dynasty_calculator_config.js";
+import { glossaryTermAnchorId } from "./app_content.js";
 
 export function DynastyCalculatorSidebar({
   meta,
@@ -37,6 +38,7 @@ export function DynastyCalculatorSidebar({
     totalPlayersPerTeam,
     validationError,
     validationWarning,
+    hasSuccessfulRun,
   } = state;
   const {
     applyQuickStartAndRun,
@@ -52,7 +54,19 @@ export function DynastyCalculatorSidebar({
     selectPreset,
     setPresetName,
     update,
+    openMethodologyGlossary,
   } = actions;
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(Boolean(hasSuccessfulRun));
+
+  useEffect(() => {
+    if (!hasSuccessfulRun) return;
+    setShowAdvancedSettings(true);
+  }, [hasSuccessfulRun]);
+
+  function jumpToGlossaryTerm(term) {
+    if (typeof openMethodologyGlossary !== "function") return;
+    openMethodologyGlossary(glossaryTermAnchorId(term));
+  }
 
   return (
     <div className="calc-sidebar">
@@ -105,6 +119,15 @@ export function DynastyCalculatorSidebar({
 
       <div className="calc-section">
         <p className="calc-section-title">Format</p>
+        <p className="calc-note calc-note-links">
+          Definitions:
+          {" "}
+          <button type="button" className="calc-method-link" onClick={() => jumpToGlossaryTerm("Projection Window")}>Projection Window</button>
+          {" · "}
+          <button type="button" className="calc-method-link" onClick={() => jumpToGlossaryTerm("League Configuration")}>League Configuration</button>
+          {" · "}
+          <button type="button" className="calc-method-link" onClick={() => jumpToGlossaryTerm("SGP (Standings Gain Points)")}>SGP</button>
+        </p>
 
         <div className="form-row">
           <div className="form-group">
@@ -288,181 +311,206 @@ export function DynastyCalculatorSidebar({
       </div>
 
       <div className="calc-section">
-        <p className="calc-section-title">Starter Slots Per Team</p>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label>C</label>
-            <input type="number" value={settings.hit_c} onChange={e => update("hit_c", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-          </div>
-          <div className="form-group">
-            <label>1B</label>
-            <input type="number" value={settings.hit_1b} onChange={e => update("hit_1b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label>2B</label>
-            <input type="number" value={settings.hit_2b} onChange={e => update("hit_2b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-          </div>
-          <div className="form-group">
-            <label>3B</label>
-            <input type="number" value={settings.hit_3b} onChange={e => update("hit_3b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label>SS</label>
-            <input type="number" value={settings.hit_ss} onChange={e => update("hit_ss", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-          </div>
-          <div className="form-group">
-            <label>CI</label>
-            <input type="number" value={settings.hit_ci} onChange={e => update("hit_ci", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label>MI</label>
-            <input type="number" value={settings.hit_mi} onChange={e => update("hit_mi", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-          </div>
-          <div className="form-group">
-            <label>OF</label>
-            <input type="number" value={settings.hit_of} onChange={e => update("hit_of", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label>UT</label>
-            <input type="number" value={settings.hit_ut} onChange={e => update("hit_ut", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-          </div>
-          <div className="form-group">
-            <label>P</label>
-            <input type="number" value={settings.pit_p} onChange={e => update("pit_p", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label>SP</label>
-            <input type="number" value={settings.pit_sp} onChange={e => update("pit_sp", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-          </div>
-          <div className="form-group">
-            <label>RP</label>
-            <input type="number" value={settings.pit_rp} onChange={e => update("pit_rp", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
-          </div>
-        </div>
+        <p className="calc-section-title">Advanced Settings</p>
+        <p className="calc-note">
+          Starter slots, scoring categories, and bench/minors depth.
+          {!hasSuccessfulRun && " Run quick start first for a baseline before adjusting these values."}
+        </p>
+        <button
+          type="button"
+          className="calc-secondary-btn"
+          onClick={() => setShowAdvancedSettings(current => !current)}
+        >
+          {showAdvancedSettings ? "Hide Advanced Settings" : "Show Advanced Settings"}
+        </button>
       </div>
 
-      {!isPointsMode && (
-        <div className="calc-section">
-          <p className="calc-section-title">Roto Categories</p>
-          <p className="calc-note">
-            Choose which categories count toward value in roto mode ({selectedRotoHitCategoryCount} hitting, {selectedRotoPitchCategoryCount} pitching).
-          </p>
+      {showAdvancedSettings && (
+        <>
+          <div className="calc-section">
+            <p className="calc-section-title">Starter Slots Per Team</p>
 
-          <p className="calc-subheading">Hitting</p>
-          <div className="calc-checkbox-grid">
-            {ROTO_HITTER_CATEGORY_FIELDS.map(field => (
-              <label className="calc-checkbox-option" key={field.key}>
-                <input
-                  type="checkbox"
-                  checked={coerceBooleanSetting(settings[field.key], field.defaultValue)}
-                  onChange={e => update(field.key, e.target.checked)}
-                />
-                <span>{field.label}</span>
-              </label>
-            ))}
-          </div>
-
-          <p className="calc-subheading">Pitching</p>
-          <div className="calc-checkbox-grid">
-            {ROTO_PITCHER_CATEGORY_FIELDS.map(field => (
-              <label className="calc-checkbox-option" key={field.key}>
-                <input
-                  type="checkbox"
-                  checked={coerceBooleanSetting(settings[field.key], field.defaultValue)}
-                  onChange={e => update(field.key, e.target.checked)}
-                />
-                <span>{field.label}</span>
-              </label>
-            ))}
-          </div>
-          <button type="button" className="calc-secondary-btn" onClick={resetRotoCategoryDefaults}>
-            Reset 5x5 Categories
-          </button>
-        </div>
-      )}
-
-      {isPointsMode && (
-        <div className="calc-section">
-          <p className="calc-section-title">Points Scoring Rules</p>
-          <p className="calc-note">Edit category points below. Defaults align with a common H2H points format ({pointRulesCount} categories).</p>
-          <p className="calc-subheading">Batting</p>
-          <div className="form-row">
-            {POINTS_BATTING_FIELDS.map(field => (
-              <div className="form-group" key={field.key}>
-                <label>{field.label}</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={settings[field.key]}
-                  onChange={e => update(field.key, e.target.value)}
-                />
+            <div className="form-row">
+              <div className="form-group">
+                <label>C</label>
+                <input type="number" value={settings.hit_c} onChange={e => update("hit_c", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
               </div>
-            ))}
-          </div>
-
-          <p className="calc-subheading">Pitching</p>
-          <div className="form-row">
-            {POINTS_PITCHING_FIELDS.map(field => (
-              <div className="form-group" key={field.key}>
-                <label>{field.label}</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={settings[field.key]}
-                  onChange={e => update(field.key, e.target.value)}
-                />
+              <div className="form-group">
+                <label>1B</label>
+                <input type="number" value={settings.hit_1b} onChange={e => update("hit_1b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
               </div>
-            ))}
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>2B</label>
+                <input type="number" value={settings.hit_2b} onChange={e => update("hit_2b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+              <div className="form-group">
+                <label>3B</label>
+                <input type="number" value={settings.hit_3b} onChange={e => update("hit_3b", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>SS</label>
+                <input type="number" value={settings.hit_ss} onChange={e => update("hit_ss", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+              <div className="form-group">
+                <label>CI</label>
+                <input type="number" value={settings.hit_ci} onChange={e => update("hit_ci", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>MI</label>
+                <input type="number" value={settings.hit_mi} onChange={e => update("hit_mi", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+              <div className="form-group">
+                <label>OF</label>
+                <input type="number" value={settings.hit_of} onChange={e => update("hit_of", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>UT</label>
+                <input type="number" value={settings.hit_ut} onChange={e => update("hit_ut", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+              <div className="form-group">
+                <label>P</label>
+                <input type="number" value={settings.pit_p} onChange={e => update("pit_p", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>SP</label>
+                <input type="number" value={settings.pit_sp} onChange={e => update("pit_sp", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+              <div className="form-group">
+                <label>RP</label>
+                <input type="number" value={settings.pit_rp} onChange={e => update("pit_rp", e.target.value)} min={SLOT_INPUT_MIN} max={SLOT_INPUT_MAX} />
+              </div>
+            </div>
           </div>
-          <button type="button" className="calc-secondary-btn" onClick={resetPointsScoringDefaults}>
-            Reset Recommended Points Scoring
-          </button>
-        </div>
+
+          {!isPointsMode && (
+            <div className="calc-section">
+              <p className="calc-section-title">Roto Categories</p>
+              <p className="calc-note">
+                Choose which categories count toward value in roto mode ({selectedRotoHitCategoryCount} hitting, {selectedRotoPitchCategoryCount} pitching).
+                {" "}
+                <button type="button" className="calc-method-link" onClick={() => jumpToGlossaryTerm("Category Impact")}>How category impact works</button>
+              </p>
+
+              <p className="calc-subheading">Hitting</p>
+              <div className="calc-checkbox-grid">
+                {ROTO_HITTER_CATEGORY_FIELDS.map(field => (
+                  <label className="calc-checkbox-option" key={field.key}>
+                    <input
+                      type="checkbox"
+                      checked={coerceBooleanSetting(settings[field.key], field.defaultValue)}
+                      onChange={e => update(field.key, e.target.checked)}
+                    />
+                    <span>{field.label}</span>
+                  </label>
+                ))}
+              </div>
+
+              <p className="calc-subheading">Pitching</p>
+              <div className="calc-checkbox-grid">
+                {ROTO_PITCHER_CATEGORY_FIELDS.map(field => (
+                  <label className="calc-checkbox-option" key={field.key}>
+                    <input
+                      type="checkbox"
+                      checked={coerceBooleanSetting(settings[field.key], field.defaultValue)}
+                      onChange={e => update(field.key, e.target.checked)}
+                    />
+                    <span>{field.label}</span>
+                  </label>
+                ))}
+              </div>
+              <button type="button" className="calc-secondary-btn" onClick={resetRotoCategoryDefaults}>
+                Reset 5x5 Categories
+              </button>
+            </div>
+          )}
+
+          {isPointsMode && (
+            <div className="calc-section">
+              <p className="calc-section-title">Points Scoring Rules</p>
+              <p className="calc-note">
+                Edit category points below. Defaults align with a common H2H points format ({pointRulesCount} categories).
+                {" "}
+                <button type="button" className="calc-method-link" onClick={() => jumpToGlossaryTerm("Dynasty Value")}>Dynasty value context</button>
+              </p>
+              <p className="calc-subheading">Batting</p>
+              <div className="form-row">
+                {POINTS_BATTING_FIELDS.map(field => (
+                  <div className="form-group" key={field.key}>
+                    <label>{field.label}</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={settings[field.key]}
+                      onChange={e => update(field.key, e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <p className="calc-subheading">Pitching</p>
+              <div className="form-row">
+                {POINTS_PITCHING_FIELDS.map(field => (
+                  <div className="form-group" key={field.key}>
+                    <label>{field.label}</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={settings[field.key]}
+                      onChange={e => update(field.key, e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="calc-secondary-btn" onClick={resetPointsScoringDefaults}>
+                Reset Recommended Points Scoring
+              </button>
+            </div>
+          )}
+
+          <div className="calc-section">
+            <p className="calc-section-title">Depth And Reset</p>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Bench Slots</label>
+                <input type="number" value={settings.bench} onChange={e => update("bench", e.target.value)} min="0" max="40" />
+              </div>
+              <div className="form-group">
+                <label>Minor Slots</label>
+                <input type="number" value={settings.minors} onChange={e => update("minors", e.target.value)} min="0" max="60" />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>IR Slots</label>
+                <input type="number" value={settings.ir} onChange={e => update("ir", e.target.value)} min="0" max="40" />
+              </div>
+              <div className="form-group">
+                <label>Setup Actions</label>
+                <button type="button" className="calc-secondary-btn" onClick={reapplySetupDefaults}>
+                  {isPointsMode ? "Reset Points + Slot Defaults" : "Reapply Roto Slot Defaults"}
+                </button>
+              </div>
+            </div>
+            <p className="calc-note">Reserve depth per team: {reservePerTeam} (bench + minors).</p>
+          </div>
+        </>
       )}
-
-      <div className="calc-section">
-        <p className="calc-section-title">Depth And Reset</p>
-        <div className="form-row">
-          <div className="form-group">
-            <label>Bench Slots</label>
-            <input type="number" value={settings.bench} onChange={e => update("bench", e.target.value)} min="0" max="40" />
-          </div>
-          <div className="form-group">
-            <label>Minor Slots</label>
-            <input type="number" value={settings.minors} onChange={e => update("minors", e.target.value)} min="0" max="60" />
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label>IR Slots</label>
-            <input type="number" value={settings.ir} onChange={e => update("ir", e.target.value)} min="0" max="40" />
-          </div>
-          <div className="form-group">
-            <label>Setup Actions</label>
-            <button type="button" className="calc-secondary-btn" onClick={reapplySetupDefaults}>
-              {isPointsMode ? "Reset Points + Slot Defaults" : "Reapply Roto Slot Defaults"}
-            </button>
-          </div>
-        </div>
-        <p className="calc-note">Reserve depth per team: {reservePerTeam} (bench + minors).</p>
-      </div>
 
       <div className="calc-section">
         <p className="calc-section-title">Main Table Sync</p>

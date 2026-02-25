@@ -1,5 +1,5 @@
 import React from "react";
-import { GLOSSARY_TERMS, METHODOLOGY_FAQS } from "./app_content.js";
+import { GLOSSARY_TERMS, METHODOLOGY_FAQS, glossaryTermAnchorId } from "./app_content.js";
 
 export function MethodologySection() {
   return (
@@ -107,7 +107,7 @@ export function MethodologySection() {
         <dl className="glossary-list">
           {GLOSSARY_TERMS.map(entry => (
             <div key={entry.term} className="glossary-item">
-              <dt>{entry.term}</dt>
+              <dt id={glossaryTermAnchorId(entry.term)} tabIndex={-1}>{entry.term}</dt>
               <dd>{entry.definition}</dd>
             </div>
           ))}

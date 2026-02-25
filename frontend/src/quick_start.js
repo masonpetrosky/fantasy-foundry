@@ -11,9 +11,11 @@ export function runQuickStartFlow({
   openCalculatorPanel,
   setPendingQuickStartMode,
   scrollToCalculator,
+  focusCalculator,
   scheduleFrame,
 }) {
   const normalizedMode = normalizeQuickStartMode(mode);
+  trackEvent("ff_onboarding_cta_click", { source: "onboarding_strip", mode: normalizedMode });
   trackEvent("quickstart_click", { source: "onboarding_strip", mode: normalizedMode });
 
   if (!onboardingDismissed && typeof markOnboardingDismissed === "function") {
@@ -32,6 +34,9 @@ export function runQuickStartFlow({
   schedule(() => {
     if (typeof scrollToCalculator === "function") {
       scrollToCalculator();
+    }
+    if (typeof focusCalculator === "function") {
+      focusCalculator();
     }
   });
 

@@ -205,6 +205,16 @@
   gap: 6px;
 }
 
+.overlay-why-btn {
+  justify-self: start;
+}
+
+.overlay-why-copy {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
 .overlay-status-chip-row {
   display: flex;
   align-items: center;
@@ -393,6 +403,25 @@
   line-height: var(--lh-base);
 }
 
+.calc-note-links {
+  margin-bottom: 10px;
+}
+
+.calc-method-link {
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  cursor: pointer;
+}
+
+.calc-method-link:hover {
+  color: var(--text-primary);
+}
+
 .calc-preset-status {
   margin: -4px 0 10px;
   font-size: var(--fs-xs);
@@ -570,4 +599,3 @@
 .rankings-table tbody tr.rank-row-selected:hover td.rank-pin-value {
   background: rgba(78, 205, 196, 0.16);
 }
-

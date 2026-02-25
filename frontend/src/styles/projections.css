@@ -26,6 +26,26 @@
 .section-tab:hover { color: var(--text-primary); background: rgba(26, 35, 50, 0.4); }
 .section-tab.active { background: var(--bg-tertiary); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 
+.filter-preset-row {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-preset-label {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-family: var(--ff-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 /* ====== FILTER BAR ====== */
 .filter-bar {
   display: flex;
@@ -696,6 +716,18 @@ td.value-negative { color: var(--red); }
   text-align: center;
 }
 
+.projection-card-empty p {
+  margin: 0 0 10px;
+}
+
+.empty-state-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* ====== PAGINATION ====== */
 .pagination {
   display: flex;
@@ -736,4 +768,3 @@ td.value-negative { color: var(--red); }
   margin: 8px 14px;
 }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-

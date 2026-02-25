@@ -2389,6 +2389,9 @@ class CalculatorValidationTests(unittest.TestCase):
         freshness = payload.get("projection_freshness", {})
         self.assertIn("newest_projection_date", freshness)
         self.assertIn("date_coverage_pct", freshness)
+        self.assertIn("last_projection_update", payload)
+        self.assertIn("projection_window_start", payload)
+        self.assertIn("projection_window_end", payload)
 
     def test_calculate_response_includes_explanations_payload(self) -> None:
         fake_out = pd.DataFrame(
