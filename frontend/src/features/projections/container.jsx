@@ -3,23 +3,16 @@ import React, {
   lazy,
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { ColumnChooserControl } from "../../ui_components.jsx";
 import {
-  MenuButton,
   SortableHeaderCell,
-  VisuallyHidden,
-  useMenuInteractions,
 } from "../../accessibility_components.jsx";
 import {
   projectionRowKey,
-  readProjectionFilterPresets,
   stablePlayerKeyFromRow,
-  writeProjectionFilterPresets,
 } from "../../app_state_storage.js";
 import { trackEvent } from "../../analytics.js";
 import {
@@ -30,7 +23,6 @@ import {
   fmt,
   fmtInt,
   formatCellValue,
-  parsePosTokens,
 } from "../../formatting_utils.js";
 import {
   useProjectionColumnVisibility,
@@ -45,6 +37,12 @@ import {
   useProjectionLayoutState,
 } from "./hooks/useProjectionLayoutState.js";
 import {
+  useProjectionOverlay,
+} from "./hooks/useProjectionOverlay.js";
+import {
+  useProjectionFilterPresets,
+} from "./hooks/useProjectionFilterPresets.js";
+import {
   CAREER_TOTALS_FILTER_VALUE,
   DEFAULT_PROJECTIONS_SORT_COL,
   DEFAULT_PROJECTIONS_SORT_DIR,
@@ -53,9 +51,10 @@ import {
 } from "../../hooks/useProjectionsData.js";
 import {
   buildActiveFilterChips,
-  buildOverlayStatusMeta,
-  DEFAULT_FILTER_SUMMARY_FALLBACK,
 } from "./view_state.js";
+import { ProjectionOverlayBanner } from "./components/ProjectionOverlayBanner.jsx";
+import { ProjectionFilterBar } from "./components/ProjectionFilterBar.jsx";
+import { ColumnChooserControl } from "../../ui_components.jsx";
 
 const LazyProjectionComparisonPanel = lazy(() => (
   import("./components/ProjectionComparisonPanel.jsx").then(module => ({
@@ -134,50 +133,26 @@ export function ProjectionsExplorer({
     handleProjectionTableScroll,
   } = useProjectionLayoutState();
 
-  const [showPosMenu, setShowPosMenu] = useState(false);
-  const posMenuRef = useRef(null);
-  const posMenuTriggerRef = useRef(null);
-  const posMenuId = useId();
-  const [projectionFilterPresets, setProjectionFilterPresets] = useState(() => readProjectionFilterPresets());
-  const [showOverlayWhy, setShowOverlayWhy] = useState(false);
+  const [, setShowPosMenu] = useState(false);
   const emptyStateTrackedRef = useRef("");
 
-  const resolvedCalculatorOverlayByPlayerKey = useMemo(() => (
-    calculatorOverlayByPlayerKey && typeof calculatorOverlayByPlayerKey === "object" && !Array.isArray(calculatorOverlayByPlayerKey)
-      ? calculatorOverlayByPlayerKey
-      : {}
-  ), [calculatorOverlayByPlayerKey]);
-  const resolvedCalculatorOverlayPlayerCount = useMemo(
-    () => Number.isFinite(Number(calculatorOverlayPlayerCount))
-      ? Math.max(0, Number(calculatorOverlayPlayerCount))
-      : Object.keys(resolvedCalculatorOverlayByPlayerKey).length,
-    [calculatorOverlayPlayerCount, resolvedCalculatorOverlayByPlayerKey]
-  );
-  const hasCalculatorOverlay = Boolean(calculatorOverlayActive) && resolvedCalculatorOverlayPlayerCount > 0;
-  const overlayScoringMode = String(calculatorOverlaySummary?.scoringMode || "").trim().toLowerCase();
-  const overlayStartYear = Number(calculatorOverlaySummary?.startYear);
-  const overlayHorizon = Number(calculatorOverlaySummary?.horizon);
-  const overlaySummaryParts = useMemo(() => {
-    const parts = [];
-    if (overlayScoringMode === "points") {
-      parts.push("Points mode");
-    } else if (overlayScoringMode === "roto") {
-      parts.push("Roto mode");
-    }
-    if (Number.isFinite(overlayStartYear) && overlayStartYear > 0) {
-      parts.push(`Start ${overlayStartYear}`);
-    }
-    if (Number.isFinite(overlayHorizon) && overlayHorizon > 0) {
-      parts.push(`${overlayHorizon}-year horizon`);
-    }
-    return parts;
-  }, [overlayHorizon, overlayScoringMode, overlayStartYear]);
-  const overlayStatusMeta = useMemo(() => buildOverlayStatusMeta({
-    overlaySummaryParts,
-    overlayJobId: calculatorOverlayJobId,
-    overlayAppliedDataVersion: calculatorOverlayDataVersion,
-    resolvedDataVersion: dataVersion,
-  }), [calculatorOverlayDataVersion, calculatorOverlayJobId, dataVersion, overlaySummaryParts]);
+  const {
+    hasCalculatorOverlay,
+    resolvedCalculatorOverlayPlayerCount,
+    overlayStatusMeta,
+    showOverlayWhy,
+    setShowOverlayWhy,
+    applyCalculatorOverlayToRows,
+  } = useProjectionOverlay({
+    calculatorOverlayByPlayerKey,
+    calculatorOverlayActive,
+    calculatorOverlayJobId,
+    calculatorOverlayDataVersion,
+    calculatorOverlayPlayerCount,
+    calculatorOverlaySummary,
+    dataVersion,
+  });
+
   const activeFilterChips = useMemo(() => buildActiveFilterChips({
     search,
     teamFilter,
@@ -188,51 +163,30 @@ export function ProjectionsExplorer({
   }), [posFilters, resolvedYearFilter, search, teamFilter, watchlistOnly]);
   const hasActiveFilters = activeFilterChips.length > 0;
 
-  const applyCalculatorOverlayToRows = useCallback(rows => {
-    if (!Array.isArray(rows) || rows.length === 0) return [];
-    if (!hasCalculatorOverlay) return rows;
-    return rows.map(row => {
-      const key = stablePlayerKeyFromRow(row);
-      const overlay = resolvedCalculatorOverlayByPlayerKey[key];
-      if (!overlay || typeof overlay !== "object") return row;
-      return { ...row, ...overlay, DynastyMatchStatus: "matched" };
-    });
-  }, [hasCalculatorOverlay, resolvedCalculatorOverlayByPlayerKey]);
   const data = useMemo(
     () => applyCalculatorOverlayToRows(baseData),
     [applyCalculatorOverlayToRows, baseData]
   );
-  useMenuInteractions({
-    open: showPosMenu,
-    setOpen: setShowPosMenu,
-    menuRef: posMenuRef,
-    triggerRef: posMenuTriggerRef,
-  });
 
-  const positionOptions = useMemo(() => {
-    const rawPositions = tab === "all"
-      ? [...(meta.bat_positions || []), ...(meta.pit_positions || [])]
-      : tab === "bat"
-        ? (meta.bat_positions || [])
-        : (meta.pit_positions || []);
-    const uniq = new Set();
-    rawPositions.forEach(pos => {
-      parsePosTokens(pos).forEach(token => uniq.add(token));
-    });
-    if (tab === "bat") uniq.delete("SP");
+  const filterActions = useMemo(() => ({
+    setTab, setSearch, setTeamFilter, setYearFilter,
+    setPosFilters, setWatchlistOnly, setSortCol, setSortDir, setOffset,
+  }), [setTab, setSearch, setTeamFilter, setYearFilter,
+       setPosFilters, setWatchlistOnly, setSortCol, setSortDir, setOffset]);
 
-    const order = ["C", "1B", "2B", "3B", "SS", "OF", "DH", "UT", "SP", "RP"];
-    return Array.from(uniq).sort((a, b) => {
-      const ai = order.indexOf(a);
-      const bi = order.indexOf(b);
-      if (ai !== -1 || bi !== -1) {
-        if (ai === -1) return 1;
-        if (bi === -1) return -1;
-        return ai - bi;
-      }
-      return a.localeCompare(b);
-    });
-  }, [tab, meta.bat_positions, meta.pit_positions]);
+  const filterState = useMemo(() => ({
+    tab, search, teamFilter, resolvedYearFilter,
+    posFilters, watchlistOnly, sortCol, sortDir,
+  }), [tab, search, teamFilter, resolvedYearFilter,
+       posFilters, watchlistOnly, sortCol, sortDir]);
+
+  const {
+    projectionFilterPresets,
+    applyProjectionFilterPreset,
+    saveCustomProjectionPreset,
+    activeProjectionPresetKey,
+    clearAllFilters,
+  } = useProjectionFilterPresets({ filterActions, filterState, setShowPosMenu });
 
   const page = data;
   const {
@@ -328,11 +282,6 @@ export function ProjectionsExplorer({
   const twoDecimalCols = TWO_DECIMAL_COLS;
   const wholeNumberCols = WHOLE_NUMBER_COLS;
   const intCols = INT_COLS;
-  const posFilterLabel = posFilters.length === 0
-    ? "All Positions"
-    : posFilters.length <= 2
-      ? posFilters.join(", ")
-      : `${posFilters.length} Positions`;
   const displayedPage = page;
   const showCards = mobileLayoutMode === "cards";
   const showInitialLoadSkeleton = loading && displayedPage.length === 0;
@@ -351,213 +300,6 @@ export function ProjectionsExplorer({
       : [seasonCol, "DynastyValue", "AB", "R", "HR", "RBI", "SB", "IP", "W", "K", "SV", "ERA", "WHIP"];
   const compareRowsCount = compareRows.length;
 
-  function togglePosFilter(pos) {
-    setPosFilters(curr => (
-      curr.includes(pos) ? curr.filter(p => p !== pos) : [...curr, pos]
-    ));
-  }
-
-  const clearAllFilters = useCallback(() => {
-    setSearch("");
-    setTeamFilter("");
-    setYearFilter(CAREER_TOTALS_FILTER_VALUE);
-    setPosFilters([]);
-    setWatchlistOnly(false);
-    setSortCol(DEFAULT_PROJECTIONS_SORT_COL);
-    setSortDir(DEFAULT_PROJECTIONS_SORT_DIR);
-    setShowPosMenu(false);
-    setOffset(0);
-  }, [
-    setOffset,
-    setPosFilters,
-    setSearch,
-    setSortCol,
-    setSortDir,
-    setTeamFilter,
-    setWatchlistOnly,
-    setYearFilter,
-  ]);
-
-  const applyProjectionFilterPreset = useCallback((presetKey, source = "toolbar") => {
-    const key = String(presetKey || "").trim().toLowerCase();
-    if (!key) return;
-
-    const applyPresetValues = values => {
-      setTab(values.tab || DEFAULT_PROJECTIONS_TAB);
-      setSearch(values.search || "");
-      setTeamFilter(values.teamFilter || "");
-      setYearFilter(values.yearFilter || CAREER_TOTALS_FILTER_VALUE);
-      setPosFilters(Array.isArray(values.posFilters) ? values.posFilters : []);
-      setWatchlistOnly(Boolean(values.watchlistOnly));
-      setSortCol(values.sortCol || DEFAULT_PROJECTIONS_SORT_COL);
-      setSortDir(values.sortDir || DEFAULT_PROJECTIONS_SORT_DIR);
-      setShowPosMenu(false);
-      setOffset(0);
-    };
-
-    if (key === "all") {
-      applyPresetValues({
-        tab: DEFAULT_PROJECTIONS_TAB,
-        search: "",
-        teamFilter: "",
-        yearFilter: CAREER_TOTALS_FILTER_VALUE,
-        posFilters: [],
-        watchlistOnly: false,
-        sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-        sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-      });
-    } else if (key === "watchlist") {
-      applyPresetValues({
-        tab: DEFAULT_PROJECTIONS_TAB,
-        search: "",
-        teamFilter: "",
-        yearFilter: CAREER_TOTALS_FILTER_VALUE,
-        posFilters: [],
-        watchlistOnly: true,
-        sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-        sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-      });
-    } else if (key === "hitters") {
-      applyPresetValues({
-        tab: "bat",
-        search: "",
-        teamFilter: "",
-        yearFilter: CAREER_TOTALS_FILTER_VALUE,
-        posFilters: [],
-        watchlistOnly: false,
-        sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-        sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-      });
-    } else if (key === "pitchers") {
-      applyPresetValues({
-        tab: "pitch",
-        search: "",
-        teamFilter: "",
-        yearFilter: CAREER_TOTALS_FILTER_VALUE,
-        posFilters: [],
-        watchlistOnly: false,
-        sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-        sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-      });
-    } else if (key === "custom") {
-      if (!projectionFilterPresets?.custom) return;
-      applyPresetValues(projectionFilterPresets.custom);
-    } else {
-      return;
-    }
-
-    trackEvent("ff_projection_filter_preset_apply", {
-      preset: key,
-      source,
-      watchlist_only: key === "watchlist",
-    });
-  }, [
-    projectionFilterPresets,
-    setOffset,
-    setPosFilters,
-    setSearch,
-    setSortCol,
-    setSortDir,
-    setTab,
-    setTeamFilter,
-    setWatchlistOnly,
-    setYearFilter,
-  ]);
-
-  const saveCustomProjectionPreset = useCallback(() => {
-    const customPreset = {
-      tab,
-      search,
-      teamFilter,
-      yearFilter: resolvedYearFilter,
-      posFilters,
-      watchlistOnly,
-      sortCol,
-      sortDir,
-    };
-    setProjectionFilterPresets({ custom: customPreset });
-    trackEvent("ff_projection_filter_preset_apply", {
-      preset: "custom_save",
-      source: "toolbar",
-      watchlist_only: watchlistOnly,
-    });
-  }, [posFilters, resolvedYearFilter, search, sortCol, sortDir, tab, teamFilter, watchlistOnly]);
-
-  const activeProjectionPresetKey = useMemo(() => {
-    const matchesPreset = preset => (
-      tab === (preset.tab || DEFAULT_PROJECTIONS_TAB)
-      && search === (preset.search || "")
-      && teamFilter === (preset.teamFilter || "")
-      && resolvedYearFilter === (preset.yearFilter || CAREER_TOTALS_FILTER_VALUE)
-      && watchlistOnly === Boolean(preset.watchlistOnly)
-      && sortCol === (preset.sortCol || DEFAULT_PROJECTIONS_SORT_COL)
-      && sortDir === (preset.sortDir || DEFAULT_PROJECTIONS_SORT_DIR)
-      && JSON.stringify(posFilters) === JSON.stringify(Array.isArray(preset.posFilters) ? preset.posFilters : [])
-    );
-
-    if (matchesPreset({
-      tab: DEFAULT_PROJECTIONS_TAB,
-      search: "",
-      teamFilter: "",
-      yearFilter: CAREER_TOTALS_FILTER_VALUE,
-      posFilters: [],
-      watchlistOnly: false,
-      sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-      sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-    })) {
-      return "all";
-    }
-    if (matchesPreset({
-      tab: DEFAULT_PROJECTIONS_TAB,
-      search: "",
-      teamFilter: "",
-      yearFilter: CAREER_TOTALS_FILTER_VALUE,
-      posFilters: [],
-      watchlistOnly: true,
-      sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-      sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-    })) {
-      return "watchlist";
-    }
-    if (matchesPreset({
-      tab: "bat",
-      search: "",
-      teamFilter: "",
-      yearFilter: CAREER_TOTALS_FILTER_VALUE,
-      posFilters: [],
-      watchlistOnly: false,
-      sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-      sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-    })) {
-      return "hitters";
-    }
-    if (matchesPreset({
-      tab: "pitch",
-      search: "",
-      teamFilter: "",
-      yearFilter: CAREER_TOTALS_FILTER_VALUE,
-      posFilters: [],
-      watchlistOnly: false,
-      sortCol: DEFAULT_PROJECTIONS_SORT_COL,
-      sortDir: DEFAULT_PROJECTIONS_SORT_DIR,
-    })) {
-      return "pitchers";
-    }
-    if (projectionFilterPresets?.custom && matchesPreset(projectionFilterPresets.custom)) {
-      return "custom";
-    }
-    return "";
-  }, [
-    posFilters,
-    projectionFilterPresets,
-    resolvedYearFilter,
-    search,
-    sortCol,
-    sortDir,
-    tab,
-    teamFilter,
-    watchlistOnly,
-  ]);
   const formatProjectionCell = useCallback((col, row) => {
     const val = row[col];
     if (col === "Player") return <td key={col} className="player-name">{val}</td>;
@@ -710,16 +452,6 @@ export function ProjectionsExplorer({
   }, [updateProjectionHorizontalAffordance]);
 
   useEffect(() => {
-    writeProjectionFilterPresets(projectionFilterPresets);
-  }, [projectionFilterPresets]);
-
-  useEffect(() => {
-    if (!hasCalculatorOverlay) {
-      setShowOverlayWhy(false);
-    }
-  }, [hasCalculatorOverlay]);
-
-  useEffect(() => {
     if (loading || error || displayedPage.length > 0) return;
     const marker = [
       tab,
@@ -784,218 +516,53 @@ export function ProjectionsExplorer({
         <button className={`section-tab ${tab==="pitch"?"active":""}`} onClick={() => {setTab("pitch"); setSortCol(DEFAULT_PROJECTIONS_SORT_COL); setSortDir(DEFAULT_PROJECTIONS_SORT_DIR); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="pitch"}>Pitchers</button>
       </div>
 
-      <div className="filter-preset-row" role="group" aria-label="Projection filter presets">
-        <span className="filter-preset-label">Presets</span>
-        <button
-          type="button"
-          className={`inline-btn ${activeProjectionPresetKey === "all" ? "open" : ""}`.trim()}
-          onClick={() => applyProjectionFilterPreset("all")}
-        >
-          All
-        </button>
-        <button
-          type="button"
-          className={`inline-btn ${activeProjectionPresetKey === "watchlist" ? "open" : ""}`.trim()}
-          onClick={() => applyProjectionFilterPreset("watchlist")}
-          disabled={watchlistCount === 0}
-        >
-          My Watchlist
-        </button>
-        <button
-          type="button"
-          className={`inline-btn ${activeProjectionPresetKey === "hitters" ? "open" : ""}`.trim()}
-          onClick={() => applyProjectionFilterPreset("hitters")}
-        >
-          Hitters
-        </button>
-        <button
-          type="button"
-          className={`inline-btn ${activeProjectionPresetKey === "pitchers" ? "open" : ""}`.trim()}
-          onClick={() => applyProjectionFilterPreset("pitchers")}
-        >
-          Pitchers
-        </button>
-        <button
-          type="button"
-          className={`inline-btn ${activeProjectionPresetKey === "custom" ? "open" : ""}`.trim()}
-          onClick={() => applyProjectionFilterPreset("custom")}
-          disabled={!projectionFilterPresets?.custom}
-        >
-          Custom
-        </button>
-        <button
-          type="button"
-          className="inline-btn"
-          onClick={saveCustomProjectionPreset}
-        >
-          Save Current As Custom
-        </button>
-      </div>
-
-      <div className="filter-bar">
-        <VisuallyHidden as="label" htmlFor="projections-search">Search player name</VisuallyHidden>
-        <input
-          id="projections-search"
-          type="text"
-          placeholder="Search player name…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-        <VisuallyHidden as="label" htmlFor="projections-year-filter">Projection year view</VisuallyHidden>
-        <select id="projections-year-filter" value={resolvedYearFilter} onChange={e => setYearFilter(e.target.value)}>
-          <option value={CAREER_TOTALS_FILTER_VALUE}>Rest of Career Totals</option>
-          {meta.years.map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <VisuallyHidden as="label" htmlFor="projections-team-filter">Team filter</VisuallyHidden>
-        <select id="projections-team-filter" value={teamFilter} onChange={e => setTeamFilter(e.target.value)}>
-          <option value="">All Teams</option>
-          {meta.teams.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <div className="multi-select" ref={posMenuRef}>
-          <MenuButton
-            controlsId={posMenuId}
-            open={showPosMenu}
-            onToggle={() => setShowPosMenu(open => !open)}
-            buttonRef={posMenuTriggerRef}
-            className={`multi-select-trigger ${showPosMenu ? "open" : ""}`}
-            aria-label="Filter positions"
-            label={(
-              <span className="multi-select-label">
-                <span>{posFilterLabel}</span>
-                <span className="multi-select-chevron" aria-hidden="true">{showPosMenu ? "▲" : "▼"}</span>
-              </span>
-            )}
-          >
-          </MenuButton>
-          {showPosMenu && (
-            <div id={posMenuId} className="multi-select-menu" role="listbox" aria-multiselectable="true">
-              <button
-                type="button"
-                className="multi-select-clear"
-                onClick={() => setPosFilters([])}
-                disabled={posFilters.length === 0}
-              >
-                Clear position filters
-              </button>
-              {positionOptions.map(pos => (
-                <label key={pos} className="multi-select-option">
-                  <input
-                    type="checkbox"
-                    checked={posFilters.includes(pos)}
-                    onChange={() => togglePosFilter(pos)}
-                  />
-                  <span>{pos}</span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-        {ColumnChooserControl && (
-          <ColumnChooserControl
-            buttonLabel="Table Columns"
-            columns={tableColumnCatalog}
-            hiddenCols={resolvedProjectionTableHiddenCols}
-            requiredCols={requiredProjectionTableCols}
-            onToggleColumn={toggleProjectionTableColumn}
-            onShowAllColumns={showAllProjectionTableColumns}
-            columnLabels={colLabels}
-          />
-        )}
-        <span className={`result-count ${loading || searchIsDebouncing ? "loading" : ""}`.trim()} aria-live="polite" aria-atomic="true" aria-busy={loading || searchIsDebouncing}>
-          {watchlistOnly ? `${totalRows.toLocaleString()} watchlist rows` : `${totalRows.toLocaleString()} rows`}
-          {searchIsDebouncing ? " · typing..." : loading ? " · refreshing..." : ""}
-        </span>
-        <button
-          type="button"
-          className={`inline-btn ${watchlistOnly ? "open" : ""}`.trim()}
-          onClick={() => setWatchlistOnly(value => !value)}
-          disabled={watchlistCount === 0}
-        >
-          {watchlistOnly ? "All Players View" : "Watchlist View"}
-        </button>
-        <button
-          type="button"
-          className="inline-btn"
-          onClick={() => exportCurrentProjections("csv")}
-          disabled={Boolean(exportingFormat)}
-        >
-          {exportingFormat === "csv" ? "Exporting CSV..." : "Export CSV"}
-        </button>
-        <button
-          type="button"
-          className="inline-btn"
-          onClick={() => exportCurrentProjections("xlsx")}
-          disabled={Boolean(exportingFormat)}
-        >
-          {exportingFormat === "xlsx" ? "Exporting XLSX..." : "Export XLSX"}
-        </button>
-      </div>
-      <div className="active-filter-row" role="status" aria-live="polite">
-        <span className="active-filter-label">Active filters</span>
-        <div className="active-filter-chip-row">
-          {hasActiveFilters ? activeFilterChips.map(chip => (
-            <span key={chip} className="filter-chip">{chip}</span>
-          )) : (
-            <span className="filter-chip filter-chip-empty">{DEFAULT_FILTER_SUMMARY_FALLBACK}</span>
-          )}
-        </div>
-        <button
-          type="button"
-          className="inline-btn"
-          onClick={clearAllFilters}
-          disabled={!hasActiveFilters}
-        >
-          Clear All Filters
-        </button>
-      </div>
+      <ProjectionFilterBar
+        tab={tab}
+        meta={meta}
+        search={search}
+        resolvedYearFilter={resolvedYearFilter}
+        teamFilter={teamFilter}
+        posFilters={posFilters}
+        watchlistOnly={watchlistOnly}
+        watchlistCount={watchlistCount}
+        totalRows={totalRows}
+        loading={loading}
+        searchIsDebouncing={searchIsDebouncing}
+        setSearch={setSearch}
+        setTeamFilter={setTeamFilter}
+        setYearFilter={setYearFilter}
+        setPosFilters={setPosFilters}
+        setWatchlistOnly={setWatchlistOnly}
+        activeProjectionPresetKey={activeProjectionPresetKey}
+        projectionFilterPresets={projectionFilterPresets}
+        applyProjectionFilterPreset={applyProjectionFilterPreset}
+        saveCustomProjectionPreset={saveCustomProjectionPreset}
+        clearAllFilters={clearAllFilters}
+        hasActiveFilters={hasActiveFilters}
+        activeFilterChips={activeFilterChips}
+        tableColumnCatalog={tableColumnCatalog}
+        resolvedProjectionTableHiddenCols={resolvedProjectionTableHiddenCols}
+        requiredProjectionTableCols={requiredProjectionTableCols}
+        toggleProjectionTableColumn={toggleProjectionTableColumn}
+        showAllProjectionTableColumns={showAllProjectionTableColumns}
+        colLabels={colLabels}
+        exportingFormat={exportingFormat}
+        exportCurrentProjections={exportCurrentProjections}
+      />
       {pageResetNotice && (
         <div className="table-refresh-message page-reset-notice" role="status" aria-live="polite">
           <span>{pageResetNotice}</span>
           <button type="button" className="inline-btn" onClick={clearPageResetNotice}>Dismiss</button>
         </div>
       )}
-      {hasCalculatorOverlay && (
-        <div
-          className={`table-refresh-message projections-overlay-message ${overlayStatusMeta.isStale ? "warning" : ""}`.trim()}
-          role="status"
-          aria-live="polite"
-        >
-          <div className="overlay-status-copy">
-            <span>
-              Showing calculator-adjusted dynasty values for matched players ({resolvedCalculatorOverlayPlayerCount.toLocaleString()} available).
-            </span>
-            {overlayStatusMeta.chips.length > 0 && (
-              <div className="overlay-status-chip-row" aria-label="Applied calculator overlay details">
-                {overlayStatusMeta.chips.map(chip => (
-                  <span key={chip} className="overlay-status-chip">{chip}</span>
-                ))}
-              </div>
-            )}
-            {overlayStatusMeta.isStale && (
-              <span className="overlay-stale-note">
-                Overlay source is from an older projections build. Re-run the calculator to refresh these values.
-              </span>
-            )}
-            <button
-              type="button"
-              className="inline-btn overlay-why-btn"
-              onClick={() => setShowOverlayWhy(current => !current)}
-            >
-              {showOverlayWhy ? "Hide why this changed" : "Why this changed"}
-            </button>
-            {showOverlayWhy && (
-              <p className="overlay-why-copy">
-                Calculator overlays re-rank players using your league setup (teams, roster depth, scoring mode, and horizon) instead of baseline site defaults.
-              </p>
-            )}
-          </div>
-          {typeof onClearCalculatorOverlay === "function" && (
-            <button type="button" className="inline-btn" onClick={onClearCalculatorOverlay}>
-              Clear applied values
-            </button>
-          )}
-        </div>
-      )}
+      <ProjectionOverlayBanner
+        hasCalculatorOverlay={hasCalculatorOverlay}
+        resolvedCalculatorOverlayPlayerCount={resolvedCalculatorOverlayPlayerCount}
+        overlayStatusMeta={overlayStatusMeta}
+        showOverlayWhy={showOverlayWhy}
+        setShowOverlayWhy={setShowOverlayWhy}
+        onClearCalculatorOverlay={onClearCalculatorOverlay}
+      />
       {exportError && (
         <div className="table-refresh-message error" role="status" aria-live="polite">
           Export failed. {exportError}
