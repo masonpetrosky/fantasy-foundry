@@ -196,6 +196,16 @@ python scripts/activation_readout.py \
   --strict-contract
 ```
 
+Recommended one-command execution (includes decision memo generation):
+
+```bash
+scripts/run_activation_readout.sh \
+  --current tmp/activation_current.csv \
+  --baseline tmp/activation_baseline.csv \
+  --date 2026-02-25 \
+  --owner "Analytics Team"
+```
+
 See [`docs/activation-rollout-validation.md`](docs/activation-rollout-validation.md) for expected columns, thresholds, and rollout decision rules.
 
 ### Running Browser E2E Tests (Playwright)

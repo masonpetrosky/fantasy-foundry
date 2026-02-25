@@ -47,6 +47,22 @@ python scripts/activation_readout.py \
   --strict-contract
 ```
 
+### One-command workflow (recommended)
+
+```bash
+scripts/run_activation_readout.sh \
+  --current tmp/activation_current.csv \
+  --baseline tmp/activation_baseline.csv \
+  --date 2026-02-25 \
+  --owner "Analytics Team"
+```
+
+Generates:
+
+- `tmp/activation_readout_<date>.txt`
+- `tmp/activation_readout_<date>.json`
+- `docs/activation-rollout-decision-<date>.md`
+
 ### JSON output (optional)
 
 ```bash
