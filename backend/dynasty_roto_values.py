@@ -768,7 +768,7 @@ def initial_pitcher_weight(df: pd.DataFrame, categories: Optional[List[str]] = N
     selected = {str(cat).strip().upper() for cat in (categories or list(PIT_CATS))}
     components: List[pd.Series] = []
 
-    for cat in ("W", "K", "SV", "QS", "SVH"):
+    for cat in ("W", "K", "SV", "QS", "QA3", "SVH"):
         if cat in selected:
             components.append(zscore(df[cat]))
 
@@ -856,6 +856,7 @@ def common_pitch_category_totals(totals: Dict[str, float]) -> Dict[str, float]:
         "ERA": float(totals.get("ERA", 0.0)),
         "WHIP": float(totals.get("WHIP", 0.0)),
         "QS": float(totals.get("QS", 0.0)),
+        "QA3": float(totals.get("QA3", 0.0)),
         "SVH": float(totals.get("SVH", 0.0)),
     }
 
@@ -872,11 +873,12 @@ def common_replacement_pitcher_rates(
 
     ip = float(rep["IP"].sum()) if not rep.empty else 0.0
     if ip <= 0:
-        return {k: 0.0 for k in ["W", "QS", "K", "SV", "SVH", "ER", "H", "BB"]}
+        return {k: 0.0 for k in ["W", "QS", "QA3", "K", "SV", "SVH", "ER", "H", "BB"]}
 
     return {
         "W": float(rep["W"].sum() / ip),
         "QS": float(rep["QS"].sum() / ip),
+        "QA3": float(rep["QA3"].sum() / ip),
         "K": float(rep["K"].sum() / ip),
         "SV": float(rep["SV"].sum() / ip),
         "SVH": float(rep["SVH"].sum() / ip),
@@ -912,7 +914,7 @@ def common_apply_pitching_bounds(
         if fill_to_ip_max and ip < ip_cap and rep_rates is not None:
             add = ip_cap - ip
             out["IP"] = ip_cap
-            for col in ["W", "QS", "K", "SV", "SVH", "ER", "H", "BB"]:
+            for col in ["W", "QS", "QA3", "K", "SV", "SVH", "ER", "H", "BB"]:
                 out[col] = float(out[col]) + add * float(rep_rates.get(col, 0.0))
             ip = ip_cap
 
@@ -935,6 +937,58 @@ def _coerce_non_negative_float(value: object) -> float:
     return float(max(number, 0.0))
 
 
+def _low_volume_positive_credit_scale(
+    *,
+    pitcher_ip: float,
+    slot_ip_reference: float,
+    min_share_for_positive_ratio_credit: float = 0.35,
+    full_share_for_positive_ratio_credit: float = 1.00,
+) -> float:
+    """Return a [0, 1] positive-credit scale based on projected innings share."""
+    slot_ip = _coerce_non_negative_float(slot_ip_reference)
+    player_ip = _coerce_non_negative_float(pitcher_ip)
+    if slot_ip <= 0.0:
+        return 1.0
+
+    share = player_ip / slot_ip
+    min_share = float(min_share_for_positive_ratio_credit)
+    full_share = float(full_share_for_positive_ratio_credit)
+
+    if full_share <= min_share:
+        return 1.0 if share >= full_share else 0.0
+    if share <= min_share:
+        return 0.0
+    if share >= full_share:
+        return 1.0
+    return float((share - min_share) / (full_share - min_share))
+
+
+def _apply_low_volume_non_ratio_positive_guard(
+    delta: Dict[str, float],
+    *,
+    pit_categories: List[str],
+    pitcher_ip: float,
+    slot_ip_reference: float,
+    min_share_for_positive_ratio_credit: float = 0.35,
+    full_share_for_positive_ratio_credit: float = 1.00,
+) -> None:
+    """Scale positive non-ratio pitching category credit for tiny workloads."""
+    scale = _low_volume_positive_credit_scale(
+        pitcher_ip=pitcher_ip,
+        slot_ip_reference=slot_ip_reference,
+        min_share_for_positive_ratio_credit=min_share_for_positive_ratio_credit,
+        full_share_for_positive_ratio_credit=full_share_for_positive_ratio_credit,
+    )
+    if scale >= 1.0:
+        return
+
+    for cat in pit_categories:
+        if cat in COMMON_REVERSED_PITCH_CATS:
+            continue
+        if float(delta.get(cat, 0.0)) > 0.0:
+            delta[cat] = float(delta[cat]) * scale
+
+
 def _apply_low_volume_ratio_guard(
     delta: Dict[str, float],
     *,
@@ -952,24 +1006,12 @@ def _apply_low_volume_ratio_guard(
       - share >= full_share_for_positive_ratio_credit: full positive ratio credit
       - otherwise: linearly scale positive ratio credit between the two bounds
     """
-    slot_ip = _coerce_non_negative_float(slot_ip_reference)
-    player_ip = _coerce_non_negative_float(pitcher_ip)
-    if slot_ip <= 0.0:
-        return
-
-    share = player_ip / slot_ip
-    min_share = float(min_share_for_positive_ratio_credit)
-    full_share = float(full_share_for_positive_ratio_credit)
-
-    if full_share <= min_share:
-        scale = 1.0 if share >= full_share else 0.0
-    elif share <= min_share:
-        scale = 0.0
-    elif share >= full_share:
-        scale = 1.0
-    else:
-        scale = (share - min_share) / (full_share - min_share)
-
+    scale = _low_volume_positive_credit_scale(
+        pitcher_ip=pitcher_ip,
+        slot_ip_reference=slot_ip_reference,
+        min_share_for_positive_ratio_credit=min_share_for_positive_ratio_credit,
+        full_share_for_positive_ratio_credit=full_share_for_positive_ratio_credit,
+    )
     if scale >= 1.0:
         return
 
@@ -1099,6 +1141,12 @@ def compute_year_context(year: int, bat: pd.DataFrame, pit: pd.DataFrame, lg: Co
     pit_y = pit[pit["Year"] == year].copy()
     hit_categories = _active_common_hit_categories(lg)
     pit_categories = _active_common_pitch_categories(lg)
+
+    # Keep QS/QA3 interchangeable for compatibility with mixed schemas.
+    if "QS" not in pit_y.columns and "QA3" in pit_y.columns:
+        pit_y["QS"] = pit_y["QA3"]
+    if "QA3" not in pit_y.columns and "QS" in pit_y.columns:
+        pit_y["QA3"] = pit_y["QS"]
 
     # Clean numeric NaNs
     for c in HIT_COMPONENT_COLS:
@@ -1303,6 +1351,12 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                     delta[cat] = base_val - new_val
                 else:
                     delta[cat] = new_val - base_val
+            _apply_low_volume_non_ratio_positive_guard(
+                delta,
+                pit_categories=pit_categories,
+                pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
+                slot_ip_reference=_coerce_non_negative_float(b.get("IP", 0.0)),
+            )
             _apply_low_volume_ratio_guard(
                 delta,
                 pit_categories=pit_categories,
@@ -1513,6 +1567,12 @@ def compute_year_player_values_vs_replacement(
                     delta[cat] = base_val - new_val
                 else:
                     delta[cat] = new_val - base_val
+            _apply_low_volume_non_ratio_positive_guard(
+                delta,
+                pit_categories=pit_categories,
+                pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
+                slot_ip_reference=_coerce_non_negative_float(b_avg.get("IP", 0.0)),
+            )
             _apply_low_volume_ratio_guard(
                 delta,
                 pit_categories=pit_categories,
@@ -2114,13 +2174,19 @@ def calculate_common_dynasty_values(
             pit["SVH"] = pit["SV"].fillna(0.0)
     pit["SVH"] = pit["SVH"].fillna(0.0)
 
-    # Ensure QS exists (fallback to QA3 when provided by source).
+    # Ensure QS/QA3 both exist (fallback each way for legacy source schemas).
     if "QS" not in pit.columns:
         if "QA3" in pit.columns:
             pit["QS"] = pit["QA3"].fillna(0.0)
         else:
             pit["QS"] = 0.0
+    if "QA3" not in pit.columns:
+        if "QS" in pit.columns:
+            pit["QA3"] = pit["QS"].fillna(0.0)
+        else:
+            pit["QA3"] = 0.0
     pit["QS"] = pit["QS"].fillna(0.0)
+    pit["QA3"] = pit["QA3"].fillna(0.0)
 
     if start_year is None:
         start_year = int(min(bat["Year"].min(), pit["Year"].min()))

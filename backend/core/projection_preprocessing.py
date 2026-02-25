@@ -270,6 +270,11 @@ def average_recent_projection_rows(
                 out["QS"] = out["QA3"].astype(float).fillna(0.0)
             else:
                 out["QS"] = 0.0
+        if "QA3" not in out.columns:
+            if "QS" in out.columns:
+                out["QA3"] = out["QS"].astype(float).fillna(0.0)
+            else:
+                out["QA3"] = 0.0
         if "ER" in out.columns and "IP" in out.columns:
             er = out["ER"].astype(float)
             ip = out["IP"].astype(float)

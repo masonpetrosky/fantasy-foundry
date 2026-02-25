@@ -2,6 +2,8 @@ import unittest
 
 from backend.dynasty_roto_values import (
     CommonDynastyRotoSettings,
+    _active_common_pitch_categories,
+    _apply_low_volume_non_ratio_positive_guard,
     _apply_low_volume_ratio_guard,
     common_apply_pitching_bounds,
 )
@@ -9,12 +11,23 @@ from backend.runtime import _calculate_common_dynasty_frame_cached
 
 
 class CommonPitcherBoundsRegressionTests(unittest.TestCase):
+    def test_active_common_pitch_categories_includes_native_qa3(self) -> None:
+        lg = CommonDynastyRotoSettings(pitcher_categories=("W", "K", "ERA", "WHIP", "QA3", "SVH"))
+        active = _active_common_pitch_categories(lg)
+        self.assertEqual(active, ["W", "K", "ERA", "WHIP", "QA3", "SVH"])
+
+    def test_active_common_pitch_categories_allows_qs_and_qa3_together(self) -> None:
+        lg = CommonDynastyRotoSettings(pitcher_categories=("W", "K", "ERA", "WHIP", "QS", "QA3", "SVH"))
+        active = _active_common_pitch_categories(lg)
+        self.assertEqual(active, ["W", "K", "ERA", "WHIP", "QS", "QA3", "SVH"])
+
     def test_common_apply_pitching_bounds_fill_flag_controls_ip_backfill(self) -> None:
         lg = CommonDynastyRotoSettings(ip_min=0.0, ip_max=200.0)
         totals = {
             "IP": 100.0,
             "W": 10.0,
             "QS": 8.0,
+            "QA3": 9.0,
             "K": 120.0,
             "SV": 2.0,
             "SVH": 7.0,
@@ -25,6 +38,7 @@ class CommonPitcherBoundsRegressionTests(unittest.TestCase):
         rep_rates = {
             "W": 0.05,
             "QS": 0.04,
+            "QA3": 0.045,
             "K": 0.9,
             "SV": 0.01,
             "SVH": 0.02,
@@ -39,6 +53,7 @@ class CommonPitcherBoundsRegressionTests(unittest.TestCase):
         self.assertAlmostEqual(float(filled["IP"]), 200.0, places=6)
         self.assertAlmostEqual(float(unfilled["IP"]), 100.0, places=6)
         self.assertGreater(float(filled["W"]), float(unfilled["W"]))
+        self.assertGreater(float(filled["QA3"]), float(unfilled["QA3"]))
 
     def test_low_volume_ratio_guard_scales_positive_ratio_credit(self) -> None:
         delta = {"ERA": 1.2, "WHIP": 0.6, "K": 0.4}
@@ -73,6 +88,20 @@ class CommonPitcherBoundsRegressionTests(unittest.TestCase):
         )
         self.assertEqual(float(high_volume_delta["ERA"]), 1.2)
         self.assertEqual(float(high_volume_delta["WHIP"]), 0.6)
+
+    def test_low_volume_non_ratio_guard_scales_positive_counting_credit(self) -> None:
+        delta = {"W": 1.4, "K": 2.1, "SVH": 0.8, "ERA": 1.2, "WHIP": 0.4}
+        _apply_low_volume_non_ratio_positive_guard(
+            delta,
+            pit_categories=["W", "K", "SVH", "ERA", "WHIP"],
+            pitcher_ip=20.0,
+            slot_ip_reference=80.0,
+        )
+        self.assertEqual(float(delta["W"]), 0.0)
+        self.assertEqual(float(delta["K"]), 0.0)
+        self.assertEqual(float(delta["SVH"]), 0.0)
+        self.assertEqual(float(delta["ERA"]), 1.2)
+        self.assertEqual(float(delta["WHIP"]), 0.4)
 
     def test_low_ip_regression_kollar_does_not_rank_above_lodolo(self) -> None:
         _calculate_common_dynasty_frame_cached.cache_clear()
@@ -185,6 +214,7 @@ class CommonPitcherBoundsRegressionTests(unittest.TestCase):
         kollar_value = float(rows.loc["jared-kollar", "DynastyValue"])
         lopez_value = float(rows.loc["reynaldo-lopez", "DynastyValue"])
         self.assertLessEqual(kollar_value, lopez_value)
+        self.assertLessEqual(kollar_value, 1.0)
 
 
 if __name__ == "__main__":
