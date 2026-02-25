@@ -170,8 +170,8 @@ export function DynastyCalculatorSidebar({
             />
           </div>
           <div className="form-group">
-            <label>Start Year</label>
-            <select value={settings.start_year} onChange={e => update("start_year", e.target.value)}>
+            <label htmlFor="calc-start-year">Start Year</label>
+            <select id="calc-start-year" value={settings.start_year} onChange={e => update("start_year", e.target.value)}>
               {meta.years.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
@@ -179,12 +179,13 @@ export function DynastyCalculatorSidebar({
 
         <div className="form-row">
           <div className="form-group">
-            <label>Horizon (yrs)</label>
-            <input type="number" value={settings.horizon} onChange={e => update("horizon", e.target.value)} min="1" max="20" />
+            <label htmlFor="calc-horizon">Horizon (yrs)</label>
+            <input id="calc-horizon" type="number" value={settings.horizon} onChange={e => update("horizon", e.target.value)} min="1" max="20" />
           </div>
           <div className="form-group">
-            <label>Setup</label>
+            <label htmlFor="calc-setup">Setup</label>
             <select
+              id="calc-setup"
               value={settings.scoring_mode}
               onChange={e => applyScoringSetup(e.target.value)}
             >
@@ -199,7 +200,7 @@ export function DynastyCalculatorSidebar({
           <>
             <div className="form-row">
               <div className="form-group">
-                <label>
+                <label htmlFor="calc-discount">
                   Discount
                   <span
                     className="field-help"
@@ -211,10 +212,10 @@ export function DynastyCalculatorSidebar({
                     ?
                   </span>
                 </label>
-                <input type="number" value={settings.discount} onChange={e => update("discount", e.target.value)} min="0.5" max="1" step="0.01" />
+                <input id="calc-discount" type="number" value={settings.discount} onChange={e => update("discount", e.target.value)} min="0.5" max="1" step="0.01" />
               </div>
               <div className="form-group">
-                <label>
+                <label htmlFor="calc-two-way">
                   Two-Way Value
                   <span
                     className="field-help"
@@ -226,7 +227,7 @@ export function DynastyCalculatorSidebar({
                     ?
                   </span>
                 </label>
-                <select value={settings.two_way} onChange={e => update("two_way", e.target.value)}>
+                <select id="calc-two-way" value={settings.two_way} onChange={e => update("two_way", e.target.value)}>
                   <option value="sum">Sum H + P</option>
                   <option value="max">Best of H/P</option>
                 </select>
@@ -235,8 +236,9 @@ export function DynastyCalculatorSidebar({
 
             <div className="form-row">
               <div className="form-group">
-                <label>Simulations</label>
+                <label htmlFor="calc-sims">Simulations</label>
                 <input
+                  id="calc-sims"
                   type="number"
                   value={settings.sims}
                   onChange={e => update("sims", e.target.value)}
@@ -247,7 +249,7 @@ export function DynastyCalculatorSidebar({
                 />
               </div>
               <div className="form-group">
-                <label>
+                <label htmlFor="calc-recent-projections">
                   Recent Proj.
                   <span
                     className="field-help"
@@ -259,15 +261,16 @@ export function DynastyCalculatorSidebar({
                     ?
                   </span>
                 </label>
-                <input type="number" value={settings.recent_projections} onChange={e => update("recent_projections", e.target.value)} min="1" max="10" />
+                <input id="calc-recent-projections" type="number" value={settings.recent_projections} onChange={e => update("recent_projections", e.target.value)} min="1" max="10" />
               </div>
             </div>
             {isPointsMode && <p className="calc-note">Points mode ignores the simulations setting and scores directly from projected totals.</p>}
 
             <div className="form-row">
               <div className="form-group">
-                <label>IP Min</label>
+                <label htmlFor="calc-ip-min">IP Min</label>
                 <input
+                  id="calc-ip-min"
                   type="number"
                   value={settings.ip_min}
                   onChange={e => update("ip_min", e.target.value)}
@@ -277,8 +280,9 @@ export function DynastyCalculatorSidebar({
                 />
               </div>
               <div className="form-group">
-                <label>IP Max</label>
+                <label htmlFor="calc-ip-max">IP Max</label>
                 <input
+                  id="calc-ip-max"
                   type="text"
                   value={settings.ip_max}
                   onChange={e => update("ip_max", e.target.value)}
@@ -292,8 +296,9 @@ export function DynastyCalculatorSidebar({
             <p className="calc-section-title" style={{ marginTop: "8px" }}>Predictive Accuracy (Roto)</p>
             <div className="form-row">
               <div className="form-group">
-                <label>SGP Denominator</label>
+                <label htmlFor="calc-sgp-denominator">SGP Denominator</label>
                 <select
+                  id="calc-sgp-denominator"
                   value={settings.sgp_denominator_mode}
                   onChange={e => update("sgp_denominator_mode", e.target.value)}
                   disabled={isPointsMode}
@@ -303,8 +308,9 @@ export function DynastyCalculatorSidebar({
                 </select>
               </div>
               <div className="form-group">
-                <label>Replacement Blend Alpha</label>
+                <label htmlFor="calc-replacement-blend-alpha">Replacement Blend Alpha</label>
                 <input
+                  id="calc-replacement-blend-alpha"
                   type="number"
                   value={settings.replacement_blend_alpha}
                   onChange={e => update("replacement_blend_alpha", e.target.value)}
@@ -318,8 +324,9 @@ export function DynastyCalculatorSidebar({
 
             <div className="form-row">
               <div className="form-group">
-                <label>Winsor Low Pct</label>
+                <label htmlFor="calc-sgp-winsor-low">Winsor Low Pct</label>
                 <input
+                  id="calc-sgp-winsor-low"
                   type="number"
                   value={settings.sgp_winsor_low_pct}
                   onChange={e => update("sgp_winsor_low_pct", e.target.value)}
@@ -330,8 +337,9 @@ export function DynastyCalculatorSidebar({
                 />
               </div>
               <div className="form-group">
-                <label>Winsor High Pct</label>
+                <label htmlFor="calc-sgp-winsor-high">Winsor High Pct</label>
                 <input
+                  id="calc-sgp-winsor-high"
                   type="number"
                   value={settings.sgp_winsor_high_pct}
                   onChange={e => update("sgp_winsor_high_pct", e.target.value)}
@@ -345,8 +353,9 @@ export function DynastyCalculatorSidebar({
 
             <div className="form-row">
               <div className="form-group">
-                <label>Counting Epsilon</label>
+                <label htmlFor="calc-sgp-epsilon-counting">Counting Epsilon</label>
                 <input
+                  id="calc-sgp-epsilon-counting"
                   type="number"
                   value={settings.sgp_epsilon_counting}
                   onChange={e => update("sgp_epsilon_counting", e.target.value)}
@@ -356,8 +365,9 @@ export function DynastyCalculatorSidebar({
                 />
               </div>
               <div className="form-group">
-                <label>Ratio Epsilon</label>
+                <label htmlFor="calc-sgp-epsilon-ratio">Ratio Epsilon</label>
                 <input
+                  id="calc-sgp-epsilon-ratio"
                   type="number"
                   value={settings.sgp_epsilon_ratio}
                   onChange={e => update("sgp_epsilon_ratio", e.target.value)}
@@ -442,8 +452,9 @@ export function DynastyCalculatorSidebar({
           <p className="calc-section-title">Presets And Sharing</p>
           <div className="form-row">
             <div className="form-group">
-              <label>Preset Name</label>
+              <label htmlFor="calc-preset-name">Preset Name</label>
               <input
+                id="calc-preset-name"
                 type="text"
                 value={presetName}
                 placeholder="e.g. 12-team H2H Points"
@@ -459,8 +470,9 @@ export function DynastyCalculatorSidebar({
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>Saved Presets</label>
+              <label htmlFor="calc-saved-presets">Saved Presets</label>
               <select
+                id="calc-saved-presets"
                 value={selectedPresetName}
                 onChange={e => selectPreset(e.target.value)}
               >
@@ -540,19 +552,19 @@ export function DynastyCalculatorSidebar({
             <p className="calc-section-title">Depth And Reset</p>
             <div className="form-row">
               <div className="form-group">
-                <label>Bench Slots</label>
-                <input type="number" value={settings.bench} onChange={e => update("bench", e.target.value)} min="0" max="40" />
+                <label htmlFor="calc-bench">Bench Slots</label>
+                <input id="calc-bench" type="number" value={settings.bench} onChange={e => update("bench", e.target.value)} min="0" max="40" />
               </div>
               <div className="form-group">
-                <label>Minor Slots</label>
-                <input type="number" value={settings.minors} onChange={e => update("minors", e.target.value)} min="0" max="60" />
+                <label htmlFor="calc-minors">Minor Slots</label>
+                <input id="calc-minors" type="number" value={settings.minors} onChange={e => update("minors", e.target.value)} min="0" max="60" />
               </div>
             </div>
 
             <div className="form-row">
               <div className="form-group">
-                <label>IR Slots</label>
-                <input type="number" value={settings.ir} onChange={e => update("ir", e.target.value)} min="0" max="40" />
+                <label htmlFor="calc-ir">IR Slots</label>
+                <input id="calc-ir" type="number" value={settings.ir} onChange={e => update("ir", e.target.value)} min="0" max="40" />
               </div>
               <div className="form-group">
                 <label>Setup Actions</label>

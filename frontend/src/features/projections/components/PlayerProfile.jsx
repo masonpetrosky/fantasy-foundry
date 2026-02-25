@@ -3,6 +3,7 @@ import { formatCellValue } from "../../../formatting_utils.js";
 
 const KEY_STAT_COLS_BAT = ["Year", "Team", "Pos", "PA", "HR", "RBI", "SB", "AVG", "OBP", "OPS", "DynastyValue"];
 const KEY_STAT_COLS_PIT = ["Year", "Team", "Pos", "IP", "W", "K", "SV", "ERA", "WHIP", "DynastyValue"];
+const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 function SparkLine({ rows, col }) {
   const values = rows.map(r => Number(r[col] ?? 0)).filter(v => !isNaN(v));
@@ -45,6 +46,7 @@ export function PlayerProfile({ row, tab, apiBase, onClose }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const dialogRef = useRef(null);
+  const previousFocusRef = useRef(null);
 
   const playerKey = String(row?.PlayerEntityKey || row?.PlayerKey || "").trim();
   const playerName = String(row?.Player || "Player").trim();
@@ -72,9 +74,37 @@ export function PlayerProfile({ row, tab, apiBase, onClose }) {
   }, [apiBase, playerKey, tab]);
 
   useEffect(() => {
-    const handler = e => { if (e.key === "Escape") onClose(); };
+    previousFocusRef.current = document.activeElement;
+    const handler = e => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key === "Tab" && dialogRef.current) {
+        const focusable = Array.from(
+          dialogRef.current.querySelectorAll(FOCUSABLE_SELECTOR)
+        ).filter(el => !el.disabled);
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first || document.activeElement === dialogRef.current) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last || document.activeElement === dialogRef.current) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      previousFocusRef.current?.focus();
+    };
   }, [onClose]);
 
   useEffect(() => {
@@ -96,14 +126,14 @@ export function PlayerProfile({ row, tab, apiBase, onClose }) {
         className="player-profile-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label={`Player profile: ${playerName}`}
+        aria-labelledby="player-profile-heading"
         tabIndex={-1}
         ref={dialogRef}
         onClick={e => e.stopPropagation()}
       >
         <div className="player-profile-header">
           <div>
-            <h2 className="player-profile-name">{playerName}</h2>
+            <h2 id="player-profile-heading" className="player-profile-name">{playerName}</h2>
             <p className="player-profile-meta">
               {row.Team || "—"} · {row.Pos || "—"}
             </p>

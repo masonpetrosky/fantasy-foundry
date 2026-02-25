@@ -18,7 +18,7 @@ export const ProjectionStatusMessages = React.memo(function ProjectionStatusMess
         </div>
       )}
       {exportError && (
-        <div className="table-refresh-message error" role="status" aria-live="polite">
+        <div className="table-refresh-message error" role="alert" aria-live="assertive">
           <span>Export failed. {exportError}</span>
           <button type="button" className="inline-btn" onClick={clearExportError}>Dismiss</button>
         </div>

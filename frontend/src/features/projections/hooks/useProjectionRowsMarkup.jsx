@@ -75,6 +75,7 @@ export function useProjectionRowsMarkup({
                 type="button"
                 className={`inline-btn ${rowWatch ? "open" : ""}`.trim()}
                 onClick={() => toggleRowWatch(row)}
+                aria-pressed={rowWatch}
               >
                 {rowWatch ? "Tracked" : "Track"}
               </button>
@@ -83,6 +84,7 @@ export function useProjectionRowsMarkup({
                 className={`inline-btn ${isCompared ? "open" : ""}`.trim()}
                 onClick={() => toggleCompareRow(row)}
                 disabled={!isCompared && compareRowsCount >= maxComparePlayers}
+                aria-pressed={isCompared}
               >
                 {isCompared ? "Compared" : "Compare"}
               </button>
@@ -153,6 +155,7 @@ export function useProjectionRowsMarkup({
               type="button"
               className={`inline-btn ${rowWatch ? "open" : ""}`.trim()}
               onClick={() => toggleRowWatch(row)}
+              aria-pressed={rowWatch}
             >
               {rowWatch ? "Tracked" : "Track"}
             </button>
@@ -161,6 +164,7 @@ export function useProjectionRowsMarkup({
               className={`inline-btn ${isCompared ? "open" : ""}`.trim()}
               onClick={() => toggleCompareRow(row)}
               disabled={!isCompared && compareRowsCount >= maxComparePlayers}
+              aria-pressed={isCompared}
             >
               {isCompared ? "Compared" : "Compare"}
             </button>

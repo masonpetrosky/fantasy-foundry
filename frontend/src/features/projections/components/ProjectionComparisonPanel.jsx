@@ -30,7 +30,7 @@ export const ProjectionComparisonPanel = React.memo(function ProjectionCompariso
             <article className="comparison-card" key={compareKey}>
               <div className="comparison-card-head">
                 <h4>{row.Player || "Player"}</h4>
-                <button type="button" className="inline-btn" onClick={() => removeCompareRow(compareKey)}>Remove</button>
+                <button type="button" className="inline-btn" aria-label={`Remove ${row.Player || "player"} from comparison`} onClick={() => removeCompareRow(compareKey)}>Remove</button>
               </div>
               <p>{row.Team || "—"} · {row.Pos || "—"}</p>
               <dl>
