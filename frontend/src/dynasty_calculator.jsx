@@ -3,6 +3,7 @@ import { cancelCalculationJob, runCalculationJob } from "./calculation_jobs.js";
 import { DynastyCalculatorSidebar } from "./dynasty_calculator_sidebar.jsx";
 import { trackEvent } from "./analytics.js";
 import { normalizeCalculatorRunSettingsInput } from "./calculator_submit.js";
+import { trackQuickStartClick } from "./quick_start.js";
 import {
   CALC_LINK_QUERY_PARAM,
   decodeCalculatorSettings,
@@ -198,10 +199,14 @@ export function DynastyCalculator({
   function applyQuickStartAndRun(mode, options = {}) {
     const normalizedMode = mode === "points" ? "points" : "roto";
     const source = String(options.source || "calculator_sidebar").trim() || "calculator_sidebar";
-    const trackQuickStartClick = options.trackClick !== false;
-    if (trackQuickStartClick) {
-      trackEvent("ff_quickstart_cta_click", { source, mode: normalizedMode });
-      trackEvent("quickstart_click", { source, mode: normalizedMode });
+    const shouldTrackQuickStartClick = options.trackClick !== false;
+    if (shouldTrackQuickStartClick) {
+      trackQuickStartClick({
+        mode: normalizedMode,
+        source,
+        isFirstRun: !firstSuccessTrackedRef.current,
+        section: "projections",
+      });
     }
     const nextSettings = buildQuickStartSettings({
       mode: normalizedMode,

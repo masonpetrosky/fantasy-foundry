@@ -416,6 +416,10 @@
   color: var(--red);
 }
 
+.table-last-refreshed {
+  border-style: dashed;
+}
+
 .projection-layout-controls {
   display: flex;
   flex-direction: column;
@@ -727,6 +731,23 @@ td.value-negative { color: var(--red); }
 
 .projection-card-empty p {
   margin: 0 0 10px;
+}
+
+.projection-empty-title {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+}
+
+.projection-empty-guidance {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.projection-empty-cell {
+  text-align: center;
+  padding: 34px;
+  color: var(--text-muted);
 }
 
 .empty-state-actions {

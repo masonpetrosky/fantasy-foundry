@@ -7,11 +7,12 @@ import {
   readFirstRunState,
   writeFirstRunState,
 } from "../app_state_storage.js";
-import { runQuickStartFlow } from "../quick_start.js";
+import { runQuickStartFlow, trackQuickStartImpression } from "../quick_start.js";
 
 export function useQuickStart({
   meta,
   section,
+  dataVersion,
   calculatorPanelOpen,
   lastSuccessfulCalcRun,
   openCalculatorPanel,
@@ -51,13 +52,24 @@ export function useQuickStart({
     runQuickStartFlow({
       mode,
       source,
+      isFirstRun: !hasSuccessfulRun,
+      section,
+      dataVersion,
       openCalculatorPanel,
       setPendingQuickStartMode,
       scrollToCalculator,
       focusCalculator: focusCalculatorHeading,
       scheduleFrame: window.requestAnimationFrame,
     });
-  }, [firstRunState, focusCalculatorHeading, openCalculatorPanel, scrollToCalculator]);
+  }, [
+    dataVersion,
+    firstRunState,
+    focusCalculatorHeading,
+    hasSuccessfulRun,
+    openCalculatorPanel,
+    scrollToCalculator,
+    section,
+  ]);
 
   const dismissQuickStartOnboarding = useCallback(() => {
     setFirstRunState(FIRST_RUN_STATE_DISMISSED_PRE_SUCCESS);
@@ -85,16 +97,25 @@ export function useQuickStart({
 
   useEffect(() => {
     if (!showQuickStartOnboarding || quickStartStripImpressionTrackedRef.current) return;
-    trackEvent("quickstart_impression", { source: "activation_strip" });
-    trackEvent("ff_quickstart_impression", { source: "activation_strip" });
+    trackQuickStartImpression({
+      source: "activation_strip",
+      isFirstRun: !hasSuccessfulRun,
+      section,
+      dataVersion,
+    });
     quickStartStripImpressionTrackedRef.current = true;
-  }, [showQuickStartOnboarding]);
+  }, [dataVersion, hasSuccessfulRun, section, showQuickStartOnboarding]);
 
   useEffect(() => {
     if (!showQuickStartReminder || quickStartReminderImpressionTrackedRef.current) return;
-    trackEvent("ff_quickstart_impression", { source: "activation_reminder" });
+    trackQuickStartImpression({
+      source: "activation_reminder",
+      isFirstRun: !hasSuccessfulRun,
+      section,
+      dataVersion,
+    });
     quickStartReminderImpressionTrackedRef.current = true;
-  }, [showQuickStartReminder]);
+  }, [dataVersion, hasSuccessfulRun, section, showQuickStartReminder]);
 
   useEffect(() => {
     if (!lastSuccessfulCalcRun) return;

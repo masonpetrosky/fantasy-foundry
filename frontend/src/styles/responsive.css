@@ -151,7 +151,17 @@
   }
 
   .activation-strip-actions {
-    grid-template-columns: 1fr;
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .activation-strip-btn-primary {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .activation-strip-link {
+    align-self: flex-start;
   }
 
   .activation-reminder {
@@ -362,6 +372,7 @@
 
   .form-row { grid-template-columns: 1fr; gap: 10px; }
   .calc-summary-grid { grid-template-columns: 1fr; }
+  .calc-defaults-banner-actions { grid-template-columns: 1fr; }
   .calc-inline-actions { grid-template-columns: 1fr; }
   .explain-points-grid { grid-template-columns: 1fr; }
 

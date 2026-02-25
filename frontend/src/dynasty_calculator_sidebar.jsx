@@ -51,11 +51,14 @@ export function DynastyCalculatorSidebar({
     openMethodologyGlossary,
   } = actions;
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(Boolean(hasSuccessfulRun));
+  const [showDefaultsBanner, setShowDefaultsBanner] = useState(!hasSuccessfulRun);
   const beginnerMode = !hasSuccessfulRun && !showAdvancedSettings;
+  const runActionLabel = beginnerMode ? "Run Dynasty Rankings" : "Apply To Main Table";
 
   useEffect(() => {
     if (!hasSuccessfulRun) return;
     setShowAdvancedSettings(true);
+    setShowDefaultsBanner(false);
   }, [hasSuccessfulRun]);
 
   function jumpToGlossaryTerm(term) {
@@ -69,6 +72,30 @@ export function DynastyCalculatorSidebar({
         <h3>League Settings</h3>
         <p className="calc-sidebar-intro">Configure format, roster depth, and scoring. Then apply custom dynasty values to the main projections table.</p>
       </div>
+      {showDefaultsBanner && (
+        <div className="calc-defaults-banner" role="status" aria-live="polite">
+          <p><strong>Recommended defaults are pre-filled.</strong> Run now, then open advanced settings to tune scoring and roster depth.</p>
+          <div className="calc-defaults-banner-actions">
+            <button
+              type="button"
+              className="calc-secondary-btn"
+              onClick={() => setShowDefaultsBanner(false)}
+            >
+              Dismiss
+            </button>
+            <button
+              type="button"
+              className="calc-secondary-btn"
+              onClick={() => {
+                setShowAdvancedSettings(true);
+                setShowDefaultsBanner(false);
+              }}
+            >
+              Open Advanced Settings
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="calc-summary-grid">
         <div className="calc-summary-chip">
@@ -90,7 +117,7 @@ export function DynastyCalculatorSidebar({
       </div>
       {beginnerMode && (
         <div className="calc-beginner-note" role="status" aria-live="polite">
-          Beginner mode is active. Start with quick run defaults, then open advanced controls to tune scoring and depth.
+          Beginner mode is active. Teams, start year, horizon, and setup are the only required inputs for your first run.
         </div>
       )}
 
@@ -264,6 +291,21 @@ export function DynastyCalculatorSidebar({
         )}
       </div>
 
+      {beginnerMode && (
+        <div className="calc-section">
+          <p className="calc-section-title">Run With Current Defaults</p>
+          <p className="calc-note">Generate rankings now, then adjust advanced controls after results load.</p>
+          <button
+            type="button"
+            className="calc-btn calc-btn-first-run"
+            onClick={() => run()}
+            disabled={loading || Boolean(validationError)}
+          >
+            {loading ? "Computing..." : "Run Dynasty Rankings"}
+          </button>
+        </div>
+      )}
+
       {!showAdvancedSettings && (
         <div className="calc-section">
           <p className="calc-note calc-advanced-hint">
@@ -420,7 +462,7 @@ export function DynastyCalculatorSidebar({
 
       <div className="calc-section">
         <button className="calc-btn" onClick={() => run()} disabled={loading || Boolean(validationError)}>
-          {loading ? "Computing..." : "Apply To Main Table"}
+          {loading ? "Computing..." : runActionLabel}
         </button>
         <div
           className={`calc-status ${loading ? "running" : statusIsError ? "error" : ""}`}

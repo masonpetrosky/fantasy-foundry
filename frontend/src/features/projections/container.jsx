@@ -136,6 +136,8 @@ export function ProjectionsExplorer({
 
   const [, setShowPosMenu] = useState(false);
   const emptyStateTrackedRef = useRef("");
+  const lastRefreshMarkerRef = useRef("");
+  const [lastRefreshedLabel, setLastRefreshedLabel] = useState("");
 
   const {
     hasCalculatorOverlay,
@@ -476,6 +478,23 @@ export function ProjectionsExplorer({
   }, [displayedPage.length, error, loading, posFilters, resolvedYearFilter, search, tab, teamFilter, watchlistOnly]);
 
   useEffect(() => {
+    if (loading || error || displayedPage.length === 0) return;
+    const firstRow = displayedPage[0] || {};
+    const marker = [
+      tab,
+      offset,
+      displayedPage.length,
+      totalRows,
+      String(firstRow.Player || ""),
+      String(firstRow.Team || ""),
+      String(firstRow.Year || ""),
+    ].join("|");
+    if (lastRefreshMarkerRef.current === marker) return;
+    lastRefreshMarkerRef.current = marker;
+    setLastRefreshedLabel(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+  }, [displayedPage, error, loading, offset, tab, totalRows]);
+
+  useEffect(() => {
     const raf = window.requestAnimationFrame(() => updateProjectionHorizontalAffordance());
     return () => window.cancelAnimationFrame(raf);
   }, [updateProjectionHorizontalAffordance, cols.length, displayedPage.length, loading, totalRows, tab, offset, mobileLayoutMode]);
@@ -491,13 +510,24 @@ export function ProjectionsExplorer({
     updateProjectionHorizontalAffordance();
   }, [tab, mobileLayoutMode, isMobileViewport, updateProjectionHorizontalAffordance]);
 
+  const emptyStateHeadline = watchlistOnly
+    ? "No watchlist players matched this view."
+    : "No projections matched these filters.";
+  const emptyStateGuidance = watchlistOnly
+    ? "Turn off Watchlist View or clear filters to expand results."
+    : "Adjust or clear filters to expand results.";
   const emptyStateActions = (
     <div className="empty-state-actions">
       <button type="button" className="inline-btn" onClick={clearAllFilters} disabled={!hasActiveFilters}>
         Clear Filters
       </button>
+      {watchlistOnly && (
+        <button type="button" className="inline-btn" onClick={() => setWatchlistOnly(false)}>
+          Turn Off Watchlist View
+        </button>
+      )}
       <button type="button" className="inline-btn" onClick={() => applyProjectionFilterPreset("all", "empty_state")}>
-        Show All Players
+        Reset To All Players
       </button>
       <button type="button" className="inline-btn" onClick={() => setSearch("Rodriguez")}>
         Try Example Search
@@ -568,6 +598,11 @@ export function ProjectionsExplorer({
       {exportError && (
         <div className="table-refresh-message error" role="status" aria-live="polite">
           Export failed. {exportError}
+        </div>
+      )}
+      {lastRefreshedLabel && (
+        <div className="table-refresh-message table-last-refreshed" role="status" aria-live="polite">
+          Data last refreshed at {lastRefreshedLabel}.
         </div>
       )}
       {showCollectionsWorkspace ? (
@@ -666,7 +701,8 @@ export function ProjectionsExplorer({
             <div className="projection-card-empty">Unable to load projections. {error}{" "}<button type="button" className="inline-btn" onClick={retryFetch}>Retry</button></div>
           ) : displayedPage.length === 0 ? (
             <div className="projection-card-empty">
-              <p>No projections matched these filters.</p>
+              <p>{emptyStateHeadline}</p>
+              <p className="projection-empty-guidance">{emptyStateGuidance}</p>
               {emptyStateActions}
             </div>
           ) : (
@@ -729,8 +765,9 @@ export function ProjectionsExplorer({
                   </tr>
                 ) : displayedPage.length === 0 ? (
                   <tr>
-                    <td colSpan={cols.length + 2} style={{ textAlign: "center", padding: "34px", color: "var(--text-muted)" }}>
-                      <p style={{ marginBottom: "12px" }}>No projections matched these filters.</p>
+                    <td className="projection-empty-cell" colSpan={cols.length + 2}>
+                      <p className="projection-empty-title">{emptyStateHeadline}</p>
+                      <p className="projection-empty-guidance">{emptyStateGuidance}</p>
                       {emptyStateActions}
                     </td>
                   </tr>

@@ -127,6 +127,7 @@ function App() {
   } = useQuickStart({
     meta,
     section,
+    dataVersion,
     calculatorPanelOpen,
     lastSuccessfulCalcRun,
     openCalculatorPanel,
@@ -321,24 +322,6 @@ function App() {
         <div className="hero fade-up">
           <h1>The Only <em>20-Year</em><br />Dynasty Baseball Projections</h1>
           <p>Comprehensive player projections from 2026 through 2045. Browse the data, configure your league settings, and generate personalized dynasty rankings.</p>
-          {sectionNeedsMeta && meta && ACTIVATION_SPRINT_ENABLED && (
-            <div className="hero-actions fade-up fade-up-1" role="group" aria-label="Quick start dynasty rankings">
-              <button
-                type="button"
-                className="hero-cta hero-cta-primary"
-                onClick={() => requestQuickStartRun("roto", { source: "hero_cta" })}
-              >
-                Run Recommended 5x5 Roto
-              </button>
-              <button
-                type="button"
-                className="hero-cta hero-cta-secondary"
-                onClick={() => requestQuickStartRun("points", { source: "hero_cta" })}
-              >
-                Run 12-Team Points
-              </button>
-            </div>
-          )}
           {meta && (
             <>
               <p className="hero-freshness" role="status">
@@ -369,6 +352,11 @@ function App() {
                 <p className="activation-strip-kicker">Recommended Start</p>
                 <h2>Generate your first custom dynasty rankings now.</h2>
                 <p>Run the default 12-team 5x5 setup, then fine-tune league settings after results load.</p>
+                <ul className="activation-benefits" aria-label="Quick start benefits">
+                  <li>League-specific rankings</li>
+                  <li>Career plus season views</li>
+                  <li>CSV and XLSX export</li>
+                </ul>
               </div>
               <div className="activation-strip-actions" role="group" aria-label="Quick start options">
                 <button
@@ -380,10 +368,10 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  className="activation-strip-btn activation-strip-btn-secondary"
-                  onClick={() => requestQuickStartRun("points", { source: "activation_strip" })}
+                  className="activation-strip-link"
+                  onClick={() => requestQuickStartRun("points", { source: "activation_strip_points_link" })}
                 >
-                  Run 12-Team Points Instead
+                  Use Points Instead
                 </button>
               </div>
               <button
@@ -564,7 +552,7 @@ function App() {
             </Suspense>
           )}
         </div>
-        {section === "projections" && meta && (
+        {section === "projections" && meta && !showQuickStartOnboarding && !showQuickStartReminder && (
           <button
             type="button"
             className="mobile-run-cta"
