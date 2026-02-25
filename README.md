@@ -186,6 +186,18 @@ python scripts/check_max_file_lines.py
 
 This guardrail keeps new backend/frontend source files under the configured line threshold while allowing known legacy hotspots during incremental refactors.
 
+### Activation Rollout Readout
+After shipping activation-funnel changes, validate event contract coverage and KPI/guardrail deltas:
+
+```bash
+python scripts/activation_readout.py \
+  --input tmp/activation_current.csv \
+  --baseline tmp/activation_baseline.csv \
+  --strict-contract
+```
+
+See [`docs/activation-rollout-validation.md`](docs/activation-rollout-validation.md) for expected columns, thresholds, and rollout decision rules.
+
 ### Running Browser E2E Tests (Playwright)
 ```bash
 # Install app + dev test dependencies
