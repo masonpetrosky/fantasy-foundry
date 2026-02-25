@@ -220,6 +220,10 @@ from backend.core.runtime_defaults import (
     POINTS_HITTER_SLOT_DEFAULTS,
     POINTS_PITCHER_SLOT_DEFAULTS,
 )
+from backend.core.runtime_facade import (
+    apply_runtime_facade_aliases,
+    build_runtime_facade_alias_map,
+)
 from backend.core.runtime_projection_helpers import (
     POSITION_DISPLAY_ORDER,
     POSITION_TOKEN_SPLIT_RE,
@@ -272,6 +276,7 @@ from backend.core.runtime_security import (
 from backend.core.runtime_security import (
     parse_calculate_api_key_identities as core_parse_calculate_api_key_identities,
 )
+from backend.core.runtime_startup import build_runtime_startup_artifacts
 from backend.core.settings import load_settings_from_env
 from backend.domain.constants import (
     CALCULATOR_RESULT_POINTS_EXPORT_ORDER,
@@ -313,6 +318,91 @@ _RUNTIME_STATE_EXPORTS = (
     ALL_TAB_PITCH_STAT_COLS,
     _merge_position_value,
     _row_team_value,
+)
+_RUNTIME_FACADE_EXPORTS = (
+    traceback,
+    defaultdict,
+    ThreadPoolExecutor,
+    datetime,
+    timezone,
+    lru_cache,
+    Any,
+    pd,
+    Request,
+    StreamingResponse,
+    core_runtime_state_helpers,
+    core_build_calculation_explanations,
+    core_calculator_guardrails_payload,
+    core_coerce_bool,
+    core_default_calculation_cache_params,
+    core_is_user_fixable_calculation_error,
+    core_numeric_or_zero,
+    core_playable_pool_counts_by_year,
+    core_roto_category_settings_from_dict,
+    core_selected_roto_categories,
+    core_start_year_roto_stats_by_entity,
+    core_coerce_serialized_dynasty_lookup_map,
+    core_dynasty_lookup_payload_version,
+    core_hash_file_into,
+    core_path_signature,
+    core_refresh_data_if_needed,
+    core_stable_data_version_path_label,
+    core_default_dynasty_lookup,
+    core_player_identity_by_name,
+    core_clean_records_for_json,
+    core_default_calculator_export_columns,
+    core_flatten_explanations_for_export,
+    core_tabular_export_response,
+    core_calculation_job_public_payload,
+    core_cleanup_calculation_jobs,
+    core_mark_job_cancelled_locked,
+    core_client_ip,
+    core_forwarded_for_chain,
+    core_parse_ip_text,
+    core_trusted_proxy_ip,
+    core_calculate_hitter_points_breakdown,
+    core_calculate_pitcher_points_breakdown,
+    core_coerce_minor_eligible,
+    core_points_hitter_eligible_slots,
+    core_points_pitcher_eligible_slots,
+    core_points_player_identity,
+    core_points_slot_replacement,
+    core_projection_identity_key,
+    core_stat_or_zero,
+    core_valuation_years,
+    core_calc_result_cache_key,
+    CALC_JOB_CANCELLED_ERROR,
+    CALC_JOB_CANCELLED_STATUS,
+    COMMON_DEFAULT_IR_SLOTS,
+    COMMON_DEFAULT_MINOR_SLOTS,
+    COMMON_HITTER_SLOT_DEFAULTS,
+    COMMON_HITTER_STARTER_SLOTS_PER_TEAM,
+    COMMON_PITCHER_SLOT_DEFAULTS,
+    COMMON_PITCHER_STARTER_SLOTS_PER_TEAM,
+    DEFAULT_POINTS_SCORING,
+    EXPORT_DATE_COLS,
+    EXPORT_HEADER_LABEL_OVERRIDES,
+    EXPORT_INTEGER_COLS,
+    EXPORT_THREE_DECIMAL_COLS,
+    EXPORT_TWO_DECIMAL_COLS,
+    EXPORT_WHOLE_NUMBER_COLS,
+    POINTS_HITTER_SLOT_DEFAULTS,
+    POINTS_PITCHER_SLOT_DEFAULTS,
+    _as_float,
+    _coerce_meta_years,
+    _coerce_numeric,
+    _coerce_record_year,
+    _normalize_team_key,
+    _position_tokens,
+    _value_col_sort_key,
+    core_extract_calculate_api_key,
+    CALCULATOR_RESULT_POINTS_EXPORT_ORDER,
+    CALCULATOR_RESULT_STAT_EXPORT_ORDER,
+    ROTO_CATEGORY_FIELD_DEFAULTS,
+    ROTO_HITTER_CATEGORY_FIELDS,
+    ROTO_PITCHER_CATEGORY_FIELDS,
+    CalculatorService,
+    service_reload_projection_data,
 )
 
 # ---------------------------------------------------------------------------
@@ -400,15 +490,6 @@ class DynastyLookupCacheInspection:
 TRUSTED_PROXY_NETWORKS = core_load_trusted_proxy_networks(TRUSTED_PROXY_CIDRS_RAW, logger=CALC_LOGGER)
 CALCULATE_API_KEY_IDENTITIES = core_parse_calculate_api_key_identities(CALCULATE_API_KEYS_RAW)
 
-
-def _validate_runtime_configuration() -> None:
-    core_runtime_state_helpers.validate_runtime_configuration(state=sys.modules[__name__])
-
-
-def _extract_calculate_api_key(request: Request | None) -> str | None:
-    return core_extract_calculate_api_key(request)
-
-
 META = load_json("meta.json")
 BAT_DATA_RAW = load_json("bat.json")
 PIT_DATA_RAW = load_json("pitch.json")
@@ -422,132 +503,53 @@ DATA_REFRESH_PATHS = (
     DATA_DIR / "pitch.json",
     EXCEL_PATH,
 )
-DATA_REFRESH_LOCK = Lock()
+RUNTIME_STARTUP = build_runtime_startup_artifacts(
+    data_refresh_paths=DATA_REFRESH_PATHS,
+    compute_data_signature_fn=core_compute_data_signature,
+    compute_content_data_version_fn=core_compute_content_data_version,
+    calculator_job_workers=CALCULATOR_JOB_WORKERS,
+    redis_client_state_factory=lambda: core_runtime_infra.RedisClientState(lock=Lock()),
+)
+RUNTIME_STATE = RUNTIME_STARTUP.runtime_state
+DATA_REFRESH_LOCK = RUNTIME_STATE.data_refresh_lock
+_DATA_SOURCE_SIGNATURE: tuple[tuple[str, int | None, int | None], ...] | None = RUNTIME_STARTUP.data_source_signature
+_DATA_CONTENT_VERSION: str = RUNTIME_STARTUP.data_content_version
+RUNTIME_STATE.data_source_signature = _DATA_SOURCE_SIGNATURE
+RUNTIME_STATE.data_content_version = _DATA_CONTENT_VERSION
+CALCULATOR_JOB_EXECUTOR = RUNTIME_STATE.calculator_job_executor
+CALCULATOR_JOB_LOCK = RUNTIME_STATE.calculator_job_lock
+CALCULATOR_JOBS: dict[str, dict] = RUNTIME_STATE.calculator_jobs
+CALCULATOR_PREWARM_LOCK = RUNTIME_STATE.calculator_prewarm_lock
+CALCULATOR_PREWARM_STATE = RUNTIME_STATE.calculator_prewarm_state
+REQUEST_RATE_LIMIT_LOCK = RUNTIME_STATE.request_rate_limit_lock
+REQUEST_RATE_LIMIT_BUCKETS: dict[tuple[str, str], deque[float]] = RUNTIME_STATE.request_rate_limit_buckets
+_REQUEST_RATE_LIMIT_LAST_SWEEP_TS = RUNTIME_STATE.request_rate_limit_last_sweep_ts
+CALC_RESULT_CACHE_LOCK = RUNTIME_STATE.calc_result_cache_lock
+CALC_RESULT_CACHE: dict[str, tuple[float, dict]] = RUNTIME_STATE.calc_result_cache
+CALC_RESULT_CACHE_ORDER: deque[str] = RUNTIME_STATE.calc_result_cache_order
+REDIS_CLIENT_STATE = RUNTIME_STATE.redis_client_state
 
-
-def _path_signature(path: Path) -> tuple[str, int | None, int | None]:
-    return core_path_signature(path)
-
-
-def _compute_data_signature() -> tuple[tuple[str, int | None, int | None], ...]:
-    return core_compute_data_signature(DATA_REFRESH_PATHS)
-
-
-def _stable_data_version_path_label(path: Path) -> str:
-    return core_stable_data_version_path_label(path)
-
-
-def _hash_file_into(path: Path, hasher: Any) -> None:
-    core_hash_file_into(path, hasher)
-
-
-def _compute_content_data_version(paths: tuple[Path, ...]) -> str:
-    return core_compute_content_data_version(paths)
-
-
-_DATA_SOURCE_SIGNATURE: tuple[tuple[str, int | None, int | None], ...] | None = _compute_data_signature()
-_DATA_CONTENT_VERSION: str = _compute_content_data_version(DATA_REFRESH_PATHS)
-CALCULATOR_JOB_EXECUTOR = ThreadPoolExecutor(max_workers=CALCULATOR_JOB_WORKERS)
-CALCULATOR_JOB_LOCK = Lock()
-CALCULATOR_JOBS: dict[str, dict] = {}
-CALCULATOR_PREWARM_LOCK = Lock()
-CALCULATOR_PREWARM_STATE = {
-    "status": "idle",
-    "started_at": None,
-    "completed_at": None,
-    "duration_ms": None,
-    "error": None,
-}
-REQUEST_RATE_LIMIT_LOCK = Lock()
-REQUEST_RATE_LIMIT_BUCKETS: dict[tuple[str, str], deque[float]] = defaultdict(deque)
-_REQUEST_RATE_LIMIT_LAST_SWEEP_TS = 0.0
-CALC_RESULT_CACHE_LOCK = Lock()
-CALC_RESULT_CACHE: dict[str, tuple[float, dict]] = {}
-CALC_RESULT_CACHE_ORDER: deque[str] = deque()
-REDIS_CLIENT_STATE = core_runtime_infra.RedisClientState(lock=Lock())
-
-
-def _current_data_version() -> str:
-    return _DATA_CONTENT_VERSION
-
-
-def _coerce_serialized_dynasty_lookup_map(raw: object) -> dict[str, dict]:
-    return core_coerce_serialized_dynasty_lookup_map(raw)
-
-
-def _dynasty_lookup_payload_version(payload: dict[str, object]) -> str | None:
-    return core_dynasty_lookup_payload_version(payload)
-
-
-def _inspect_precomputed_default_dynasty_lookup() -> DynastyLookupCacheInspection:
-    return core_runtime_state_helpers.inspect_precomputed_default_dynasty_lookup(state=sys.modules[__name__])
-
-
-def _load_precomputed_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]] | None:
-    return core_runtime_state_helpers.load_precomputed_default_dynasty_lookup(state=sys.modules[__name__])
-
-
-def _reload_projection_data() -> None:
-    global META, BAT_DATA_RAW, PIT_DATA_RAW, BAT_DATA, PIT_DATA, PROJECTION_FRESHNESS
-    (
-        META,
-        BAT_DATA_RAW,
-        PIT_DATA_RAW,
-        BAT_DATA,
-        PIT_DATA,
-        PROJECTION_FRESHNESS,
-    ) = service_reload_projection_data(
-        load_json=load_json,
-        with_player_identity_keys=_with_player_identity_keys,
-        average_recent_projection_rows=_average_recent_projection_rows,
-        projection_freshness_payload=_projection_freshness_payload,
-    )
-
-
-def _parse_ip_text(raw: str | None) -> IPAddress | None:
-    return core_parse_ip_text(raw)
-
-
-def _trusted_proxy_ip(addr: IPAddress) -> bool:
-    return core_trusted_proxy_ip(
-        addr,
-        trusted_proxy_networks=TRUSTED_PROXY_NETWORKS,
-        trust_x_forwarded_for=TRUST_X_FORWARDED_FOR,
-    )
-
-
-def _forwarded_for_chain(header_value: str | None) -> list[IPAddress]:
-    return core_forwarded_for_chain(header_value)
-
-
-def _client_ip(request: Request | None) -> str:
-    return core_client_ip(
-        request,
-        trust_x_forwarded_for=TRUST_X_FORWARDED_FOR,
-        trusted_proxy_networks=TRUSTED_PROXY_NETWORKS,
-    )
-
-
-def _calc_result_cache_key(settings: dict[str, Any]) -> str:
-    return core_calc_result_cache_key(settings)
-
-
-def _redis_client() -> Any | None:
-    return core_runtime_infra.get_redis_client(
-        redis_url=REDIS_URL,
-        redis_lib=redis_lib,
-        state=REDIS_CLIENT_STATE,
-        logger=CALC_LOGGER,
-    )
-
-
-def _get_request_rate_limit_last_sweep_ts() -> float:
-    return _REQUEST_RATE_LIMIT_LAST_SWEEP_TS
-
-
-def _set_request_rate_limit_last_sweep_ts(value: float) -> None:
-    global _REQUEST_RATE_LIMIT_LAST_SWEEP_TS
-    _REQUEST_RATE_LIMIT_LAST_SWEEP_TS = value
+RUNTIME_FACADE_ALIAS_MAP = build_runtime_facade_alias_map(state_module=sys.modules[__name__])
+apply_runtime_facade_aliases(
+    state_module=sys.modules[__name__],
+    alias_map=RUNTIME_FACADE_ALIAS_MAP,
+)
+# Bind facade aliases explicitly so local wiring below resolves names without
+# relying on dynamic setattr side effects.
+_validate_runtime_configuration = RUNTIME_FACADE_ALIAS_MAP["_validate_runtime_configuration"]
+_extract_calculate_api_key = RUNTIME_FACADE_ALIAS_MAP["_extract_calculate_api_key"]
+_current_data_version = RUNTIME_FACADE_ALIAS_MAP["_current_data_version"]
+_get_request_rate_limit_last_sweep_ts = RUNTIME_FACADE_ALIAS_MAP["_get_request_rate_limit_last_sweep_ts"]
+_set_request_rate_limit_last_sweep_ts = RUNTIME_FACADE_ALIAS_MAP["_set_request_rate_limit_last_sweep_ts"]
+_client_ip = RUNTIME_FACADE_ALIAS_MAP["_client_ip"]
+_redis_client = RUNTIME_FACADE_ALIAS_MAP["_redis_client"]
+_calculation_job_public_payload = RUNTIME_FACADE_ALIAS_MAP["_calculation_job_public_payload"]
+_get_default_dynasty_lookup = RUNTIME_FACADE_ALIAS_MAP["_get_default_dynasty_lookup"]
+_refresh_data_if_needed = RUNTIME_FACADE_ALIAS_MAP["_refresh_data_if_needed"]
+_prewarm_default_calculation_caches = RUNTIME_FACADE_ALIAS_MAP["_prewarm_default_calculation_caches"]
+_log_precomputed_dynasty_lookup_cache_status = RUNTIME_FACADE_ALIAS_MAP[
+    "_log_precomputed_dynasty_lookup_cache_status"
+]
 
 
 RUNTIME_CACHE_JOB_HELPERS = build_runtime_cache_job_helpers(
@@ -608,363 +610,6 @@ _cache_calculation_job_snapshot = RUNTIME_CACHE_JOB_HELPERS.cache_calculation_jo
 _cached_calculation_job_snapshot = RUNTIME_CACHE_JOB_HELPERS.cached_calculation_job_snapshot
 
 
-def _ensure_backend_module_path() -> None:
-    backend_path = str(BACKEND_MODULE_DIR)
-    if backend_path not in sys.path:
-        sys.path.insert(0, backend_path)
-
-
-@lru_cache(maxsize=16)
-def _calculate_common_dynasty_frame_cached(
-    teams: int,
-    sims: int,
-    horizon: int,
-    discount: float,
-    hit_c: int,
-    hit_1b: int,
-    hit_2b: int,
-    hit_3b: int,
-    hit_ss: int,
-    hit_ci: int,
-    hit_mi: int,
-    hit_of: int,
-    hit_ut: int,
-    pit_p: int,
-    pit_sp: int,
-    pit_rp: int,
-    bench: int,
-    minors: int,
-    ir: int,
-    ip_min: float,
-    ip_max: float | None,
-    two_way: str,
-    start_year: int,
-    recent_projections: int,
-    **roto_category_settings: bool,
-) -> pd.DataFrame:
-    return core_runtime_state_helpers.calculate_common_dynasty_frame_cached(state=sys.modules[__name__], **locals())
-
-
-def _stat_or_zero(row: dict | None, key: str) -> float:
-    return core_stat_or_zero(row, key, as_float_fn=_as_float)
-
-
-def _coerce_minor_eligible(value: object) -> bool:
-    return core_coerce_minor_eligible(value)
-
-
-def _projection_identity_key(row: dict | pd.Series) -> str:
-    return core_projection_identity_key(
-        row,
-        player_entity_key_col=PLAYER_ENTITY_KEY_COL,
-        player_key_col=PLAYER_KEY_COL,
-        normalize_player_key_fn=_normalize_player_key,
-    )
-
-
-def _coerce_bool(value: object, *, default: bool = False) -> bool:
-    return core_coerce_bool(value, default=default)
-
-
-def _roto_category_settings_from_dict(source: dict[str, Any] | None) -> dict[str, bool]:
-    return core_roto_category_settings_from_dict(
-        source,
-        coerce_bool_fn=_coerce_bool,
-        defaults=ROTO_CATEGORY_FIELD_DEFAULTS,
-    )
-
-
-def _selected_roto_categories(settings: dict[str, Any]) -> tuple[list[str], list[str]]:
-    return core_selected_roto_categories(
-        settings,
-        roto_category_settings_from_dict_fn=_roto_category_settings_from_dict,
-        hitter_fields=ROTO_HITTER_CATEGORY_FIELDS,
-        pitcher_fields=ROTO_PITCHER_CATEGORY_FIELDS,
-    )
-
-
-@lru_cache(maxsize=64)
-def _start_year_roto_stats_by_entity(
-    *,
-    start_year: int,
-    recent_projections: int,
-) -> dict[str, dict[str, float]]:
-    return core_start_year_roto_stats_by_entity(
-        start_year=start_year,
-        recent_projections=recent_projections,
-        bat_data=BAT_DATA,
-        pit_data=PIT_DATA,
-        bat_data_raw=BAT_DATA_RAW,
-        pit_data_raw=PIT_DATA_RAW,
-        average_recent_projection_rows_fn=_average_recent_projection_rows,
-        coerce_record_year_fn=_coerce_record_year,
-        projection_identity_key_fn=_projection_identity_key,
-        coerce_numeric_fn=_coerce_numeric,
-        roto_hitter_fields=ROTO_HITTER_CATEGORY_FIELDS,
-        roto_pitcher_fields=ROTO_PITCHER_CATEGORY_FIELDS,
-    )
-
-
-def _valuation_years(start_year: int, horizon: int, valid_years: list[int]) -> list[int]:
-    return core_valuation_years(start_year, horizon, valid_years)
-
-
-def _calculate_hitter_points_breakdown(row: dict | None, scoring: dict[str, float]) -> dict:
-    return core_calculate_hitter_points_breakdown(row, scoring, stat_or_zero_fn=_stat_or_zero)
-
-
-def _calculate_pitcher_points_breakdown(row: dict | None, scoring: dict[str, float]) -> dict:
-    return core_calculate_pitcher_points_breakdown(row, scoring, stat_or_zero_fn=_stat_or_zero)
-
-
-def _points_player_identity(row: dict) -> str:
-    return core_points_player_identity(
-        row,
-        player_entity_key_col=PLAYER_ENTITY_KEY_COL,
-        player_key_col=PLAYER_KEY_COL,
-        normalize_player_key_fn=_normalize_player_key,
-    )
-
-
-def _points_hitter_eligible_slots(pos_value: object) -> set[str]:
-    return core_points_hitter_eligible_slots(pos_value, position_tokens_fn=_position_tokens)
-
-
-def _points_pitcher_eligible_slots(pos_value: object) -> set[str]:
-    return core_points_pitcher_eligible_slots(pos_value, position_tokens_fn=_position_tokens)
-
-
-def _points_slot_replacement(
-    entries: list[dict[str, object]],
-    *,
-    active_slots: set[str],
-    rostered_player_ids: set[str],
-    n_replacement: int,
-) -> dict[str, float]:
-    return core_points_slot_replacement(
-        entries,
-        active_slots=active_slots,
-        rostered_player_ids=rostered_player_ids,
-        n_replacement=n_replacement,
-        as_float_fn=_as_float,
-    )
-
-
-@lru_cache(maxsize=16)
-def _calculate_points_dynasty_frame_cached(
-    teams: int,
-    horizon: int,
-    discount: float,
-    hit_c: int,
-    hit_1b: int,
-    hit_2b: int,
-    hit_3b: int,
-    hit_ss: int,
-    hit_ci: int,
-    hit_mi: int,
-    hit_of: int,
-    hit_ut: int,
-    pit_p: int,
-    pit_sp: int,
-    pit_rp: int,
-    bench: int,
-    minors: int,
-    ir: int,
-    two_way: str,
-    start_year: int,
-    recent_projections: int,
-    pts_hit_1b: float,
-    pts_hit_2b: float,
-    pts_hit_3b: float,
-    pts_hit_hr: float,
-    pts_hit_r: float,
-    pts_hit_rbi: float,
-    pts_hit_sb: float,
-    pts_hit_bb: float,
-    pts_hit_so: float,
-    pts_pit_ip: float,
-    pts_pit_w: float,
-    pts_pit_l: float,
-    pts_pit_k: float,
-    pts_pit_sv: float,
-    pts_pit_svh: float,
-    pts_pit_h: float,
-    pts_pit_er: float,
-    pts_pit_bb: float,
-) -> pd.DataFrame:
-    return core_runtime_state_helpers.calculate_points_dynasty_frame_cached(state=sys.modules[__name__], **locals())
-
-
-def _is_user_fixable_calculation_error(message: str) -> bool:
-    return core_is_user_fixable_calculation_error(message)
-
-
-def _numeric_or_zero(value: object) -> float:
-    return core_numeric_or_zero(value, as_float_fn=_as_float)
-
-
-def _build_calculation_explanations(out: pd.DataFrame, *, settings: dict[str, Any]) -> dict[str, dict]:
-    return core_build_calculation_explanations(
-        out,
-        settings=settings,
-        player_key_col=PLAYER_KEY_COL,
-        player_entity_key_col=PLAYER_ENTITY_KEY_COL,
-        normalize_player_key_fn=_normalize_player_key,
-        numeric_or_zero_fn=_numeric_or_zero,
-        value_col_sort_key_fn=_value_col_sort_key,
-    )
-
-
-def _clean_records_for_json(records: list[dict]) -> list[dict]:
-    return core_clean_records_for_json(records)
-
-
-def _flatten_explanations_for_export(explanations: dict[str, dict]) -> list[dict]:
-    return core_flatten_explanations_for_export(explanations)
-
-
-def _default_calculator_export_columns(rows: list[dict]) -> list[str]:
-    return core_default_calculator_export_columns(
-        rows,
-        calculator_result_stat_export_order=CALCULATOR_RESULT_STAT_EXPORT_ORDER,
-        calculator_result_points_export_order=CALCULATOR_RESULT_POINTS_EXPORT_ORDER,
-        value_col_sort_key=_value_col_sort_key,
-    )
-
-
-def _tabular_export_response(
-    rows: list[dict],
-    *,
-    filename_base: str,
-    file_format: Literal["csv", "xlsx"],
-    explain_rows: list[dict] | None = None,
-    selected_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
-    default_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
-    required_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
-    disallowed_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
-) -> StreamingResponse:
-    return core_tabular_export_response(
-        rows,
-        filename_base=filename_base,
-        file_format=file_format,
-        explain_rows=explain_rows,
-        selected_columns=selected_columns,
-        default_columns=default_columns,
-        required_columns=required_columns,
-        disallowed_columns=disallowed_columns,
-        export_date_cols=EXPORT_DATE_COLS,
-        export_header_label_overrides=EXPORT_HEADER_LABEL_OVERRIDES,
-        export_three_decimal_cols=EXPORT_THREE_DECIMAL_COLS,
-        export_two_decimal_cols=EXPORT_TWO_DECIMAL_COLS,
-        export_whole_number_cols=EXPORT_WHOLE_NUMBER_COLS,
-        export_integer_cols=EXPORT_INTEGER_COLS,
-    )
-
-
-@lru_cache(maxsize=1)
-def _playable_pool_counts_by_year() -> dict[str, dict[str, int]]:
-    return core_playable_pool_counts_by_year(
-        bat_data=BAT_DATA,
-        pit_data=PIT_DATA,
-        coerce_record_year_fn=_coerce_record_year,
-        as_float_fn=_as_float,
-    )
-
-
-def _default_calculation_cache_params() -> dict[str, int | float | str | None]:
-    return core_default_calculation_cache_params(
-        meta=META,
-        coerce_meta_years_fn=_coerce_meta_years,
-        common_hitter_slot_defaults=COMMON_HITTER_SLOT_DEFAULTS,
-        common_pitcher_slot_defaults=COMMON_PITCHER_SLOT_DEFAULTS,
-        common_default_minor_slots=COMMON_DEFAULT_MINOR_SLOTS,
-        common_default_ir_slots=COMMON_DEFAULT_IR_SLOTS,
-        roto_category_field_defaults=ROTO_CATEGORY_FIELD_DEFAULTS,
-    )
-
-
-def _calculator_guardrails_payload() -> dict:
-    return core_calculator_guardrails_payload(
-        common_hitter_starter_slots_per_team=COMMON_HITTER_STARTER_SLOTS_PER_TEAM,
-        common_pitcher_starter_slots_per_team=COMMON_PITCHER_STARTER_SLOTS_PER_TEAM,
-        common_hitter_slot_defaults=COMMON_HITTER_SLOT_DEFAULTS,
-        common_pitcher_slot_defaults=COMMON_PITCHER_SLOT_DEFAULTS,
-        points_hitter_slot_defaults=POINTS_HITTER_SLOT_DEFAULTS,
-        points_pitcher_slot_defaults=POINTS_PITCHER_SLOT_DEFAULTS,
-        default_points_scoring=DEFAULT_POINTS_SCORING,
-        roto_hitter_fields=ROTO_HITTER_CATEGORY_FIELDS,
-        roto_pitcher_fields=ROTO_PITCHER_CATEGORY_FIELDS,
-        common_default_minor_slots=COMMON_DEFAULT_MINOR_SLOTS,
-        common_default_ir_slots=COMMON_DEFAULT_IR_SLOTS,
-        playable_by_year=_playable_pool_counts_by_year(),
-        calculator_request_timeout_seconds=CALCULATOR_REQUEST_TIMEOUT_SECONDS,
-        trusted_proxy_networks=TRUSTED_PROXY_NETWORKS,
-        trust_x_forwarded_for=TRUST_X_FORWARDED_FOR,
-        rate_limit_bucket_cleanup_interval_seconds=RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS,
-        calculator_sync_rate_limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,
-        calculator_job_create_rate_limit_per_minute=CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE,
-        calculator_job_status_rate_limit_per_minute=CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE,
-        projection_rate_limit_per_minute=PROJECTION_RATE_LIMITS.read_per_minute,
-        projection_export_rate_limit_per_minute=PROJECTION_RATE_LIMITS.export_per_minute,
-        calculator_max_active_jobs_per_ip=CALCULATOR_MAX_ACTIVE_JOBS_PER_IP,
-    )
-
-
-def _iso_now() -> str:
-    return datetime.now(tz=timezone.utc).isoformat()
-
-
-def _mark_job_cancelled_locked(job: dict, *, now: str | None = None) -> None:
-    timestamp = now or _iso_now()
-    core_mark_job_cancelled_locked(
-        job,
-        now=timestamp,
-        cancelled_status=CALC_JOB_CANCELLED_STATUS,
-        cancelled_error=CALC_JOB_CANCELLED_ERROR,
-    )
-
-
-def _cleanup_calculation_jobs(now_ts: float | None = None) -> None:
-    core_cleanup_calculation_jobs(
-        CALCULATOR_JOBS,
-        now_ts=now_ts,
-        job_ttl_seconds=CALCULATOR_JOB_TTL_SECONDS,
-        job_max_entries=CALCULATOR_JOB_MAX_ENTRIES,
-        cancelled_status=CALC_JOB_CANCELLED_STATUS,
-    )
-
-
-def _calculation_job_public_payload(job: dict) -> dict:
-    return core_calculation_job_public_payload(
-        job,
-        calculator_jobs=CALCULATOR_JOBS,
-        cancelled_status=CALC_JOB_CANCELLED_STATUS,
-    )
-
-
-def _prewarm_default_calculation_caches() -> None:
-    core_runtime_state_helpers.prewarm_default_calculation_caches(state=sys.modules[__name__])
-
-
-@lru_cache(maxsize=1)
-def _get_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]]:
-    return core_default_dynasty_lookup(
-        inspect_precomputed_default_dynasty_lookup=_inspect_precomputed_default_dynasty_lookup,
-        require_precomputed_dynasty_lookup=REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP,
-        required_lookup_error_factory=PrecomputedDynastyLookupRequiredError,
-        default_calculation_cache_params=_default_calculation_cache_params,
-        calculate_common_dynasty_frame_cached=_calculate_common_dynasty_frame_cached,
-        roto_category_settings_from_dict=_roto_category_settings_from_dict,
-        value_col_sort_key=_value_col_sort_key,
-        normalize_team_key=_normalize_team_key,
-        normalize_player_key=_normalize_player_key,
-        bat_data=BAT_DATA,
-        pit_data=PIT_DATA,
-        player_key_col=PLAYER_KEY_COL,
-        player_entity_key_col=PLAYER_ENTITY_KEY_COL,
-    )
-
-
 PROJECTION_DYNASTY_HELPERS = ProjectionDynastyHelpers(
     year_range_token_re=YEAR_RANGE_TOKEN_RE,
     get_default_dynasty_lookup=lambda: _get_default_dynasty_lookup(),
@@ -973,80 +618,6 @@ PROJECTION_DYNASTY_HELPERS = ProjectionDynastyHelpers(
     player_entity_key_col=PLAYER_ENTITY_KEY_COL,
     lookup_required_error_type=PrecomputedDynastyLookupRequiredError,
 )
-
-
-def _parse_dynasty_years(raw: str | None, *, valid_years: list[int] | None = None) -> list[int]:
-    return PROJECTION_DYNASTY_HELPERS.parse_dynasty_years(raw, valid_years=valid_years)
-
-
-def _resolve_projection_year_filter(
-    year: int | None,
-    years: str | None,
-    *,
-    valid_years: list[int] | None = None,
-) -> set[int] | None:
-    return PROJECTION_DYNASTY_HELPERS.resolve_projection_year_filter(
-        year,
-        years,
-        valid_years=valid_years,
-    )
-
-
-def _attach_dynasty_values(rows: list[dict], dynasty_years: list[int] | None = None) -> list[dict]:
-    return PROJECTION_DYNASTY_HELPERS.attach_dynasty_values(rows, dynasty_years=dynasty_years)
-
-
-@lru_cache(maxsize=1)
-def _player_identity_by_name() -> dict[str, tuple[str, str | None]]:
-    return core_player_identity_by_name(
-        bat_data=BAT_DATA,
-        pit_data=PIT_DATA,
-        player_key_col=PLAYER_KEY_COL,
-        player_entity_key_col=PLAYER_ENTITY_KEY_COL,
-        normalize_player_key=_normalize_player_key,
-    )
-
-
-def _refresh_data_if_needed() -> None:
-    global _DATA_SOURCE_SIGNATURE, _DATA_CONTENT_VERSION
-    result = core_refresh_data_if_needed(
-        data_refresh_lock=DATA_REFRESH_LOCK,
-        data_refresh_paths=DATA_REFRESH_PATHS,
-        current_data_source_signature=_DATA_SOURCE_SIGNATURE,
-        compute_data_signature_fn=core_compute_data_signature,
-        reload_projection_data_fn=_reload_projection_data,
-        on_reload_exception=traceback.print_exc,
-        clear_after_reload=_clear_after_data_reload,
-        compute_content_data_version_fn=core_compute_content_data_version,
-    )
-    if result is None:
-        return
-
-    signature, content_version = result
-    _DATA_SOURCE_SIGNATURE = signature
-    _DATA_CONTENT_VERSION = content_version
-
-
-def _clear_after_data_reload() -> None:
-    if "PROJECTION_SERVICE" in globals():
-        PROJECTION_SERVICE.clear_caches()
-    _calculate_common_dynasty_frame_cached.cache_clear()
-    _calculate_points_dynasty_frame_cached.cache_clear()
-    _playable_pool_counts_by_year.cache_clear()
-    _get_default_dynasty_lookup.cache_clear()
-    _player_identity_by_name.cache_clear()
-    _start_year_roto_stats_by_entity.cache_clear()
-    with CALC_RESULT_CACHE_LOCK:
-        CALC_RESULT_CACHE.clear()
-        CALC_RESULT_CACHE_ORDER.clear()
-
-
-def _calculator_overlay_values_for_job(job_id: str | None) -> dict[str, dict[str, Any]]:
-    return core_runtime_state_helpers.calculator_overlay_values_for_job(state=sys.modules[__name__], job_id=job_id)
-
-
-def _calculator_service_from_globals() -> CalculatorService:
-    return core_runtime_state_helpers.calculator_service_from_globals(state=sys.modules[__name__])
 
 
 def filter_records(*args, **kwargs):
@@ -1075,11 +646,6 @@ export_calculate_dynasty_values = RUNTIME_BOOTSTRAP.alias_map["export_calculate_
 create_calculate_dynasty_job = RUNTIME_BOOTSTRAP.alias_map["create_calculate_dynasty_job"]
 get_calculate_dynasty_job = RUNTIME_BOOTSTRAP.alias_map["get_calculate_dynasty_job"]
 cancel_calculate_dynasty_job = RUNTIME_BOOTSTRAP.alias_map["cancel_calculate_dynasty_job"]
-
-
-def _log_precomputed_dynasty_lookup_cache_status() -> None:
-    core_runtime_state_helpers.log_precomputed_dynasty_lookup_cache_status(state=sys.modules[__name__])
-
 
 _log_precomputed_dynasty_lookup_cache_status()
 _validate_runtime_configuration()
