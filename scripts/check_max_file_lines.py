@@ -23,7 +23,6 @@ SOURCE_ROOTS = (
 )
 EXEMPT_LEGACY_FILES = {
     Path("backend/runtime.py"),
-    Path("backend/dynasty_roto_values.py"),
     Path("frontend/src/main.jsx"),
 }
 SKIP_PARTS = {".git", ".venv", "node_modules", "dist", "__pycache__"}
