@@ -121,11 +121,7 @@ from backend.core.runtime_cache_job_helpers import (
     RuntimeCacheJobHelperConfig,
     build_runtime_cache_job_helpers,
 )
-from backend.core.runtime_endpoint_handlers import (
-    RuntimeEndpointHandlerConfig,
-    build_runtime_endpoint_handlers,
-)
-from backend.core.runtime_orchestration_helpers import build_runtime_orchestration_helpers
+from backend.core.runtime_bootstrap import apply_runtime_aliases, build_runtime_bootstrap
 from backend.core.networking import (
     client_ip as core_client_ip,
     forwarded_for_chain as core_forwarded_for_chain,
@@ -170,7 +166,6 @@ from backend.domain.constants import (
     ROTO_PITCHER_CATEGORY_FIELDS,
 )
 from backend.services.calculator import CalculatorService
-from backend.services.projections import ProjectionService, ProjectionServiceContext
 
 try:  # pragma: no cover - optional dependency
     import redis as redis_lib  # type: ignore
@@ -939,46 +934,20 @@ def _calculator_overlay_values_for_job(job_id: str | None) -> dict[str, dict[str
     return core_runtime_state_helpers.calculator_overlay_values_for_job(state=sys.modules[__name__], job_id=job_id)
 
 
-PROJECTION_SERVICE = ProjectionService(
-    ProjectionServiceContext(
-        refresh_data_if_needed=_refresh_data_if_needed,
-        get_bat_data=lambda: BAT_DATA,
-        get_pit_data=lambda: PIT_DATA,
-        get_meta=lambda: META,
-        normalize_player_key=_normalize_player_key,
-        resolve_projection_year_filter=_resolve_projection_year_filter,
-        parse_dynasty_years=_parse_dynasty_years,
-        attach_dynasty_values=_attach_dynasty_values,
-        coerce_meta_years=_coerce_meta_years,
-        tabular_export_response=_tabular_export_response,
-        calculator_overlay_values_for_job=_calculator_overlay_values_for_job,
-        player_key_col=PLAYER_KEY_COL,
-        player_entity_key_col=PLAYER_ENTITY_KEY_COL,
-        position_token_split_re=POSITION_TOKEN_SPLIT_RE,
-        position_display_order=POSITION_DISPLAY_ORDER,
-        projection_text_sort_cols=PROJECTION_TEXT_SORT_COLS,
-        all_tab_hitter_stat_cols=ALL_TAB_HITTER_STAT_COLS,
-        all_tab_pitch_stat_cols=ALL_TAB_PITCH_STAT_COLS,
-        projection_query_cache_maxsize=PROJECTION_QUERY_CACHE_MAXSIZE,
-        filter_records=lambda *args, **kwargs: filter_records(*args, **kwargs),
-    )
-)
 def _calculator_service_from_globals() -> CalculatorService:
     return core_runtime_state_helpers.calculator_service_from_globals(state=sys.modules[__name__])
 
 
-CALCULATOR_SERVICE = _calculator_service_from_globals()
-
-# Backward-compatible module-level aliases used by tests and internal patches.
-CalculateRequest = CALCULATOR_SERVICE.calculate_request_model
-CalculateExportRequest = CALCULATOR_SERVICE.calculate_export_request_model
-_cached_projection_rows = PROJECTION_SERVICE._cached_projection_rows
-_cached_all_projection_rows = PROJECTION_SERVICE._cached_all_projection_rows
-_projection_sortable_columns_for_dataset = PROJECTION_SERVICE._projection_sortable_columns_for_dataset
-
-
 def filter_records(*args, **kwargs):
     return PROJECTION_SERVICE.filter_records(*args, **kwargs)
+
+
+RUNTIME_BOOTSTRAP = build_runtime_bootstrap(state_module=sys.modules[__name__])
+PROJECTION_SERVICE = RUNTIME_BOOTSTRAP.projection_service
+CALCULATOR_SERVICE = RUNTIME_BOOTSTRAP.calculator_service
+RUNTIME_ORCHESTRATION_HELPERS = RUNTIME_BOOTSTRAP.runtime_orchestration_helpers
+RUNTIME_ENDPOINT_HANDLERS = RUNTIME_BOOTSTRAP.runtime_endpoint_handlers
+apply_runtime_aliases(state_module=sys.modules[__name__], artifacts=RUNTIME_BOOTSTRAP)
 
 
 def _log_precomputed_dynasty_lookup_cache_status() -> None:
@@ -1010,45 +979,8 @@ app = create_app(
 # ---------------------------------------------------------------------------
 # API: Metadata
 # ---------------------------------------------------------------------------
-RUNTIME_ORCHESTRATION_HELPERS = build_runtime_orchestration_helpers(state=sys.modules[__name__])
-_status_orchestration_context = RUNTIME_ORCHESTRATION_HELPERS.status_orchestration_context
-_calculator_orchestration_context = RUNTIME_ORCHESTRATION_HELPERS.calculator_orchestration_context
-
-
-def _run_calculate_request(req: CalculateRequest, *, source: str) -> dict:
-    return _calculator_service_from_globals()._run_calculate_request(req, source=source)
-
-
-RUNTIME_ENDPOINT_HANDLERS = build_runtime_endpoint_handlers(
-    RuntimeEndpointHandlerConfig(
-        status_orchestration_context_getter=lambda: _status_orchestration_context(),
-        calculator_orchestration_context_getter=lambda: _calculator_orchestration_context(),
-        projection_service_getter=lambda: PROJECTION_SERVICE,
-        run_calculate_request_getter=lambda: _run_calculate_request,
-        enforce_rate_limit_getter=lambda: _enforce_rate_limit,
-        projection_rate_limit_per_minute_getter=lambda: PROJECTION_RATE_LIMIT_PER_MINUTE,
-        projection_export_rate_limit_per_minute_getter=lambda: PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE,
-    )
-)
-
-_meta_payload = RUNTIME_ENDPOINT_HANDLERS.meta_payload
-get_meta = RUNTIME_ENDPOINT_HANDLERS.get_meta
-_version_payload = RUNTIME_ENDPOINT_HANDLERS.version_payload
-_payload_etag = RUNTIME_ENDPOINT_HANDLERS.payload_etag
-_etag_matches = RUNTIME_ENDPOINT_HANDLERS.etag_matches
-get_version = RUNTIME_ENDPOINT_HANDLERS.get_version
-_dynasty_lookup_cache_health_payload = RUNTIME_ENDPOINT_HANDLERS.dynasty_lookup_cache_health_payload
-get_health = RUNTIME_ENDPOINT_HANDLERS.get_health
-get_ready = RUNTIME_ENDPOINT_HANDLERS.get_ready
-get_ops = RUNTIME_ENDPOINT_HANDLERS.get_ops
-_run_calculation_job = RUNTIME_ENDPOINT_HANDLERS.run_calculation_job
-projection_response = RUNTIME_ENDPOINT_HANDLERS.projection_response
-export_projections = RUNTIME_ENDPOINT_HANDLERS.export_projections
-calculate_dynasty_values = RUNTIME_ENDPOINT_HANDLERS.calculate_dynasty_values
-export_calculate_dynasty_values = RUNTIME_ENDPOINT_HANDLERS.export_calculate_dynasty_values
-create_calculate_dynasty_job = RUNTIME_ENDPOINT_HANDLERS.create_calculate_dynasty_job
-get_calculate_dynasty_job = RUNTIME_ENDPOINT_HANDLERS.get_calculate_dynasty_job
-cancel_calculate_dynasty_job = RUNTIME_ENDPOINT_HANDLERS.cancel_calculate_dynasty_job
+# Endpoint handler aliases are bound by runtime bootstrap so route wiring below
+# can continue to reference stable module-level names.
 
 
 # Route registration is centralized into dedicated route modules so app.py keeps
