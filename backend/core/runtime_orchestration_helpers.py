@@ -57,6 +57,7 @@ class RuntimeOrchestrationHelpers:
             redis_url=state.REDIS_URL,
             bat_data_getter=lambda: state.BAT_DATA,
             pit_data_getter=lambda: state.PIT_DATA,
+            calculator_worker_available=lambda: not getattr(state.CALCULATOR_JOB_EXECUTOR, "_shutdown", False),
             iso_now=state._iso_now,
         )
 
@@ -98,4 +99,3 @@ class RuntimeOrchestrationHelpers:
 
 def build_runtime_orchestration_helpers(*, state: Any) -> RuntimeOrchestrationHelpers:
     return RuntimeOrchestrationHelpers(state=state)
-

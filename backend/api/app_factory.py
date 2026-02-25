@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 
+from backend.api.error_handlers import register_exception_handlers
 from backend.api.middleware import MiddlewareConfig, register_middlewares
 
 
@@ -39,6 +40,7 @@ def create_app(
             calculator_job_executor.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(title=title, version=version, lifespan=app_lifespan)
+    register_exception_handlers(app)
     register_middlewares(
         app,
         config=MiddlewareConfig(

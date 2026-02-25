@@ -46,6 +46,7 @@ def build_status_orchestration_context(
     redis_url: str,
     bat_data_getter: Callable[[], list[dict]],
     pit_data_getter: Callable[[], list[dict]],
+    calculator_worker_available: Callable[[], bool],
     iso_now: Callable[[], str],
 ) -> StatusOrchestrationContext:
     return StatusOrchestrationContext(
@@ -86,6 +87,7 @@ def build_status_orchestration_context(
         redis_url=redis_url,
         bat_data_getter=bat_data_getter,
         pit_data_getter=pit_data_getter,
+        calculator_worker_available=calculator_worker_available,
         iso_now=iso_now,
     )
 

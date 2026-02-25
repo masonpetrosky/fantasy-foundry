@@ -130,6 +130,10 @@ pytest -q
 # Frontend unit tests
 cd frontend
 npm test
+
+# Frontend unit tests + coverage thresholds
+cd frontend
+npm run test:coverage
 ```
 
 ### Linting
@@ -161,6 +165,16 @@ rg --no-ignore <pattern>
 ```bash
 # Runs lint + backend/frontend tests + backend type checks
 make check
+```
+
+### Dependency Audit Checks
+```bash
+# Python direct dependency vulnerability gate (requires pip-audit installed)
+python scripts/check_pip_audit_direct.py
+
+# Frontend direct dependency gate (high/critical only)
+cd frontend
+node ../scripts/check_npm_audit_direct.mjs
 ```
 
 ### CI Parity Check (Frontend Dist Freshness)

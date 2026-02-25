@@ -50,6 +50,7 @@ class StatusOrchestrationContext:
     redis_url: str
     bat_data_getter: Callable[[], list[dict]]
     pit_data_getter: Callable[[], list[dict]]
+    calculator_worker_available: Callable[[], bool]
     iso_now: Callable[[], str]
 
 
@@ -251,9 +252,23 @@ def get_ready(*, ctx: StatusOrchestrationContext):
             ),
         )
 
+    bat_rows = len(ctx.bat_data_getter())
+    pit_rows = len(ctx.pit_data_getter())
+    if bat_rows <= 0 and pit_rows <= 0:
+        raise HTTPException(status_code=503, detail="Projection datasets are unavailable.")
+
+    if not ctx.calculator_worker_available():
+        raise HTTPException(status_code=503, detail="Calculation worker is unavailable.")
+
     return {
         "status": "ready",
         "build_id": ctx.app_build_id,
         "data_version": ctx.current_data_version(),
+        "checks": {
+            "frontend_dist": True,
+            "dynasty_lookup_cache": inspection.status,
+            "projection_rows": {"bat": bat_rows, "pitch": pit_rows},
+            "calculator_worker": True,
+        },
         "timestamp": ctx.iso_now(),
     }

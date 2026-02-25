@@ -71,6 +71,7 @@ class ApiContractShapeTests(unittest.TestCase):
         self.assertEqual(payload.get("status"), "ready")
         self.assertIn("build_id", payload)
         self.assertIn("data_version", payload)
+        self.assertIn("checks", payload)
         self.assertIn("timestamp", payload)
 
     def test_projections_endpoint_contract_shape(self) -> None:
