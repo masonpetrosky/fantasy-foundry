@@ -6,7 +6,6 @@ import { AccountPanel } from "./account_panel.jsx";
 import { resolveApiBase } from "./api_base.js";
 import { PRIMARY_NAV_ITEMS } from "./app_content.js";
 import { ProjectionsExplorer } from "./projections_explorer.jsx";
-import { DynastyCalculator } from "./dynasty_calculator.jsx";
 import { setAnalyticsContext } from "./analytics.js";
 import { ErrorBoundary } from "./error_boundary.jsx";
 import { formatIsoDateLabel, resolveProjectionWindow } from "./formatting_utils.js";
@@ -30,6 +29,9 @@ import {
 const API = resolveApiBase();
 const LazyMethodologySection = lazy(() => (
   import("./methodology_section.jsx").then(module => ({ default: module.MethodologySection }))
+));
+const LazyDynastyCalculator = lazy(() => (
+  import("./dynasty_calculator.jsx").then(module => ({ default: module.DynastyCalculator }))
 ));
 
 function App() {
@@ -415,20 +417,22 @@ function App() {
                 </p>
                 {calculatorPanelOpen && (
                   <div id="embedded-calculator-content" className="embedded-calculator-content">
-                    <DynastyCalculator
-                      apiBase={API}
-                      meta={meta}
-                      presets={presets}
-                      setPresets={setPresets}
-                      hasSuccessfulRun={Boolean(lastSuccessfulCalcRun)}
-                      onSettingsChange={setCalculatorSettings}
-                      onApplyToMainTable={applyCalculatorOverlay}
-                      onCalculationSuccess={handleCalculationSuccess}
-                      onClearMainTableOverlay={clearCalculatorOverlay}
-                      mainTableOverlayActive={calculatorOverlayActive}
-                      onRegisterQuickStartRunner={handleRegisterQuickStartRunner}
-                      onOpenMethodologyGlossary={openMethodologyGlossary}
-                    />
+                    <Suspense fallback={<p className="methodology-note">Loading calculator...</p>}>
+                      <LazyDynastyCalculator
+                        apiBase={API}
+                        meta={meta}
+                        presets={presets}
+                        setPresets={setPresets}
+                        hasSuccessfulRun={Boolean(lastSuccessfulCalcRun)}
+                        onSettingsChange={setCalculatorSettings}
+                        onApplyToMainTable={applyCalculatorOverlay}
+                        onCalculationSuccess={handleCalculationSuccess}
+                        onClearMainTableOverlay={clearCalculatorOverlay}
+                        mainTableOverlayActive={calculatorOverlayActive}
+                        onRegisterQuickStartRunner={handleRegisterQuickStartRunner}
+                        onOpenMethodologyGlossary={openMethodologyGlossary}
+                      />
+                    </Suspense>
                   </div>
                 )}
               </section>
