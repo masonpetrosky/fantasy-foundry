@@ -144,6 +144,9 @@ npm run test:coverage
 
 ### Linting
 ```bash
+# Enforce backend Ruff per-file-ignore allowlist
+python scripts/check_ruff_per_file_ignores.py
+
 # Backend lint
 ruff check backend tests preprocess.py scripts
 
@@ -205,6 +208,13 @@ python scripts/check_max_file_lines.py
 ```
 
 This guardrail keeps new backend/frontend source files under the configured line threshold while allowing known legacy hotspots during incremental refactors.
+
+### CI Parity Check (Ruff Per-File Ignore Allowlist)
+```bash
+python scripts/check_ruff_per_file_ignores.py
+```
+
+This guardrail prevents silent growth of temporary Ruff per-file ignores during incremental refactors.
 
 ### Activation Rollout Readout
 After shipping activation-funnel changes, validate event contract coverage and KPI/guardrail deltas:

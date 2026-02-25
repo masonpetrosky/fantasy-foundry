@@ -7,8 +7,13 @@ from typing import Dict, List, Optional, Set
 import pandas as pd
 
 try:
-    from backend.dynasty_roto_values import *  # noqa: F401,F403
     from backend.dynasty_roto_values import (
+        COMMON_COLUMN_ALIASES,
+        DERIVED_HIT_RATE_COLS,
+        DERIVED_PIT_RATE_COLS,
+        HIT_COMPONENT_COLS,
+        PLAYER_ENTITY_KEY_COL,
+        CommonDynastyRotoSettings,
         _add_player_identity_keys,
         _apply_negative_value_stash_rules,
         _attach_identity_columns_to_output,
@@ -20,10 +25,29 @@ try:
         _players_with_playing_time,
         _resolve_minor_eligibility_by_year,
         _select_mlb_roster_with_active_floor,
+        average_recent_projections,
+        combine_two_way,
+        compute_replacement_baselines,
+        compute_year_context,
+        compute_year_player_values,
+        compute_year_player_values_vs_replacement,
+        dynasty_keep_or_drop_value,
+        normalize_input_schema,
+        numeric_stat_cols_for_recent_avg,
+        projection_meta_for_start_year,
+        recompute_common_rates_hit,
+        recompute_common_rates_pit,
+        reorder_detail_columns,
+        require_cols,
     )
 except ImportError:  # pragma: no cover - direct script execution fallback
-    from dynasty_roto_values import *  # type: ignore # noqa: F401,F403
     from dynasty_roto_values import (  # type: ignore
+        COMMON_COLUMN_ALIASES,
+        DERIVED_HIT_RATE_COLS,
+        DERIVED_PIT_RATE_COLS,
+        HIT_COMPONENT_COLS,
+        PLAYER_ENTITY_KEY_COL,
+        CommonDynastyRotoSettings,
         _add_player_identity_keys,
         _apply_negative_value_stash_rules,
         _attach_identity_columns_to_output,
@@ -35,6 +59,20 @@ except ImportError:  # pragma: no cover - direct script execution fallback
         _players_with_playing_time,
         _resolve_minor_eligibility_by_year,
         _select_mlb_roster_with_active_floor,
+        average_recent_projections,
+        combine_two_way,
+        compute_replacement_baselines,
+        compute_year_context,
+        compute_year_player_values,
+        compute_year_player_values_vs_replacement,
+        dynasty_keep_or_drop_value,
+        normalize_input_schema,
+        numeric_stat_cols_for_recent_avg,
+        projection_meta_for_start_year,
+        recompute_common_rates_hit,
+        recompute_common_rates_pit,
+        reorder_detail_columns,
+        require_cols,
     )
 
 

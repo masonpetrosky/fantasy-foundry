@@ -80,6 +80,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install ruff
 
+      - name: Enforce Ruff Per-File Ignore Allowlist
+        run: python scripts/check_ruff_per_file_ignores.py
+
       - name: Run Backend Lint
         run: ruff check backend tests preprocess.py scripts
 

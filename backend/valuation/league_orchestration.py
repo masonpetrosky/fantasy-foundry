@@ -7,8 +7,13 @@ from typing import Dict, List, Optional, Set
 import pandas as pd
 
 try:
-    from backend.dynasty_roto_values import *  # noqa: F401,F403
     from backend.dynasty_roto_values import (
+        DERIVED_HIT_RATE_COLS,
+        DERIVED_PIT_RATE_COLS,
+        HAVE_SCIPY,
+        LEAGUE_COLUMN_ALIASES,
+        PLAYER_ENTITY_KEY_COL,
+        LeagueSettings,
         _add_player_identity_keys,
         _apply_negative_value_stash_rules,
         _attach_identity_columns_to_output,
@@ -18,10 +23,30 @@ try:
         _find_projection_date_col,
         _players_with_playing_time,
         _resolve_minor_eligibility_by_year,
+        average_recent_projections,
+        dynasty_keep_or_drop_value,
+        league_combine_hitter_pitcher_year,
+        league_compute_replacement_baselines,
+        league_compute_year_context,
+        league_compute_year_player_values,
+        league_compute_year_player_values_vs_replacement,
+        league_ensure_pitch_cols,
+        normalize_input_schema,
+        numeric_stat_cols_for_recent_avg,
+        projection_meta_for_start_year,
+        recompute_league_rates_hit,
+        recompute_league_rates_pit,
+        reorder_detail_columns,
+        require_cols,
     )
 except ImportError:  # pragma: no cover - direct script execution fallback
-    from dynasty_roto_values import *  # type: ignore # noqa: F401,F403
     from dynasty_roto_values import (  # type: ignore
+        DERIVED_HIT_RATE_COLS,
+        DERIVED_PIT_RATE_COLS,
+        HAVE_SCIPY,
+        LEAGUE_COLUMN_ALIASES,
+        PLAYER_ENTITY_KEY_COL,
+        LeagueSettings,
         _add_player_identity_keys,
         _apply_negative_value_stash_rules,
         _attach_identity_columns_to_output,
@@ -31,6 +56,21 @@ except ImportError:  # pragma: no cover - direct script execution fallback
         _find_projection_date_col,
         _players_with_playing_time,
         _resolve_minor_eligibility_by_year,
+        average_recent_projections,
+        dynasty_keep_or_drop_value,
+        league_combine_hitter_pitcher_year,
+        league_compute_replacement_baselines,
+        league_compute_year_context,
+        league_compute_year_player_values,
+        league_compute_year_player_values_vs_replacement,
+        league_ensure_pitch_cols,
+        normalize_input_schema,
+        numeric_stat_cols_for_recent_avg,
+        projection_meta_for_start_year,
+        recompute_league_rates_hit,
+        recompute_league_rates_pit,
+        reorder_detail_columns,
+        require_cols,
     )
 
 

@@ -17,6 +17,7 @@ test-frontend:
 lint: lint-backend lint-frontend
 
 lint-backend:
+	python scripts/check_ruff_per_file_ignores.py
 	ruff check backend tests preprocess.py scripts
 
 lint-frontend:

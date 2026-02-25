@@ -12,9 +12,9 @@ Endpoints:
 
 from __future__ import annotations
 
-import logging
-import json
 import ipaddress
+import json
+import logging
 import os
 import re
 import sys
@@ -33,112 +33,171 @@ import pandas as pd
 from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from backend.api.app_factory import create_app
 from backend.api.dependencies import (
     build_calculator_service,
 )
-from backend.api.app_factory import create_app
 from backend.api.routes import (
     build_calculate_router,
     build_frontend_assets_router,
     build_projections_router,
     build_status_router,
 )
-from backend.core.jobs import (
-    calculation_job_public_payload as core_calculation_job_public_payload,
-    cleanup_calculation_jobs as core_cleanup_calculation_jobs,
-    mark_job_cancelled_locked as core_mark_job_cancelled_locked,
+from backend.core import runtime_infra as core_runtime_infra
+from backend.core import runtime_state_helpers as core_runtime_state_helpers
+from backend.core.calculator_helpers import (
+    build_calculation_explanations as core_build_calculation_explanations,
 )
+from backend.core.calculator_helpers import (
+    calculator_guardrails_payload as core_calculator_guardrails_payload,
+)
+from backend.core.calculator_helpers import (
+    coerce_bool as core_coerce_bool,
+)
+from backend.core.calculator_helpers import (
+    default_calculation_cache_params as core_default_calculation_cache_params,
+)
+from backend.core.calculator_helpers import (
+    is_user_fixable_calculation_error as core_is_user_fixable_calculation_error,
+)
+from backend.core.calculator_helpers import (
+    numeric_or_zero as core_numeric_or_zero,
+)
+from backend.core.calculator_helpers import (
+    playable_pool_counts_by_year as core_playable_pool_counts_by_year,
+)
+from backend.core.calculator_helpers import (
+    roto_category_settings_from_dict as core_roto_category_settings_from_dict,
+)
+from backend.core.calculator_helpers import (
+    selected_roto_categories as core_selected_roto_categories,
+)
+from backend.core.calculator_helpers import (
+    start_year_roto_stats_by_entity as core_start_year_roto_stats_by_entity,
+)
+from backend.core.common_calculator import calculate_common_dynasty_frame as core_calculate_common_dynasty_frame
 from backend.core.data_refresh import (
     coerce_serialized_dynasty_lookup_map as core_coerce_serialized_dynasty_lookup_map,
+)
+from backend.core.data_refresh import (
     compute_content_data_version as core_compute_content_data_version,
+)
+from backend.core.data_refresh import (
     compute_data_signature as core_compute_data_signature,
+)
+from backend.core.data_refresh import (
     dynasty_lookup_payload_version as core_dynasty_lookup_payload_version,
+)
+from backend.core.data_refresh import (
     hash_file_into as core_hash_file_into,
+)
+from backend.core.data_refresh import (
     inspect_precomputed_default_dynasty_lookup as core_inspect_precomputed_default_dynasty_lookup,
+)
+from backend.core.data_refresh import (
     path_signature as core_path_signature,
+)
+from backend.core.data_refresh import (
     refresh_data_if_needed as core_refresh_data_if_needed,
+)
+from backend.core.data_refresh import (
     reload_projection_data as core_reload_projection_data,
+)
+from backend.core.data_refresh import (
     stable_data_version_path_label as core_stable_data_version_path_label,
 )
 from backend.core.dynasty_lookup_orchestration import (
     attach_dynasty_values as core_attach_dynasty_values,
+)
+from backend.core.dynasty_lookup_orchestration import (
     default_dynasty_lookup as core_default_dynasty_lookup,
+)
+from backend.core.dynasty_lookup_orchestration import (
     parse_dynasty_years as core_parse_dynasty_years,
+)
+from backend.core.dynasty_lookup_orchestration import (
     player_identity_by_name as core_player_identity_by_name,
+)
+from backend.core.dynasty_lookup_orchestration import (
     resolve_projection_year_filter as core_resolve_projection_year_filter,
 )
 from backend.core.export_utils import (
     clean_records_for_json as core_clean_records_for_json,
+)
+from backend.core.export_utils import (
     default_calculator_export_columns as core_default_calculator_export_columns,
+)
+from backend.core.export_utils import (
     flatten_explanations_for_export as core_flatten_explanations_for_export,
+)
+from backend.core.export_utils import (
     tabular_export_response as core_tabular_export_response,
 )
-from backend.core.calculator_helpers import (
-    build_calculation_explanations as core_build_calculation_explanations,
-    calculator_guardrails_payload as core_calculator_guardrails_payload,
-    coerce_bool as core_coerce_bool,
-    default_calculation_cache_params as core_default_calculation_cache_params,
-    is_user_fixable_calculation_error as core_is_user_fixable_calculation_error,
-    numeric_or_zero as core_numeric_or_zero,
-    playable_pool_counts_by_year as core_playable_pool_counts_by_year,
-    roto_category_settings_from_dict as core_roto_category_settings_from_dict,
-    selected_roto_categories as core_selected_roto_categories,
-    start_year_roto_stats_by_entity as core_start_year_roto_stats_by_entity,
+from backend.core.jobs import (
+    calculation_job_public_payload as core_calculation_job_public_payload,
 )
-from backend.core.common_calculator import calculate_common_dynasty_frame as core_calculate_common_dynasty_frame
+from backend.core.jobs import (
+    cleanup_calculation_jobs as core_cleanup_calculation_jobs,
+)
+from backend.core.jobs import (
+    mark_job_cancelled_locked as core_mark_job_cancelled_locked,
+)
+from backend.core.networking import (
+    client_ip as core_client_ip,
+)
+from backend.core.networking import (
+    forwarded_for_chain as core_forwarded_for_chain,
+)
+from backend.core.networking import (
+    parse_ip_text as core_parse_ip_text,
+)
+from backend.core.networking import (
+    trusted_proxy_ip as core_trusted_proxy_ip,
+)
 from backend.core.points_calculator import (
     PointsCalculatorContext,
+)
+from backend.core.points_calculator import (
     calculate_hitter_points_breakdown as core_calculate_hitter_points_breakdown,
+)
+from backend.core.points_calculator import (
     calculate_pitcher_points_breakdown as core_calculate_pitcher_points_breakdown,
+)
+from backend.core.points_calculator import (
     calculate_points_dynasty_frame as core_calculate_points_dynasty_frame,
+)
+from backend.core.points_calculator import (
     coerce_minor_eligible as core_coerce_minor_eligible,
+)
+from backend.core.points_calculator import (
     points_hitter_eligible_slots as core_points_hitter_eligible_slots,
+)
+from backend.core.points_calculator import (
     points_pitcher_eligible_slots as core_points_pitcher_eligible_slots,
+)
+from backend.core.points_calculator import (
     points_player_identity as core_points_player_identity,
+)
+from backend.core.points_calculator import (
     points_slot_replacement as core_points_slot_replacement,
+)
+from backend.core.points_calculator import (
     projection_identity_key as core_projection_identity_key,
+)
+from backend.core.points_calculator import (
     stat_or_zero as core_stat_or_zero,
+)
+from backend.core.points_calculator import (
     valuation_years as core_valuation_years,
 )
-from backend.core.runtime_projection_helpers import (
-    POSITION_DISPLAY_ORDER,
-    POSITION_TOKEN_SPLIT_RE,
-    as_float as _as_float,
-    average_recent_projection_rows as _average_recent_projection_rows,
-    coerce_meta_years as _coerce_meta_years,
-    coerce_numeric as _coerce_numeric,
-    coerce_record_year as _coerce_record_year,
-    merge_position_value as _merge_position_value,
-    normalize_player_key as _normalize_player_key,
-    normalize_team_key as _normalize_team_key,
-    position_tokens as _position_tokens,
-    projection_freshness_payload as _projection_freshness_payload,
-    row_team_value as _row_team_value,
-    value_col_sort_key as _value_col_sort_key,
-    with_player_identity_keys as _with_player_identity_keys,
+from backend.core.result_cache import (
+    calc_result_cache_key as core_calc_result_cache_key,
 )
+from backend.core.runtime_bootstrap import apply_runtime_aliases, build_runtime_bootstrap
 from backend.core.runtime_cache_job_helpers import (
     RuntimeCacheJobHelperConfig,
     build_runtime_cache_job_helpers,
 )
-from backend.core.runtime_bootstrap import apply_runtime_aliases, build_runtime_bootstrap
-from backend.core.networking import (
-    client_ip as core_client_ip,
-    forwarded_for_chain as core_forwarded_for_chain,
-    parse_ip_text as core_parse_ip_text,
-    trusted_proxy_ip as core_trusted_proxy_ip,
-)
-from backend.core.runtime_security import (
-    extract_calculate_api_key as core_extract_calculate_api_key,
-    load_trusted_proxy_networks as core_load_trusted_proxy_networks,
-    parse_calculate_api_key_identities as core_parse_calculate_api_key_identities,
-)
-from backend.core import runtime_infra as core_runtime_infra
-from backend.core import runtime_state_helpers as core_runtime_state_helpers
-from backend.core.result_cache import (
-    calc_result_cache_key as core_calc_result_cache_key,
-)
-from backend.core.settings import load_settings_from_env
 from backend.core.runtime_defaults import (
     COMMON_DEFAULT_IR_SLOTS,
     COMMON_DEFAULT_MINOR_SLOTS,
@@ -156,6 +215,59 @@ from backend.core.runtime_defaults import (
     POINTS_HITTER_SLOT_DEFAULTS,
     POINTS_PITCHER_SLOT_DEFAULTS,
 )
+from backend.core.runtime_projection_helpers import (
+    POSITION_DISPLAY_ORDER,
+    POSITION_TOKEN_SPLIT_RE,
+)
+from backend.core.runtime_projection_helpers import (
+    as_float as _as_float,
+)
+from backend.core.runtime_projection_helpers import (
+    average_recent_projection_rows as _average_recent_projection_rows,
+)
+from backend.core.runtime_projection_helpers import (
+    coerce_meta_years as _coerce_meta_years,
+)
+from backend.core.runtime_projection_helpers import (
+    coerce_numeric as _coerce_numeric,
+)
+from backend.core.runtime_projection_helpers import (
+    coerce_record_year as _coerce_record_year,
+)
+from backend.core.runtime_projection_helpers import (
+    merge_position_value as _merge_position_value,
+)
+from backend.core.runtime_projection_helpers import (
+    normalize_player_key as _normalize_player_key,
+)
+from backend.core.runtime_projection_helpers import (
+    normalize_team_key as _normalize_team_key,
+)
+from backend.core.runtime_projection_helpers import (
+    position_tokens as _position_tokens,
+)
+from backend.core.runtime_projection_helpers import (
+    projection_freshness_payload as _projection_freshness_payload,
+)
+from backend.core.runtime_projection_helpers import (
+    row_team_value as _row_team_value,
+)
+from backend.core.runtime_projection_helpers import (
+    value_col_sort_key as _value_col_sort_key,
+)
+from backend.core.runtime_projection_helpers import (
+    with_player_identity_keys as _with_player_identity_keys,
+)
+from backend.core.runtime_security import (
+    extract_calculate_api_key as core_extract_calculate_api_key,
+)
+from backend.core.runtime_security import (
+    load_trusted_proxy_networks as core_load_trusted_proxy_networks,
+)
+from backend.core.runtime_security import (
+    parse_calculate_api_key_identities as core_parse_calculate_api_key_identities,
+)
+from backend.core.settings import load_settings_from_env
 from backend.domain.constants import (
     CALCULATOR_RESULT_POINTS_EXPORT_ORDER,
     CALCULATOR_RESULT_STAT_EXPORT_ORDER,
@@ -171,6 +283,21 @@ try:  # pragma: no cover - optional dependency
     import redis as redis_lib  # type: ignore
 except Exception:  # pragma: no cover - exercised only when redis is unavailable
     redis_lib = None  # type: ignore[assignment]
+
+# These names are consumed indirectly through `state=sys.modules[__name__]` by
+# runtime_state_helpers during the incremental runtime decomposition.
+_RUNTIME_STATE_EXPORTS = (
+    time,
+    build_calculator_service,
+    core_inspect_precomputed_default_dynasty_lookup,
+    core_calculate_common_dynasty_frame,
+    PointsCalculatorContext,
+    core_calculate_points_dynasty_frame,
+    POSITION_DISPLAY_ORDER,
+    POSITION_TOKEN_SPLIT_RE,
+    _merge_position_value,
+    _row_team_value,
+)
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -948,6 +1075,22 @@ CALCULATOR_SERVICE = RUNTIME_BOOTSTRAP.calculator_service
 RUNTIME_ORCHESTRATION_HELPERS = RUNTIME_BOOTSTRAP.runtime_orchestration_helpers
 RUNTIME_ENDPOINT_HANDLERS = RUNTIME_BOOTSTRAP.runtime_endpoint_handlers
 apply_runtime_aliases(state_module=sys.modules[__name__], artifacts=RUNTIME_BOOTSTRAP)
+# Bind dynamically applied aliases explicitly so static analyzers and route
+# wiring resolve names without relying on `setattr` side effects.
+CalculateRequest = RUNTIME_BOOTSTRAP.alias_map["CalculateRequest"]
+CalculateExportRequest = RUNTIME_BOOTSTRAP.alias_map["CalculateExportRequest"]
+get_meta = RUNTIME_BOOTSTRAP.alias_map["get_meta"]
+get_version = RUNTIME_BOOTSTRAP.alias_map["get_version"]
+get_health = RUNTIME_BOOTSTRAP.alias_map["get_health"]
+get_ready = RUNTIME_BOOTSTRAP.alias_map["get_ready"]
+get_ops = RUNTIME_BOOTSTRAP.alias_map["get_ops"]
+projection_response = RUNTIME_BOOTSTRAP.alias_map["projection_response"]
+export_projections = RUNTIME_BOOTSTRAP.alias_map["export_projections"]
+calculate_dynasty_values = RUNTIME_BOOTSTRAP.alias_map["calculate_dynasty_values"]
+export_calculate_dynasty_values = RUNTIME_BOOTSTRAP.alias_map["export_calculate_dynasty_values"]
+create_calculate_dynasty_job = RUNTIME_BOOTSTRAP.alias_map["create_calculate_dynasty_job"]
+get_calculate_dynasty_job = RUNTIME_BOOTSTRAP.alias_map["get_calculate_dynasty_job"]
+cancel_calculate_dynasty_job = RUNTIME_BOOTSTRAP.alias_map["cancel_calculate_dynasty_job"]
 
 
 def _log_precomputed_dynasty_lookup_cache_status() -> None:
