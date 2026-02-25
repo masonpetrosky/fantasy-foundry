@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Dict, List, Optional, Set, Tuple, Union
 
 import numpy as np
@@ -44,6 +43,8 @@ try:
     from backend.valuation import common_math as _common_math
     from backend.valuation import league_math as _league_math
     from backend.valuation import minor_eligibility as _minor_elig
+    from backend.valuation import projection_averaging as _projection_averaging
+    from backend.valuation import projection_identity as _projection_identity
     from backend.valuation import xlsx_formatting as _xlsx_fmt
 except ImportError:
     # Support direct execution/import when /backend is added to sys.path.
@@ -82,13 +83,15 @@ except ImportError:
     from valuation import common_math as _common_math
     from valuation import league_math as _league_math
     from valuation import minor_eligibility as _minor_elig
+    from valuation import projection_averaging as _projection_averaging
+    from valuation import projection_identity as _projection_identity
     from valuation import xlsx_formatting as _xlsx_fmt
 
 # Projection de-duplication helpers
-PROJECTION_DATE_COLS = ["ProjectionDate", "Date", "Updated", "LastUpdated", "Timestamp", "Created", "AsOf"]
-PLAYER_KEY_COL = "PlayerKey"
-PLAYER_ENTITY_KEY_COL = "PlayerEntityKey"
-PLAYER_KEY_PATTERN = re.compile(r"[^a-z0-9]+")
+PROJECTION_DATE_COLS = _projection_identity.PROJECTION_DATE_COLS
+PLAYER_KEY_COL = _projection_identity.PLAYER_KEY_COL
+PLAYER_ENTITY_KEY_COL = _projection_identity.PLAYER_ENTITY_KEY_COL
+PLAYER_KEY_PATTERN = _projection_identity.PLAYER_KEY_PATTERN
 
 # Bench-stash penalty curve defaults:
 # - first stash round per team should still carry a small cost
@@ -99,166 +102,38 @@ BENCH_STASH_PENALTY_GAMMA = 1.35
 
 
 def _find_projection_date_col(df: pd.DataFrame) -> Optional[str]:
-    for col in PROJECTION_DATE_COLS:
-        if col in df.columns:
-            return col
-    return None
+    return _projection_identity._find_projection_date_col(df)
 
 
 def _normalize_player_key(value: object) -> str:
-    text = str(value or "").strip().lower()
-    if not text:
-        return "unknown-player"
-    key = PLAYER_KEY_PATTERN.sub("-", text).strip("-")
-    return key or "unknown-player"
+    return _projection_identity._normalize_player_key(value)
 
 
 def _normalize_team_key(value: object) -> str:
-    return str(value or "").strip().upper()
+    return _projection_identity._normalize_team_key(value)
 
 
 def _normalize_year_key(value: object) -> str:
-    if value is None or value == "":
-        return ""
-    try:
-        numeric = float(value)
-        if pd.notna(numeric) and numeric.is_integer():
-            return str(int(numeric))
-    except (TypeError, ValueError):
-        pass
-    return str(value).strip()
+    return _projection_identity._normalize_year_key(value)
 
 
 def _team_column_for_dataframe(df: pd.DataFrame) -> Optional[str]:
-    for col in ("Team", "MLBTeam"):
-        if col in df.columns:
-            return col
-    return None
+    return _projection_identity._team_column_for_dataframe(df)
 
 
 def _add_player_identity_keys(
     bat: pd.DataFrame,
     pit: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    bat_out = bat.copy()
-    pit_out = pit.copy()
-
-    def _prepare(df: pd.DataFrame, *, team_col: Optional[str]) -> pd.DataFrame:
-        out = df.copy()
-
-        if PLAYER_KEY_COL in out.columns:
-            existing_keys = out[PLAYER_KEY_COL].astype("string").fillna("").str.strip()
-        else:
-            existing_keys = pd.Series("", index=out.index, dtype="string")
-        normalized_keys = out.get("Player", pd.Series("", index=out.index)).map(_normalize_player_key)
-        out["_player_key"] = existing_keys.where(existing_keys != "", normalized_keys)
-
-        if "Year" in out.columns:
-            out["_year_key"] = out["Year"].map(_normalize_year_key)
-        else:
-            out["_year_key"] = ""
-
-        if team_col and team_col in out.columns:
-            out["_team_key"] = out[team_col].map(_normalize_team_key)
-        else:
-            out["_team_key"] = ""
-
-        return out
-
-    bat_prepared = _prepare(bat_out, team_col=_team_column_for_dataframe(bat_out))
-    pit_prepared = _prepare(pit_out, team_col=_team_column_for_dataframe(pit_out))
-    combined = pd.concat([bat_prepared, pit_prepared], ignore_index=True, sort=False)
-
-    teams_by_player_year: dict[tuple[str, str], set[str]] = {}
-    for _, row in combined.iterrows():
-        player_key = str(row.get("_player_key", "")).strip()
-        year_key = str(row.get("_year_key", "")).strip()
-        team_key = str(row.get("_team_key", "")).strip()
-        if not player_key or not team_key:
-            continue
-        teams_by_player_year.setdefault((player_key, year_key), set()).add(team_key)
-
-    ambiguous_players = {
-        player_key
-        for (player_key, _), teams in teams_by_player_year.items()
-        if len(teams) > 1
-    }
-
-    def _finalize(df: pd.DataFrame) -> pd.DataFrame:
-        out = df.copy()
-        out[PLAYER_KEY_COL] = out["_player_key"].map(lambda value: str(value).strip() or "unknown-player")
-
-        if PLAYER_ENTITY_KEY_COL in out.columns:
-            existing_entities = out[PLAYER_ENTITY_KEY_COL].astype("string").fillna("").str.strip()
-        else:
-            existing_entities = pd.Series("", index=out.index, dtype="string")
-
-        entity_values: list[str] = []
-        for idx, row in out.iterrows():
-            existing_entity = str(existing_entities.loc[idx]).strip()
-            if existing_entity:
-                entity_values.append(existing_entity)
-                continue
-
-            player_key = str(row.get(PLAYER_KEY_COL, "")).strip() or "unknown-player"
-            if player_key in ambiguous_players:
-                team_key = str(row.get("_team_key", "")).strip().lower() or "unknown"
-                entity_values.append(f"{player_key}__{team_key}")
-            else:
-                entity_values.append(player_key)
-
-        out[PLAYER_ENTITY_KEY_COL] = entity_values
-        return out.drop(columns=["_player_key", "_year_key", "_team_key"], errors="ignore")
-
-    return _finalize(bat_prepared), _finalize(pit_prepared)
+    return _projection_identity._add_player_identity_keys(bat, pit)
 
 
 def _build_player_identity_lookup(bat: pd.DataFrame, pit: pd.DataFrame) -> pd.DataFrame:
-    parts: list[pd.DataFrame] = []
-    for frame in (bat, pit):
-        if frame.empty or PLAYER_ENTITY_KEY_COL not in frame.columns:
-            continue
-        subset = frame[[PLAYER_ENTITY_KEY_COL, PLAYER_KEY_COL, "Player"]].copy()
-        subset[PLAYER_ENTITY_KEY_COL] = subset[PLAYER_ENTITY_KEY_COL].astype("string").fillna("").str.strip()
-        subset[PLAYER_KEY_COL] = subset[PLAYER_KEY_COL].astype("string").fillna("").str.strip()
-        subset["Player"] = subset["Player"].astype("string").fillna("").str.strip()
-        parts.append(subset)
-
-    if not parts:
-        return pd.DataFrame(columns=[PLAYER_ENTITY_KEY_COL, PLAYER_KEY_COL, "Player"])
-
-    merged = pd.concat(parts, ignore_index=True).dropna(subset=[PLAYER_ENTITY_KEY_COL])
-    merged = merged[merged[PLAYER_ENTITY_KEY_COL] != ""]
-    merged = merged.drop_duplicates(subset=[PLAYER_ENTITY_KEY_COL], keep="first").reset_index(drop=True)
-    merged[PLAYER_KEY_COL] = merged.apply(
-        lambda row: (
-            str(row.get(PLAYER_KEY_COL) or "").strip()
-            or str(row.get(PLAYER_ENTITY_KEY_COL) or "").split("__", 1)[0]
-            or _normalize_player_key(row.get("Player"))
-        ),
-        axis=1,
-    )
-    return merged[[PLAYER_ENTITY_KEY_COL, PLAYER_KEY_COL, "Player"]]
+    return _projection_identity._build_player_identity_lookup(bat, pit)
 
 
 def _attach_identity_columns_to_output(out: pd.DataFrame, identity_lookup: pd.DataFrame) -> pd.DataFrame:
-    if "Player" not in out.columns:
-        return out
-
-    result = out.rename(columns={"Player": PLAYER_ENTITY_KEY_COL}).copy()
-    if identity_lookup.empty:
-        result["Player"] = result[PLAYER_ENTITY_KEY_COL]
-        result[PLAYER_KEY_COL] = result[PLAYER_ENTITY_KEY_COL].astype("string").str.split("__").str[0]
-    else:
-        result = result.merge(identity_lookup, on=PLAYER_ENTITY_KEY_COL, how="left")
-        result["Player"] = result["Player"].fillna(result[PLAYER_ENTITY_KEY_COL])
-        result[PLAYER_KEY_COL] = result[PLAYER_KEY_COL].fillna(
-            result[PLAYER_ENTITY_KEY_COL].astype("string").str.split("__").str[0]
-        )
-
-    front = ["Player", PLAYER_KEY_COL, PLAYER_ENTITY_KEY_COL]
-    rest = [c for c in result.columns if c not in front]
-    return result[front + rest]
+    return _projection_identity._attach_identity_columns_to_output(out, identity_lookup)
 
 
 def average_recent_projections(
@@ -267,99 +142,12 @@ def average_recent_projections(
     group_cols: Optional[List[str]] = None,
     max_entries: int = 3,
 ) -> pd.DataFrame:
-    """
-    If multiple projections exist for the same (Player, Year), average the most recent
-    `max_entries` rows (by projection date column if present, otherwise file order).
-
-    Adds two columns to the averaged output:
-      - ProjectionsUsed: number of rows actually averaged (<= max_entries)
-      - OldestProjectionDate: the oldest projection date among the rows averaged
-        (i.e., the "third-oldest" among the selected rows when max_entries=3).
-        If no projection date column exists, this will be NaT.
-    """
-    if max_entries < 1:
-        raise ValueError("max_entries must be >= 1")
-
-    df = df.copy()
-    group_cols = group_cols or ["Player", "Year"]
-    effective_group_cols = list(group_cols)
-
-    missing_group_cols = [c for c in group_cols if c not in df.columns]
-    if missing_group_cols:
-        raise ValueError(f"average_recent_projections missing required group columns: {missing_group_cols}")
-
-    team_col = _team_column_for_dataframe(df)
-    if (
-        team_col
-        and "Player" in group_cols
-        and "Year" in group_cols
-        and "_entity_team" not in effective_group_cols
-    ):
-        team_values = df[team_col].astype("string").fillna("").str.strip()
-        team_nonempty = team_values.where(team_values != "", pd.NA)
-        team_counts = team_nonempty.groupby([df[c] for c in group_cols], dropna=False).transform("nunique")
-        if team_counts.gt(1).any():
-            # Split only ambiguous same-name/same-year groups where teams differ.
-            df["_entity_team"] = team_values.where(team_counts > 1, "")
-            effective_group_cols.append("_entity_team")
-
-    date_col = _find_projection_date_col(df)
-
-    df["_projection_order"] = np.arange(len(df))
-
-    # Always create _projection_date so downstream logic can rely on it.
-    if date_col:
-        df["_projection_date"] = pd.to_datetime(df[date_col], errors="coerce")
-        df["_sort_key"] = df["_projection_date"].fillna(pd.Timestamp.min)
-    else:
-        df["_projection_date"] = pd.NaT
-        df["_sort_key"] = df["_projection_order"]
-
-    # Keep up to `max_entries` most-recent rows per (Player, Year)
-    recent = (
-        df.sort_values(["_sort_key", "_projection_order"], ascending=False)
-        .groupby(effective_group_cols, as_index=False, sort=False)
-        .head(max_entries)
+    return _projection_averaging.average_recent_projections(
+        df,
+        stat_cols,
+        group_cols=group_cols,
+        max_entries=max_entries,
     )
-
-    # Per-row markers so we can aggregate to group-level metadata
-    recent["ProjectionsUsed"] = 1
-    recent["OldestProjectionDate"] = recent["_projection_date"]
-
-    stat_cols_present = [c for c in stat_cols if c in recent.columns]
-
-    # Meta cols are carried forward from the most recent row (same behavior as before)
-    meta_cols = [
-        c for c in recent.columns
-        if c not in stat_cols_present
-        and c not in effective_group_cols
-        and c
-        not in {
-            "_projection_order",
-            "_projection_date",
-            "_sort_key",
-            "ProjectionsUsed",
-            "OldestProjectionDate",
-        }
-    ]
-
-    agg: Dict[str, str] = {c: "mean" for c in stat_cols_present}
-    agg["ProjectionsUsed"] = "sum"
-    agg["OldestProjectionDate"] = "min"
-    for c in meta_cols:
-        agg[c] = "first"
-
-    out = (
-        recent.sort_values(["_sort_key", "_projection_order"], ascending=False)
-        .groupby(effective_group_cols, as_index=False, sort=False)
-        .agg(agg)
-    )
-    out = out.drop(columns=["_entity_team"], errors="ignore")
-
-    # Nice column order: group keys, then the new metadata columns, then everything else
-    front = list(group_cols) + ["ProjectionsUsed", "OldestProjectionDate"]
-    rest = [c for c in out.columns if c not in front]
-    return out[front + rest]
 
 
 def projection_meta_for_start_year(
@@ -367,53 +155,14 @@ def projection_meta_for_start_year(
     pit_df: pd.DataFrame,
     start_year: int,
 ) -> pd.DataFrame:
-    """
-    Produce one row per Player with:
-      - ProjectionsUsed: max of Bat vs Pitch (handles hitter-only / pitcher-only / two-way)
-      - OldestProjectionDate: min (oldest) of Bat vs Pitch dates
-
-    Uses the already-averaged frames produced by average_recent_projections().
-    """
-    cols = ["Player", "ProjectionsUsed", "OldestProjectionDate"]
-
-    def _subset_projection_meta(df: pd.DataFrame) -> pd.DataFrame:
-        """Return a safe start-year projection metadata slice.
-
-        Handles empty frames and cases where upstream processing provided no rows,
-        ensuring we still return the expected metadata columns.
-        """
-        if df.empty:
-            return pd.DataFrame(columns=cols)
-
-        missing = [c for c in ["Year"] + cols if c not in df.columns]
-        if missing:
-            raise ValueError(f"projection metadata is missing required columns: {missing}")
-
-        return df.loc[df["Year"] == start_year, cols].copy()
-
-    b = _subset_projection_meta(bat_df)
-    p = _subset_projection_meta(pit_df)
-
-    m = b.merge(p, on="Player", how="outer", suffixes=("_bat", "_pit"))
-
-    # How many projections were used (cap is enforced upstream by max_entries)
-    m["ProjectionsUsed"] = m[["ProjectionsUsed_bat", "ProjectionsUsed_pit"]].max(axis=1, skipna=True)
-    m["ProjectionsUsed"] = m["ProjectionsUsed"].round().astype("Int64")
-
-    # Oldest date among whichever side exists (and the min if both exist)
-    m["OldestProjectionDate"] = m[["OldestProjectionDate_bat", "OldestProjectionDate_pit"]].min(axis=1, skipna=True)
-
-    # Store as date-only (no time) for cleaner Excel display
-    m["OldestProjectionDate"] = pd.to_datetime(m["OldestProjectionDate"], errors="coerce").dt.date
-
-    return m[["Player", "ProjectionsUsed", "OldestProjectionDate"]]
+    return _projection_averaging.projection_meta_for_start_year(bat_df, pit_df, start_year)
 
 # ----------------------------
 # Helpers: recent-projection averaging + detail sheet formatting
 # ----------------------------
 
-DERIVED_HIT_RATE_COLS: Set[str] = {"AVG", "OBP", "SLG", "OPS"}
-DERIVED_PIT_RATE_COLS: Set[str] = {"ERA", "WHIP"}
+DERIVED_HIT_RATE_COLS = _projection_averaging.DERIVED_HIT_RATE_COLS
+DERIVED_PIT_RATE_COLS = _projection_averaging.DERIVED_PIT_RATE_COLS
 
 
 def numeric_stat_cols_for_recent_avg(
@@ -421,21 +170,11 @@ def numeric_stat_cols_for_recent_avg(
     group_cols: Optional[List[str]] = None,
     exclude_cols: Optional[Set[str]] = None,
 ) -> List[str]:
-    """Return numeric columns that should be averaged when collapsing projections.
-
-    This is used both for valuation (so that any categories you care about get averaged)
-    and for building "detail" output tabs that closely match the input sheets.
-    """
-    group_cols = group_cols or ["Player", "Year"]
-    exclude_cols = set(exclude_cols or set())
-
-    cols: List[str] = []
-    for c in df.columns:
-        if c in group_cols or c in exclude_cols:
-            continue
-        if pd.api.types.is_numeric_dtype(df[c]):
-            cols.append(c)
-    return cols
+    return _projection_averaging.numeric_stat_cols_for_recent_avg(
+        df,
+        group_cols=group_cols,
+        exclude_cols=exclude_cols,
+    )
 
 
 def reorder_detail_columns(
@@ -444,25 +183,12 @@ def reorder_detail_columns(
     add_after: Optional[str] = None,
     extra_cols: Optional[List[str]] = None,
 ) -> pd.DataFrame:
-    """Reorder a detail DataFrame to resemble the original input sheet.
-
-    - Start with input_cols order (only those present).
-    - Insert extra_cols immediately after `add_after` if provided and present.
-    - Append any remaining columns at the end.
-    """
-    df = df.copy()
-
-    base = [c for c in input_cols if c in df.columns]
-    extras = [c for c in (extra_cols or []) if c in df.columns and c not in base]
-
-    if add_after and add_after in base and extras:
-        idx = base.index(add_after) + 1
-        ordered = base[:idx] + extras + base[idx:]
-    else:
-        ordered = base + extras
-
-    remaining = [c for c in df.columns if c not in ordered]
-    return df[ordered + remaining]
+    return _projection_averaging.reorder_detail_columns(
+        df,
+        input_cols,
+        add_after=add_after,
+        extra_cols=extra_cols,
+    )
 
 
 
