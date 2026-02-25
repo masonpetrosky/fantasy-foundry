@@ -2,20 +2,28 @@ from __future__ import annotations
 
 import re
 
+from backend.services.projections import ProjectionDynastyHelpers, ProjectionRateLimits
 from backend.services.projections import service as projection_service_module
 from backend.services.projections.service import ProjectionService, ProjectionServiceContext
 
 
 def _build_service() -> ProjectionService:
+    normalize_player_key = lambda value: str(value or "").strip().lower().replace(" ", "-")
+    dynasty_helpers = ProjectionDynastyHelpers(
+        year_range_token_re=re.compile(r"^(\d{4})\s*-\s*(\d{4})$"),
+        get_default_dynasty_lookup=lambda: ({}, {}, set(), []),
+        normalize_player_key=normalize_player_key,
+        player_key_col="PlayerKey",
+        player_entity_key_col="PlayerEntityKey",
+        lookup_required_error_type=RuntimeError,
+    )
     ctx = ProjectionServiceContext(
         refresh_data_if_needed=lambda: None,
         get_bat_data=lambda: [],
         get_pit_data=lambda: [],
         get_meta=lambda: {"years": [2026, 2027]},
-        normalize_player_key=lambda value: str(value or "").strip().lower().replace(" ", "-"),
-        resolve_projection_year_filter=lambda year, years, valid_years=None: None,
-        parse_dynasty_years=lambda raw, valid_years=None: [],
-        attach_dynasty_values=lambda rows, dynasty_years=None: rows,
+        normalize_player_key=normalize_player_key,
+        dynasty_helpers=dynasty_helpers,
         coerce_meta_years=lambda meta: [2026, 2027],
         tabular_export_response=lambda *args, **kwargs: {"args": args, "kwargs": kwargs},
         calculator_overlay_values_for_job=lambda job_id: {},
@@ -27,6 +35,7 @@ def _build_service() -> ProjectionService:
         all_tab_hitter_stat_cols=("AB", "R", "HR"),
         all_tab_pitch_stat_cols=("IP", "K", "BB", "H", "HR"),
         projection_query_cache_maxsize=4,
+        rate_limits=ProjectionRateLimits(read_per_minute=120, export_per_minute=30),
         filter_records=None,
     )
     return ProjectionService(ctx)

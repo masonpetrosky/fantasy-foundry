@@ -17,7 +17,7 @@ class OperationalHardeningTests(unittest.TestCase):
             app_module._REQUEST_RATE_LIMIT_LAST_SWEEP_TS = 0.0
 
     def test_projection_read_rate_limit_returns_retry_after_header(self) -> None:
-        with patch.object(app_module, "PROJECTION_RATE_LIMIT_PER_MINUTE", 1), patch.object(
+        with patch.object(app_module.PROJECTION_SERVICE._ctx.rate_limits, "read_per_minute", 1), patch.object(
             app_module,
             "_refresh_data_if_needed",
             return_value=None,
@@ -34,7 +34,7 @@ class OperationalHardeningTests(unittest.TestCase):
         self.assertEqual(second.headers.get("retry-after"), "60")
 
     def test_projection_export_rate_limit_returns_retry_after_header(self) -> None:
-        with patch.object(app_module, "PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE", 1), patch.object(
+        with patch.object(app_module.PROJECTION_SERVICE._ctx.rate_limits, "export_per_minute", 1), patch.object(
             app_module,
             "_refresh_data_if_needed",
             return_value=None,

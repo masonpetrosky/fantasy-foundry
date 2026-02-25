@@ -6,8 +6,10 @@ from typing import Any
 
 import pandas as pd
 
+from backend.core.runtime_state_protocols import RuntimeStateHelpersState
 
-def validate_runtime_configuration(*, state: Any) -> None:
+
+def validate_runtime_configuration(*, state: RuntimeStateHelpersState) -> None:
     if state.APP_ENVIRONMENT != "production":
         return
 
@@ -27,7 +29,7 @@ def validate_runtime_configuration(*, state: Any) -> None:
         raise RuntimeError("Invalid production runtime configuration:\n- " + "\n- ".join(errors))
 
 
-def inspect_precomputed_default_dynasty_lookup(*, state: Any) -> Any:
+def inspect_precomputed_default_dynasty_lookup(*, state: RuntimeStateHelpersState) -> Any:
     pytest_current_test = bool(state.os.getenv("PYTEST_CURRENT_TEST"))
     e2e_enabled = str(state.os.getenv("FF_RUN_E2E", "")).strip().lower() in {"1", "true", "yes", "on"}
     inspection = state.core_inspect_precomputed_default_dynasty_lookup(
@@ -45,7 +47,10 @@ def inspect_precomputed_default_dynasty_lookup(*, state: Any) -> Any:
     )
 
 
-def load_precomputed_default_dynasty_lookup(*, state: Any) -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]] | None:
+def load_precomputed_default_dynasty_lookup(
+    *,
+    state: RuntimeStateHelpersState,
+) -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]] | None:
     inspection = state._inspect_precomputed_default_dynasty_lookup()
     if inspection.status == "ready" and inspection.lookup is not None:
         return inspection.lookup
@@ -56,7 +61,7 @@ def load_precomputed_default_dynasty_lookup(*, state: Any) -> tuple[dict[str, di
 
 def calculate_common_dynasty_frame_cached(
     *,
-    state: Any,
+    state: RuntimeStateHelpersState,
     teams: int,
     sims: int,
     horizon: int,
@@ -119,7 +124,7 @@ def calculate_common_dynasty_frame_cached(
 
 def calculate_points_dynasty_frame_cached(
     *,
-    state: Any,
+    state: RuntimeStateHelpersState,
     teams: int,
     horizon: int,
     discount: float,
@@ -227,7 +232,7 @@ def calculate_points_dynasty_frame_cached(
     )
 
 
-def prewarm_default_calculation_caches(*, state: Any) -> None:
+def prewarm_default_calculation_caches(*, state: RuntimeStateHelpersState) -> None:
     with state.CALCULATOR_PREWARM_LOCK:
         state.CALCULATOR_PREWARM_STATE.update(
             {
@@ -298,7 +303,11 @@ def prewarm_default_calculation_caches(*, state: Any) -> None:
         state.CALC_LOGGER.exception("calculator prewarm failed")
 
 
-def calculator_overlay_values_for_job(*, state: Any, job_id: str | None) -> dict[str, dict[str, Any]]:
+def calculator_overlay_values_for_job(
+    *,
+    state: RuntimeStateHelpersState,
+    job_id: str | None,
+) -> dict[str, dict[str, Any]]:
     normalized_job_id = str(job_id or "").strip()
     if not normalized_job_id:
         return {}
@@ -344,7 +353,7 @@ def calculator_overlay_values_for_job(*, state: Any, job_id: str | None) -> dict
     return overlay_by_player_key
 
 
-def calculator_service_from_globals(*, state: Any) -> Any:
+def calculator_service_from_globals(*, state: RuntimeStateHelpersState) -> Any:
     return state.build_calculator_service(
         refresh_data_if_needed=state._refresh_data_if_needed,
         coerce_meta_years=state._coerce_meta_years,
@@ -388,7 +397,7 @@ def calculator_service_from_globals(*, state: Any) -> Any:
     )
 
 
-def log_precomputed_dynasty_lookup_cache_status(*, state: Any) -> None:
+def log_precomputed_dynasty_lookup_cache_status(*, state: RuntimeStateHelpersState) -> None:
     inspection = state._inspect_precomputed_default_dynasty_lookup()
     state.CALC_LOGGER.info(
         "dynasty lookup cache status=%s require_precomputed=%s expected=%s found=%s",

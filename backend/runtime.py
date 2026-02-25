@@ -16,7 +16,6 @@ import ipaddress
 import json
 import logging
 import os
-import re
 import sys
 import time
 import traceback
@@ -30,7 +29,7 @@ from threading import Lock
 from typing import Any, Literal
 
 import pandas as pd
-from fastapi import HTTPException, Request
+from fastapi import Request
 from fastapi.responses import StreamingResponse
 
 from backend.api.app_factory import create_app
@@ -101,25 +100,13 @@ from backend.core.data_refresh import (
     refresh_data_if_needed as core_refresh_data_if_needed,
 )
 from backend.core.data_refresh import (
-    reload_projection_data as core_reload_projection_data,
-)
-from backend.core.data_refresh import (
     stable_data_version_path_label as core_stable_data_version_path_label,
-)
-from backend.core.dynasty_lookup_orchestration import (
-    attach_dynasty_values as core_attach_dynasty_values,
 )
 from backend.core.dynasty_lookup_orchestration import (
     default_dynasty_lookup as core_default_dynasty_lookup,
 )
 from backend.core.dynasty_lookup_orchestration import (
-    parse_dynasty_years as core_parse_dynasty_years,
-)
-from backend.core.dynasty_lookup_orchestration import (
     player_identity_by_name as core_player_identity_by_name,
-)
-from backend.core.dynasty_lookup_orchestration import (
-    resolve_projection_year_filter as core_resolve_projection_year_filter,
 )
 from backend.core.export_utils import (
     clean_records_for_json as core_clean_records_for_json,
@@ -197,6 +184,24 @@ from backend.core.runtime_bootstrap import apply_runtime_aliases, build_runtime_
 from backend.core.runtime_cache_job_helpers import (
     RuntimeCacheJobHelperConfig,
     build_runtime_cache_job_helpers,
+)
+from backend.core.runtime_config import (
+    ALL_TAB_HITTER_STAT_COLS,
+    ALL_TAB_PITCH_STAT_COLS,
+    API_NO_CACHE_HEADERS,
+    CALC_JOB_CANCELLED_ERROR,
+    CALC_JOB_CANCELLED_STATUS,
+    INDEX_BUILD_TOKEN,
+    PROJECTION_QUERY_CACHE_MAXSIZE,
+    PROJECTION_TEXT_SORT_COLS,
+    REDIS_ACTIVE_JOBS_PREFIX,
+    REDIS_JOB_CANCEL_PREFIX,
+    REDIS_JOB_CLIENT_PREFIX,
+    REDIS_JOB_PREFIX,
+    REDIS_RATE_LIMIT_PREFIX,
+    REDIS_RESULT_PREFIX,
+    YEAR_RANGE_TOKEN_RE,
+    build_app_build_metadata,
 )
 from backend.core.runtime_defaults import (
     COMMON_DEFAULT_IR_SLOTS,
@@ -278,6 +283,13 @@ from backend.domain.constants import (
     ROTO_PITCHER_CATEGORY_FIELDS,
 )
 from backend.services.calculator import CalculatorService
+from backend.services.projections import (
+    ProjectionDynastyHelpers,
+    ProjectionRateLimits,
+)
+from backend.services.projections import (
+    reload_projection_data as service_reload_projection_data,
+)
 
 try:  # pragma: no cover - optional dependency
     import redis as redis_lib  # type: ignore
@@ -295,6 +307,10 @@ _RUNTIME_STATE_EXPORTS = (
     core_calculate_points_dynasty_frame,
     POSITION_DISPLAY_ORDER,
     POSITION_TOKEN_SPLIT_RE,
+    PROJECTION_QUERY_CACHE_MAXSIZE,
+    PROJECTION_TEXT_SORT_COLS,
+    ALL_TAB_HITTER_STAT_COLS,
+    ALL_TAB_PITCH_STAT_COLS,
     _merge_position_value,
     _row_team_value,
 )
@@ -312,33 +328,10 @@ DYNASTY_LOOKUP_CACHE_PATH = DATA_DIR / "dynasty_lookup.json"
 BACKEND_MODULE_DIR = BASE_DIR / "backend"
 INDEX_PATH = FRONTEND_DIST_DIR / "index.html"
 DEPLOY_COMMIT_SHA = os.getenv("RAILWAY_GIT_COMMIT_SHA", "").strip()
-
-
-def _build_id() -> str:
-    if DEPLOY_COMMIT_SHA:
-        return DEPLOY_COMMIT_SHA[:12]
-    try:
-        return str(INDEX_PATH.stat().st_mtime_ns)
-    except OSError:
-        return "unknown"
-
-
-def _build_timestamp_iso() -> str | None:
-    try:
-        ts = INDEX_PATH.stat().st_mtime
-    except OSError:
-        return None
-    return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
-
-
-APP_BUILD_ID = _build_id()
-APP_BUILD_AT = _build_timestamp_iso()
-INDEX_BUILD_TOKEN = "__APP_BUILD_ID__"
-API_NO_CACHE_HEADERS = {
-    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-    "Pragma": "no-cache",
-    "Expires": "0",
-}
+APP_BUILD_ID, APP_BUILD_AT = build_app_build_metadata(
+    index_path=INDEX_PATH,
+    deploy_commit_sha=DEPLOY_COMMIT_SHA,
+)
 
 # ---------------------------------------------------------------------------
 # Load pre-processed JSON data once at startup
@@ -349,11 +342,6 @@ def load_json(name: str):
         return json.load(f)
 
 
-YEAR_RANGE_TOKEN_RE = re.compile(r"^(\d{4})\s*-\s*(\d{4})$")
-PROJECTION_QUERY_CACHE_MAXSIZE = 256
-ALL_TAB_HITTER_STAT_COLS = ("G", "AB", "R", "H", "2B", "3B", "HR", "RBI", "SB", "BB", "SO", "AVG", "OBP", "OPS")
-ALL_TAB_PITCH_STAT_COLS = ("GS", "IP", "W", "QS", "QA3", "L", "K", "SV", "SVH", "ERA", "WHIP", "ER")
-PROJECTION_TEXT_SORT_COLS = {"Player", "Team", "Pos", "Type", "Years"}
 EXPORT_INTERNAL_COLUMN_BLOCKLIST = {
     PLAYER_KEY_COL,
     PLAYER_ENTITY_KEY_COL,
@@ -371,8 +359,13 @@ CALCULATOR_REQUEST_TIMEOUT_SECONDS = SETTINGS.calculator_request_timeout_seconds
 CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE = SETTINGS.calculator_sync_rate_limit_per_minute
 CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE = SETTINGS.calculator_job_create_rate_limit_per_minute
 CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE = SETTINGS.calculator_job_status_rate_limit_per_minute
-PROJECTION_RATE_LIMIT_PER_MINUTE = SETTINGS.projection_rate_limit_per_minute
-PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE = SETTINGS.projection_export_rate_limit_per_minute
+PROJECTION_RATE_LIMITS = ProjectionRateLimits(
+    read_per_minute=SETTINGS.projection_rate_limit_per_minute,
+    export_per_minute=SETTINGS.projection_export_rate_limit_per_minute,
+)
+# Backward-compatible aliases retained for tests and compatibility imports.
+PROJECTION_RATE_LIMIT_PER_MINUTE = PROJECTION_RATE_LIMITS.read_per_minute
+PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE = PROJECTION_RATE_LIMITS.export_per_minute
 CALCULATOR_MAX_ACTIVE_JOBS_PER_IP = SETTINGS.calculator_max_active_jobs_per_ip
 CALC_RESULT_CACHE_TTL_SECONDS = SETTINGS.calc_result_cache_ttl_seconds
 CALC_RESULT_CACHE_MAX_ENTRIES = SETTINGS.calc_result_cache_max_entries
@@ -384,15 +377,7 @@ REQUIRE_CALCULATE_AUTH = SETTINGS.require_calculate_auth
 CALCULATE_API_KEYS_RAW = SETTINGS.calculate_api_keys_raw
 CANONICAL_HOST = SETTINGS.canonical_host
 CORS_ALLOW_ORIGINS = SETTINGS.cors_allow_origins
-REDIS_RESULT_PREFIX = "ff:calc:result:"
-REDIS_JOB_PREFIX = "ff:calc:job:"
-REDIS_JOB_CANCEL_PREFIX = "ff:calc:job-cancel:"
-REDIS_ACTIVE_JOBS_PREFIX = "ff:calc:active-jobs:"
-REDIS_JOB_CLIENT_PREFIX = "ff:calc:job-client:"
-REDIS_RATE_LIMIT_PREFIX = "ff:rate:"
 CALC_LOGGER = logging.getLogger("fantasy_foundry.calculate")
-CALC_JOB_CANCELLED_STATUS = "cancelled"
-CALC_JOB_CANCELLED_ERROR = {"status_code": 499, "detail": "Calculation job cancelled by client."}
 RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS = SETTINGS.rate_limit_bucket_cleanup_interval_seconds
 
 IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
@@ -511,7 +496,7 @@ def _reload_projection_data() -> None:
         BAT_DATA,
         PIT_DATA,
         PROJECTION_FRESHNESS,
-    ) = core_reload_projection_data(
+    ) = service_reload_projection_data(
         load_json=load_json,
         with_player_identity_keys=_with_player_identity_keys,
         average_recent_projection_rows=_average_recent_projection_rows,
@@ -684,7 +669,7 @@ def _coerce_bool(value: object, *, default: bool = False) -> bool:
 def _roto_category_settings_from_dict(source: dict[str, Any] | None) -> dict[str, bool]:
     return core_roto_category_settings_from_dict(
         source,
-        coerce_bool_fn=lambda value, default=False: _coerce_bool(value, default=default),
+        coerce_bool_fn=_coerce_bool,
         defaults=ROTO_CATEGORY_FIELD_DEFAULTS,
     )
 
@@ -919,8 +904,8 @@ def _calculator_guardrails_payload() -> dict:
         calculator_sync_rate_limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,
         calculator_job_create_rate_limit_per_minute=CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE,
         calculator_job_status_rate_limit_per_minute=CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE,
-        projection_rate_limit_per_minute=PROJECTION_RATE_LIMIT_PER_MINUTE,
-        projection_export_rate_limit_per_minute=PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE,
+        projection_rate_limit_per_minute=PROJECTION_RATE_LIMITS.read_per_minute,
+        projection_export_rate_limit_per_minute=PROJECTION_RATE_LIMITS.export_per_minute,
         calculator_max_active_jobs_per_ip=CALCULATOR_MAX_ACTIVE_JOBS_PER_IP,
     )
 
@@ -980,8 +965,18 @@ def _get_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set
     )
 
 
+PROJECTION_DYNASTY_HELPERS = ProjectionDynastyHelpers(
+    year_range_token_re=YEAR_RANGE_TOKEN_RE,
+    get_default_dynasty_lookup=lambda: _get_default_dynasty_lookup(),
+    normalize_player_key=_normalize_player_key,
+    player_key_col=PLAYER_KEY_COL,
+    player_entity_key_col=PLAYER_ENTITY_KEY_COL,
+    lookup_required_error_type=PrecomputedDynastyLookupRequiredError,
+)
+
+
 def _parse_dynasty_years(raw: str | None, *, valid_years: list[int] | None = None) -> list[int]:
-    return core_parse_dynasty_years(raw, valid_years=valid_years, year_range_token_re=YEAR_RANGE_TOKEN_RE)
+    return PROJECTION_DYNASTY_HELPERS.parse_dynasty_years(raw, valid_years=valid_years)
 
 
 def _resolve_projection_year_filter(
@@ -990,26 +985,15 @@ def _resolve_projection_year_filter(
     *,
     valid_years: list[int] | None = None,
 ) -> set[int] | None:
-    return core_resolve_projection_year_filter(
+    return PROJECTION_DYNASTY_HELPERS.resolve_projection_year_filter(
         year,
         years,
         valid_years=valid_years,
-        parse_dynasty_years_fn=lambda raw: _parse_dynasty_years(raw, valid_years=valid_years),
     )
 
 
 def _attach_dynasty_values(rows: list[dict], dynasty_years: list[int] | None = None) -> list[dict]:
-    try:
-        return core_attach_dynasty_values(
-            rows,
-            dynasty_years=dynasty_years,
-            get_default_dynasty_lookup=_get_default_dynasty_lookup,
-            normalize_player_key=_normalize_player_key,
-            player_key_col=PLAYER_KEY_COL,
-            player_entity_key_col=PLAYER_ENTITY_KEY_COL,
-        )
-    except PrecomputedDynastyLookupRequiredError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return PROJECTION_DYNASTY_HELPERS.attach_dynasty_values(rows, dynasty_years=dynasty_years)
 
 
 @lru_cache(maxsize=1)

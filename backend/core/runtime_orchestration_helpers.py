@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from backend.api.dependencies import (
     build_calculator_orchestration_context,
     build_status_orchestration_context,
 )
 from backend.core.calculator_orchestration import CalculatorOrchestrationContext
+from backend.core.runtime_state_protocols import RuntimeOrchestrationState
 from backend.core.status_orchestration import StatusOrchestrationContext
 
 
 @dataclass(slots=True)
 class RuntimeOrchestrationHelpers:
-    state: Any
+    state: RuntimeOrchestrationState
 
     def status_orchestration_context(self) -> StatusOrchestrationContext:
         state = self.state
@@ -52,8 +52,8 @@ class RuntimeOrchestrationHelpers:
             calculator_sync_rate_limit_per_minute=state.CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,
             calculator_job_create_rate_limit_per_minute=state.CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE,
             calculator_job_status_rate_limit_per_minute=state.CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE,
-            projection_rate_limit_per_minute=state.PROJECTION_RATE_LIMIT_PER_MINUTE,
-            projection_export_rate_limit_per_minute=state.PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE,
+            projection_rate_limit_per_minute=state.PROJECTION_RATE_LIMITS.read_per_minute,
+            projection_export_rate_limit_per_minute=state.PROJECTION_RATE_LIMITS.export_per_minute,
             redis_url=state.REDIS_URL,
             bat_data_getter=lambda: state.BAT_DATA,
             pit_data_getter=lambda: state.PIT_DATA,
@@ -97,5 +97,5 @@ class RuntimeOrchestrationHelpers:
         )
 
 
-def build_runtime_orchestration_helpers(*, state: Any) -> RuntimeOrchestrationHelpers:
+def build_runtime_orchestration_helpers(*, state: RuntimeOrchestrationState) -> RuntimeOrchestrationHelpers:
     return RuntimeOrchestrationHelpers(state=state)

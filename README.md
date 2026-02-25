@@ -39,7 +39,10 @@ dynasty-site/
 │   ├── core/export_utils.py            # CSV/XLSX export and record serialization helpers
 │   ├── core/result_cache.py            # Local/Redis calculator result and job snapshot cache helpers
 │   ├── core/data_refresh.py            # Data refresh/content-version/cache-inspection helpers
+│   ├── core/runtime_config.py          # Shared runtime constants + build metadata helpers
+│   ├── core/runtime_state_protocols.py # Typed protocol surfaces for state-driven runtime helpers
 │   ├── domain/constants.py             # Shared domain constants
+│   ├── services/projections/           # Projection service pipeline + runtime boundary helpers
 │   ├── services/valuation/             # Service boundary around legacy valuation entrypoints
 │   ├── dynasty_roto_values.py          # Main valuation workflow + CLI facade
 │   └── valuation/                      # Shared valuation modules (models/positions/assignment)

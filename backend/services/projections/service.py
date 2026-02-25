@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Literal, Optional
+from typing import Any, Callable, Literal, Optional
 
 from backend.core.projections_aggregation import (
     aggregate_all_projection_career_rows as core_aggregate_all_projection_career_rows,
@@ -32,25 +32,27 @@ from backend.core.projections_export import (
 from backend.core.projections_export import (
     validate_sort_col as core_validate_sort_col,
 )
+from backend.services.projections.runtime_boundaries import (
+    ProjectionDynastyHelpers,
+    ProjectionRateLimits,
+)
 
 ProjectionDataset = Literal["all", "bat", "pitch"]
 PROJECTION_HITTER_CORE_EXPORT_COLS: tuple[str, ...] = ("AB", "R", "HR", "RBI", "SB", "AVG", "OPS")
 PROJECTION_PITCHER_CORE_EXPORT_COLS: tuple[str, ...] = ("IP", "W", "K", "SV", "ERA", "WHIP", "QS", "QA3")
 
 
-@dataclass(slots=True)
+@dataclass
 class ProjectionServiceContext:
-    refresh_data_if_needed: callable
-    get_bat_data: callable
-    get_pit_data: callable
-    get_meta: callable
-    normalize_player_key: callable
-    resolve_projection_year_filter: callable
-    parse_dynasty_years: callable
-    attach_dynasty_values: callable
-    coerce_meta_years: callable
-    tabular_export_response: callable
-    calculator_overlay_values_for_job: callable
+    refresh_data_if_needed: Callable[[], None]
+    get_bat_data: Callable[[], list[dict]]
+    get_pit_data: Callable[[], list[dict]]
+    get_meta: Callable[[], dict[str, Any]]
+    normalize_player_key: Callable[[object], str]
+    dynasty_helpers: ProjectionDynastyHelpers
+    coerce_meta_years: Callable[[dict[str, Any] | None], list[int]]
+    tabular_export_response: Callable[..., Any]
+    calculator_overlay_values_for_job: Callable[[str | None], dict[str, dict[str, Any]]]
     player_key_col: str
     player_entity_key_col: str
     position_token_split_re: re.Pattern[str]
@@ -59,7 +61,27 @@ class ProjectionServiceContext:
     all_tab_hitter_stat_cols: tuple[str, ...]
     all_tab_pitch_stat_cols: tuple[str, ...]
     projection_query_cache_maxsize: int
-    filter_records: callable | None = None
+    rate_limits: ProjectionRateLimits
+    filter_records: Callable[..., Any] | None = None
+
+    def parse_dynasty_years(self, raw: str | None, *, valid_years: list[int] | None = None) -> list[int]:
+        return self.dynasty_helpers.parse_dynasty_years(raw, valid_years=valid_years)
+
+    def resolve_projection_year_filter(
+        self,
+        year: int | None,
+        years: str | None,
+        *,
+        valid_years: list[int] | None = None,
+    ) -> set[int] | None:
+        return self.dynasty_helpers.resolve_projection_year_filter(
+            year,
+            years,
+            valid_years=valid_years,
+        )
+
+    def attach_dynasty_values(self, rows: list[dict], dynasty_years: list[int] | None = None) -> list[dict]:
+        return self.dynasty_helpers.attach_dynasty_values(rows, dynasty_years=dynasty_years)
 
 
 class ProjectionService:
@@ -82,7 +104,11 @@ class ProjectionService:
             career_totals: bool,
         ) -> tuple[dict, ...]:
             valid_years = ctx.coerce_meta_years(ctx.get_meta())
-            requested_years = ctx.resolve_projection_year_filter(year, years or None, valid_years=valid_years)
+            requested_years = ctx.resolve_projection_year_filter(
+                year,
+                years or None,
+                valid_years=valid_years,
+            )
             records = ctx.get_bat_data() if dataset == "bat" else ctx.get_pit_data()
             filter_impl = ctx.filter_records or self.filter_records
             filtered = filter_impl(
@@ -115,7 +141,11 @@ class ProjectionService:
             career_totals: bool,
         ) -> tuple[dict, ...]:
             valid_years = ctx.coerce_meta_years(ctx.get_meta())
-            requested_years = ctx.resolve_projection_year_filter(year, years or None, valid_years=valid_years)
+            requested_years = ctx.resolve_projection_year_filter(
+                year,
+                years or None,
+                valid_years=valid_years,
+            )
             player_key_filter = self._parse_player_keys_filter(player_keys)
             filter_impl = ctx.filter_records or self.filter_records
             hit_filtered = filter_impl(
@@ -198,6 +228,33 @@ class ProjectionService:
         self._cached_projection_rows.cache_clear()
         self._cached_all_projection_rows.cache_clear()
         self._projection_sortable_columns_for_dataset.cache_clear()
+
+    @property
+    def projection_rate_limit_per_minute(self) -> int:
+        return self._ctx.rate_limits.read_per_minute
+
+    @property
+    def projection_export_rate_limit_per_minute(self) -> int:
+        return self._ctx.rate_limits.export_per_minute
+
+    def parse_dynasty_years(self, raw: str | None, *, valid_years: list[int] | None = None) -> list[int]:
+        return self._ctx.dynasty_helpers.parse_dynasty_years(raw, valid_years=valid_years)
+
+    def resolve_projection_year_filter(
+        self,
+        year: int | None,
+        years: str | None,
+        *,
+        valid_years: list[int] | None = None,
+    ) -> set[int] | None:
+        return self._ctx.dynasty_helpers.resolve_projection_year_filter(
+            year,
+            years,
+            valid_years=valid_years,
+        )
+
+    def attach_dynasty_values(self, rows: list[dict], dynasty_years: list[int] | None = None) -> list[dict]:
+        return self._ctx.dynasty_helpers.attach_dynasty_values(rows, dynasty_years=dynasty_years)
 
     def _coerce_record_year(self, value: object) -> int | None:
         """Normalize JSON year values from int/float/string to int for robust filtering."""
@@ -528,24 +585,37 @@ class ProjectionService:
     ) -> dict[str, Any]:
         self._ctx.refresh_data_if_needed()
         validated_sort_col = self._validate_sort_col(sort_col, dataset=dataset)
-        filter_kwargs = dict(
-            player=player,
-            team=team,
-            player_keys=player_keys,
-            year=year,
-            years=years,
-            pos=pos,
-            include_dynasty=include_dynasty,
-            dynasty_years=dynasty_years,
-            calculator_job_id=calculator_job_id,
-            career_totals=career_totals,
-            sort_col=validated_sort_col,
-            sort_dir=sort_dir,
-        )
         if dataset == "all":
-            filtered = self._get_all_projection_rows(**filter_kwargs)
+            filtered = self._get_all_projection_rows(
+                player=player,
+                team=team,
+                player_keys=player_keys,
+                year=year,
+                years=years,
+                pos=pos,
+                include_dynasty=include_dynasty,
+                dynasty_years=dynasty_years,
+                calculator_job_id=calculator_job_id,
+                career_totals=career_totals,
+                sort_col=validated_sort_col,
+                sort_dir=sort_dir,
+            )
         else:
-            filtered = self._get_projection_rows(dataset, **filter_kwargs)
+            filtered = self._get_projection_rows(
+                dataset,
+                player=player,
+                team=team,
+                player_keys=player_keys,
+                year=year,
+                years=years,
+                pos=pos,
+                include_dynasty=include_dynasty,
+                dynasty_years=dynasty_years,
+                calculator_job_id=calculator_job_id,
+                career_totals=career_totals,
+                sort_col=validated_sort_col,
+                sort_dir=sort_dir,
+            )
         total = len(filtered)
         page = list(filtered[offset : offset + limit])
         return {"total": total, "offset": offset, "limit": limit, "data": page}

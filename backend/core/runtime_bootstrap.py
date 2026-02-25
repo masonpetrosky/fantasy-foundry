@@ -3,14 +3,46 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Mapping, cast
 
 from backend.core.runtime_endpoint_handlers import (
     RuntimeEndpointHandlerConfig,
     build_runtime_endpoint_handlers,
 )
 from backend.core.runtime_orchestration_helpers import build_runtime_orchestration_helpers
+from backend.core.runtime_state_protocols import RuntimeBootstrapState, RuntimeOrchestrationState
 from backend.services.projections import ProjectionService, ProjectionServiceContext
+
+REQUIRED_RUNTIME_ALIAS_KEYS = frozenset(
+    {
+        "CalculateRequest",
+        "CalculateExportRequest",
+        "_cached_projection_rows",
+        "_cached_all_projection_rows",
+        "_projection_sortable_columns_for_dataset",
+        "_status_orchestration_context",
+        "_calculator_orchestration_context",
+        "_run_calculate_request",
+        "_meta_payload",
+        "get_meta",
+        "_version_payload",
+        "_payload_etag",
+        "_etag_matches",
+        "get_version",
+        "_dynasty_lookup_cache_health_payload",
+        "get_health",
+        "get_ready",
+        "get_ops",
+        "_run_calculation_job",
+        "projection_response",
+        "export_projections",
+        "calculate_dynasty_values",
+        "export_calculate_dynasty_values",
+        "create_calculate_dynasty_job",
+        "get_calculate_dynasty_job",
+        "cancel_calculate_dynasty_job",
+    }
+)
 
 
 @dataclass(slots=True)
@@ -23,7 +55,28 @@ class RuntimeBootstrapArtifacts:
     alias_map: dict[str, Any]
 
 
-def build_runtime_bootstrap(*, state_module: Any) -> RuntimeBootstrapArtifacts:
+def missing_runtime_alias_keys(alias_map: Mapping[str, Any]) -> set[str]:
+    return set(REQUIRED_RUNTIME_ALIAS_KEYS) - set(alias_map.keys())
+
+
+def unexpected_runtime_alias_keys(alias_map: Mapping[str, Any]) -> set[str]:
+    return set(alias_map.keys()) - set(REQUIRED_RUNTIME_ALIAS_KEYS)
+
+
+def validate_runtime_alias_map(alias_map: Mapping[str, Any]) -> None:
+    missing = missing_runtime_alias_keys(alias_map)
+    unexpected = unexpected_runtime_alias_keys(alias_map)
+    if not missing and not unexpected:
+        return
+    details: list[str] = []
+    if missing:
+        details.append(f"missing={sorted(missing)}")
+    if unexpected:
+        details.append(f"unexpected={sorted(unexpected)}")
+    raise RuntimeError("Invalid runtime alias map contract: " + "; ".join(details))
+
+
+def build_runtime_bootstrap(*, state_module: RuntimeBootstrapState) -> RuntimeBootstrapArtifacts:
     projection_service = ProjectionService(
         ProjectionServiceContext(
             refresh_data_if_needed=state_module._refresh_data_if_needed,
@@ -31,9 +84,7 @@ def build_runtime_bootstrap(*, state_module: Any) -> RuntimeBootstrapArtifacts:
             get_pit_data=lambda: state_module.PIT_DATA,
             get_meta=lambda: state_module.META,
             normalize_player_key=state_module._normalize_player_key,
-            resolve_projection_year_filter=state_module._resolve_projection_year_filter,
-            parse_dynasty_years=state_module._parse_dynasty_years,
-            attach_dynasty_values=state_module._attach_dynasty_values,
+            dynasty_helpers=state_module.PROJECTION_DYNASTY_HELPERS,
             coerce_meta_years=state_module._coerce_meta_years,
             tabular_export_response=state_module._tabular_export_response,
             calculator_overlay_values_for_job=state_module._calculator_overlay_values_for_job,
@@ -45,11 +96,14 @@ def build_runtime_bootstrap(*, state_module: Any) -> RuntimeBootstrapArtifacts:
             all_tab_hitter_stat_cols=state_module.ALL_TAB_HITTER_STAT_COLS,
             all_tab_pitch_stat_cols=state_module.ALL_TAB_PITCH_STAT_COLS,
             projection_query_cache_maxsize=state_module.PROJECTION_QUERY_CACHE_MAXSIZE,
+            rate_limits=state_module.PROJECTION_RATE_LIMITS,
             filter_records=lambda *args, **kwargs: state_module.filter_records(*args, **kwargs),
         )
     )
     calculator_service = state_module._calculator_service_from_globals()
-    runtime_orchestration_helpers = build_runtime_orchestration_helpers(state=state_module)
+    runtime_orchestration_helpers = build_runtime_orchestration_helpers(
+        state=cast(RuntimeOrchestrationState, state_module)
+    )
     status_orchestration_context = runtime_orchestration_helpers.status_orchestration_context
     calculator_orchestration_context = runtime_orchestration_helpers.calculator_orchestration_context
 
@@ -63,8 +117,8 @@ def build_runtime_bootstrap(*, state_module: Any) -> RuntimeBootstrapArtifacts:
             projection_service_getter=lambda: state_module.PROJECTION_SERVICE,
             run_calculate_request_getter=lambda: state_module._run_calculate_request,
             enforce_rate_limit_getter=lambda: state_module._enforce_rate_limit,
-            projection_rate_limit_per_minute_getter=lambda: state_module.PROJECTION_RATE_LIMIT_PER_MINUTE,
-            projection_export_rate_limit_per_minute_getter=lambda: state_module.PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE,
+            projection_rate_limit_per_minute_getter=lambda: projection_service.projection_rate_limit_per_minute,
+            projection_export_rate_limit_per_minute_getter=lambda: projection_service.projection_export_rate_limit_per_minute,
         )
     )
 
@@ -96,6 +150,7 @@ def build_runtime_bootstrap(*, state_module: Any) -> RuntimeBootstrapArtifacts:
         "get_calculate_dynasty_job": runtime_endpoint_handlers.get_calculate_dynasty_job,
         "cancel_calculate_dynasty_job": runtime_endpoint_handlers.cancel_calculate_dynasty_job,
     }
+    validate_runtime_alias_map(alias_map)
     return RuntimeBootstrapArtifacts(
         projection_service=projection_service,
         calculator_service=calculator_service,

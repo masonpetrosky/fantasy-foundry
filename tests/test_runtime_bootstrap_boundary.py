@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from types import SimpleNamespace
 
+import pytest
+
 from backend.core import runtime_bootstrap
 
 
@@ -76,6 +78,8 @@ def test_build_runtime_bootstrap_wires_services_handlers_and_aliases(monkeypatch
             self._cached_projection_rows = SimpleNamespace(name="projection-cache")
             self._cached_all_projection_rows = SimpleNamespace(name="all-cache")
             self._projection_sortable_columns_for_dataset = SimpleNamespace(name="sortable-cache")
+            self.projection_rate_limit_per_minute = ctx.rate_limits.read_per_minute
+            self.projection_export_rate_limit_per_minute = ctx.rate_limits.export_per_minute
 
     class FakeCalculatorService:
         calculate_request_model = object()
@@ -98,15 +102,21 @@ def test_build_runtime_bootstrap_wires_services_handlers_and_aliases(monkeypatch
         filter_calls.append((args, kwargs))
         return [{"filtered": True}]
 
+    dynasty_helpers = SimpleNamespace(
+        resolve_projection_year_filter=lambda year, years, valid_years=None: {2026},
+        parse_dynasty_years=lambda raw, valid_years=None: [2026],
+        attach_dynasty_values=lambda rows, dynasty_years=None: rows,
+    )
+    rate_limits = SimpleNamespace(read_per_minute=111, export_per_minute=222)
+
     state = SimpleNamespace(
         _refresh_data_if_needed=lambda: None,
         BAT_DATA=[{"Player": "A"}],
         PIT_DATA=[{"Player": "B"}],
         META={"years": [2026]},
         _normalize_player_key=lambda value: str(value or "").strip().lower().replace(" ", "-"),
-        _resolve_projection_year_filter=lambda year, years, valid_years=None: {2026},
-        _parse_dynasty_years=lambda raw, valid_years=None: [2026],
-        _attach_dynasty_values=lambda rows, dynasty_years=None: rows,
+        PROJECTION_DYNASTY_HELPERS=dynasty_helpers,
+        PROJECTION_RATE_LIMITS=rate_limits,
         _coerce_meta_years=lambda meta: [2026],
         _tabular_export_response=lambda *args, **kwargs: {"ok": True},
         _calculator_overlay_values_for_job=lambda job_id: {},
@@ -120,8 +130,6 @@ def test_build_runtime_bootstrap_wires_services_handlers_and_aliases(monkeypatch
         PROJECTION_QUERY_CACHE_MAXSIZE=8,
         filter_records=fake_filter_records,
         _enforce_rate_limit=lambda *args, **kwargs: None,
-        PROJECTION_RATE_LIMIT_PER_MINUTE=111,
-        PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE=222,
         _calculator_service_from_globals=lambda: calculator_service,
     )
 
@@ -165,26 +173,17 @@ def test_build_runtime_bootstrap_wires_services_handlers_and_aliases(monkeypatch
     }
     assert run_calls == [({"request": "job"}, "job"), ({"request": "api"}, "api")]
 
-    required_aliases = {
-        "CalculateRequest",
-        "CalculateExportRequest",
-        "_cached_projection_rows",
-        "_cached_all_projection_rows",
-        "_projection_sortable_columns_for_dataset",
-        "_status_orchestration_context",
-        "_calculator_orchestration_context",
-        "_run_calculate_request",
-        "_meta_payload",
+    assert set(artifacts.alias_map.keys()) == runtime_bootstrap.REQUIRED_RUNTIME_ALIAS_KEYS
+    assert runtime_bootstrap.missing_runtime_alias_keys(artifacts.alias_map) == set()
+    assert runtime_bootstrap.unexpected_runtime_alias_keys(artifacts.alias_map) == set()
+    assert artifacts.alias_map["CalculateRequest"] is calculator_service.calculate_request_model
+    assert artifacts.alias_map["CalculateExportRequest"] is calculator_service.calculate_export_request_model
+    route_aliases = {
         "get_meta",
-        "_version_payload",
-        "_payload_etag",
-        "_etag_matches",
         "get_version",
-        "_dynasty_lookup_cache_health_payload",
         "get_health",
         "get_ready",
         "get_ops",
-        "_run_calculation_job",
         "projection_response",
         "export_projections",
         "calculate_dynasty_values",
@@ -193,9 +192,14 @@ def test_build_runtime_bootstrap_wires_services_handlers_and_aliases(monkeypatch
         "get_calculate_dynasty_job",
         "cancel_calculate_dynasty_job",
     }
-    assert required_aliases.issubset(set(artifacts.alias_map.keys()))
-    assert artifacts.alias_map["CalculateRequest"] is calculator_service.calculate_request_model
-    assert artifacts.alias_map["CalculateExportRequest"] is calculator_service.calculate_export_request_model
+    for key in route_aliases:
+        assert callable(artifacts.alias_map[key]), key
+
+
+def test_validate_runtime_alias_map_rejects_missing_required_key() -> None:
+    incomplete = {key: object() for key in runtime_bootstrap.REQUIRED_RUNTIME_ALIAS_KEYS if key != "get_meta"}
+    with pytest.raises(RuntimeError, match="missing"):
+        runtime_bootstrap.validate_runtime_alias_map(incomplete)
 
 
 def test_apply_runtime_aliases_sets_attributes_idempotently() -> None:
