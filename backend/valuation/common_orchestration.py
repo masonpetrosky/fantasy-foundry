@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+import re
 from typing import Dict, List, Optional, Set
 
 import pandas as pd
@@ -74,6 +76,79 @@ except ImportError:  # pragma: no cover - direct script execution fallback
         reorder_detail_columns,
         require_cols,
     )
+
+
+_PITCH_POSITION_TOKENS = {"P", "SP", "RP"}
+_POSITION_TOKEN_RE = re.compile(r"[,\s/;+|]+")
+
+
+def _position_profile(pos_value: object) -> str:
+    text = str(pos_value or "").strip().upper()
+    if not text:
+        return "hitter"
+    tokens = {token for token in _POSITION_TOKEN_RE.split(text) if token}
+    has_pitch = any(token in _PITCH_POSITION_TOKENS for token in tokens)
+    has_hit = any(token not in _PITCH_POSITION_TOKENS for token in tokens)
+    if has_pitch and not has_hit:
+        return "pitcher"
+    if has_pitch and has_hit:
+        return "two_way"
+    return "hitter"
+
+
+def _piecewise_age_factor(age: float, *, profile: str) -> float:
+    if profile == "pitcher":
+        if age <= 28.0:
+            return 1.0
+        if age <= 34.0:
+            return 1.0 + (0.84 - 1.0) * ((age - 28.0) / 6.0)
+        if age <= 38.0:
+            return 0.84 + (0.70 - 0.84) * ((age - 34.0) / 4.0)
+        return 0.70
+
+    # Hitter defaults and two-way fallback.
+    if age <= 29.0:
+        return 1.0
+    if age <= 35.0:
+        return 1.0 + (0.88 - 1.0) * ((age - 29.0) / 6.0)
+    if age <= 39.0:
+        return 0.88 + (0.75 - 0.88) * ((age - 35.0) / 4.0)
+    return 0.75
+
+
+def _year_risk_multiplier(
+    *,
+    age_start: float | None,
+    year: int,
+    start_year: int,
+    profile: str,
+    enabled: bool,
+) -> float:
+    if not enabled:
+        return 1.0
+    if age_start is None or not math.isfinite(age_start):
+        return 1.0
+    year_offset = max(int(year) - int(start_year), 0)
+    age = float(age_start) + float(year_offset)
+    factor = _piecewise_age_factor(age, profile=profile)
+    if age >= 31.0 and year_offset > 0:
+        factor *= float(0.98 ** year_offset)
+    return float(max(min(factor, 1.0), 0.0))
+
+
+def _blend_replacement_frame(
+    frozen_frame: pd.DataFrame,
+    current_frame: pd.DataFrame,
+    *,
+    alpha: float,
+) -> pd.DataFrame:
+    frozen = frozen_frame.astype(float)
+    current = current_frame.astype(float)
+    idx = frozen.index.union(current.index)
+    cols = frozen.columns.union(current.columns)
+    frozen_aligned = frozen.reindex(index=idx, columns=cols).fillna(0.0)
+    current_aligned = current.reindex(index=idx, columns=cols).fillna(0.0)
+    return (float(alpha) * frozen_aligned) + ((1.0 - float(alpha)) * current_aligned)
 
 
 def calculate_common_dynasty_values(
@@ -182,6 +257,29 @@ def calculate_common_dynasty_values(
     proj_meta = projection_meta_for_start_year(bat, pit, start_year)
 
     years_set = {int(y) for y in years}
+    start_rows = pd.concat(
+        [
+            bat[bat["Year"] == int(start_year)][["Player", "Age", "Pos"]],
+            pit[pit["Year"] == int(start_year)][["Player", "Age", "Pos"]],
+        ],
+        ignore_index=True,
+    )
+    age_by_player: Dict[str, float | None] = {}
+    profile_by_player: Dict[str, str] = {}
+    if not start_rows.empty:
+        for player, group in start_rows.groupby("Player"):
+            ages = pd.to_numeric(group["Age"], errors="coerce").dropna()
+            age_by_player[str(player)] = float(ages.iloc[0]) if not ages.empty else None
+            pos_text = "/".join(
+                sorted(
+                    {
+                        str(value).strip()
+                        for value in group["Pos"].tolist()
+                        if str(value).strip()
+                    }
+                )
+            )
+            profile_by_player[str(player)] = _position_profile(pos_text)
     if lg.minor_slots and lg.minor_slots > 0:
         elig_year_df = _resolve_minor_eligibility_by_year(
             bat,
@@ -245,12 +343,21 @@ def calculate_common_dynasty_values(
         player = str(row["Player"])
         can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and player in bench_stash_players)
         bench_penalty = float(bench_penalty_by_player.get(player, 1.0))
+        player_age = age_by_player.get(player)
+        player_profile = profile_by_player.get(player, "hitter")
         vals: List[float] = []
         for y in years:
             v = row.get(y)
             if pd.isna(v):
                 v = 0.0
             v = float(v)
+            v *= _year_risk_multiplier(
+                age_start=player_age,
+                year=int(y),
+                start_year=int(start_year),
+                profile=player_profile,
+                enabled=bool(getattr(lg, "enable_age_risk_adjustment", False)),
+            )
             v = _apply_negative_value_stash_rules(
                 v,
                 can_minor_stash=bool(
@@ -304,6 +411,8 @@ def calculate_common_dynasty_values(
 
     frozen_repl_hit: Optional[pd.DataFrame] = None
     frozen_repl_pit: Optional[pd.DataFrame] = None
+    blend_enabled = bool(lg.freeze_replacement_baselines and getattr(lg, "enable_replacement_blend", False))
+    blend_alpha = float(min(max(getattr(lg, "replacement_blend_alpha", 0.70), 0.0), 1.0))
     if lg.freeze_replacement_baselines:
         start_ctx_for_replacement = year_contexts.get(start_year)
         if start_ctx_for_replacement is None:
@@ -325,6 +434,17 @@ def calculate_common_dynasty_values(
             # Reuse a fixed replacement baseline from the start year.
             repl_hit = frozen_repl_hit
             repl_pit = frozen_repl_pit
+            if blend_enabled:
+                current_repl_hit, current_repl_pit = compute_replacement_baselines(
+                    ctx,
+                    lg,
+                    rostered_names,
+                    n_repl=lg.n_teams,
+                )
+                if repl_hit is not None:
+                    repl_hit = _blend_replacement_frame(repl_hit, current_repl_hit, alpha=blend_alpha)
+                if repl_pit is not None:
+                    repl_pit = _blend_replacement_frame(repl_pit, current_repl_pit, alpha=blend_alpha)
         else:
             repl_hit, repl_pit = compute_replacement_baselines(
                 ctx,
@@ -375,6 +495,8 @@ def calculate_common_dynasty_values(
         player = str(r.get("Player") or "")
         can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and player in bench_stash_players)
         bench_penalty = float(bench_penalty_by_player.get(player, 1.0))
+        player_age = age_by_player.get(player)
+        player_profile = profile_by_player.get(player, "hitter")
 
         vals: List[float] = []
         for y in years:
@@ -382,6 +504,13 @@ def calculate_common_dynasty_values(
             if pd.isna(v):
                 v = 0.0
             v = float(v)
+            v *= _year_risk_multiplier(
+                age_start=player_age,
+                year=int(y),
+                start_year=int(start_year),
+                profile=player_profile,
+                enabled=bool(getattr(lg, "enable_age_risk_adjustment", False)),
+            )
             v = _apply_negative_value_stash_rules(
                 v,
                 can_minor_stash=bool(

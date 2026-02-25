@@ -225,6 +225,15 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
         two_way: str,
         start_year: int,
         recent_projections: int,
+        sgp_denominator_mode: str = "classic",
+        sgp_winsor_low_pct: float = 0.10,
+        sgp_winsor_high_pct: float = 0.90,
+        sgp_epsilon_counting: float = 0.15,
+        sgp_epsilon_ratio: float = 0.0015,
+        enable_playing_time_reliability: bool = False,
+        enable_age_risk_adjustment: bool = False,
+        enable_replacement_blend: bool = False,
+        replacement_blend_alpha: float = 0.70,
         **roto_category_settings: bool,
     ) -> pd.DataFrame:
         return state_module.core_runtime_state_helpers.calculate_common_dynasty_frame_cached(
@@ -253,6 +262,15 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
             two_way=two_way,
             start_year=start_year,
             recent_projections=recent_projections,
+            sgp_denominator_mode=sgp_denominator_mode,
+            sgp_winsor_low_pct=sgp_winsor_low_pct,
+            sgp_winsor_high_pct=sgp_winsor_high_pct,
+            sgp_epsilon_counting=sgp_epsilon_counting,
+            sgp_epsilon_ratio=sgp_epsilon_ratio,
+            enable_playing_time_reliability=enable_playing_time_reliability,
+            enable_age_risk_adjustment=enable_age_risk_adjustment,
+            enable_replacement_blend=enable_replacement_blend,
+            replacement_blend_alpha=replacement_blend_alpha,
             roto_category_settings=roto_category_settings,
         )
 

@@ -46,6 +46,13 @@ describe("buildQuickStartSettings", () => {
     expect(settings.ip_min).toBe(0);
     expect(settings.ip_max).toBe("");
     expect(settings.two_way).toBe("sum");
+    expect(settings.sgp_denominator_mode).toBe("classic");
+    expect(settings.sgp_winsor_low_pct).toBe(0.1);
+    expect(settings.sgp_winsor_high_pct).toBe(0.9);
+    expect(settings.enable_playing_time_reliability).toBe(false);
+    expect(settings.enable_age_risk_adjustment).toBe(false);
+    expect(settings.enable_replacement_blend).toBe(false);
+    expect(settings.replacement_blend_alpha).toBe(0.7);
     expect(settings.recent_projections).toBe(3);
     expect(settings.sims).toBe(300);
     expect(settings.start_year).toBe(2027);

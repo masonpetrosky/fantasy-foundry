@@ -67,6 +67,15 @@ def default_dynasty_lookup(
             two_way=str(params["two_way"]),
             start_year=int(params["start_year"]),
             recent_projections=int(params["recent_projections"]),
+            sgp_denominator_mode=str(params.get("sgp_denominator_mode", "classic")),
+            sgp_winsor_low_pct=float(params.get("sgp_winsor_low_pct", 0.10)),
+            sgp_winsor_high_pct=float(params.get("sgp_winsor_high_pct", 0.90)),
+            sgp_epsilon_counting=float(params.get("sgp_epsilon_counting", 0.15)),
+            sgp_epsilon_ratio=float(params.get("sgp_epsilon_ratio", 0.0015)),
+            enable_playing_time_reliability=bool(params.get("enable_playing_time_reliability", False)),
+            enable_age_risk_adjustment=bool(params.get("enable_age_risk_adjustment", False)),
+            enable_replacement_blend=bool(params.get("enable_replacement_blend", False)),
+            replacement_blend_alpha=float(params.get("replacement_blend_alpha", 0.70)),
             **roto_category_settings_from_dict(params),
         ).copy(deep=True)
 

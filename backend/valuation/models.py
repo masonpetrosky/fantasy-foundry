@@ -78,6 +78,9 @@ class CommonDynastyRotoSettings:
     # for all future valuation years. This avoids late-horizon value inflation
     # caused by an increasingly thin projected replacement pool.
     freeze_replacement_baselines: bool = True
+    # Optional blend between frozen and in-year replacement baselines.
+    enable_replacement_blend: bool = False
+    replacement_blend_alpha: float = 0.70
 
     # Two-way players: "max" = choose best of hitter/pitcher per year
     # (Most leagues effectively work like this for valuation purposes)
@@ -86,6 +89,15 @@ class CommonDynastyRotoSettings:
     # Active roto categories (common mode defaults to standard 5x5).
     hitter_categories: tuple[str, ...] = tuple(HIT_CATS)
     pitcher_categories: tuple[str, ...] = tuple(PIT_CATS)
+    # SGP denominator estimator controls.
+    sgp_denominator_mode: str = "classic"
+    sgp_winsor_low_pct: float = 0.10
+    sgp_winsor_high_pct: float = 0.90
+    sgp_epsilon_counting: float = 0.15
+    sgp_epsilon_ratio: float = 0.0015
+    # Optional predictive modifiers.
+    enable_playing_time_reliability: bool = False
+    enable_age_risk_adjustment: bool = False
 
     # Minor eligibility (best-effort inference, since projections file usually
     # lacks career AB/IP):
@@ -145,10 +157,22 @@ class LeagueSettings:
     # for all future valuation years. This avoids late-horizon value inflation
     # caused by an increasingly thin projected replacement pool.
     freeze_replacement_baselines: bool = True
+    # Optional blend between frozen and in-year replacement baselines.
+    enable_replacement_blend: bool = False
+    replacement_blend_alpha: float = 0.70
 
     # To reduce false positives when inferring minor eligibility from projections
     infer_minor_age_max_hit: int = 25
     infer_minor_age_max_pit: int = 26
+    # SGP denominator estimator controls.
+    sgp_denominator_mode: str = "classic"
+    sgp_winsor_low_pct: float = 0.10
+    sgp_winsor_high_pct: float = 0.90
+    sgp_epsilon_counting: float = 0.15
+    sgp_epsilon_ratio: float = 0.0015
+    # Optional predictive modifiers.
+    enable_playing_time_reliability: bool = False
+    enable_age_risk_adjustment: bool = False
 
     # Two-way handling if player appears in both Bat and Pitch:
     #   "max" = treat as choose hitter OR pitcher each season

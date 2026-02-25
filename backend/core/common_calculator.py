@@ -42,6 +42,15 @@ def calculate_common_dynasty_frame(
     roto_hitter_fields: tuple[tuple[str, str, bool], ...],
     roto_pitcher_fields: tuple[tuple[str, str, bool], ...],
     coerce_bool_fn: Callable[..., bool],
+    sgp_denominator_mode: str = "classic",
+    sgp_winsor_low_pct: float = 0.10,
+    sgp_winsor_high_pct: float = 0.90,
+    sgp_epsilon_counting: float = 0.15,
+    sgp_epsilon_ratio: float = 0.0015,
+    enable_playing_time_reliability: bool = False,
+    enable_age_risk_adjustment: bool = False,
+    enable_replacement_blend: bool = False,
+    replacement_blend_alpha: float = 0.70,
 ) -> pd.DataFrame:
     valuation_service = ValuationService(ensure_backend_module_path_fn=ensure_backend_module_path_fn)
 
@@ -83,6 +92,15 @@ def calculate_common_dynasty_frame(
         ip_min=ip_min,
         ip_max=ip_max,
         two_way=two_way,
+        sgp_denominator_mode=sgp_denominator_mode,
+        sgp_winsor_low_pct=sgp_winsor_low_pct,
+        sgp_winsor_high_pct=sgp_winsor_high_pct,
+        sgp_epsilon_counting=sgp_epsilon_counting,
+        sgp_epsilon_ratio=sgp_epsilon_ratio,
+        enable_playing_time_reliability=enable_playing_time_reliability,
+        enable_age_risk_adjustment=enable_age_risk_adjustment,
+        enable_replacement_blend=enable_replacement_blend,
+        replacement_blend_alpha=replacement_blend_alpha,
         hitter_categories=tuple(hitter_categories),
         pitcher_categories=tuple(pitcher_categories),
     )

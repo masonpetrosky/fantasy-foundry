@@ -48,6 +48,7 @@ except ImportError:
 
 
 COMMON_REVERSED_PITCH_CATS: Set[str] = {"ERA", "WHIP"}
+COMMON_RATE_HIT_CATS: Set[str] = {"AVG", "OBP", "SLG", "OPS"}
 
 
 def _zscore(s: pd.Series) -> pd.Series:
@@ -301,22 +302,22 @@ def _coerce_non_negative_float(value: object) -> float:
     return float(max(number, 0.0))
 
 
-def _low_volume_positive_credit_scale(
+def _positive_credit_scale(
     *,
-    pitcher_ip: float,
-    slot_ip_reference: float,
-    min_share_for_positive_ratio_credit: float = 0.35,
-    full_share_for_positive_ratio_credit: float = 1.00,
+    player_volume: float,
+    slot_volume_reference: float,
+    min_share_for_positive_credit: float = 0.35,
+    full_share_for_positive_credit: float = 1.00,
 ) -> float:
-    """Return a [0, 1] positive-credit scale based on projected innings share."""
-    slot_ip = _coerce_non_negative_float(slot_ip_reference)
-    player_ip = _coerce_non_negative_float(pitcher_ip)
-    if slot_ip <= 0.0:
+    """Return a [0, 1] positive-credit scale based on projected workload share."""
+    slot_volume = _coerce_non_negative_float(slot_volume_reference)
+    player_workload = _coerce_non_negative_float(player_volume)
+    if slot_volume <= 0.0:
         return 1.0
 
-    share = player_ip / slot_ip
-    min_share = float(min_share_for_positive_ratio_credit)
-    full_share = float(full_share_for_positive_ratio_credit)
+    share = player_workload / slot_volume
+    min_share = float(min_share_for_positive_credit)
+    full_share = float(full_share_for_positive_credit)
 
     if full_share <= min_share:
         return 1.0 if share >= full_share else 0.0
@@ -325,6 +326,22 @@ def _low_volume_positive_credit_scale(
     if share >= full_share:
         return 1.0
     return float((share - min_share) / (full_share - min_share))
+
+
+def _low_volume_positive_credit_scale(
+    *,
+    pitcher_ip: float,
+    slot_ip_reference: float,
+    min_share_for_positive_ratio_credit: float = 0.35,
+    full_share_for_positive_ratio_credit: float = 1.00,
+) -> float:
+    """Return a [0, 1] positive-credit scale based on projected innings share."""
+    return _positive_credit_scale(
+        player_volume=pitcher_ip,
+        slot_volume_reference=slot_ip_reference,
+        min_share_for_positive_credit=min_share_for_positive_ratio_credit,
+        full_share_for_positive_credit=full_share_for_positive_ratio_credit,
+    )
 
 
 def _apply_low_volume_non_ratio_positive_guard(
@@ -377,7 +394,60 @@ def _apply_low_volume_ratio_guard(
             delta[cat] = float(delta[cat]) * scale
 
 
-def _mean_adjacent_rank_gap(values: np.ndarray, *, ascending: bool) -> float:
+def _apply_hitter_playing_time_reliability_guard(
+    delta: Dict[str, float],
+    *,
+    hit_categories: List[str],
+    hitter_ab: float,
+    slot_ab_reference: float,
+    min_share_for_positive_credit: float = 0.35,
+    full_share_for_positive_credit: float = 1.00,
+) -> None:
+    """Scale positive hitter category credit for low projected AB workloads."""
+    scale = _positive_credit_scale(
+        player_volume=hitter_ab,
+        slot_volume_reference=slot_ab_reference,
+        min_share_for_positive_credit=min_share_for_positive_credit,
+        full_share_for_positive_credit=full_share_for_positive_credit,
+    )
+    if scale >= 1.0:
+        return
+    for cat in hit_categories:
+        if float(delta.get(cat, 0.0)) > 0.0:
+            delta[cat] = float(delta[cat]) * scale
+
+
+def _apply_pitcher_playing_time_reliability_guard(
+    delta: Dict[str, float],
+    *,
+    pit_categories: List[str],
+    pitcher_ip: float,
+    slot_ip_reference: float,
+    min_share_for_positive_credit: float = 0.35,
+    full_share_for_positive_credit: float = 1.00,
+) -> None:
+    """Scale positive pitching category credit for low projected IP workloads."""
+    scale = _positive_credit_scale(
+        player_volume=pitcher_ip,
+        slot_volume_reference=slot_ip_reference,
+        min_share_for_positive_credit=min_share_for_positive_credit,
+        full_share_for_positive_credit=full_share_for_positive_credit,
+    )
+    if scale >= 1.0:
+        return
+    for cat in pit_categories:
+        if float(delta.get(cat, 0.0)) > 0.0:
+            delta[cat] = float(delta[cat]) * scale
+
+
+def _mean_adjacent_rank_gap(
+    values: np.ndarray,
+    *,
+    ascending: bool,
+    robust: bool = False,
+    winsor_low_pct: float = 0.10,
+    winsor_high_pct: float = 0.90,
+) -> float:
     """Mean absolute adjacent difference after rank-order sorting."""
     arr = np.asarray(values, dtype=float)
     arr = arr[np.isfinite(arr)]
@@ -387,7 +457,35 @@ def _mean_adjacent_rank_gap(values: np.ndarray, *, ascending: bool) -> float:
     sorted_arr = np.sort(arr)
     if not ascending:
         sorted_arr = sorted_arr[::-1]
-    return float(np.mean(np.abs(np.diff(sorted_arr))))
+    diffs = np.abs(np.diff(sorted_arr))
+    if diffs.size == 0:
+        return 0.0
+    if robust:
+        low = float(np.clip(winsor_low_pct, 0.0, 1.0))
+        high = float(np.clip(winsor_high_pct, 0.0, 1.0))
+        if high < low:
+            low, high = high, low
+        lo_val = float(np.quantile(diffs, low))
+        hi_val = float(np.quantile(diffs, high))
+        diffs = np.clip(diffs, lo_val, hi_val)
+    return float(np.mean(diffs))
+
+
+def _sgp_estimator_options(lg: CommonDynastyRotoSettings) -> tuple[bool, float, float]:
+    mode = str(getattr(lg, "sgp_denominator_mode", "classic") or "classic").strip().lower()
+    robust = mode == "robust"
+    low = float(getattr(lg, "sgp_winsor_low_pct", 0.10))
+    high = float(getattr(lg, "sgp_winsor_high_pct", 0.90))
+    return robust, low, high
+
+
+def _sgp_denominator_floor(*, lg: CommonDynastyRotoSettings, category: str) -> float:
+    mode = str(getattr(lg, "sgp_denominator_mode", "classic") or "classic").strip().lower()
+    if mode != "robust":
+        return 0.0
+    if category in COMMON_REVERSED_PITCH_CATS or category in COMMON_RATE_HIT_CATS:
+        return float(max(getattr(lg, "sgp_epsilon_ratio", 0.0015), 0.0))
+    return float(max(getattr(lg, "sgp_epsilon_counting", 0.15), 0.0))
 
 
 def simulate_sgp_hit(
@@ -401,6 +499,7 @@ def simulate_sgp_hit(
     active_categories = [c for c in HIT_CATS if c in set(categories or HIT_CATS)]
     if not active_categories:
         return {}
+    robust, winsor_low, winsor_high = _sgp_estimator_options(lg)
     diffs = {c: [] for c in active_categories}
 
     groups = {slot: assigned_hit[assigned_hit["AssignedSlot"] == slot] for slot in per_team.keys()}
@@ -428,9 +527,22 @@ def simulate_sgp_hit(
 
         for c in active_categories:
             x = np.array(vals[c], dtype=float)
-            diffs[c].append(_mean_adjacent_rank_gap(x, ascending=False))
+            diffs[c].append(
+                _mean_adjacent_rank_gap(
+                    x,
+                    ascending=False,
+                    robust=robust,
+                    winsor_low_pct=winsor_low,
+                    winsor_high_pct=winsor_high,
+                )
+            )
 
-    return {c: (float(np.mean(diffs[c])) if diffs[c] else 0.0) for c in active_categories}
+    out: Dict[str, float] = {}
+    for category in active_categories:
+        value = float(np.mean(diffs[category])) if diffs[category] else 0.0
+        floor = _sgp_denominator_floor(lg=lg, category=category)
+        out[category] = max(value, floor) if floor > 0.0 else value
+    return out
 
 
 def simulate_sgp_pit(
@@ -443,6 +555,7 @@ def simulate_sgp_pit(
     active_categories = [c for c in PIT_CATS if c in set(categories or PIT_CATS)]
     if not active_categories:
         return {}
+    robust, winsor_low, winsor_high = _sgp_estimator_options(lg)
     diffs = {c: [] for c in active_categories}
     per_team = lg.pitcher_slots
     groups = {slot: assigned_pit[assigned_pit["AssignedSlot"] == slot] for slot in per_team.keys()}
@@ -474,9 +587,22 @@ def simulate_sgp_pit(
 
         for c in active_categories:
             x = np.array(vals[c], dtype=float)
-            diffs[c].append(_mean_adjacent_rank_gap(x, ascending=(c in COMMON_REVERSED_PITCH_CATS)))
+            diffs[c].append(
+                _mean_adjacent_rank_gap(
+                    x,
+                    ascending=(c in COMMON_REVERSED_PITCH_CATS),
+                    robust=robust,
+                    winsor_low_pct=winsor_low,
+                    winsor_high_pct=winsor_high,
+                )
+            )
 
-    return {c: (float(np.mean(diffs[c])) if diffs[c] else 0.0) for c in active_categories}
+    out: Dict[str, float] = {}
+    for category in active_categories:
+        value = float(np.mean(diffs[category])) if diffs[category] else 0.0
+        floor = _sgp_denominator_floor(lg=lg, category=category)
+        out[category] = max(value, floor) if floor > 0.0 else value
+    return out
 
 
 def compute_year_context(
@@ -640,6 +766,20 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                 cat: float(new_hit_cats.get(cat, 0.0) - base_hit_cats.get(cat, 0.0))
                 for cat in hit_categories
             }
+            if bool(getattr(lg, "enable_playing_time_reliability", False)):
+                _apply_hitter_playing_time_reliability_guard(
+                    delta,
+                    hit_categories=hit_categories,
+                    hitter_ab=_coerce_non_negative_float(row.get("AB", 0.0)),
+                    slot_ab_reference=_coerce_non_negative_float(b.get("AB", 0.0)),
+                )
+            if bool(getattr(lg, "enable_playing_time_reliability", False)):
+                _apply_hitter_playing_time_reliability_guard(
+                    delta,
+                    hit_categories=hit_categories,
+                    hitter_ab=_coerce_non_negative_float(row.get("AB", 0.0)),
+                    slot_ab_reference=_coerce_non_negative_float(b.get("AB", 0.0)),
+                )
 
             val = 0.0
             for c in hit_categories:
@@ -700,18 +840,26 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                     delta[cat] = base_val - new_val
                 else:
                     delta[cat] = new_val - base_val
-            _apply_low_volume_non_ratio_positive_guard(
-                delta,
-                pit_categories=pit_categories,
-                pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
-                slot_ip_reference=_coerce_non_negative_float(b.get("IP", 0.0)),
-            )
-            _apply_low_volume_ratio_guard(
-                delta,
-                pit_categories=pit_categories,
-                pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
-                slot_ip_reference=_coerce_non_negative_float(b.get("IP", 0.0)),
-            )
+            if bool(getattr(lg, "enable_playing_time_reliability", False)):
+                _apply_pitcher_playing_time_reliability_guard(
+                    delta,
+                    pit_categories=pit_categories,
+                    pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
+                    slot_ip_reference=_coerce_non_negative_float(b.get("IP", 0.0)),
+                )
+            else:
+                _apply_low_volume_non_ratio_positive_guard(
+                    delta,
+                    pit_categories=pit_categories,
+                    pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
+                    slot_ip_reference=_coerce_non_negative_float(b.get("IP", 0.0)),
+                )
+                _apply_low_volume_ratio_guard(
+                    delta,
+                    pit_categories=pit_categories,
+                    pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
+                    slot_ip_reference=_coerce_non_negative_float(b.get("IP", 0.0)),
+                )
 
             val = 0.0
             for c in pit_categories:
@@ -920,18 +1068,26 @@ def compute_year_player_values_vs_replacement(
                     delta[cat] = base_val - new_val
                 else:
                     delta[cat] = new_val - base_val
-            _apply_low_volume_non_ratio_positive_guard(
-                delta,
-                pit_categories=pit_categories,
-                pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
-                slot_ip_reference=_coerce_non_negative_float(b_avg.get("IP", 0.0)),
-            )
-            _apply_low_volume_ratio_guard(
-                delta,
-                pit_categories=pit_categories,
-                pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
-                slot_ip_reference=_coerce_non_negative_float(b_avg.get("IP", 0.0)),
-            )
+            if bool(getattr(lg, "enable_playing_time_reliability", False)):
+                _apply_pitcher_playing_time_reliability_guard(
+                    delta,
+                    pit_categories=pit_categories,
+                    pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
+                    slot_ip_reference=_coerce_non_negative_float(b_avg.get("IP", 0.0)),
+                )
+            else:
+                _apply_low_volume_non_ratio_positive_guard(
+                    delta,
+                    pit_categories=pit_categories,
+                    pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
+                    slot_ip_reference=_coerce_non_negative_float(b_avg.get("IP", 0.0)),
+                )
+                _apply_low_volume_ratio_guard(
+                    delta,
+                    pit_categories=pit_categories,
+                    pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
+                    slot_ip_reference=_coerce_non_negative_float(b_avg.get("IP", 0.0)),
+                )
 
             val = 0.0
             for c in pit_categories:
@@ -1018,9 +1174,12 @@ __all__ = [
     "common_replacement_pitcher_rates",
     "common_apply_pitching_bounds",
     "_coerce_non_negative_float",
+    "_positive_credit_scale",
     "_low_volume_positive_credit_scale",
     "_apply_low_volume_non_ratio_positive_guard",
     "_apply_low_volume_ratio_guard",
+    "_apply_hitter_playing_time_reliability_guard",
+    "_apply_pitcher_playing_time_reliability_guard",
     "_mean_adjacent_rank_gap",
     "simulate_sgp_hit",
     "simulate_sgp_pit",

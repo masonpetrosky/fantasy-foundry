@@ -102,6 +102,10 @@ class CalculatorValidationTests(unittest.TestCase):
         req = app_module.CalculateRequest()
         self.assertEqual(req.horizon, 20)
         self.assertEqual(req.minors, app_module.COMMON_DEFAULT_MINOR_SLOTS)
+        self.assertEqual(req.sgp_denominator_mode, "classic")
+        self.assertFalse(req.enable_playing_time_reliability)
+        self.assertFalse(req.enable_age_risk_adjustment)
+        self.assertFalse(req.enable_replacement_blend)
 
     def test_mode_must_be_common(self) -> None:
         response = self.client.post("/api/calculate", json={"mode": "league"})
@@ -109,6 +113,13 @@ class CalculatorValidationTests(unittest.TestCase):
 
     def test_rejects_invalid_ip_bounds(self) -> None:
         response = self.client.post("/api/calculate", json={"ip_min": 1200, "ip_max": 1000})
+        self.assertEqual(response.status_code, 422)
+
+    def test_rejects_invalid_sgp_winsor_bounds(self) -> None:
+        response = self.client.post(
+            "/api/calculate",
+            json={"sgp_winsor_low_pct": 0.95, "sgp_winsor_high_pct": 0.90},
+        )
         self.assertEqual(response.status_code, 422)
 
     def test_rejects_zero_total_hitter_slots(self) -> None:
@@ -351,6 +362,11 @@ class CalculatorValidationTests(unittest.TestCase):
                     "pit_sp": 1,
                     "pit_rp": 1,
                     "ir": 4,
+                    "sgp_denominator_mode": "robust",
+                    "enable_playing_time_reliability": True,
+                    "enable_age_risk_adjustment": True,
+                    "enable_replacement_blend": True,
+                    "replacement_blend_alpha": 0.55,
                 },
             )
 
@@ -361,6 +377,11 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(captured_kwargs.get("pitcher_slots", {}).get("SP"), 1)
         self.assertEqual(captured_kwargs.get("pitcher_slots", {}).get("RP"), 1)
         self.assertEqual(captured_kwargs.get("ir_slots"), 4)
+        self.assertEqual(captured_kwargs.get("sgp_denominator_mode"), "robust")
+        self.assertTrue(captured_kwargs.get("enable_playing_time_reliability"))
+        self.assertTrue(captured_kwargs.get("enable_age_risk_adjustment"))
+        self.assertTrue(captured_kwargs.get("enable_replacement_blend"))
+        self.assertEqual(captured_kwargs.get("replacement_blend_alpha"), 0.55)
 
     def test_points_mode_respects_custom_scoring_weights(self) -> None:
         bat_rows = [
@@ -1119,5 +1140,4 @@ class CalculatorValidationTests(unittest.TestCase):
 
             self.assertEqual(payload["error"]["status_code"], 422)
             self.assertIn("Not enough players", payload["error"]["detail"])
-
 

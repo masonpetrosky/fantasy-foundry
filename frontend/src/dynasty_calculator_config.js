@@ -106,6 +106,11 @@ const ROTO_CATEGORY_FIELDS = [...ROTO_HITTER_CATEGORY_FIELDS, ...ROTO_PITCHER_CA
 export const ROTO_RATE_STAT_COLS = new Set(["AVG", "OBP", "SLG", "OPS", "ERA", "WHIP"]);
 export const ROTO_THREE_DECIMAL_RATE_COLS = new Set(["AVG", "OBP", "SLG", "OPS"]);
 export const ROTO_COUNTING_STAT_COLS = new Set(["R", "RBI", "HR", "SB", "H", "BB", "2B", "TB", "W", "K", "SV", "QS", "QA3", "SVH"]);
+export const PREDICTIVE_TOGGLE_FIELDS = [
+  { key: "enable_playing_time_reliability", label: "Playing-Time Reliability", defaultValue: false },
+  { key: "enable_age_risk_adjustment", label: "Age Risk Adjustment", defaultValue: false },
+  { key: "enable_replacement_blend", label: "Replacement Blend", defaultValue: false },
+];
 
 export function coerceBooleanSetting(value, fallback = false) {
   if (typeof value === "boolean") return value;
@@ -212,6 +217,15 @@ export function buildDefaultCalculatorSettings(meta) {
     ip_min: 0,
     ip_max: "",
     two_way: "sum",
+    sgp_denominator_mode: "classic",
+    sgp_winsor_low_pct: 0.1,
+    sgp_winsor_high_pct: 0.9,
+    sgp_epsilon_counting: 0.15,
+    sgp_epsilon_ratio: 0.0015,
+    enable_playing_time_reliability: false,
+    enable_age_risk_adjustment: false,
+    enable_replacement_blend: false,
+    replacement_blend_alpha: 0.7,
     start_year: Number(meta?.years?.[0] ?? 2026),
     recent_projections: 3,
     ...resolveRotoCategoryDefaults(),
@@ -314,6 +328,36 @@ export function buildCalculatorPayload(settings, availableYears, meta) {
   if (twoWay !== "sum" && twoWay !== "max") {
     return { error: "Two-Way mode must be either 'sum' or 'max'." };
   }
+  const sgpDenominatorMode = String(settings.sgp_denominator_mode ?? "").trim().toLowerCase() || "classic";
+  if (sgpDenominatorMode !== "classic" && sgpDenominatorMode !== "robust") {
+    return { error: "SGP denominator mode must be either 'classic' or 'robust'." };
+  }
+  const sgpWinsorLowPct = Number(settings.sgp_winsor_low_pct);
+  if (!Number.isFinite(sgpWinsorLowPct) || sgpWinsorLowPct < 0 || sgpWinsorLowPct > 1) {
+    return { error: "SGP winsor low percentile must be a number between 0 and 1." };
+  }
+  const sgpWinsorHighPct = Number(settings.sgp_winsor_high_pct);
+  if (!Number.isFinite(sgpWinsorHighPct) || sgpWinsorHighPct < 0 || sgpWinsorHighPct > 1) {
+    return { error: "SGP winsor high percentile must be a number between 0 and 1." };
+  }
+  if (sgpWinsorLowPct >= sgpWinsorHighPct) {
+    return { error: "SGP winsor low percentile must be less than the high percentile." };
+  }
+  const sgpEpsilonCounting = Number(settings.sgp_epsilon_counting);
+  if (!Number.isFinite(sgpEpsilonCounting) || sgpEpsilonCounting < 0) {
+    return { error: "SGP counting epsilon must be a non-negative number." };
+  }
+  const sgpEpsilonRatio = Number(settings.sgp_epsilon_ratio);
+  if (!Number.isFinite(sgpEpsilonRatio) || sgpEpsilonRatio < 0) {
+    return { error: "SGP ratio epsilon must be a non-negative number." };
+  }
+  const enablePlayingTimeReliability = coerceBooleanSetting(settings.enable_playing_time_reliability, false);
+  const enableAgeRiskAdjustment = coerceBooleanSetting(settings.enable_age_risk_adjustment, false);
+  const enableReplacementBlend = coerceBooleanSetting(settings.enable_replacement_blend, false);
+  const replacementBlendAlpha = Number(settings.replacement_blend_alpha);
+  if (!Number.isFinite(replacementBlendAlpha) || replacementBlendAlpha < 0 || replacementBlendAlpha > 1) {
+    return { error: "Replacement blend alpha must be a number between 0 and 1." };
+  }
 
   const parsedRotoCategories = {};
   for (const field of ROTO_CATEGORY_FIELDS) {
@@ -359,6 +403,15 @@ export function buildCalculatorPayload(settings, availableYears, meta) {
     ip_min: ipMin,
     ip_max: ipMax,
     two_way: twoWay,
+    sgp_denominator_mode: sgpDenominatorMode,
+    sgp_winsor_low_pct: sgpWinsorLowPct,
+    sgp_winsor_high_pct: sgpWinsorHighPct,
+    sgp_epsilon_counting: sgpEpsilonCounting,
+    sgp_epsilon_ratio: sgpEpsilonRatio,
+    enable_playing_time_reliability: enablePlayingTimeReliability,
+    enable_age_risk_adjustment: enableAgeRiskAdjustment,
+    enable_replacement_blend: enableReplacementBlend,
+    replacement_blend_alpha: replacementBlendAlpha,
     start_year: startYear,
     recent_projections: recentProjections,
     ...parsedRotoCategories,

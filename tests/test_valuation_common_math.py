@@ -156,6 +156,78 @@ def test_simulate_sgp_hit_and_pit_return_expected_categories() -> None:
     assert all(np.isfinite(float(v)) for v in sgp_pit.values())
 
 
+def test_simulate_sgp_robust_mode_applies_denominator_floors() -> None:
+    lg = CommonDynastyRotoSettings(
+        n_teams=1,
+        sims_for_sgp=2,
+        hitter_slots={"UT": 1},
+        pitcher_slots={"P": 1},
+        bench_slots=0,
+        minor_slots=0,
+        ir_slots=0,
+        ip_min=0.0,
+        ip_max=150.0,
+        sgp_denominator_mode="robust",
+        sgp_epsilon_counting=0.2,
+        sgp_epsilon_ratio=0.005,
+    )
+
+    assigned_hit = pd.DataFrame(
+        [
+            {
+                "AssignedSlot": "UT",
+                "AB": 500.0,
+                "H": 145.0,
+                "R": 80.0,
+                "HR": 25.0,
+                "RBI": 90.0,
+                "SB": 8.0,
+                "BB": 60.0,
+                "HBP": 3.0,
+                "SF": 4.0,
+                "2B": 30.0,
+                "3B": 2.0,
+            }
+        ]
+    )
+    assigned_pit = pd.DataFrame(
+        [
+            {
+                "AssignedSlot": "P",
+                "IP": 160.0,
+                "W": 12.0,
+                "QS": 18.0,
+                "QA3": 19.0,
+                "K": 180.0,
+                "SV": 0.0,
+                "SVH": 0.0,
+                "ER": 60.0,
+                "H": 150.0,
+                "BB": 45.0,
+            }
+        ]
+    )
+
+    sgp_hit = common_math.simulate_sgp_hit(
+        assigned_hit,
+        lg,
+        np.random.default_rng(3),
+        categories=["R", "AVG"],
+    )
+    sgp_pit = common_math.simulate_sgp_pit(
+        assigned_pit,
+        lg,
+        np.random.default_rng(4),
+        rep_rates={"W": 0.0, "QS": 0.0, "QA3": 0.0, "K": 0.0, "SV": 0.0, "SVH": 0.0, "ER": 0.0, "H": 0.0, "BB": 0.0},
+        categories=["W", "ERA"],
+    )
+
+    assert sgp_hit["R"] >= 0.2
+    assert sgp_hit["AVG"] >= 0.005
+    assert sgp_pit["W"] >= 0.2
+    assert sgp_pit["ERA"] >= 0.005
+
+
 def test_compute_year_context_and_values_smoke() -> None:
     bat, pit = _sample_common_frames()
     lg = CommonDynastyRotoSettings(
@@ -212,6 +284,30 @@ def test_low_volume_guards_scale_positive_components_only() -> None:
     )
     assert delta["ERA"] == 0.0
     assert delta["WHIP"] == 0.0
+
+
+def test_playing_time_reliability_helpers_scale_positive_components_only() -> None:
+    hit_delta = {"R": 2.0, "AVG": 0.01, "SB": -0.2}
+    common_math._apply_hitter_playing_time_reliability_guard(
+        hit_delta,
+        hit_categories=["R", "AVG", "SB"],
+        hitter_ab=40.0,
+        slot_ab_reference=200.0,
+    )
+    assert hit_delta["R"] == 0.0
+    assert hit_delta["AVG"] == 0.0
+    assert hit_delta["SB"] == -0.2
+
+    pit_delta = {"W": 1.2, "ERA": 0.8, "WHIP": -0.1}
+    common_math._apply_pitcher_playing_time_reliability_guard(
+        pit_delta,
+        pit_categories=["W", "ERA", "WHIP"],
+        pitcher_ip=20.0,
+        slot_ip_reference=100.0,
+    )
+    assert pit_delta["W"] == 0.0
+    assert pit_delta["ERA"] == 0.0
+    assert pit_delta["WHIP"] == -0.1
 
 
 def test_replacement_and_vs_replacement_paths_smoke() -> None:

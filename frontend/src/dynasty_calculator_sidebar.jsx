@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { glossaryTermAnchorId } from "./app_content.js";
+import { coerceBooleanSetting } from "./dynasty_calculator_config.js";
 import { RotoCategoriesForm } from "./dynasty_calculator_sidebar_categories.jsx";
 import { PointsScoringForm } from "./dynasty_calculator_sidebar_points.jsx";
 import { StarterSlotsForm } from "./dynasty_calculator_sidebar_slots.jsx";
@@ -287,6 +288,128 @@ export function DynastyCalculatorSidebar({
               </div>
             </div>
             {isPointsMode && <p className="calc-note">IP min/max constraints only apply in roto mode.</p>}
+
+            <p className="calc-section-title" style={{ marginTop: "8px" }}>Predictive Accuracy (Roto)</p>
+            <div className="form-row">
+              <div className="form-group">
+                <label>SGP Denominator</label>
+                <select
+                  value={settings.sgp_denominator_mode}
+                  onChange={e => update("sgp_denominator_mode", e.target.value)}
+                  disabled={isPointsMode}
+                >
+                  <option value="classic">Classic</option>
+                  <option value="robust">Robust</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Replacement Blend Alpha</label>
+                <input
+                  type="number"
+                  value={settings.replacement_blend_alpha}
+                  onChange={e => update("replacement_blend_alpha", e.target.value)}
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  disabled={isPointsMode || !coerceBooleanSetting(settings.enable_replacement_blend, false)}
+                />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>Winsor Low Pct</label>
+                <input
+                  type="number"
+                  value={settings.sgp_winsor_low_pct}
+                  onChange={e => update("sgp_winsor_low_pct", e.target.value)}
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  disabled={isPointsMode}
+                />
+              </div>
+              <div className="form-group">
+                <label>Winsor High Pct</label>
+                <input
+                  type="number"
+                  value={settings.sgp_winsor_high_pct}
+                  onChange={e => update("sgp_winsor_high_pct", e.target.value)}
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  disabled={isPointsMode}
+                />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>Counting Epsilon</label>
+                <input
+                  type="number"
+                  value={settings.sgp_epsilon_counting}
+                  onChange={e => update("sgp_epsilon_counting", e.target.value)}
+                  min="0"
+                  step="0.01"
+                  disabled={isPointsMode}
+                />
+              </div>
+              <div className="form-group">
+                <label>Ratio Epsilon</label>
+                <input
+                  type="number"
+                  value={settings.sgp_epsilon_ratio}
+                  onChange={e => update("sgp_epsilon_ratio", e.target.value)}
+                  min="0"
+                  step="0.0005"
+                  disabled={isPointsMode}
+                />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="calc-enable-playing-time-reliability">
+                  <input
+                    id="calc-enable-playing-time-reliability"
+                    type="checkbox"
+                    checked={coerceBooleanSetting(settings.enable_playing_time_reliability, false)}
+                    onChange={e => update("enable_playing_time_reliability", e.target.checked)}
+                    disabled={isPointsMode}
+                  />
+                  {" "}Playing-Time Reliability
+                </label>
+              </div>
+              <div className="form-group">
+                <label htmlFor="calc-enable-age-risk-adjustment">
+                  <input
+                    id="calc-enable-age-risk-adjustment"
+                    type="checkbox"
+                    checked={coerceBooleanSetting(settings.enable_age_risk_adjustment, false)}
+                    onChange={e => update("enable_age_risk_adjustment", e.target.checked)}
+                    disabled={isPointsMode}
+                  />
+                  {" "}Age Risk Adjustment
+                </label>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="calc-enable-replacement-blend">
+                  <input
+                    id="calc-enable-replacement-blend"
+                    type="checkbox"
+                    checked={coerceBooleanSetting(settings.enable_replacement_blend, false)}
+                    onChange={e => update("enable_replacement_blend", e.target.checked)}
+                    disabled={isPointsMode}
+                  />
+                  {" "}Replacement Blend
+                </label>
+              </div>
+            </div>
+            {isPointsMode && <p className="calc-note">Predictive-accuracy controls apply only in roto mode.</p>}
           </>
         )}
       </div>

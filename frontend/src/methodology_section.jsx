@@ -58,6 +58,10 @@ export function MethodologySection() {
             {" "}
             <code>F[i] = max(0, v_i + discount ** gap * F[i+1])</code>.
           </li>
+          <li>
+            Optional predictive controls (advanced settings) can switch SGP denominators to robust winsorized gaps,
+            apply playing-time reliability scaling, age-risk adjustment, and blended replacement baselines.
+          </li>
         </ul>
         <p><strong>Points mode math:</strong></p>
         <ul>

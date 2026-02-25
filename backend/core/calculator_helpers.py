@@ -252,6 +252,15 @@ def default_calculation_cache_params(
         "two_way": "sum",
         "start_year": start_year,
         "recent_projections": 3,
+        "sgp_denominator_mode": "classic",
+        "sgp_winsor_low_pct": 0.10,
+        "sgp_winsor_high_pct": 0.90,
+        "sgp_epsilon_counting": 0.15,
+        "sgp_epsilon_ratio": 0.0015,
+        "enable_playing_time_reliability": False,
+        "enable_age_risk_adjustment": False,
+        "enable_replacement_blend": False,
+        "replacement_blend_alpha": 0.70,
     }
     params.update(roto_category_field_defaults)
     return params

@@ -22,6 +22,15 @@ class CalculateRequest(BaseModel):
     mode: Literal["common"] = "common"
     scoring_mode: Literal["roto", "points"] = "roto"
     two_way: Literal["sum", "max"] = "sum"
+    sgp_denominator_mode: Literal["classic", "robust"] = "classic"
+    sgp_winsor_low_pct: float = Field(default=0.10, ge=0.0, le=1.0)
+    sgp_winsor_high_pct: float = Field(default=0.90, ge=0.0, le=1.0)
+    sgp_epsilon_counting: float = Field(default=0.15, ge=0.0, le=1000.0)
+    sgp_epsilon_ratio: float = Field(default=0.0015, ge=0.0, le=1000.0)
+    enable_playing_time_reliability: bool = False
+    enable_age_risk_adjustment: bool = False
+    enable_replacement_blend: bool = False
+    replacement_blend_alpha: float = Field(default=0.70, ge=0.0, le=1.0)
     teams: int = Field(default=12, ge=2, le=30)
     sims: int = Field(default=300, ge=1, le=5000)
     horizon: int = Field(default=20, ge=1, le=20)
@@ -86,6 +95,8 @@ class CalculateRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_ip_bounds(self) -> "CalculateRequest":
+        if self.sgp_winsor_low_pct >= self.sgp_winsor_high_pct:
+            raise ValueError("sgp_winsor_low_pct must be less than sgp_winsor_high_pct")
         if self.ip_max is not None and self.ip_max < self.ip_min:
             raise ValueError("ip_max must be greater than or equal to ip_min")
         total_hitter_slots = (
@@ -324,6 +335,15 @@ class CalculatorService:
                         two_way=req.two_way,
                         start_year=req.start_year,
                         recent_projections=req.recent_projections,
+                        sgp_denominator_mode=req.sgp_denominator_mode,
+                        sgp_winsor_low_pct=req.sgp_winsor_low_pct,
+                        sgp_winsor_high_pct=req.sgp_winsor_high_pct,
+                        sgp_epsilon_counting=req.sgp_epsilon_counting,
+                        sgp_epsilon_ratio=req.sgp_epsilon_ratio,
+                        enable_playing_time_reliability=req.enable_playing_time_reliability,
+                        enable_age_risk_adjustment=req.enable_age_risk_adjustment,
+                        enable_replacement_blend=req.enable_replacement_blend,
+                        replacement_blend_alpha=req.replacement_blend_alpha,
                         **self._ctx.roto_category_settings_from_dict(settings),
                     ).copy(deep=True)
             except ValueError as calc_error:
