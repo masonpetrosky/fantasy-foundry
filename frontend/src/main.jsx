@@ -8,6 +8,7 @@ import { PRIMARY_NAV_ITEMS } from "./app_content.js";
 import { ProjectionsExplorer } from "./projections_explorer.jsx";
 import { DynastyCalculator } from "./dynasty_calculator.jsx";
 import { setAnalyticsContext, trackEvent } from "./analytics.js";
+import { ErrorBoundary } from "./error_boundary.jsx";
 import { runQuickStartFlow } from "./quick_start.js";
 import { useVersionPolling } from "./hooks/useVersionPolling.js";
 import { useAccountSync } from "./hooks/useAccountSync.js";
@@ -621,4 +622,8 @@ function App() {
 // ---------------------------------------------------------------------------
 // Mount
 // ---------------------------------------------------------------------------
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
