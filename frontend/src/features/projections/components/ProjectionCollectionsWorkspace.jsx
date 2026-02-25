@@ -26,6 +26,7 @@ export const ProjectionCollectionsWorkspace = React.memo(function ProjectionColl
   compareRows,
   comparisonColumns,
   removeCompareRow,
+  copyCompareShareLink,
   colLabels,
   formatCellValue,
 }) {
@@ -52,6 +53,11 @@ export const ProjectionCollectionsWorkspace = React.memo(function ProjectionColl
         <button type="button" className="inline-btn" onClick={clearCompareRows} disabled={compareRowsCount === 0}>
           Clear Compare
         </button>
+        {copyCompareShareLink && (
+          <button type="button" className="inline-btn" onClick={copyCompareShareLink} disabled={compareRowsCount === 0}>
+            Copy Share Link
+          </button>
+        )}
       </div>
       {compareRowsCount > 0 && (
         <Suspense fallback={null}>
@@ -62,6 +68,7 @@ export const ProjectionCollectionsWorkspace = React.memo(function ProjectionColl
             colLabels={colLabels}
             formatCellValue={formatCellValue}
             removeCompareRow={removeCompareRow}
+            copyCompareShareLink={copyCompareShareLink}
           />
         </Suspense>
       )}

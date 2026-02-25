@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
 export function buildProjectionComparisonColumns({
   tab,
@@ -37,6 +37,18 @@ export function useProjectionComparisonComposition({
     [tab, seasonCol]
   );
 
+  const copyCompareShareLink = useCallback(() => {
+    const keys = Object.keys(collections.compareRowsByKey || {});
+    if (keys.length === 0) return;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("compare", keys.join(","));
+      navigator.clipboard.writeText(url.toString()).catch(() => {});
+    } catch {
+      // clipboard not available; silently no-op
+    }
+  }, [collections.compareRowsByKey]);
+
   return {
     compareRowsByKey: collections.compareRowsByKey,
     compareRows: collections.compareRows,
@@ -46,6 +58,7 @@ export function useProjectionComparisonComposition({
     removeCompareRow: collections.removeCompareRow,
     clearCompareRows: collections.clearCompareRows,
     comparisonColumns,
+    copyCompareShareLink,
     workspaceHasComparisonActivity: collections.compareRows.length > 0,
   };
 }

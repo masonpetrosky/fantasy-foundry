@@ -1,23 +1,43 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  buildCloudPreferencesPayload,
+  buildWatchlistCsv,
+  calculationRowExplainKey,
   calculatorPresetsEqual,
+  clearLastSuccessfulCalcRun,
+  decodeCalculatorSettings,
+  encodeCalculatorSettings,
+  FIRST_RUN_STATE_COMPLETED,
   FIRST_RUN_STATE_DISMISSED_PRE_SUCCESS,
   FIRST_RUN_STATE_NEW,
+  formatAuthError,
   mergeCalculatorPresetsPreferLocal,
-  readFirstRunState,
-  readLastSuccessfulCalcRun,
+  mergeKnownCalculatorSettings,
+  normalizeCloudPreferences,
+  normalizePlayerKey,
+  playerWatchEntryFromRow,
+  projectionRowKey,
   readCalculatorPanelOpenPreference,
+  readCalculatorPresets,
+  readFirstRunState,
+  readHiddenColumnOverridesByTab,
+  readLastSuccessfulCalcRun,
   readOnboardingDismissed,
+  readPlayerWatchlist,
+  readProjectionFilterPresets,
   readSessionFirstRunLandingTimestamp,
   readSessionFirstRunSuccessRecorded,
-  readProjectionFilterPresets,
-  writeFirstRunState,
-  writeLastSuccessfulCalcRun,
+  stablePlayerKeyFromRow,
   writeCalculatorPanelOpenPreference,
+  writeCalculatorPresets,
+  writeFirstRunState,
+  writeHiddenColumnOverridesByTab,
+  writeLastSuccessfulCalcRun,
   writeOnboardingDismissed,
+  writePlayerWatchlist,
+  writeProjectionFilterPresets,
   writeSessionFirstRunLandingTimestamp,
   writeSessionFirstRunSuccessRecorded,
-  writeProjectionFilterPresets,
 } from "./app_state_storage.js";
 
 function withStorage(initialValues = {}) {
@@ -245,5 +265,268 @@ describe("projection filter preset storage", () => {
   it("falls back to null custom preset on malformed storage", () => {
     withStorage({ "ff:proj-filter-presets:v1": "{bad json" });
     expect(readProjectionFilterPresets()).toEqual({ custom: null });
+  });
+});
+
+describe("clearLastSuccessfulCalcRun", () => {
+  it("removes the stored run from localStorage", () => {
+    const { store } = withStorage({ "ff:last-successful-calc-run:v1": "{}" });
+    clearLastSuccessfulCalcRun();
+    expect(Object.prototype.hasOwnProperty.call(store, "ff:last-successful-calc-run:v1")).toBe(false);
+  });
+});
+
+describe("normalizePlayerKey", () => {
+  it("lowercases and strips non-alphanumeric chars to hyphens", () => {
+    expect(normalizePlayerKey("Juan Soto")).toBe("juan-soto");
+    expect(normalizePlayerKey("Mike Trout")).toBe("mike-trout");
+    expect(normalizePlayerKey("  A.J. Pollock  ")).toBe("a-j-pollock");
+  });
+
+  it("returns 'unknown-player' for blank input", () => {
+    expect(normalizePlayerKey("")).toBe("unknown-player");
+    expect(normalizePlayerKey(null)).toBe("unknown-player");
+  });
+});
+
+describe("calculationRowExplainKey", () => {
+  it("prefers PlayerEntityKey, then PlayerKey, then normalizes Player", () => {
+    expect(calculationRowExplainKey({ PlayerEntityKey: "soto-ek" })).toBe("soto-ek");
+    expect(calculationRowExplainKey({ PlayerKey: "soto-pk" })).toBe("soto-pk");
+    expect(calculationRowExplainKey({ Player: "Juan Soto" })).toBe("juan-soto");
+  });
+});
+
+describe("projectionRowKey", () => {
+  it("builds key from entity key when present", () => {
+    const row = { PlayerEntityKey: "soto-ek", Year: 2027 };
+    const key = projectionRowKey(row, 0);
+    expect(key).toContain("soto-ek");
+  });
+
+  it("builds composite key when no entity key", () => {
+    const row = { Player: "Juan Soto", Team: "NYY", Year: "2027", Type: "H" };
+    const key = projectionRowKey(row, 5);
+    expect(key).toContain("Juan Soto");
+    expect(key).toContain("NYY");
+    expect(key).toContain("5");
+  });
+
+  it("appends fallback index to pipe-separated composite key for empty rows", () => {
+    const key = projectionRowKey({}, 3);
+    expect(key).toContain("3");
+    expect(key).not.toContain("undefined");
+  });
+});
+
+describe("stablePlayerKeyFromRow", () => {
+  it("uses PlayerEntityKey when available", () => {
+    expect(stablePlayerKeyFromRow({ PlayerEntityKey: "ek-1" })).toBe("ek-1");
+  });
+
+  it("falls back to PlayerKey, then normalizes Player+Team", () => {
+    expect(stablePlayerKeyFromRow({ PlayerKey: "pk-1" })).toBe("pk-1");
+    expect(stablePlayerKeyFromRow({ Player: "Juan Soto", Team: "NYY" })).toBe("juan-soto__nyy");
+    expect(stablePlayerKeyFromRow({ Player: "Juan Soto" })).toBe("juan-soto");
+  });
+});
+
+describe("playerWatchEntryFromRow", () => {
+  it("builds a normalized watch entry from a row", () => {
+    const row = { PlayerEntityKey: "soto-ek", Player: "Juan Soto", Team: "NYY", Pos: "OF" };
+    const entry = playerWatchEntryFromRow(row);
+    expect(entry.key).toBe("soto-ek");
+    expect(entry.player).toBe("Juan Soto");
+    expect(entry.team).toBe("NYY");
+    expect(entry.pos).toBe("OF");
+  });
+
+  it("defaults player to Unknown Player when blank", () => {
+    const entry = playerWatchEntryFromRow({});
+    expect(entry.player).toBe("Unknown Player");
+  });
+});
+
+describe("calculator preset storage", () => {
+  it("reads empty presets when storage is empty", () => {
+    withStorage();
+    expect(readCalculatorPresets()).toEqual({});
+  });
+
+  it("round-trips a preset object", () => {
+    const { store } = withStorage();
+    const presets = { "My League": { teams: 14, scoring_mode: "roto" } };
+    writeCalculatorPresets(presets);
+    expect(store["ff:calc-presets:v1"]).toBeTruthy();
+    const loaded = readCalculatorPresets();
+    expect(loaded["My League"]).toEqual({ teams: 14, scoring_mode: "roto" });
+  });
+
+  it("returns empty object on malformed storage", () => {
+    withStorage({ "ff:calc-presets:v1": "{{invalid" });
+    expect(readCalculatorPresets()).toEqual({});
+  });
+});
+
+describe("player watchlist storage", () => {
+  it("reads empty watchlist when storage is empty", () => {
+    withStorage();
+    expect(readPlayerWatchlist()).toEqual({});
+  });
+
+  it("round-trips a watchlist object", () => {
+    const { store } = withStorage();
+    const watchlist = {
+      "juan-soto": { key: "juan-soto", player: "Juan Soto", team: "NYY", pos: "OF" },
+    };
+    writePlayerWatchlist(watchlist);
+    expect(store["ff:player-watchlist:v1"]).toBeTruthy();
+    const loaded = readPlayerWatchlist();
+    expect(loaded["juan-soto"].player).toBe("Juan Soto");
+  });
+
+  it("returns empty on malformed storage", () => {
+    withStorage({ "ff:player-watchlist:v1": "{bad}" });
+    expect(readPlayerWatchlist()).toEqual({});
+  });
+});
+
+describe("hidden column overrides storage", () => {
+  it("returns normalized defaults when nothing stored", () => {
+    withStorage();
+    const overrides = readHiddenColumnOverridesByTab("ff:proj-table-hidden-cols:v1");
+    expect(typeof overrides).toBe("object");
+  });
+
+  it("round-trips hidden column data", () => {
+    const { store } = withStorage();
+    writeHiddenColumnOverridesByTab("ff:proj-table-hidden-cols:v1", { all: ["ERA", "WHIP"] });
+    expect(store["ff:proj-table-hidden-cols:v1"]).toBeTruthy();
+    const loaded = readHiddenColumnOverridesByTab("ff:proj-table-hidden-cols:v1");
+    expect(typeof loaded).toBe("object");
+  });
+});
+
+describe("normalizeCloudPreferences", () => {
+  it("returns empty defaults for null/non-object input", () => {
+    expect(normalizeCloudPreferences(null)).toEqual({ calculatorPresets: {}, playerWatchlist: {} });
+    expect(normalizeCloudPreferences([])).toEqual({ calculatorPresets: {}, playerWatchlist: {} });
+  });
+
+  it("normalizes cloud preferences from raw API response", () => {
+    const raw = {
+      calculator_presets: { "League": { teams: 12 } },
+      player_watchlist: {
+        "soto": { key: "soto", player: "Juan Soto", team: "NYY", pos: "OF" },
+      },
+    };
+    const prefs = normalizeCloudPreferences(raw);
+    expect(prefs.calculatorPresets["League"]).toBeDefined();
+    expect(prefs.playerWatchlist["soto"]).toBeDefined();
+  });
+});
+
+describe("buildCloudPreferencesPayload", () => {
+  it("builds a versioned payload for cloud sync", () => {
+    const payload = buildCloudPreferencesPayload({ calculatorPresets: {}, playerWatchlist: {} });
+    expect(typeof payload.version).toBe("number");
+    expect(payload.calculator_presets).toBeDefined();
+    expect(payload.player_watchlist).toBeDefined();
+  });
+});
+
+describe("formatAuthError", () => {
+  it("returns error message when present", () => {
+    expect(formatAuthError({ message: "Invalid email" }, "Unknown error")).toBe("Invalid email");
+  });
+
+  it("returns fallback when no message", () => {
+    expect(formatAuthError({}, "Fallback")).toBe("Fallback");
+    expect(formatAuthError(null, "Fallback")).toBe("Fallback");
+  });
+});
+
+describe("buildWatchlistCsv", () => {
+  it("produces a CSV with header and rows sorted by player name", () => {
+    const watchlist = {
+      "b": { key: "b", player: "Zach Miller", team: "CHC", pos: "C" },
+      "a": { key: "a", player: "Aaron Judge", team: "NYY", pos: "OF" },
+    };
+    const csv = buildWatchlistCsv(watchlist);
+    const lines = csv.split("\n");
+    expect(lines[0]).toBe("Player,Team,Pos,PlayerKey");
+    expect(lines[1]).toContain("Aaron Judge");
+    expect(lines[2]).toContain("Zach Miller");
+  });
+
+  it("escapes commas and quotes in player names", () => {
+    const watchlist = {
+      "k": { key: "k", player: 'Smith, Jr. "The Kid"', team: "LAD", pos: "OF" },
+    };
+    const csv = buildWatchlistCsv(watchlist);
+    expect(csv).toContain('"Smith, Jr. ""The Kid"""');
+  });
+
+  it("returns just the header for an empty watchlist", () => {
+    const csv = buildWatchlistCsv({});
+    expect(csv).toBe("Player,Team,Pos,PlayerKey");
+  });
+});
+
+describe("mergeKnownCalculatorSettings", () => {
+  it("only merges keys that exist in baseSettings", () => {
+    const base = { teams: 12, horizon: 20 };
+    const incoming = { teams: 14, unknown_key: "ignored", horizon: 15 };
+    const merged = mergeKnownCalculatorSettings(base, incoming);
+    expect(merged.teams).toBe(14);
+    expect(merged.horizon).toBe(15);
+    expect(merged.unknown_key).toBeUndefined();
+  });
+
+  it("returns base unchanged when incoming is null", () => {
+    const base = { teams: 12 };
+    const merged = mergeKnownCalculatorSettings(base, null);
+    expect(merged.teams).toBe(12);
+  });
+});
+
+describe("encodeCalculatorSettings / decodeCalculatorSettings", () => {
+  it("round-trips settings through encode/decode", () => {
+    vi.stubGlobal("window", {
+      btoa: s => globalThis.btoa(s),
+      atob: s => globalThis.atob(s),
+    });
+
+    const settings = { teams: 12, horizon: 20, scoring_mode: "roto" };
+    const encoded = encodeCalculatorSettings(settings);
+    expect(typeof encoded).toBe("string");
+    expect(encoded.length).toBeGreaterThan(0);
+
+    const decoded = decodeCalculatorSettings(encoded);
+    expect(decoded).toEqual(settings);
+  });
+
+  it("returns null for empty or invalid encoded strings", () => {
+    vi.stubGlobal("window", {
+      atob: () => { throw new Error("invalid"); },
+    });
+    expect(decodeCalculatorSettings("")).toBeNull();
+    expect(decodeCalculatorSettings("!!!invalid!!!")).toBeNull();
+  });
+
+  it("returns empty string from encodeCalculatorSettings on failure", () => {
+    vi.stubGlobal("window", {
+      btoa: () => { throw new Error("fail"); },
+    });
+    expect(encodeCalculatorSettings({ x: 1 })).toBe("");
+  });
+});
+
+describe("writeFirstRunState completed state", () => {
+  it("persists FIRST_RUN_STATE_COMPLETED without setting dismissed flag", () => {
+    const { store } = withStorage();
+    writeFirstRunState(FIRST_RUN_STATE_COMPLETED);
+    expect(store["ff:first-run-state:v1"]).toBe(FIRST_RUN_STATE_COMPLETED);
+    expect(store["ff:onboarding-dismissed:v1"]).toBe("0");
   });
 });

@@ -220,6 +220,39 @@
 
   .filter-bar { gap: 10px; }
 
+  /* ---- Mobile filter drawer ---- */
+  .filter-bar-mobile-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+
+  .filter-mobile-toggle {
+    flex-shrink: 0;
+    min-height: 44px;
+    padding: 10px 14px;
+    touch-action: manipulation;
+  }
+
+  .active-filter-chip-row-mobile {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* Hide the filter controls panel by default on mobile */
+  .filter-controls-panel {
+    display: none;
+  }
+
+  .filter-controls-panel.filter-controls-open {
+    display: block;
+  }
+
   .filter-preset-row {
     gap: 6px;
   }
@@ -237,11 +270,34 @@
     flex: 1 1 100%;
   }
 
+  /* Touch target improvements — 44px minimum */
+  .inline-btn {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 12px;
+    touch-action: manipulation;
+  }
+
+  .filter-bar select,
+  .filter-bar input[type="text"] {
+    min-height: 44px;
+  }
+
+  .multi-select-trigger {
+    min-height: 44px;
+  }
+
   .result-count {
     margin-left: 0;
     width: 100%;
     text-align: left;
   }
+
+  /* Show mobile filter row, hide duplicate active-filter-row */
+  .filter-bar-mobile-row { display: flex; }
+  .active-filter-row { display: none; }
 
   .active-filter-row {
     align-items: flex-start;

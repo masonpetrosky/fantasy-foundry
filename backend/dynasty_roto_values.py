@@ -2,90 +2,182 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple
 
 import numpy as np
 import pandas as pd
 
 try:
-    from backend.valuation.assignment import (
-        HAVE_SCIPY,
-        assign_players_to_slots,
-        assign_players_to_slots_with_vacancy_fill,
-        build_slot_list,
-        build_team_slot_template,
-        expand_slot_counts,
-        league_assign_players_to_slots,
-        league_build_slot_list,
-        league_build_team_slot_template,
-        league_expand_slot_counts,
-        validate_assigned_slots,
-    )
-    from backend.valuation.models import (
-        CommonDynastyRotoSettings,
-        HIT_CATS,
-        HIT_COMPONENT_COLS,
-        LEAGUE_HIT_STAT_COLS,
-        LeagueSettings,
-        PIT_CATS,
-        PIT_COMPONENT_COLS,
-    )
-    from backend.valuation.positions import (
-        eligible_hit_slots,
-        eligible_pit_slots,
-        league_eligible_hit_slots,
-        league_eligible_pit_slots,
-        league_parse_hit_positions,
-        league_parse_pit_positions,
-        parse_hit_positions,
-        parse_pit_positions,
-    )
     from backend.valuation import common_math as _common_math
     from backend.valuation import league_math as _league_math
     from backend.valuation import minor_eligibility as _minor_elig
     from backend.valuation import projection_averaging as _projection_averaging
     from backend.valuation import projection_identity as _projection_identity
     from backend.valuation import xlsx_formatting as _xlsx_fmt
+    from backend.valuation.assignment import (
+        HAVE_SCIPY as HAVE_SCIPY,
+    )
+    from backend.valuation.assignment import (
+        assign_players_to_slots as assign_players_to_slots,
+    )
+    from backend.valuation.assignment import (
+        assign_players_to_slots_with_vacancy_fill as assign_players_to_slots_with_vacancy_fill,
+    )
+    from backend.valuation.assignment import (
+        build_slot_list as build_slot_list,
+    )
+    from backend.valuation.assignment import (
+        build_team_slot_template as build_team_slot_template,
+    )
+    from backend.valuation.assignment import (
+        expand_slot_counts as expand_slot_counts,
+    )
+    from backend.valuation.assignment import (
+        league_assign_players_to_slots as league_assign_players_to_slots,
+    )
+    from backend.valuation.assignment import (
+        league_build_slot_list as league_build_slot_list,
+    )
+    from backend.valuation.assignment import (
+        league_build_team_slot_template as league_build_team_slot_template,
+    )
+    from backend.valuation.assignment import (
+        league_expand_slot_counts as league_expand_slot_counts,
+    )
+    from backend.valuation.assignment import (
+        validate_assigned_slots as validate_assigned_slots,
+    )
+    from backend.valuation.models import (
+        HIT_CATS as HIT_CATS,
+    )
+    from backend.valuation.models import (
+        HIT_COMPONENT_COLS as HIT_COMPONENT_COLS,
+    )
+    from backend.valuation.models import (
+        LEAGUE_HIT_STAT_COLS as LEAGUE_HIT_STAT_COLS,
+    )
+    from backend.valuation.models import (
+        PIT_CATS as PIT_CATS,
+    )
+    from backend.valuation.models import (
+        PIT_COMPONENT_COLS as PIT_COMPONENT_COLS,
+    )
+    from backend.valuation.models import (
+        CommonDynastyRotoSettings as CommonDynastyRotoSettings,
+    )
+    from backend.valuation.models import (
+        LeagueSettings as LeagueSettings,
+    )
+    from backend.valuation.positions import (
+        eligible_hit_slots as eligible_hit_slots,
+    )
+    from backend.valuation.positions import (
+        eligible_pit_slots as eligible_pit_slots,
+    )
+    from backend.valuation.positions import (
+        league_eligible_hit_slots as league_eligible_hit_slots,
+    )
+    from backend.valuation.positions import (
+        league_eligible_pit_slots as league_eligible_pit_slots,
+    )
+    from backend.valuation.positions import (
+        league_parse_hit_positions as league_parse_hit_positions,
+    )
+    from backend.valuation.positions import (
+        league_parse_pit_positions as league_parse_pit_positions,
+    )
+    from backend.valuation.positions import (
+        parse_hit_positions as parse_hit_positions,
+    )
+    from backend.valuation.positions import (
+        parse_pit_positions as parse_pit_positions,
+    )
 except ImportError:
     # Support direct execution/import when /backend is added to sys.path.
+    from valuation import common_math as _common_math  # type: ignore[no-redef]
+    from valuation import league_math as _league_math  # type: ignore[no-redef]
+    from valuation import minor_eligibility as _minor_elig  # type: ignore[no-redef]
+    from valuation import projection_averaging as _projection_averaging  # type: ignore[no-redef]
+    from valuation import projection_identity as _projection_identity  # type: ignore[no-redef]
+    from valuation import xlsx_formatting as _xlsx_fmt  # type: ignore[no-redef]
+    from valuation.assignment import (  # type: ignore[no-redef]
+        HAVE_SCIPY as HAVE_SCIPY,
+    )
     from valuation.assignment import (
-        HAVE_SCIPY,
-        assign_players_to_slots,
-        assign_players_to_slots_with_vacancy_fill,
-        build_slot_list,
-        build_team_slot_template,
-        expand_slot_counts,
-        league_assign_players_to_slots,
-        league_build_slot_list,
-        league_build_team_slot_template,
-        league_expand_slot_counts,
-        validate_assigned_slots,
+        assign_players_to_slots as assign_players_to_slots,
+    )
+    from valuation.assignment import (
+        assign_players_to_slots_with_vacancy_fill as assign_players_to_slots_with_vacancy_fill,
+    )
+    from valuation.assignment import (
+        build_slot_list as build_slot_list,
+    )
+    from valuation.assignment import (
+        build_team_slot_template as build_team_slot_template,
+    )
+    from valuation.assignment import (
+        expand_slot_counts as expand_slot_counts,
+    )
+    from valuation.assignment import (
+        league_assign_players_to_slots as league_assign_players_to_slots,
+    )
+    from valuation.assignment import (
+        league_build_slot_list as league_build_slot_list,
+    )
+    from valuation.assignment import (
+        league_build_team_slot_template as league_build_team_slot_template,
+    )
+    from valuation.assignment import (
+        league_expand_slot_counts as league_expand_slot_counts,
+    )
+    from valuation.assignment import (
+        validate_assigned_slots as validate_assigned_slots,
+    )
+    from valuation.models import (  # type: ignore[no-redef]
+        HIT_CATS as HIT_CATS,
     )
     from valuation.models import (
-        CommonDynastyRotoSettings,
-        HIT_CATS,
-        HIT_COMPONENT_COLS,
-        LEAGUE_HIT_STAT_COLS,
-        LeagueSettings,
-        PIT_CATS,
-        PIT_COMPONENT_COLS,
+        HIT_COMPONENT_COLS as HIT_COMPONENT_COLS,
+    )
+    from valuation.models import (
+        LEAGUE_HIT_STAT_COLS as LEAGUE_HIT_STAT_COLS,
+    )
+    from valuation.models import (
+        PIT_CATS as PIT_CATS,
+    )
+    from valuation.models import (
+        PIT_COMPONENT_COLS as PIT_COMPONENT_COLS,
+    )
+    from valuation.models import (
+        CommonDynastyRotoSettings as CommonDynastyRotoSettings,
+    )
+    from valuation.models import (
+        LeagueSettings as LeagueSettings,
+    )
+    from valuation.positions import (  # type: ignore[no-redef]
+        eligible_hit_slots as eligible_hit_slots,
     )
     from valuation.positions import (
-        eligible_hit_slots,
-        eligible_pit_slots,
-        league_eligible_hit_slots,
-        league_eligible_pit_slots,
-        league_parse_hit_positions,
-        league_parse_pit_positions,
-        parse_hit_positions,
-        parse_pit_positions,
+        eligible_pit_slots as eligible_pit_slots,
     )
-    from valuation import common_math as _common_math
-    from valuation import league_math as _league_math
-    from valuation import minor_eligibility as _minor_elig
-    from valuation import projection_averaging as _projection_averaging
-    from valuation import projection_identity as _projection_identity
-    from valuation import xlsx_formatting as _xlsx_fmt
+    from valuation.positions import (
+        league_eligible_hit_slots as league_eligible_hit_slots,
+    )
+    from valuation.positions import (
+        league_eligible_pit_slots as league_eligible_pit_slots,
+    )
+    from valuation.positions import (
+        league_parse_hit_positions as league_parse_hit_positions,
+    )
+    from valuation.positions import (
+        league_parse_pit_positions as league_parse_pit_positions,
+    )
+    from valuation.positions import (
+        parse_hit_positions as parse_hit_positions,
+    )
+    from valuation.positions import (
+        parse_pit_positions as parse_pit_positions,
+    )
 
 # Projection de-duplication helpers
 PROJECTION_DATE_COLS = _projection_identity.PROJECTION_DATE_COLS

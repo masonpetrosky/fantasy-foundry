@@ -132,6 +132,33 @@ def build_projections_router(
             request=request,
         )
 
+    @router.get("/api/projections/player/{player_id}", response_model=ProjectionListResponse, responses=PROJECTION_ERROR_RESPONSES)
+    def get_player_projection_series(
+        request: Request,
+        player_id: str,
+        dataset: Literal["all", "bat", "pitch"] = "all",
+        include_dynasty: bool = True,
+        calculator_job_id: str | None = None,
+    ):
+        return projection_response_handler(
+            dataset,
+            player=None,
+            team=None,
+            player_keys=player_id,
+            year=None,
+            years=None,
+            pos=None,
+            dynasty_years=None,
+            career_totals=False,
+            include_dynasty=include_dynasty,
+            calculator_job_id=calculator_job_id,
+            sort_col="Year",
+            sort_dir="asc",
+            limit=5000,
+            offset=0,
+            request=request,
+        )
+
     @router.get("/api/projections/export/{dataset}")
     def export_projections(
         request: Request,

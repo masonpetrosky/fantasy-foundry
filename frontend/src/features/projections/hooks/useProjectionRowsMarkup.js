@@ -27,6 +27,7 @@ export function useProjectionRowsMarkup({
   toggleRowWatch,
   toggleCompareRow,
   quickAddRow,
+  onViewProfile,
 }) {
   const threeDecimalCols = THREE_DECIMAL_COLS;
   const twoDecimalCols = TWO_DECIMAL_COLS;
@@ -94,6 +95,16 @@ export function useProjectionRowsMarkup({
               >
                 {rowWatch && isCompared ? "Quick Added" : "Quick +"}
               </button>
+              {onViewProfile && (
+                <button
+                  type="button"
+                  className="inline-btn"
+                  onClick={() => onViewProfile(row)}
+                  aria-label={`View profile for ${row.Player || "player"}`}
+                >
+                  Profile
+                </button>
+              )}
             </div>
           </div>
           <p className="projection-card-meta">{row.Team || "—"} · {row.Pos || "—"}</p>
@@ -121,6 +132,7 @@ export function useProjectionRowsMarkup({
     toggleRowWatch,
     toggleCompareRow,
     quickAddRow,
+    onViewProfile,
   ]);
 
   const tableRowsMarkup = useMemo(() => {
@@ -161,6 +173,16 @@ export function useProjectionRowsMarkup({
             >
               {rowWatch && isCompared ? "Quick Added" : "Quick +"}
             </button>
+            {onViewProfile && (
+              <button
+                type="button"
+                className="inline-btn"
+                onClick={() => onViewProfile(row)}
+                aria-label={`View profile for ${row.Player || "player"}`}
+              >
+                Profile
+              </button>
+            )}
           </td>
         </tr>
       );
@@ -178,6 +200,7 @@ export function useProjectionRowsMarkup({
     quickAddRow,
     compareRowsCount,
     maxComparePlayers,
+    onViewProfile,
   ]);
 
   return {

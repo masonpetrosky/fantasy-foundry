@@ -8,6 +8,7 @@ export const ProjectionComparisonPanel = React.memo(function ProjectionCompariso
   colLabels,
   formatCellValue,
   removeCompareRow,
+  copyCompareShareLink,
 }) {
   if (compareRows.length === 0) return null;
 
@@ -16,6 +17,11 @@ export const ProjectionComparisonPanel = React.memo(function ProjectionCompariso
       <div className="comparison-header">
         <strong>Player Comparison</strong>
         <span>{compareRows.length}/{maxComparePlayers} selected</span>
+        {copyCompareShareLink && (
+          <button type="button" className="inline-btn" onClick={copyCompareShareLink} aria-label="Copy shareable comparison link">
+            Share
+          </button>
+        )}
       </div>
       <div className="comparison-grid">
         {compareRows.map(row => {

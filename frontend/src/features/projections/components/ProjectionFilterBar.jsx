@@ -43,6 +43,7 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
   exportCurrentProjections,
 }) {
   const [showPosMenu, setShowPosMenu] = useState(false);
+  const [filterExpanded, setFilterExpanded] = useState(false);
   const posMenuRef = useRef(null);
   const posMenuTriggerRef = useRef(null);
   const posMenuId = useId();
@@ -92,8 +93,35 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
     ));
   }
 
+  const filterToggleId = `${posMenuId}-filter-toggle`;
+
   return (
     <>
+      <div className="filter-bar-mobile-row">
+        <button
+          id={filterToggleId}
+          type="button"
+          className={`inline-btn filter-mobile-toggle ${filterExpanded ? "open" : ""}`.trim()}
+          aria-expanded={filterExpanded}
+          aria-controls="filter-controls-panel"
+          onClick={() => setFilterExpanded(v => !v)}
+        >
+          {hasActiveFilters ? `Filters (${activeFilterChips.length} active)` : "Filters"}
+          <span aria-hidden="true">{filterExpanded ? " ▲" : " ▼"}</span>
+        </button>
+        <div className="active-filter-chip-row active-filter-chip-row-mobile" role="status" aria-live="polite">
+          {hasActiveFilters ? activeFilterChips.map(chip => (
+            <span key={chip} className="filter-chip">{chip}</span>
+          )) : (
+            <span className="filter-chip filter-chip-empty">No active filters</span>
+          )}
+        </div>
+      </div>
+
+      <div
+        id="filter-controls-panel"
+        className={`filter-controls-panel ${filterExpanded ? "filter-controls-open" : ""}`.trim()}
+      >
       <div className="filter-preset-row" role="group" aria-label="Projection filter presets">
         <span className="filter-preset-label">Presets</span>
         <button
@@ -246,6 +274,8 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
           {exportingFormat === "xlsx" ? "Exporting XLSX..." : "Export XLSX"}
         </button>
       </div>
+      </div>{/* end filter-controls-panel */}
+
       <div className="active-filter-row" role="status" aria-live="polite">
         <span className="active-filter-label">Active filters</span>
         <div className="active-filter-chip-row">

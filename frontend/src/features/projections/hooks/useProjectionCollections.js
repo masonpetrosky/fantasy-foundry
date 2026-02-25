@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { trackEvent } from "../../../analytics.js";
 import {
   MAX_COMPARE_PLAYERS,
@@ -8,8 +8,40 @@ import {
 } from "../../../app_state_storage.js";
 import { downloadBlob } from "../../../download_helpers.js";
 
+function parseCompareKeysFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("compare") || "";
+    return raw
+      .split(",")
+      .map(k => k.trim().toLowerCase())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 export function useProjectionCollections({ watchlist, setWatchlist, data }) {
   const [compareRowsByKey, setCompareRowsByKey] = useState({});
+  const pendingCompareKeys = useRef(parseCompareKeysFromUrl());
+
+  // Seed compare rows from URL param on first data load
+  useEffect(() => {
+    if (!Array.isArray(data) || data.length === 0) return;
+    const pending = pendingCompareKeys.current;
+    if (pending.length === 0) return;
+    pendingCompareKeys.current = [];
+    const seeds = {};
+    data.forEach(row => {
+      const key = stablePlayerKeyFromRow(row);
+      if (pending.includes(key.toLowerCase()) && Object.keys(seeds).length < MAX_COMPARE_PLAYERS) {
+        seeds[key] = row;
+      }
+    });
+    if (Object.keys(seeds).length > 0) {
+      setCompareRowsByKey(seeds);
+    }
+  }, [data]);
 
   useEffect(() => {
     if (!Array.isArray(data) || data.length === 0) return;

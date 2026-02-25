@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { formatCellValue } from "../../formatting_utils.js";
 import { useProjectionColumnVisibility } from "./hooks/useProjectionColumnVisibility.js";
 import { useProjectionCollections } from "./hooks/useProjectionCollections.js";
@@ -12,6 +12,7 @@ import { useProjectionRowsMarkup } from "./hooks/useProjectionRowsMarkup.js";
 import { useProjectionWatchlistComposition } from "./hooks/useProjectionWatchlistComposition.js";
 import { CAREER_TOTALS_FILTER_VALUE, DEFAULT_PROJECTIONS_SORT_COL, DEFAULT_PROJECTIONS_SORT_DIR, DEFAULT_PROJECTIONS_TAB, useProjectionsData } from "../../hooks/useProjectionsData.js";
 import { buildActiveFilterChips, resolveProjectionEmptyStateModel, resolveProjectionSwipeHint } from "./view_state.js";
+import { PlayerProfile } from "./components/PlayerProfile.jsx";
 import { ProjectionCollectionsWorkspace } from "./components/ProjectionCollectionsWorkspace.jsx";
 import { ProjectionEmptyStateActions } from "./components/ProjectionEmptyStateActions.jsx";
 import { ProjectionFilterBar } from "./components/ProjectionFilterBar.jsx";
@@ -90,6 +91,9 @@ export function ProjectionsExplorer({
   } = useProjectionLayoutState();
 
   const [, setShowPosMenu] = useState(false);
+  const [profileRow, setProfileRow] = useState(null);
+  const handleViewProfile = useCallback(row => setProfileRow(row), []);
+  const handleCloseProfile = useCallback(() => setProfileRow(null), []);
 
   const {
     hasCalculatorOverlay,
@@ -170,6 +174,7 @@ export function ProjectionsExplorer({
     removeCompareRow,
     clearCompareRows,
     comparisonColumns,
+    copyCompareShareLink,
     workspaceHasComparisonActivity,
   } = useProjectionComparisonComposition({
     collections,
@@ -318,6 +323,7 @@ export function ProjectionsExplorer({
     toggleRowWatch,
     toggleCompareRow,
     quickAddRow,
+    onViewProfile: handleViewProfile,
   });
 
   useEffect(() => {
@@ -424,6 +430,7 @@ export function ProjectionsExplorer({
         compareRows={compareRows}
         comparisonColumns={comparisonColumns}
         removeCompareRow={removeCompareRow}
+        copyCompareShareLink={copyCompareShareLink}
         colLabels={colLabels}
         formatCellValue={formatCellValue}
       />
@@ -467,6 +474,15 @@ export function ProjectionsExplorer({
         offset={offset}
         setOffset={setOffset}
       />
+
+      {profileRow && (
+        <PlayerProfile
+          row={profileRow}
+          tab={tab}
+          apiBase={apiBase}
+          onClose={handleCloseProfile}
+        />
+      )}
     </div>
   );
 }

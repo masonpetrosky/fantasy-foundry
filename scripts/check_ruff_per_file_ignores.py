@@ -6,9 +6,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-EXPECTED_IGNORES: dict[str, set[str]] = {
-    "backend/dynasty_roto_values.py": {"F401", "I001"},
-}
+EXPECTED_IGNORES: dict[str, set[str]] = {}
 
 
 def _load_ruff_per_file_ignores(pyproject_path: Path) -> dict[str, set[str]]:

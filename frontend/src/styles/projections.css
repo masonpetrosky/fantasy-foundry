@@ -47,6 +47,12 @@
 }
 
 /* ====== FILTER BAR ====== */
+/* Mobile-only filter elements: hidden on desktop, shown via responsive.css at ≤768px */
+.filter-bar-mobile-row { display: none; }
+
+/* On desktop the filter controls are always visible */
+.filter-controls-panel { display: block; }
+
 .filter-bar {
   display: flex;
   gap: 12px;
@@ -798,3 +804,115 @@ td.value-negative { color: var(--red); }
   margin: 8px 14px;
 }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ==== Player Profile Modal ==== */
+.player-profile-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.player-profile-dialog {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 860px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  outline: none;
+}
+
+.player-profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.player-profile-name {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.player-profile-meta {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.player-profile-status {
+  padding: 20px;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.player-profile-error { color: var(--red); }
+
+.player-profile-chart {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px 8px;
+  flex-shrink: 0;
+}
+
+.player-profile-chart-label {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.sparkline { display: block; }
+
+.player-profile-table-wrap {
+  overflow: auto;
+  flex: 1 1 auto;
+  padding: 0 20px 16px;
+}
+
+.player-profile-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+
+.player-profile-table th,
+.player-profile-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.player-profile-table th.num,
+.player-profile-table td.num {
+  text-align: right;
+}
+
+.player-profile-table thead th {
+  color: var(--text-secondary);
+  font-weight: 500;
+  border-bottom-color: var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+}
+
+@media (max-width: 600px) {
+  .player-profile-dialog {
+    max-height: 92vh;
+    border-radius: 8px;
+  }
+}
