@@ -1,77 +1,26 @@
-import React, {
-  Suspense,
-  lazy,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  SortableHeaderCell,
-} from "../../accessibility_components.jsx";
-import {
-  projectionRowKey,
-  stablePlayerKeyFromRow,
-} from "../../app_state_storage.js";
-import { trackEvent } from "../../analytics.js";
-import {
-  INT_COLS,
-  THREE_DECIMAL_COLS,
-  TWO_DECIMAL_COLS,
-  WHOLE_NUMBER_COLS,
-  fmt,
-  fmtInt,
-  formatCellValue,
-} from "../../formatting_utils.js";
-import {
-  useProjectionColumnVisibility,
-} from "./hooks/useProjectionColumnVisibility.js";
-import {
-  useProjectionCollections,
-} from "./hooks/useProjectionCollections.js";
-import {
-  useProjectionLayoutState,
-} from "./hooks/useProjectionLayoutState.js";
-import {
-  useProjectionOverlay,
-} from "./hooks/useProjectionOverlay.js";
-import {
-  useProjectionComparisonComposition,
-} from "./hooks/useProjectionComparisonComposition.js";
-import {
-  useProjectionExportPipeline,
-} from "./hooks/useProjectionExportPipeline.js";
-import {
-  useProjectionFilterPresets,
-} from "./hooks/useProjectionFilterPresets.js";
-import {
-  useProjectionWatchlistComposition,
-} from "./hooks/useProjectionWatchlistComposition.js";
-import {
-  CAREER_TOTALS_FILTER_VALUE,
-  DEFAULT_PROJECTIONS_SORT_COL,
-  DEFAULT_PROJECTIONS_SORT_DIR,
-  DEFAULT_PROJECTIONS_TAB,
-  useProjectionsData,
-} from "../../hooks/useProjectionsData.js";
-import {
-  buildActiveFilterChips,
-} from "./view_state.js";
-import { ProjectionOverlayBanner } from "./components/ProjectionOverlayBanner.jsx";
+import React, { useEffect, useMemo, useState } from "react";
+import { formatCellValue } from "../../formatting_utils.js";
+import { useProjectionColumnVisibility } from "./hooks/useProjectionColumnVisibility.js";
+import { useProjectionCollections } from "./hooks/useProjectionCollections.js";
+import { useProjectionLayoutState } from "./hooks/useProjectionLayoutState.js";
+import { useProjectionOverlay } from "./hooks/useProjectionOverlay.js";
+import { useProjectionComparisonComposition } from "./hooks/useProjectionComparisonComposition.js";
+import { useProjectionExportPipeline } from "./hooks/useProjectionExportPipeline.js";
+import { useProjectionFilterPresets } from "./hooks/useProjectionFilterPresets.js";
+import { useProjectionTelemetry } from "./hooks/useProjectionTelemetry.js";
+import { useProjectionRowsMarkup } from "./hooks/useProjectionRowsMarkup.js";
+import { useProjectionWatchlistComposition } from "./hooks/useProjectionWatchlistComposition.js";
+import { CAREER_TOTALS_FILTER_VALUE, DEFAULT_PROJECTIONS_SORT_COL, DEFAULT_PROJECTIONS_SORT_DIR, DEFAULT_PROJECTIONS_TAB, useProjectionsData } from "../../hooks/useProjectionsData.js";
+import { buildActiveFilterChips, resolveProjectionEmptyStateModel, resolveProjectionSwipeHint } from "./view_state.js";
+import { ProjectionCollectionsWorkspace } from "./components/ProjectionCollectionsWorkspace.jsx";
+import { ProjectionEmptyStateActions } from "./components/ProjectionEmptyStateActions.jsx";
 import { ProjectionFilterBar } from "./components/ProjectionFilterBar.jsx";
-import { ColumnChooserControl } from "../../ui_components.jsx";
+import { ProjectionLayoutControls } from "./components/ProjectionLayoutControls.jsx";
+import { ProjectionOverlayBanner } from "./components/ProjectionOverlayBanner.jsx";
+import { ProjectionResultsShell } from "./components/ProjectionResultsShell.jsx";
+import { ProjectionSectionTabs } from "./components/ProjectionSectionTabs.jsx";
+import { ProjectionStatusMessages } from "./components/ProjectionStatusMessages.jsx";
 
-const LazyProjectionComparisonPanel = lazy(() => (
-  import("./components/ProjectionComparisonPanel.jsx").then(module => ({
-    default: module.ProjectionComparisonPanel,
-  }))
-));
-const LazyProjectionWatchlistPanel = lazy(() => (
-  import("./components/ProjectionWatchlistPanel.jsx").then(module => ({
-    default: module.ProjectionWatchlistPanel,
-  }))
-));
 export function ProjectionsExplorer({
   apiBase,
   meta,
@@ -141,9 +90,6 @@ export function ProjectionsExplorer({
   } = useProjectionLayoutState();
 
   const [, setShowPosMenu] = useState(false);
-  const emptyStateTrackedRef = useRef("");
-  const lastRefreshMarkerRef = useRef("");
-  const [lastRefreshedLabel, setLastRefreshedLabel] = useState("");
 
   const {
     hasCalculatorOverlay,
@@ -178,16 +124,13 @@ export function ProjectionsExplorer({
   );
 
   const filterActions = useMemo(() => ({
-    setTab, setSearch, setTeamFilter, setYearFilter,
-    setPosFilters, setWatchlistOnly, setSortCol, setSortDir, setOffset,
-  }), [setTab, setSearch, setTeamFilter, setYearFilter,
-       setPosFilters, setWatchlistOnly, setSortCol, setSortDir, setOffset]);
+    setTab, setSearch, setTeamFilter, setYearFilter, setPosFilters,
+    setWatchlistOnly, setSortCol, setSortDir, setOffset,
+  }), [setTab, setSearch, setTeamFilter, setYearFilter, setPosFilters, setWatchlistOnly, setSortCol, setSortDir, setOffset]);
 
   const filterState = useMemo(() => ({
-    tab, search, teamFilter, resolvedYearFilter,
-    posFilters, watchlistOnly, sortCol, sortDir,
-  }), [tab, search, teamFilter, resolvedYearFilter,
-       posFilters, watchlistOnly, sortCol, sortDir]);
+    tab, search, teamFilter, resolvedYearFilter, posFilters, watchlistOnly, sortCol, sortDir,
+  }), [tab, search, teamFilter, resolvedYearFilter, posFilters, watchlistOnly, sortCol, sortDir]);
 
   const {
     projectionFilterPresets,
@@ -241,6 +184,18 @@ export function ProjectionsExplorer({
       setSortCol(col);
       setSortDir(col === "Player" || col === "Team" || col === "Pos" || col === "Type" || col === "Year" || col === "Years" ? "asc" : "desc");
     }
+  }
+
+  function handleSelectTab(nextTab) {
+    const resolvedTab = nextTab === "bat" || nextTab === "pitch"
+      ? nextTab
+      : DEFAULT_PROJECTIONS_TAB;
+    setTab(resolvedTab);
+    setSortCol(DEFAULT_PROJECTIONS_SORT_COL);
+    setSortDir(DEFAULT_PROJECTIONS_SORT_DIR);
+    setOffset(0);
+    setPosFilters([]);
+    setShowPosMenu(false);
   }
 
   const seasonCol = careerTotalsView ? "Years" : "Year";
@@ -304,214 +259,72 @@ export function ProjectionsExplorer({
     });
     return labels;
   }, [dynastyYearCols]);
-  const threeDecimalCols = THREE_DECIMAL_COLS;
-  const twoDecimalCols = TWO_DECIMAL_COLS;
-  const wholeNumberCols = WHOLE_NUMBER_COLS;
-  const intCols = INT_COLS;
+
   const displayedPage = page;
   const showCards = mobileLayoutMode === "cards";
   const showInitialLoadSkeleton = loading && displayedPage.length === 0;
   const showInlineRefreshError = Boolean(error) && displayedPage.length > 0;
   const searchIsDebouncing = search !== debouncedSearch;
-  const showMobileSwipeHint = !showCards && isMobileViewport && (canScrollLeft || canScrollRight);
-  const swipeHintText = !canScrollLeft && canScrollRight
-    ? "Swipe left for more columns →"
-    : canScrollLeft && canScrollRight
-      ? "← Swipe both directions for more columns →"
-      : "← Swipe right to return";
+
+  const swipeHintModel = useMemo(() => resolveProjectionSwipeHint({
+    canScrollLeft,
+    canScrollRight,
+  }), [canScrollLeft, canScrollRight]);
+  const showMobileSwipeHint = !showCards
+    && isMobileViewport
+    && swipeHintModel.showSwipeHint;
+
   const showCollectionsWorkspace = Boolean(hasSuccessfulCalcRun)
     || workspaceHasWatchlistActivity
     || workspaceHasComparisonActivity;
 
-  const formatProjectionCell = useCallback((col, row) => {
-    const val = row[col];
-    if (col === "Player") return <td key={col} className="player-name">{val}</td>;
-    if (col === "Pos") return <td key={col} className="pos">{val}</td>;
-    if (col === "Team") return <td key={col} className="team">{val}</td>;
-    if (col === "DynastyValue" || col.startsWith("Value_")) {
-      if ((val == null || val === "") && col === "DynastyValue" && row.DynastyMatchStatus === "no_unique_match") {
-        return <td key={col} className="num" style={{color:"var(--text-muted)"}}>No unique match</td>;
-      }
-      const n = Number(val);
-      const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
-      return <td key={col} className={`num ${cls}`}>{fmt(val, 2)}</td>;
-    }
-    if (twoDecimalCols.has(col)) return <td key={col} className="num">{fmt(val, 2)}</td>;
-    if (threeDecimalCols.has(col)) return <td key={col} className="num">{fmt(val, 3)}</td>;
-    if (wholeNumberCols.has(col)) return <td key={col} className="num">{fmtInt(val, true)}</td>;
-    if (intCols.has(col)) return <td key={col} className="num">{fmtInt(val, col !== "Year")}</td>;
-    if (typeof val === "number") return <td key={col} className="num">{fmt(val)}</td>;
-    return <td key={col}>{val ?? "—"}</td>;
-  }, [intCols, threeDecimalCols, twoDecimalCols, wholeNumberCols]);
-  const cardRowsMarkup = useMemo(() => {
-    if (!showCards || displayedPage.length === 0) return [];
+  const emptyStateModel = useMemo(() => resolveProjectionEmptyStateModel({
+    watchlistOnly,
+    resolvedYearFilter,
+    hasActiveFilters,
+    careerTotalsFilterValue: CAREER_TOTALS_FILTER_VALUE,
+  }), [hasActiveFilters, resolvedYearFilter, watchlistOnly]);
 
-    return displayedPage.map((row, idx) => {
-      const rowWatch = isRowWatched(row);
-      const compareKey = stablePlayerKeyFromRow(row);
-      const isCompared = Boolean(compareRowsByKey[compareKey]);
-      const rowWithRank = { ...row, Rank: offset + idx + 1 };
-      const cardCols = projectionCardColumnsForRow(rowWithRank);
-      const rowKey = projectionRowKey(row, offset + idx);
-
-      return (
-        <article className="projection-card" key={rowKey}>
-          <div className="projection-card-head">
-            <h4>{row.Player || "Player"}</h4>
-            <div className="projection-card-actions">
-              <button
-                type="button"
-                className={`inline-btn ${rowWatch ? "open" : ""}`.trim()}
-                onClick={() => toggleRowWatch(row)}
-              >
-                {rowWatch ? "Tracked" : "Track"}
-              </button>
-              <button
-                type="button"
-                className={`inline-btn ${isCompared ? "open" : ""}`.trim()}
-                onClick={() => toggleCompareRow(row)}
-                disabled={!isCompared && compareRowsCount >= maxComparePlayers}
-              >
-                {isCompared ? "Compared" : "Compare"}
-              </button>
-              <button
-                type="button"
-                className={`inline-btn ${rowWatch && isCompared ? "open" : ""}`.trim()}
-                onClick={() => quickAddRow(row)}
-                disabled={!isCompared && !rowWatch && compareRowsCount >= maxComparePlayers}
-                aria-label="Quick add to watchlist and compare"
-              >
-                {rowWatch && isCompared ? "Quick Added" : "Quick +"}
-              </button>
-            </div>
-          </div>
-          <p className="projection-card-meta">{row.Team || "—"} · {row.Pos || "—"}</p>
-          <dl>
-            {cardCols.map(col => (
-              <div className="projection-card-stat" key={`${rowKey}-${col}`}>
-                <dt>{colLabels[col] || col}</dt>
-                <dd>{formatCellValue(col, rowWithRank[col])}</dd>
-              </div>
-            ))}
-          </dl>
-        </article>
-      );
-    });
-  }, [
-    showCards,
+  const {
+    lastRefreshedLabel,
+  } = useProjectionTelemetry({
+    loading,
+    error,
     displayedPage,
-    isRowWatched,
-    compareRowsByKey,
+    tab,
+    resolvedYearFilter,
+    teamFilter,
+    watchlistOnly,
+    search,
+    posFilters,
     offset,
-    projectionCardColumnsForRow,
-    compareRowsCount,
-    maxComparePlayers,
-    colLabels,
-    toggleRowWatch,
-    toggleCompareRow,
-    quickAddRow,
-  ]);
-  const tableRowsMarkup = useMemo(() => {
-    if (showCards || displayedPage.length === 0) return [];
+    totalRows,
+  });
 
-    return displayedPage.map((row, i) => {
-      const rowWatch = isRowWatched(row);
-      const compareKey = stablePlayerKeyFromRow(row);
-      const isCompared = Boolean(compareRowsByKey[compareKey]);
-      const rowKey = projectionRowKey(row, offset + i);
-
-      return (
-        <tr key={rowKey}>
-          <td className="num index-col" style={{color:"var(--text-muted)"}}>{offset + i + 1}</td>
-          {cols.map(col => formatProjectionCell(col, row))}
-          <td className="row-actions-cell">
-            <button
-              type="button"
-              className={`inline-btn ${rowWatch ? "open" : ""}`.trim()}
-              onClick={() => toggleRowWatch(row)}
-            >
-              {rowWatch ? "Tracked" : "Track"}
-            </button>
-            <button
-              type="button"
-              className={`inline-btn ${isCompared ? "open" : ""}`.trim()}
-              onClick={() => toggleCompareRow(row)}
-              disabled={!isCompared && compareRowsCount >= maxComparePlayers}
-            >
-              {isCompared ? "Compared" : "Compare"}
-            </button>
-            <button
-              type="button"
-              className={`inline-btn ${rowWatch && isCompared ? "open" : ""}`.trim()}
-              onClick={() => quickAddRow(row)}
-              disabled={!isCompared && !rowWatch && compareRowsCount >= maxComparePlayers}
-              aria-label="Quick add to watchlist and compare"
-            >
-              {rowWatch && isCompared ? "Quick Added" : "Quick +"}
-            </button>
-          </td>
-        </tr>
-      );
-    });
-  }, [
+  const {
+    cardRowsMarkup,
+    tableRowsMarkup,
+  } = useProjectionRowsMarkup({
     showCards,
     displayedPage,
-    isRowWatched,
-    compareRowsByKey,
     offset,
     cols,
-    formatProjectionCell,
+    colLabels,
+    projectionCardColumnsForRow,
+    isRowWatched,
+    compareRowsByKey,
+    compareRowsCount,
+    maxComparePlayers,
     toggleRowWatch,
     toggleCompareRow,
     quickAddRow,
-    compareRowsCount,
-    maxComparePlayers,
-  ]);
+  });
 
   useEffect(() => {
     const onResize = () => updateProjectionHorizontalAffordance();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [updateProjectionHorizontalAffordance]);
-
-  useEffect(() => {
-    if (loading || error || displayedPage.length > 0) return;
-    const marker = [
-      tab,
-      resolvedYearFilter,
-      teamFilter,
-      watchlistOnly ? "watchlist" : "all",
-      search.trim(),
-      posFilters.join(","),
-    ].join("|");
-    if (emptyStateTrackedRef.current === marker) return;
-    emptyStateTrackedRef.current = marker;
-    trackEvent("ff_projection_empty_state_seen", {
-      tab,
-      watchlist_only: watchlistOnly,
-      has_search: Boolean(search.trim()),
-      has_team_filter: Boolean(teamFilter),
-      has_pos_filters: posFilters.length > 0,
-      year_view: resolvedYearFilter,
-    });
-  }, [displayedPage.length, error, loading, posFilters, resolvedYearFilter, search, tab, teamFilter, watchlistOnly]);
-
-  useEffect(() => {
-    if (loading || error || displayedPage.length === 0) return;
-    const firstRow = displayedPage[0] || {};
-    const marker = [
-      tab,
-      offset,
-      displayedPage.length,
-      totalRows,
-      String(firstRow.Player || ""),
-      String(firstRow.Team || ""),
-      String(firstRow.Year || ""),
-    ].join("|");
-    if (lastRefreshMarkerRef.current === marker) return;
-    lastRefreshMarkerRef.current = marker;
-    setLastRefreshedLabel(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
-  }, [displayedPage, error, loading, offset, tab, totalRows]);
 
   useEffect(() => {
     const raf = window.requestAnimationFrame(() => updateProjectionHorizontalAffordance());
@@ -527,45 +340,25 @@ export function ProjectionsExplorer({
     if (!el) return;
     el.scrollLeft = 0;
     updateProjectionHorizontalAffordance();
-  }, [tab, mobileLayoutMode, isMobileViewport, updateProjectionHorizontalAffordance]);
+  }, [tab, mobileLayoutMode, isMobileViewport, updateProjectionHorizontalAffordance, projectionTableScrollRef]);
 
-  const emptyStateHeadline = watchlistOnly
-    ? "No watchlist players matched this view."
-    : "No projections matched these filters.";
-  const emptyStateGuidance = watchlistOnly
-    ? "Turn off Watchlist View or clear filters to expand results."
-    : "Adjust or clear filters to expand results.";
   const emptyStateActions = (
-    <div className="empty-state-actions">
-      <button type="button" className="inline-btn" onClick={clearAllFilters} disabled={!hasActiveFilters}>
-        Clear Filters
-      </button>
-      {watchlistOnly && (
-        <button type="button" className="inline-btn" onClick={() => setWatchlistOnly(false)}>
-          Turn Off Watchlist View
-        </button>
-      )}
-      <button type="button" className="inline-btn" onClick={() => applyProjectionFilterPreset("all", "empty_state")}>
-        Reset To All Players
-      </button>
-      <button type="button" className="inline-btn" onClick={() => setSearch("Rodriguez")}>
-        Try Example Search
-      </button>
-      {resolvedYearFilter !== CAREER_TOTALS_FILTER_VALUE && (
-        <button type="button" className="inline-btn" onClick={() => setYearFilter(CAREER_TOTALS_FILTER_VALUE)}>
-          Switch To Career Totals
-        </button>
-      )}
-    </div>
+    <ProjectionEmptyStateActions
+      clearAllFilters={clearAllFilters}
+      clearFiltersDisabled={emptyStateModel.clearFiltersDisabled}
+      showTurnOffWatchlistAction={emptyStateModel.showTurnOffWatchlistAction}
+      setWatchlistOnly={setWatchlistOnly}
+      applyProjectionFilterPreset={applyProjectionFilterPreset}
+      setSearch={setSearch}
+      showSwitchToCareerTotalsAction={emptyStateModel.showSwitchToCareerTotalsAction}
+      setYearFilter={setYearFilter}
+      careerTotalsFilterValue={CAREER_TOTALS_FILTER_VALUE}
+    />
   );
 
   return (
     <div className="fade-up fade-up-1">
-      <div className="section-tabs">
-        <button className={`section-tab ${tab==="all"?"active":""}`} onClick={() => {setTab(DEFAULT_PROJECTIONS_TAB); setSortCol(DEFAULT_PROJECTIONS_SORT_COL); setSortDir(DEFAULT_PROJECTIONS_SORT_DIR); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="all"}>All</button>
-        <button className={`section-tab ${tab==="bat"?"active":""}`} onClick={() => {setTab("bat"); setSortCol(DEFAULT_PROJECTIONS_SORT_COL); setSortDir(DEFAULT_PROJECTIONS_SORT_DIR); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="bat"}>Hitters</button>
-        <button className={`section-tab ${tab==="pitch"?"active":""}`} onClick={() => {setTab("pitch"); setSortCol(DEFAULT_PROJECTIONS_SORT_COL); setSortDir(DEFAULT_PROJECTIONS_SORT_DIR); setOffset(0); setPosFilters([]); setShowPosMenu(false);}} aria-pressed={tab==="pitch"}>Pitchers</button>
-      </div>
+      <ProjectionSectionTabs tab={tab} onSelectTab={handleSelectTab} />
 
       <ProjectionFilterBar
         tab={tab}
@@ -600,12 +393,6 @@ export function ProjectionsExplorer({
         exportingFormat={exportingFormat}
         exportCurrentProjections={exportCurrentProjections}
       />
-      {pageResetNotice && (
-        <div className="table-refresh-message page-reset-notice" role="status" aria-live="polite">
-          <span>{pageResetNotice}</span>
-          <button type="button" className="inline-btn" onClick={clearPageResetNotice}>Dismiss</button>
-        </div>
-      )}
       <ProjectionOverlayBanner
         hasCalculatorOverlay={hasCalculatorOverlay}
         resolvedCalculatorOverlayPlayerCount={resolvedCalculatorOverlayPlayerCount}
@@ -614,202 +401,72 @@ export function ProjectionsExplorer({
         setShowOverlayWhy={setShowOverlayWhy}
         onClearCalculatorOverlay={onClearCalculatorOverlay}
       />
-      {exportError && (
-        <div className="table-refresh-message error" role="status" aria-live="polite">
-          <span>Export failed. {exportError}</span>
-          <button type="button" className="inline-btn" onClick={clearExportError}>Dismiss</button>
-        </div>
-      )}
-      {lastRefreshedLabel && (
-        <div className="table-refresh-message table-last-refreshed" role="status" aria-live="polite">
-          Data last refreshed at {lastRefreshedLabel}.
-        </div>
-      )}
-      {showCollectionsWorkspace ? (
-        <>
-          <div className="collection-toolbar" role="group" aria-label="Watchlist and comparison actions">
-            <span className="collection-toolbar-label">Watchlist: {watchlistCount}</span>
-            <span className="collection-toolbar-label">View: {watchlistOnly ? "Watchlist" : "All Players"}</span>
-            <button type="button" className="inline-btn" onClick={exportWatchlistCsv} disabled={watchlistCount === 0}>
-              Export Watchlist CSV
-            </button>
-            <button type="button" className="inline-btn" onClick={clearWatchlist} disabled={watchlistCount === 0}>
-              Clear Watchlist
-            </button>
-            <span className="collection-toolbar-label">Compare: {compareRowsCount}/{maxComparePlayers}</span>
-            <button type="button" className="inline-btn" onClick={clearCompareRows} disabled={compareRowsCount === 0}>
-              Clear Compare
-            </button>
-          </div>
-          {compareRowsCount > 0 && (
-            <Suspense fallback={null}>
-              <LazyProjectionComparisonPanel
-                compareRows={compareRows}
-                maxComparePlayers={maxComparePlayers}
-                comparisonColumns={comparisonColumns}
-                colLabels={colLabels}
-                formatCellValue={formatCellValue}
-                removeCompareRow={removeCompareRow}
-              />
-            </Suspense>
-          )}
-          {watchlistCount > 0 && (
-            <Suspense fallback={null}>
-              <LazyProjectionWatchlistPanel
-                watchlistCount={watchlistCount}
-                watchlist={resolvedWatchlist}
-                watchlistEntries={sortedWatchlistEntries}
-                removeWatchlistEntry={removeWatchlistEntry}
-              />
-            </Suspense>
-          )}
-        </>
-      ) : (
-        <div className="collection-toolbar collection-toolbar-hint" role="note">
-          Run dynasty rankings first to unlock your watchlist and comparison workspace.
-        </div>
-      )}
-      <div className="projection-layout-controls" role="group" aria-label="Projection layout controls">
-          <div className="projection-layout-row">
-            <span className="label">
-              Layout
-              {isMobileViewport ? ` · Viewing ${mobileLayoutMode === "cards" ? "Cards" : "Table"}` : ""}
-            </span>
-            <div className="projection-view-toggle">
-              <button
-                type="button"
-                className={`projection-view-btn ${mobileLayoutMode === "cards" ? "active" : ""}`.trim()}
-                onClick={() => setMobileLayoutMode("cards")}
-                aria-pressed={mobileLayoutMode === "cards"}
-              >
-                Card View
-              </button>
-              <button
-                type="button"
-                className={`projection-view-btn ${mobileLayoutMode === "table" ? "active" : ""}`.trim()}
-                onClick={() => setMobileLayoutMode("table")}
-                aria-pressed={mobileLayoutMode === "table"}
-              >
-                Table View
-              </button>
-            </div>
-          </div>
-          {mobileLayoutMode === "cards" && ColumnChooserControl && (
-            <div className="projection-layout-row">
-              <span className="label">Cards</span>
-              <ColumnChooserControl
-                buttonLabel="Card Stats"
-                columns={cardColumnCatalog}
-                hiddenCols={resolvedProjectionCardHiddenCols}
-                requiredCols={requiredProjectionCardCols}
-                onToggleColumn={toggleProjectionCardColumn}
-                onShowAllColumns={showAllProjectionCardColumns}
-                columnLabels={colLabels}
-              />
-            </div>
-          )}
-      </div>
-      {showCards && (
-        <div className="projection-card-list">
-          {showInitialLoadSkeleton ? (
-            Array.from({ length: 8 }).map((_, idx) => (
-              <div className="projection-card" key={`loading-card-${idx}`}>
-                <div className="loading-shimmer" style={{ width: "60%", margin: 0 }} />
-                <div className="loading-shimmer" style={{ width: "90%", marginTop: 10 }} />
-              </div>
-            ))
-          ) : error && displayedPage.length === 0 ? (
-            <div className="projection-card-empty">Unable to load projections. {error}{" "}<button type="button" className="inline-btn" onClick={retryFetch}>Retry</button></div>
-          ) : displayedPage.length === 0 ? (
-            <div className="projection-card-empty">
-              <p>{emptyStateHeadline}</p>
-              <p className="projection-empty-guidance">{emptyStateGuidance}</p>
-              {emptyStateActions}
-            </div>
-          ) : (
-            cardRowsMarkup
-          )}
-        </div>
-      )}
-      {showMobileSwipeHint && (
-        <div className="table-swipe-hint" role="note">
-          {swipeHintText}
-        </div>
-      )}
-      {showInlineRefreshError && (
-        <div className="table-refresh-message error" role="status" aria-live="polite">
-          Refresh failed. Showing last loaded page. {error}
-        </div>
-      )}
-      {loading && displayedPage.length > 0 && !showInlineRefreshError && (
-        <div className="table-refresh-message" role="status" aria-live="polite">
-          Refreshing results...
-        </div>
-      )}
+      <ProjectionStatusMessages
+        pageResetNotice={pageResetNotice}
+        clearPageResetNotice={clearPageResetNotice}
+        exportError={exportError}
+        clearExportError={clearExportError}
+        lastRefreshedLabel={lastRefreshedLabel}
+      />
 
-      {(!showCards || totalRows > limit) && (
-      <div className="table-wrapper">
-        {!showCards && (
-          <div className="table-scroll" ref={projectionTableScrollRef} onScroll={handleProjectionTableScroll}>
-            <table className="projections-table">
-              <thead>
-                <tr>
-                  <th scope="col" className="index-col" style={{width:40}}>#</th>
-                  {cols.map(c => (
-                    <SortableHeaderCell
-                      key={c}
-                      columnKey={c}
-                      label={colLabels[c] || c}
-                      sortCol={sortCol}
-                      sortDir={sortDir}
-                      onSort={handleSort}
-                      className={`${sortCol === c ? "sorted" : ""}${c === "Player" ? " player-col" : ""}`.trim()}
-                    />
-                  ))}
-                  <th scope="col">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {showInitialLoadSkeleton ? (
-                  Array.from({length: 15}).map((_,i) => (
-                    <tr key={i}>
-                      <td className="index-col"><div className="loading-shimmer" style={{width: 24}}/></td>
-                      {cols.map((c,j) => <td key={j}><div className="loading-shimmer" style={{width: c==="Player"?120:50}}/></td>)}
-                      <td><div className="loading-shimmer" style={{width: 90}}/></td>
-                    </tr>
-                  ))
-                ) : error && displayedPage.length === 0 ? (
-                  <tr>
-                    <td colSpan={cols.length + 2} style={{textAlign:"center",padding:"40px",color:"var(--red)"}}>
-                      Unable to load projections. {error}{" "}<button type="button" className="inline-btn" onClick={retryFetch}>Retry</button>
-                    </td>
-                  </tr>
-                ) : displayedPage.length === 0 ? (
-                  <tr>
-                    <td className="projection-empty-cell" colSpan={cols.length + 2}>
-                      <p className="projection-empty-title">{emptyStateHeadline}</p>
-                      <p className="projection-empty-guidance">{emptyStateGuidance}</p>
-                      {emptyStateActions}
-                    </td>
-                  </tr>
-                ) : (
-                  tableRowsMarkup
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {totalRows > limit && (
-          <div className="pagination">
-            <button aria-label="Previous page" disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - limit))}>← Previous</button>
-            <span className="page-info">
-              {totalRows === 0 ? 0 : offset + 1}–{Math.min(offset + limit, totalRows)} of {totalRows}
-            </span>
-            <button aria-label="Next page" disabled={offset + limit >= totalRows || loading} onClick={() => setOffset(offset + limit)}>Next →</button>
-          </div>
-        )}
-      </div>
-      )}
+      <ProjectionCollectionsWorkspace
+        showCollectionsWorkspace={showCollectionsWorkspace}
+        watchlistCount={watchlistCount}
+        watchlistOnly={watchlistOnly}
+        watchlist={resolvedWatchlist}
+        watchlistEntries={sortedWatchlistEntries}
+        clearWatchlist={clearWatchlist}
+        exportWatchlistCsv={exportWatchlistCsv}
+        removeWatchlistEntry={removeWatchlistEntry}
+        compareRowsCount={compareRowsCount}
+        maxComparePlayers={maxComparePlayers}
+        clearCompareRows={clearCompareRows}
+        compareRows={compareRows}
+        comparisonColumns={comparisonColumns}
+        removeCompareRow={removeCompareRow}
+        colLabels={colLabels}
+        formatCellValue={formatCellValue}
+      />
+
+      <ProjectionLayoutControls
+        isMobileViewport={isMobileViewport}
+        mobileLayoutMode={mobileLayoutMode}
+        setMobileLayoutMode={setMobileLayoutMode}
+        cardColumnCatalog={cardColumnCatalog}
+        resolvedProjectionCardHiddenCols={resolvedProjectionCardHiddenCols}
+        requiredProjectionCardCols={requiredProjectionCardCols}
+        toggleProjectionCardColumn={toggleProjectionCardColumn}
+        showAllProjectionCardColumns={showAllProjectionCardColumns}
+        colLabels={colLabels}
+      />
+
+      <ProjectionResultsShell
+        showCards={showCards}
+        displayedPage={displayedPage}
+        showInitialLoadSkeleton={showInitialLoadSkeleton}
+        error={error}
+        retryFetch={retryFetch}
+        emptyStateHeadline={emptyStateModel.headline}
+        emptyStateGuidance={emptyStateModel.guidance}
+        emptyStateActions={emptyStateActions}
+        cardRowsMarkup={cardRowsMarkup}
+        showMobileSwipeHint={showMobileSwipeHint}
+        swipeHintText={swipeHintModel.swipeHintText}
+        showInlineRefreshError={showInlineRefreshError}
+        loading={loading}
+        cols={cols}
+        colLabels={colLabels}
+        sortCol={sortCol}
+        sortDir={sortDir}
+        onSort={handleSort}
+        projectionTableScrollRef={projectionTableScrollRef}
+        onTableScroll={handleProjectionTableScroll}
+        tableRowsMarkup={tableRowsMarkup}
+        totalRows={totalRows}
+        limit={limit}
+        offset={offset}
+        setOffset={setOffset}
+      />
     </div>
   );
 }

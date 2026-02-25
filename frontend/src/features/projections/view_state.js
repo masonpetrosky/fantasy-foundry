@@ -36,6 +36,58 @@ export function buildActiveFilterChips({
   return chips;
 }
 
+export function resolveProjectionSwipeHint({
+  canScrollLeft,
+  canScrollRight,
+}) {
+  const hasHorizontalOverflow = Boolean(canScrollLeft) || Boolean(canScrollRight);
+  if (!hasHorizontalOverflow) {
+    return {
+      showSwipeHint: false,
+      swipeHintText: "",
+    };
+  }
+  if (!canScrollLeft && canScrollRight) {
+    return {
+      showSwipeHint: true,
+      swipeHintText: "Swipe left for more columns →",
+    };
+  }
+  if (canScrollLeft && canScrollRight) {
+    return {
+      showSwipeHint: true,
+      swipeHintText: "← Swipe both directions for more columns →",
+    };
+  }
+  return {
+    showSwipeHint: true,
+    swipeHintText: "← Swipe right to return",
+  };
+}
+
+export function resolveProjectionEmptyStateModel({
+  watchlistOnly,
+  resolvedYearFilter,
+  hasActiveFilters,
+  careerTotalsFilterValue,
+}) {
+  const isWatchlistOnly = Boolean(watchlistOnly);
+  const inCareerTotalsView = String(resolvedYearFilter || "").trim()
+    === String(careerTotalsFilterValue || "").trim();
+
+  return {
+    headline: isWatchlistOnly
+      ? "No watchlist players matched this view."
+      : "No projections matched these filters.",
+    guidance: isWatchlistOnly
+      ? "Turn off Watchlist View or clear filters to expand results."
+      : "Adjust or clear filters to expand results.",
+    clearFiltersDisabled: !hasActiveFilters,
+    showTurnOffWatchlistAction: isWatchlistOnly,
+    showSwitchToCareerTotalsAction: !inCareerTotalsView,
+  };
+}
+
 export function buildOverlayStatusMeta({
   overlaySummaryParts,
   overlayJobId,
