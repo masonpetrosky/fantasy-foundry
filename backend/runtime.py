@@ -49,7 +49,6 @@ from backend.core.jobs import (
     mark_job_cancelled_locked as core_mark_job_cancelled_locked,
 )
 from backend.core.data_refresh import (
-    LookupInspectionResult,
     coerce_serialized_dynasty_lookup_map as core_coerce_serialized_dynasty_lookup_map,
     compute_content_data_version as core_compute_content_data_version,
     compute_data_signature as core_compute_data_signature,
@@ -139,10 +138,28 @@ from backend.core.runtime_security import (
     parse_calculate_api_key_identities as core_parse_calculate_api_key_identities,
 )
 from backend.core import runtime_infra as core_runtime_infra
+from backend.core import runtime_state_helpers as core_runtime_state_helpers
 from backend.core.result_cache import (
     calc_result_cache_key as core_calc_result_cache_key,
 )
 from backend.core.settings import load_settings_from_env
+from backend.core.runtime_defaults import (
+    COMMON_DEFAULT_IR_SLOTS,
+    COMMON_DEFAULT_MINOR_SLOTS,
+    COMMON_HITTER_SLOT_DEFAULTS,
+    COMMON_HITTER_STARTER_SLOTS_PER_TEAM,
+    COMMON_PITCHER_SLOT_DEFAULTS,
+    COMMON_PITCHER_STARTER_SLOTS_PER_TEAM,
+    DEFAULT_POINTS_SCORING,
+    EXPORT_DATE_COLS,
+    EXPORT_HEADER_LABEL_OVERRIDES,
+    EXPORT_INTEGER_COLS,
+    EXPORT_THREE_DECIMAL_COLS,
+    EXPORT_TWO_DECIMAL_COLS,
+    EXPORT_WHOLE_NUMBER_COLS,
+    POINTS_HITTER_SLOT_DEFAULTS,
+    POINTS_PITCHER_SLOT_DEFAULTS,
+)
 from backend.domain.constants import (
     CALCULATOR_RESULT_POINTS_EXPORT_ORDER,
     CALCULATOR_RESULT_STAT_EXPORT_ORDER,
@@ -222,145 +239,6 @@ EXPORT_INTERNAL_COLUMN_BLOCKLIST = {
     "RawDynastyValue",
     "minor_eligible",
 }
-EXPORT_HEADER_LABEL_OVERRIDES = {
-    "Type": "Side",
-    "ProjectionsUsed": "Proj Count",
-    "OldestProjectionDate": "Oldest Proj Date",
-    "DynastyValue": "Dynasty Value",
-    "RawDynastyValue": "Raw Dynasty Value",
-    "YearValue": "Year Value",
-    "DiscountFactor": "Discount Factor",
-    "DiscountedContribution": "Discounted Contribution",
-    "HittingPoints": "Hitting Points",
-    "PitchingPoints": "Pitching Points",
-    "SelectedPoints": "Selected Points",
-    "SelectedSide": "Selected Side",
-    "HittingBestSlot": "Hitting Best Slot",
-    "PitchingBestSlot": "Pitching Best Slot",
-    "HittingValue": "Hitting Value",
-    "PitchingValue": "Pitching Value",
-    "HittingAssignmentSlot": "Hitting Assignment Slot",
-    "PitchingAssignmentSlot": "Pitching Assignment Slot",
-    "HittingAssignmentValue": "Hitting Assignment Value",
-    "PitchingAssignmentValue": "Pitching Assignment Value",
-    "HittingAssignmentReplacement": "Hitting Assignment Replacement",
-    "PitchingAssignmentReplacement": "Pitching Assignment Replacement",
-    "KeepDropValue": "Keep/Drop Value",
-    "KeepDropHoldValue": "Keep/Drop Hold Value",
-    "KeepDropKeep": "Keep/Drop Keep",
-    "HittingRulePoints": "Hitting Rule Points",
-    "PitchingRulePoints": "Pitching Rule Points",
-    "Years": "Years",
-    "PitH": "P H",
-    "PitHR": "P HR",
-    "PitBB": "P BB",
-}
-EXPORT_THREE_DECIMAL_COLS = {"AVG", "OBP", "SLG", "OPS"}
-EXPORT_TWO_DECIMAL_COLS = {
-    "DynastyValue",
-    "RawDynastyValue",
-    "YearValue",
-    "DiscountFactor",
-    "DiscountedContribution",
-    "HittingPoints",
-    "PitchingPoints",
-    "SelectedPoints",
-    "HittingValue",
-    "PitchingValue",
-    "HittingAssignmentValue",
-    "PitchingAssignmentValue",
-    "HittingAssignmentReplacement",
-    "PitchingAssignmentReplacement",
-    "KeepDropValue",
-    "KeepDropHoldValue",
-    "ERA",
-    "WHIP",
-}
-EXPORT_WHOLE_NUMBER_COLS = {
-    "AB",
-    "R",
-    "HR",
-    "RBI",
-    "SB",
-    "IP",
-    "W",
-    "K",
-    "SVH",
-    "QS",
-    "QA3",
-    "G",
-    "H",
-    "2B",
-    "3B",
-    "BB",
-    "SO",
-    "GS",
-    "L",
-    "PitBB",
-    "SV",
-    "PitH",
-    "PitHR",
-    "ER",
-    "TB",
-}
-EXPORT_INTEGER_COLS = {"Rank", "Year", "Age", "ProjectionsUsed"}
-EXPORT_DATE_COLS = {"OldestProjectionDate"}
-COMMON_HITTER_SLOT_DEFAULTS = {
-    "C": 1,
-    "1B": 1,
-    "2B": 1,
-    "3B": 1,
-    "SS": 1,
-    "CI": 1,
-    "MI": 1,
-    "OF": 5,
-    "UT": 1,
-}
-COMMON_PITCHER_SLOT_DEFAULTS = {
-    "P": 9,
-    "SP": 0,
-    "RP": 0,
-}
-POINTS_HITTER_SLOT_DEFAULTS = {
-    "C": 1,
-    "1B": 1,
-    "2B": 1,
-    "3B": 1,
-    "SS": 1,
-    "CI": 0,
-    "MI": 0,
-    "OF": 3,
-    "UT": 1,
-}
-POINTS_PITCHER_SLOT_DEFAULTS = {
-    "P": 2,
-    "SP": 5,
-    "RP": 2,
-}
-DEFAULT_POINTS_SCORING = {
-    "pts_hit_1b": 1.0,
-    "pts_hit_2b": 2.0,
-    "pts_hit_3b": 3.0,
-    "pts_hit_hr": 4.0,
-    "pts_hit_r": 1.0,
-    "pts_hit_rbi": 1.0,
-    "pts_hit_sb": 1.0,
-    "pts_hit_bb": 1.0,
-    "pts_hit_so": -1.0,
-    "pts_pit_ip": 3.0,
-    "pts_pit_w": 5.0,
-    "pts_pit_l": -5.0,
-    "pts_pit_k": 1.0,
-    "pts_pit_sv": 5.0,
-    "pts_pit_svh": 0.0,
-    "pts_pit_h": -1.0,
-    "pts_pit_er": -2.0,
-    "pts_pit_bb": -1.0,
-}
-COMMON_DEFAULT_IR_SLOTS = 0
-COMMON_DEFAULT_MINOR_SLOTS = 0
-COMMON_HITTER_STARTER_SLOTS_PER_TEAM = sum(COMMON_HITTER_SLOT_DEFAULTS.values())
-COMMON_PITCHER_STARTER_SLOTS_PER_TEAM = sum(COMMON_PITCHER_SLOT_DEFAULTS.values())
 SETTINGS = load_settings_from_env()
 APP_ENVIRONMENT = SETTINGS.environment
 CALCULATOR_JOB_TTL_SECONDS = SETTINGS.calculator_job_ttl_seconds
@@ -417,23 +295,7 @@ CALCULATE_API_KEY_IDENTITIES = core_parse_calculate_api_key_identities(CALCULATE
 
 
 def _validate_runtime_configuration() -> None:
-    if APP_ENVIRONMENT != "production":
-        return
-
-    errors: list[str] = []
-    if "*" in set(CORS_ALLOW_ORIGINS):
-        errors.append("FF_CORS_ALLOW_ORIGINS must not contain '*' when FF_ENV=production.")
-    if TRUST_X_FORWARDED_FOR and not TRUSTED_PROXY_NETWORKS:
-        errors.append(
-            "FF_TRUST_X_FORWARDED_FOR=1 requires explicit FF_TRUSTED_PROXY_CIDRS when FF_ENV=production."
-        )
-    if REQUIRE_CALCULATE_AUTH and not CALCULATE_API_KEY_IDENTITIES:
-        errors.append(
-            "FF_REQUIRE_CALCULATE_AUTH=1 requires FF_CALCULATE_API_KEYS to be configured when FF_ENV=production."
-        )
-
-    if errors:
-        raise RuntimeError("Invalid production runtime configuration:\n- " + "\n- ".join(errors))
+    core_runtime_state_helpers.validate_runtime_configuration(state=sys.modules[__name__])
 
 
 def _extract_calculate_api_key(request: Request | None) -> str | None:
@@ -511,30 +373,11 @@ def _dynasty_lookup_payload_version(payload: dict[str, object]) -> str | None:
 
 
 def _inspect_precomputed_default_dynasty_lookup() -> DynastyLookupCacheInspection:
-    pytest_current_test = bool(os.getenv("PYTEST_CURRENT_TEST"))
-    e2e_enabled = str(os.getenv("FF_RUN_E2E", "")).strip().lower() in {"1", "true", "yes", "on"}
-    inspection: LookupInspectionResult = core_inspect_precomputed_default_dynasty_lookup(
-        current_data_version=_current_data_version(),
-        dynasty_lookup_cache_path=DYNASTY_LOOKUP_CACHE_PATH,
-        pytest_current_test=pytest_current_test and not e2e_enabled,
-        value_col_sort_key=_value_col_sort_key,
-    )
-    return DynastyLookupCacheInspection(
-        status=inspection.status,
-        expected_version=inspection.expected_version,
-        found_version=inspection.found_version,
-        lookup=inspection.lookup,
-        error=inspection.error,
-    )
+    return core_runtime_state_helpers.inspect_precomputed_default_dynasty_lookup(state=sys.modules[__name__])
 
 
 def _load_precomputed_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]] | None:
-    inspection = _inspect_precomputed_default_dynasty_lookup()
-    if inspection.status == "ready" and inspection.lookup is not None:
-        return inspection.lookup
-    if inspection.status == "invalid" and inspection.error:
-        CALC_LOGGER.warning(inspection.error)
-    return None
+    return core_runtime_state_helpers.load_precomputed_default_dynasty_lookup(state=sys.modules[__name__])
 
 
 def _reload_projection_data() -> None:
@@ -692,38 +535,7 @@ def _calculate_common_dynasty_frame_cached(
     recent_projections: int,
     **roto_category_settings: bool,
 ) -> pd.DataFrame:
-    return core_calculate_common_dynasty_frame(
-        ensure_backend_module_path_fn=_ensure_backend_module_path,
-        excel_path=EXCEL_PATH,
-        teams=teams,
-        sims=sims,
-        horizon=horizon,
-        discount=discount,
-        hit_c=hit_c,
-        hit_1b=hit_1b,
-        hit_2b=hit_2b,
-        hit_3b=hit_3b,
-        hit_ss=hit_ss,
-        hit_ci=hit_ci,
-        hit_mi=hit_mi,
-        hit_of=hit_of,
-        hit_ut=hit_ut,
-        pit_p=pit_p,
-        pit_sp=pit_sp,
-        pit_rp=pit_rp,
-        bench=bench,
-        minors=minors,
-        ir=ir,
-        ip_min=ip_min,
-        ip_max=ip_max,
-        two_way=two_way,
-        start_year=start_year,
-        recent_projections=recent_projections,
-        roto_category_settings=roto_category_settings,
-        roto_hitter_fields=ROTO_HITTER_CATEGORY_FIELDS,
-        roto_pitcher_fields=ROTO_PITCHER_CATEGORY_FIELDS,
-        coerce_bool_fn=_coerce_bool,
-    )
+    return core_runtime_state_helpers.calculate_common_dynasty_frame_cached(state=sys.modules[__name__], **locals())
 
 
 def _stat_or_zero(row: dict | None, key: str) -> float:
@@ -873,71 +685,7 @@ def _calculate_points_dynasty_frame_cached(
     pts_pit_er: float,
     pts_pit_bb: float,
 ) -> pd.DataFrame:
-    return core_calculate_points_dynasty_frame(
-        ctx=PointsCalculatorContext(
-            bat_data=BAT_DATA,
-            pit_data=PIT_DATA,
-            bat_data_raw=BAT_DATA_RAW,
-            pit_data_raw=PIT_DATA_RAW,
-            meta=META,
-            average_recent_projection_rows=_average_recent_projection_rows,
-            coerce_meta_years=_coerce_meta_years,
-            valuation_years=_valuation_years,
-            coerce_record_year=_coerce_record_year,
-            points_player_identity=_points_player_identity,
-            normalize_player_key=_normalize_player_key,
-            player_key_col=PLAYER_KEY_COL,
-            player_entity_key_col=PLAYER_ENTITY_KEY_COL,
-            row_team_value=_row_team_value,
-            merge_position_value=_merge_position_value,
-            coerce_minor_eligible=_coerce_minor_eligible,
-            calculate_hitter_points_breakdown=_calculate_hitter_points_breakdown,
-            calculate_pitcher_points_breakdown=_calculate_pitcher_points_breakdown,
-            stat_or_zero=_stat_or_zero,
-            points_hitter_eligible_slots=_points_hitter_eligible_slots,
-            points_pitcher_eligible_slots=_points_pitcher_eligible_slots,
-            points_slot_replacement=_points_slot_replacement,
-        ),
-        teams=teams,
-        horizon=horizon,
-        discount=discount,
-        hit_c=hit_c,
-        hit_1b=hit_1b,
-        hit_2b=hit_2b,
-        hit_3b=hit_3b,
-        hit_ss=hit_ss,
-        hit_ci=hit_ci,
-        hit_mi=hit_mi,
-        hit_of=hit_of,
-        hit_ut=hit_ut,
-        pit_p=pit_p,
-        pit_sp=pit_sp,
-        pit_rp=pit_rp,
-        bench=bench,
-        minors=minors,
-        ir=ir,
-        two_way=two_way,
-        start_year=start_year,
-        recent_projections=recent_projections,
-        pts_hit_1b=pts_hit_1b,
-        pts_hit_2b=pts_hit_2b,
-        pts_hit_3b=pts_hit_3b,
-        pts_hit_hr=pts_hit_hr,
-        pts_hit_r=pts_hit_r,
-        pts_hit_rbi=pts_hit_rbi,
-        pts_hit_sb=pts_hit_sb,
-        pts_hit_bb=pts_hit_bb,
-        pts_hit_so=pts_hit_so,
-        pts_pit_ip=pts_pit_ip,
-        pts_pit_w=pts_pit_w,
-        pts_pit_l=pts_pit_l,
-        pts_pit_k=pts_pit_k,
-        pts_pit_sv=pts_pit_sv,
-        pts_pit_svh=pts_pit_svh,
-        pts_pit_h=pts_pit_h,
-        pts_pit_er=pts_pit_er,
-        pts_pit_bb=pts_pit_bb,
-    )
+    return core_runtime_state_helpers.calculate_points_dynasty_frame_cached(state=sys.modules[__name__], **locals())
 
 
 def _is_user_fixable_calculation_error(message: str) -> bool:
@@ -1088,74 +836,7 @@ def _calculation_job_public_payload(job: dict) -> dict:
 
 
 def _prewarm_default_calculation_caches() -> None:
-    with CALCULATOR_PREWARM_LOCK:
-        CALCULATOR_PREWARM_STATE.update(
-            {
-                "status": "running",
-                "started_at": _iso_now(),
-                "completed_at": None,
-                "duration_ms": None,
-                "error": None,
-            }
-        )
-
-    started = time.perf_counter()
-    try:
-        _refresh_data_if_needed()
-        params = _default_calculation_cache_params()
-        ip_max = params["ip_max"]
-        _calculate_common_dynasty_frame_cached(
-            teams=int(params["teams"]),
-            sims=int(params["sims"]),
-            horizon=int(params["horizon"]),
-            discount=float(params["discount"]),
-            hit_c=int(params["hit_c"]),
-            hit_1b=int(params["hit_1b"]),
-            hit_2b=int(params["hit_2b"]),
-            hit_3b=int(params["hit_3b"]),
-            hit_ss=int(params["hit_ss"]),
-            hit_ci=int(params["hit_ci"]),
-            hit_mi=int(params["hit_mi"]),
-            hit_of=int(params["hit_of"]),
-            hit_ut=int(params["hit_ut"]),
-            pit_p=int(params["pit_p"]),
-            pit_sp=int(params["pit_sp"]),
-            pit_rp=int(params["pit_rp"]),
-            bench=int(params["bench"]),
-            minors=int(params["minors"]),
-            ir=int(params["ir"]),
-            ip_min=float(params["ip_min"]),
-            ip_max=float(ip_max) if ip_max is not None else None,
-            two_way=str(params["two_way"]),
-            start_year=int(params["start_year"]),
-            recent_projections=int(params["recent_projections"]),
-            **_roto_category_settings_from_dict(params),
-        )
-        _get_default_dynasty_lookup()
-
-        duration_ms = round((time.perf_counter() - started) * 1000.0, 1)
-        with CALCULATOR_PREWARM_LOCK:
-            CALCULATOR_PREWARM_STATE.update(
-                {
-                    "status": "ready",
-                    "completed_at": _iso_now(),
-                    "duration_ms": duration_ms,
-                    "error": None,
-                }
-            )
-        CALC_LOGGER.info("calculator prewarm completed duration_ms=%s", duration_ms)
-    except Exception as exc:
-        duration_ms = round((time.perf_counter() - started) * 1000.0, 1)
-        with CALCULATOR_PREWARM_LOCK:
-            CALCULATOR_PREWARM_STATE.update(
-                {
-                    "status": "failed",
-                    "completed_at": _iso_now(),
-                    "duration_ms": duration_ms,
-                    "error": str(exc),
-                }
-            )
-        CALC_LOGGER.exception("calculator prewarm failed")
+    core_runtime_state_helpers.prewarm_default_calculation_caches(state=sys.modules[__name__])
 
 
 @lru_cache(maxsize=1)
@@ -1255,49 +936,7 @@ def _clear_after_data_reload() -> None:
 
 
 def _calculator_overlay_values_for_job(job_id: str | None) -> dict[str, dict[str, Any]]:
-    normalized_job_id = str(job_id or "").strip()
-    if not normalized_job_id:
-        return {}
-
-    with CALCULATOR_JOB_LOCK:
-        live_job = CALCULATOR_JOBS.get(normalized_job_id)
-    job_payload = live_job if isinstance(live_job, dict) else _cached_calculation_job_snapshot(normalized_job_id)
-    if not isinstance(job_payload, dict):
-        return {}
-    if str(job_payload.get("status") or "").lower() != "completed":
-        return {}
-
-    result = job_payload.get("result")
-    rows = result.get("data") if isinstance(result, dict) else None
-    if not isinstance(rows, list):
-        return {}
-
-    overlay_by_player_key: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-
-        overlay: dict[str, Any] = {}
-        dynasty_value = row.get("DynastyValue")
-        if dynasty_value is not None and dynasty_value != "":
-            overlay["DynastyValue"] = dynasty_value
-        for col, value in row.items():
-            if not str(col).startswith("Value_"):
-                continue
-            if value is None or value == "":
-                continue
-            overlay[str(col)] = value
-        if not overlay:
-            continue
-
-        entity_key = str(row.get(PLAYER_ENTITY_KEY_COL) or "").strip().lower()
-        player_key = str(row.get(PLAYER_KEY_COL) or "").strip().lower()
-        if entity_key:
-            overlay_by_player_key[entity_key] = overlay
-        elif player_key:
-            overlay_by_player_key[player_key] = overlay
-
-    return overlay_by_player_key
+    return core_runtime_state_helpers.calculator_overlay_values_for_job(state=sys.modules[__name__], job_id=job_id)
 
 
 PROJECTION_SERVICE = ProjectionService(
@@ -1325,47 +964,7 @@ PROJECTION_SERVICE = ProjectionService(
     )
 )
 def _calculator_service_from_globals() -> CalculatorService:
-    return build_calculator_service(
-        refresh_data_if_needed=_refresh_data_if_needed,
-        coerce_meta_years=_coerce_meta_years,
-        get_meta=lambda: META,
-        calc_result_cache_key=_calc_result_cache_key,
-        result_cache_get=_result_cache_get,
-        result_cache_set=_result_cache_set,
-        calculate_common_dynasty_frame_cached=_calculate_common_dynasty_frame_cached,
-        calculate_points_dynasty_frame_cached=_calculate_points_dynasty_frame_cached,
-        roto_category_settings_from_dict=_roto_category_settings_from_dict,
-        is_user_fixable_calculation_error=_is_user_fixable_calculation_error,
-        player_identity_by_name=_player_identity_by_name,
-        normalize_player_key=_normalize_player_key,
-        player_key_col=PLAYER_KEY_COL,
-        player_entity_key_col=PLAYER_ENTITY_KEY_COL,
-        selected_roto_categories=_selected_roto_categories,
-        start_year_roto_stats_by_entity=_start_year_roto_stats_by_entity,
-        projection_identity_key=_projection_identity_key,
-        build_calculation_explanations=_build_calculation_explanations,
-        clean_records_for_json=_clean_records_for_json,
-        flatten_explanations_for_export=_flatten_explanations_for_export,
-        tabular_export_response=_tabular_export_response,
-        calc_logger=CALC_LOGGER,
-        enforce_rate_limit=_enforce_rate_limit,
-        sync_rate_limit_per_minute=CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,
-        job_create_rate_limit_per_minute=CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE,
-        job_status_rate_limit_per_minute=CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE,
-        client_ip=_client_ip,
-        iso_now=_iso_now,
-        active_jobs_for_ip=_active_jobs_for_ip,
-        calculator_max_active_jobs_per_ip=CALCULATOR_MAX_ACTIVE_JOBS_PER_IP,
-        calculator_job_lock=CALCULATOR_JOB_LOCK,
-        calculator_jobs=CALCULATOR_JOBS,
-        cleanup_calculation_jobs=_cleanup_calculation_jobs,
-        cache_calculation_job_snapshot=_cache_calculation_job_snapshot,
-        cached_calculation_job_snapshot=_cached_calculation_job_snapshot,
-        calculation_job_public_payload=_calculation_job_public_payload,
-        mark_job_cancelled_locked=_mark_job_cancelled_locked,
-        calculator_job_executor=CALCULATOR_JOB_EXECUTOR,
-        calc_job_cancelled_status=CALC_JOB_CANCELLED_STATUS,
-    )
+    return core_runtime_state_helpers.calculator_service_from_globals(state=sys.modules[__name__])
 
 
 CALCULATOR_SERVICE = _calculator_service_from_globals()
@@ -1383,16 +982,7 @@ def filter_records(*args, **kwargs):
 
 
 def _log_precomputed_dynasty_lookup_cache_status() -> None:
-    inspection = _inspect_precomputed_default_dynasty_lookup()
-    CALC_LOGGER.info(
-        "dynasty lookup cache status=%s require_precomputed=%s expected=%s found=%s",
-        inspection.status,
-        REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP,
-        inspection.expected_version,
-        inspection.found_version or "missing",
-    )
-    if inspection.error:
-        CALC_LOGGER.warning("dynasty lookup cache error: %s", inspection.error)
+    core_runtime_state_helpers.log_precomputed_dynasty_lookup_cache_status(state=sys.modules[__name__])
 
 
 _log_precomputed_dynasty_lookup_cache_status()

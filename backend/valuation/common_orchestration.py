@@ -8,8 +8,34 @@ import pandas as pd
 
 try:
     from backend.dynasty_roto_values import *  # noqa: F401,F403
+    from backend.dynasty_roto_values import (
+        _add_player_identity_keys,
+        _apply_negative_value_stash_rules,
+        _attach_identity_columns_to_output,
+        _build_bench_stash_penalty_map,
+        _build_player_identity_lookup,
+        _fillna_bool,
+        _find_projection_date_col,
+        _non_vacant_player_names,
+        _players_with_playing_time,
+        _resolve_minor_eligibility_by_year,
+        _select_mlb_roster_with_active_floor,
+    )
 except ImportError:  # pragma: no cover - direct script execution fallback
     from dynasty_roto_values import *  # type: ignore # noqa: F401,F403
+    from dynasty_roto_values import (  # type: ignore
+        _add_player_identity_keys,
+        _apply_negative_value_stash_rules,
+        _attach_identity_columns_to_output,
+        _build_bench_stash_penalty_map,
+        _build_player_identity_lookup,
+        _fillna_bool,
+        _find_projection_date_col,
+        _non_vacant_player_names,
+        _players_with_playing_time,
+        _resolve_minor_eligibility_by_year,
+        _select_mlb_roster_with_active_floor,
+    )
 
 
 def calculate_common_dynasty_values(
@@ -399,4 +425,3 @@ def calculate_common_dynasty_values(
     pit_detail = reorder_detail_columns(pit_detail, pit_input_cols, add_after=pit_date_col, extra_cols=extra)
 
     return out, bat_detail, pit_detail
-

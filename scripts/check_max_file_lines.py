@@ -22,7 +22,6 @@ SOURCE_ROOTS = (
     ("frontend/src", {".js", ".jsx"}),
 )
 EXEMPT_LEGACY_FILES = {
-    Path("backend/runtime.py"),
     Path("frontend/src/main.jsx"),
 }
 SKIP_PARTS = {".git", ".venv", "node_modules", "dist", "__pycache__"}

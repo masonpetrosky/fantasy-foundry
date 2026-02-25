@@ -1,0 +1,401 @@
+"""State-driven helper implementations extracted from backend.runtime."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pandas as pd
+
+
+def validate_runtime_configuration(*, state: Any) -> None:
+    if state.APP_ENVIRONMENT != "production":
+        return
+
+    errors: list[str] = []
+    if "*" in set(state.CORS_ALLOW_ORIGINS):
+        errors.append("FF_CORS_ALLOW_ORIGINS must not contain '*' when FF_ENV=production.")
+    if state.TRUST_X_FORWARDED_FOR and not state.TRUSTED_PROXY_NETWORKS:
+        errors.append(
+            "FF_TRUST_X_FORWARDED_FOR=1 requires explicit FF_TRUSTED_PROXY_CIDRS when FF_ENV=production."
+        )
+    if state.REQUIRE_CALCULATE_AUTH and not state.CALCULATE_API_KEY_IDENTITIES:
+        errors.append(
+            "FF_REQUIRE_CALCULATE_AUTH=1 requires FF_CALCULATE_API_KEYS to be configured when FF_ENV=production."
+        )
+
+    if errors:
+        raise RuntimeError("Invalid production runtime configuration:\n- " + "\n- ".join(errors))
+
+
+def inspect_precomputed_default_dynasty_lookup(*, state: Any) -> Any:
+    pytest_current_test = bool(state.os.getenv("PYTEST_CURRENT_TEST"))
+    e2e_enabled = str(state.os.getenv("FF_RUN_E2E", "")).strip().lower() in {"1", "true", "yes", "on"}
+    inspection = state.core_inspect_precomputed_default_dynasty_lookup(
+        current_data_version=state._current_data_version(),
+        dynasty_lookup_cache_path=state.DYNASTY_LOOKUP_CACHE_PATH,
+        pytest_current_test=pytest_current_test and not e2e_enabled,
+        value_col_sort_key=state._value_col_sort_key,
+    )
+    return state.DynastyLookupCacheInspection(
+        status=inspection.status,
+        expected_version=inspection.expected_version,
+        found_version=inspection.found_version,
+        lookup=inspection.lookup,
+        error=inspection.error,
+    )
+
+
+def load_precomputed_default_dynasty_lookup(*, state: Any) -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]] | None:
+    inspection = state._inspect_precomputed_default_dynasty_lookup()
+    if inspection.status == "ready" and inspection.lookup is not None:
+        return inspection.lookup
+    if inspection.status == "invalid" and inspection.error:
+        state.CALC_LOGGER.warning(inspection.error)
+    return None
+
+
+def calculate_common_dynasty_frame_cached(
+    *,
+    state: Any,
+    teams: int,
+    sims: int,
+    horizon: int,
+    discount: float,
+    hit_c: int,
+    hit_1b: int,
+    hit_2b: int,
+    hit_3b: int,
+    hit_ss: int,
+    hit_ci: int,
+    hit_mi: int,
+    hit_of: int,
+    hit_ut: int,
+    pit_p: int,
+    pit_sp: int,
+    pit_rp: int,
+    bench: int,
+    minors: int,
+    ir: int,
+    ip_min: float,
+    ip_max: float | None,
+    two_way: str,
+    start_year: int,
+    recent_projections: int,
+    roto_category_settings: dict[str, bool],
+) -> pd.DataFrame:
+    return state.core_calculate_common_dynasty_frame(
+        ensure_backend_module_path_fn=state._ensure_backend_module_path,
+        excel_path=state.EXCEL_PATH,
+        teams=teams,
+        sims=sims,
+        horizon=horizon,
+        discount=discount,
+        hit_c=hit_c,
+        hit_1b=hit_1b,
+        hit_2b=hit_2b,
+        hit_3b=hit_3b,
+        hit_ss=hit_ss,
+        hit_ci=hit_ci,
+        hit_mi=hit_mi,
+        hit_of=hit_of,
+        hit_ut=hit_ut,
+        pit_p=pit_p,
+        pit_sp=pit_sp,
+        pit_rp=pit_rp,
+        bench=bench,
+        minors=minors,
+        ir=ir,
+        ip_min=ip_min,
+        ip_max=ip_max,
+        two_way=two_way,
+        start_year=start_year,
+        recent_projections=recent_projections,
+        roto_category_settings=roto_category_settings,
+        roto_hitter_fields=state.ROTO_HITTER_CATEGORY_FIELDS,
+        roto_pitcher_fields=state.ROTO_PITCHER_CATEGORY_FIELDS,
+        coerce_bool_fn=state._coerce_bool,
+    )
+
+
+def calculate_points_dynasty_frame_cached(
+    *,
+    state: Any,
+    teams: int,
+    horizon: int,
+    discount: float,
+    hit_c: int,
+    hit_1b: int,
+    hit_2b: int,
+    hit_3b: int,
+    hit_ss: int,
+    hit_ci: int,
+    hit_mi: int,
+    hit_of: int,
+    hit_ut: int,
+    pit_p: int,
+    pit_sp: int,
+    pit_rp: int,
+    bench: int,
+    minors: int,
+    ir: int,
+    two_way: str,
+    start_year: int,
+    recent_projections: int,
+    pts_hit_1b: float,
+    pts_hit_2b: float,
+    pts_hit_3b: float,
+    pts_hit_hr: float,
+    pts_hit_r: float,
+    pts_hit_rbi: float,
+    pts_hit_sb: float,
+    pts_hit_bb: float,
+    pts_hit_so: float,
+    pts_pit_ip: float,
+    pts_pit_w: float,
+    pts_pit_l: float,
+    pts_pit_k: float,
+    pts_pit_sv: float,
+    pts_pit_svh: float,
+    pts_pit_h: float,
+    pts_pit_er: float,
+    pts_pit_bb: float,
+) -> pd.DataFrame:
+    return state.core_calculate_points_dynasty_frame(
+        ctx=state.PointsCalculatorContext(
+            bat_data=state.BAT_DATA,
+            pit_data=state.PIT_DATA,
+            bat_data_raw=state.BAT_DATA_RAW,
+            pit_data_raw=state.PIT_DATA_RAW,
+            meta=state.META,
+            average_recent_projection_rows=state._average_recent_projection_rows,
+            coerce_meta_years=state._coerce_meta_years,
+            valuation_years=state._valuation_years,
+            coerce_record_year=state._coerce_record_year,
+            points_player_identity=state._points_player_identity,
+            normalize_player_key=state._normalize_player_key,
+            player_key_col=state.PLAYER_KEY_COL,
+            player_entity_key_col=state.PLAYER_ENTITY_KEY_COL,
+            row_team_value=state._row_team_value,
+            merge_position_value=state._merge_position_value,
+            coerce_minor_eligible=state._coerce_minor_eligible,
+            calculate_hitter_points_breakdown=state._calculate_hitter_points_breakdown,
+            calculate_pitcher_points_breakdown=state._calculate_pitcher_points_breakdown,
+            stat_or_zero=state._stat_or_zero,
+            points_hitter_eligible_slots=state._points_hitter_eligible_slots,
+            points_pitcher_eligible_slots=state._points_pitcher_eligible_slots,
+            points_slot_replacement=state._points_slot_replacement,
+        ),
+        teams=teams,
+        horizon=horizon,
+        discount=discount,
+        hit_c=hit_c,
+        hit_1b=hit_1b,
+        hit_2b=hit_2b,
+        hit_3b=hit_3b,
+        hit_ss=hit_ss,
+        hit_ci=hit_ci,
+        hit_mi=hit_mi,
+        hit_of=hit_of,
+        hit_ut=hit_ut,
+        pit_p=pit_p,
+        pit_sp=pit_sp,
+        pit_rp=pit_rp,
+        bench=bench,
+        minors=minors,
+        ir=ir,
+        two_way=two_way,
+        start_year=start_year,
+        recent_projections=recent_projections,
+        pts_hit_1b=pts_hit_1b,
+        pts_hit_2b=pts_hit_2b,
+        pts_hit_3b=pts_hit_3b,
+        pts_hit_hr=pts_hit_hr,
+        pts_hit_r=pts_hit_r,
+        pts_hit_rbi=pts_hit_rbi,
+        pts_hit_sb=pts_hit_sb,
+        pts_hit_bb=pts_hit_bb,
+        pts_hit_so=pts_hit_so,
+        pts_pit_ip=pts_pit_ip,
+        pts_pit_w=pts_pit_w,
+        pts_pit_l=pts_pit_l,
+        pts_pit_k=pts_pit_k,
+        pts_pit_sv=pts_pit_sv,
+        pts_pit_svh=pts_pit_svh,
+        pts_pit_h=pts_pit_h,
+        pts_pit_er=pts_pit_er,
+        pts_pit_bb=pts_pit_bb,
+    )
+
+
+def prewarm_default_calculation_caches(*, state: Any) -> None:
+    with state.CALCULATOR_PREWARM_LOCK:
+        state.CALCULATOR_PREWARM_STATE.update(
+            {
+                "status": "running",
+                "started_at": state._iso_now(),
+                "completed_at": None,
+                "duration_ms": None,
+                "error": None,
+            }
+        )
+
+    started = state.time.perf_counter()
+    try:
+        state._refresh_data_if_needed()
+        params = state._default_calculation_cache_params()
+        ip_max = params["ip_max"]
+        state._calculate_common_dynasty_frame_cached(
+            teams=int(params["teams"]),
+            sims=int(params["sims"]),
+            horizon=int(params["horizon"]),
+            discount=float(params["discount"]),
+            hit_c=int(params["hit_c"]),
+            hit_1b=int(params["hit_1b"]),
+            hit_2b=int(params["hit_2b"]),
+            hit_3b=int(params["hit_3b"]),
+            hit_ss=int(params["hit_ss"]),
+            hit_ci=int(params["hit_ci"]),
+            hit_mi=int(params["hit_mi"]),
+            hit_of=int(params["hit_of"]),
+            hit_ut=int(params["hit_ut"]),
+            pit_p=int(params["pit_p"]),
+            pit_sp=int(params["pit_sp"]),
+            pit_rp=int(params["pit_rp"]),
+            bench=int(params["bench"]),
+            minors=int(params["minors"]),
+            ir=int(params["ir"]),
+            ip_min=float(params["ip_min"]),
+            ip_max=float(ip_max) if ip_max is not None else None,
+            two_way=str(params["two_way"]),
+            start_year=int(params["start_year"]),
+            recent_projections=int(params["recent_projections"]),
+            **state._roto_category_settings_from_dict(params),
+        )
+        state._get_default_dynasty_lookup()
+
+        duration_ms = round((state.time.perf_counter() - started) * 1000.0, 1)
+        with state.CALCULATOR_PREWARM_LOCK:
+            state.CALCULATOR_PREWARM_STATE.update(
+                {
+                    "status": "ready",
+                    "completed_at": state._iso_now(),
+                    "duration_ms": duration_ms,
+                    "error": None,
+                }
+            )
+        state.CALC_LOGGER.info("calculator prewarm completed duration_ms=%s", duration_ms)
+    except Exception as exc:
+        duration_ms = round((state.time.perf_counter() - started) * 1000.0, 1)
+        with state.CALCULATOR_PREWARM_LOCK:
+            state.CALCULATOR_PREWARM_STATE.update(
+                {
+                    "status": "failed",
+                    "completed_at": state._iso_now(),
+                    "duration_ms": duration_ms,
+                    "error": str(exc),
+                }
+            )
+        state.CALC_LOGGER.exception("calculator prewarm failed")
+
+
+def calculator_overlay_values_for_job(*, state: Any, job_id: str | None) -> dict[str, dict[str, Any]]:
+    normalized_job_id = str(job_id or "").strip()
+    if not normalized_job_id:
+        return {}
+
+    with state.CALCULATOR_JOB_LOCK:
+        live_job = state.CALCULATOR_JOBS.get(normalized_job_id)
+    job_payload = live_job if isinstance(live_job, dict) else state._cached_calculation_job_snapshot(normalized_job_id)
+    if not isinstance(job_payload, dict):
+        return {}
+    if str(job_payload.get("status") or "").lower() != "completed":
+        return {}
+
+    result = job_payload.get("result")
+    rows = result.get("data") if isinstance(result, dict) else None
+    if not isinstance(rows, list):
+        return {}
+
+    overlay_by_player_key: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+
+        overlay: dict[str, Any] = {}
+        dynasty_value = row.get("DynastyValue")
+        if dynasty_value is not None and dynasty_value != "":
+            overlay["DynastyValue"] = dynasty_value
+        for col, value in row.items():
+            if not str(col).startswith("Value_"):
+                continue
+            if value is None or value == "":
+                continue
+            overlay[str(col)] = value
+        if not overlay:
+            continue
+
+        entity_key = str(row.get(state.PLAYER_ENTITY_KEY_COL) or "").strip().lower()
+        player_key = str(row.get(state.PLAYER_KEY_COL) or "").strip().lower()
+        if entity_key:
+            overlay_by_player_key[entity_key] = overlay
+        elif player_key:
+            overlay_by_player_key[player_key] = overlay
+
+    return overlay_by_player_key
+
+
+def calculator_service_from_globals(*, state: Any) -> Any:
+    return state.build_calculator_service(
+        refresh_data_if_needed=state._refresh_data_if_needed,
+        coerce_meta_years=state._coerce_meta_years,
+        get_meta=lambda: state.META,
+        calc_result_cache_key=state._calc_result_cache_key,
+        result_cache_get=state._result_cache_get,
+        result_cache_set=state._result_cache_set,
+        calculate_common_dynasty_frame_cached=state._calculate_common_dynasty_frame_cached,
+        calculate_points_dynasty_frame_cached=state._calculate_points_dynasty_frame_cached,
+        roto_category_settings_from_dict=state._roto_category_settings_from_dict,
+        is_user_fixable_calculation_error=state._is_user_fixable_calculation_error,
+        player_identity_by_name=state._player_identity_by_name,
+        normalize_player_key=state._normalize_player_key,
+        player_key_col=state.PLAYER_KEY_COL,
+        player_entity_key_col=state.PLAYER_ENTITY_KEY_COL,
+        selected_roto_categories=state._selected_roto_categories,
+        start_year_roto_stats_by_entity=state._start_year_roto_stats_by_entity,
+        projection_identity_key=state._projection_identity_key,
+        build_calculation_explanations=state._build_calculation_explanations,
+        clean_records_for_json=state._clean_records_for_json,
+        flatten_explanations_for_export=state._flatten_explanations_for_export,
+        tabular_export_response=state._tabular_export_response,
+        calc_logger=state.CALC_LOGGER,
+        enforce_rate_limit=state._enforce_rate_limit,
+        sync_rate_limit_per_minute=state.CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,
+        job_create_rate_limit_per_minute=state.CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE,
+        job_status_rate_limit_per_minute=state.CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE,
+        client_ip=state._client_ip,
+        iso_now=state._iso_now,
+        active_jobs_for_ip=state._active_jobs_for_ip,
+        calculator_max_active_jobs_per_ip=state.CALCULATOR_MAX_ACTIVE_JOBS_PER_IP,
+        calculator_job_lock=state.CALCULATOR_JOB_LOCK,
+        calculator_jobs=state.CALCULATOR_JOBS,
+        cleanup_calculation_jobs=state._cleanup_calculation_jobs,
+        cache_calculation_job_snapshot=state._cache_calculation_job_snapshot,
+        cached_calculation_job_snapshot=state._cached_calculation_job_snapshot,
+        calculation_job_public_payload=state._calculation_job_public_payload,
+        mark_job_cancelled_locked=state._mark_job_cancelled_locked,
+        calculator_job_executor=state.CALCULATOR_JOB_EXECUTOR,
+        calc_job_cancelled_status=state.CALC_JOB_CANCELLED_STATUS,
+    )
+
+
+def log_precomputed_dynasty_lookup_cache_status(*, state: Any) -> None:
+    inspection = state._inspect_precomputed_default_dynasty_lookup()
+    state.CALC_LOGGER.info(
+        "dynasty lookup cache status=%s require_precomputed=%s expected=%s found=%s",
+        inspection.status,
+        state.REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP,
+        inspection.expected_version,
+        inspection.found_version or "missing",
+    )
+    if inspection.error:
+        state.CALC_LOGGER.warning("dynasty lookup cache error: %s", inspection.error)
