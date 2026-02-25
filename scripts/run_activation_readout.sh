@@ -9,6 +9,9 @@ Usage:
     --baseline tmp/activation_baseline.csv \
     [--date YYYY-MM-DD] \
     [--owner "Owner Name"] \
+    [--release-commit COMMIT_SHA] \
+    [--current-window-label "24h post-release"] \
+    [--baseline-window-label "Comparable 24h pre-release"] \
     [--output-dir tmp] \
     [--docs-dir docs]
 
@@ -23,6 +26,9 @@ REPORT_DATE="$(date +%F)"
 OWNER="TBD"
 OUTPUT_DIR="tmp"
 DOCS_DIR="docs"
+RELEASE_COMMIT=""
+CURRENT_WINDOW_LABEL="24h post-release (activation rollout)"
+BASELINE_WINDOW_LABEL="Comparable 24h pre-release window"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,6 +46,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --owner)
       OWNER="${2:-}"
+      shift 2
+      ;;
+    --release-commit)
+      RELEASE_COMMIT="${2:-}"
+      shift 2
+      ;;
+    --current-window-label)
+      CURRENT_WINDOW_LABEL="${2:-}"
+      shift 2
+      ;;
+    --baseline-window-label)
+      BASELINE_WINDOW_LABEL="${2:-}"
       shift 2
       ;;
     --output-dir)
@@ -82,7 +100,11 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEXT_OUTPUT="$REPO_ROOT/$OUTPUT_DIR/activation_readout_${REPORT_DATE}.txt"
 JSON_OUTPUT="$REPO_ROOT/$OUTPUT_DIR/activation_readout_${REPORT_DATE}.json"
 DECISION_OUTPUT="$REPO_ROOT/$DOCS_DIR/activation-rollout-decision-${REPORT_DATE}.md"
-RELEASE_COMMIT="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+if [[ -n "${RELEASE_COMMIT:-}" ]]; then
+  RESOLVED_RELEASE_COMMIT="$RELEASE_COMMIT"
+else
+  RESOLVED_RELEASE_COMMIT="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+fi
 
 mkdir -p "$(dirname "$TEXT_OUTPUT")" "$(dirname "$JSON_OUTPUT")" "$(dirname "$DECISION_OUTPUT")"
 
@@ -104,9 +126,9 @@ python "$REPO_ROOT/scripts/generate_activation_decision_memo.py" \
   --output "$DECISION_OUTPUT" \
   --memo-date "$REPORT_DATE" \
   --owner "$OWNER" \
-  --release-commit "$RELEASE_COMMIT" \
-  --current-window-label "24h post-release (activation rollout)" \
-  --baseline-window-label "Comparable 24h pre-release window"
+  --release-commit "$RESOLVED_RELEASE_COMMIT" \
+  --current-window-label "$CURRENT_WINDOW_LABEL" \
+  --baseline-window-label "$BASELINE_WINDOW_LABEL"
 
 echo
 echo "Activation readout complete."

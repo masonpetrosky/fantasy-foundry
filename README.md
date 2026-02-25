@@ -206,6 +206,24 @@ scripts/run_activation_readout.sh \
   --owner "Analytics Team"
 ```
 
+Recommended two-checkpoint execution (24h + 48h + final gate):
+
+```bash
+scripts/run_activation_readout_checkpoints.sh \
+  --current-24h tmp/activation_current_24h.csv \
+  --baseline-24h tmp/activation_baseline_24h.csv \
+  --date-24h 2026-02-26 \
+  --current-48h tmp/activation_current_48h.csv \
+  --baseline-48h tmp/activation_baseline_48h.csv \
+  --date-48h 2026-02-27 \
+  --owner "Analytics Team"
+```
+
+This generates per-checkpoint readouts and memos plus:
+
+- `tmp/activation_rollout_gate_<date-48h>.json`
+- `docs/activation-rollout-final-decision-<date-48h>.md`
+
 See [`docs/activation-rollout-validation.md`](docs/activation-rollout-validation.md) for expected columns, thresholds, and rollout decision rules.
 
 ### Running Browser E2E Tests (Playwright)
