@@ -8,7 +8,7 @@ import { useProjectionComparisonComposition } from "./hooks/useProjectionCompari
 import { useProjectionExportPipeline } from "./hooks/useProjectionExportPipeline.js";
 import { useProjectionFilterPresets } from "./hooks/useProjectionFilterPresets.js";
 import { useProjectionTelemetry } from "./hooks/useProjectionTelemetry.js";
-import { useProjectionRowsMarkup } from "./hooks/useProjectionRowsMarkup.js";
+import { useProjectionRowsMarkup } from "./hooks/useProjectionRowsMarkup.jsx";
 import { useProjectionWatchlistComposition } from "./hooks/useProjectionWatchlistComposition.js";
 import { CAREER_TOTALS_FILTER_VALUE, DEFAULT_PROJECTIONS_SORT_COL, DEFAULT_PROJECTIONS_SORT_DIR, DEFAULT_PROJECTIONS_TAB, useProjectionsData } from "../../hooks/useProjectionsData.js";
 import { buildActiveFilterChips, resolveProjectionEmptyStateModel, resolveProjectionSwipeHint } from "./view_state.js";
