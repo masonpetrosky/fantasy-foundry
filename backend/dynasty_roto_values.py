@@ -103,6 +103,7 @@ try:
         parse_hit_positions,
         parse_pit_positions,
     )
+    from backend.valuation import xlsx_formatting as _xlsx_fmt
 except ImportError:
     # Support direct execution/import when /backend is added to sys.path.
     from valuation.assignment import (
@@ -145,12 +146,7 @@ except ImportError:
         parse_hit_positions,
         parse_pit_positions,
     )
-
-# Excel formatting (output workbook)
-from openpyxl.formatting.rule import ColorScaleRule
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
-from openpyxl.worksheet.table import Table, TableStyleInfo
+    from valuation import xlsx_formatting as _xlsx_fmt
 
 # Projection de-duplication helpers
 PROJECTION_DATE_COLS = ["ProjectionDate", "Date", "Updated", "LastUpdated", "Timestamp", "Created", "AsOf"]
@@ -3269,78 +3265,19 @@ def league_combine_hitter_pitcher_year(hit_vals: pd.DataFrame, pit_vals: pd.Data
 # ----------------------------
 
 def _xlsx_apply_header_style(ws) -> None:
-    """Apply a consistent header style to row 1."""
-    max_col = ws.max_column
-    if max_col < 1:
-        return
-
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill("solid", fgColor="1F4E79")  # dark blue
-    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    thin = Side(style="thin", color="D9D9D9")
-    header_border = Border(bottom=thin)
-
-    ws.row_dimensions[1].height = 22
-    for c in range(1, max_col + 1):
-        cell = ws.cell(row=1, column=c)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = header_alignment
-        cell.border = header_border
+    return _xlsx_fmt._xlsx_apply_header_style(ws)
 
 
 def _xlsx_set_freeze_filters_and_view(ws, freeze_panes: str, add_autofilter: bool = False) -> None:
-    """Freeze panes, optionally add a worksheet AutoFilter, and hide gridlines.
-
-    IMPORTANT:
-      Excel Tables include their own AutoFilter. If the worksheet also has a
-      worksheet-level AutoFilter over the same range, Excel will often open the
-      file in "repair" mode and remove the Table/filters.
-
-    By default we therefore *clear* any worksheet-level filter and rely on the
-    Table's built-in filter dropdowns. Pass add_autofilter=True only for sheets
-    where you are NOT creating a Table.
-    """
-    ws.freeze_panes = freeze_panes
-    ws.sheet_view.showGridLines = False
-
-    if add_autofilter:
-        max_row = ws.max_row
-        max_col = ws.max_column
-        if max_row >= 1 and max_col >= 1:
-            ref = f"A1:{get_column_letter(max_col)}{max_row}"
-            ws.auto_filter.ref = ref
-    else:
-        # Clear worksheet-level AutoFilter to avoid conflicts with Excel Tables.
-        ws.auto_filter.ref = None
+    return _xlsx_fmt._xlsx_set_freeze_filters_and_view(
+        ws,
+        freeze_panes=freeze_panes,
+        add_autofilter=add_autofilter,
+    )
 
 
 def _xlsx_add_table(ws, table_name: str, style_name: str = "TableStyleMedium9") -> None:
-    """Wrap the used range in an Excel Table for striping + filter dropdowns.
-
-    Excel Tables carry their own AutoFilter. If a worksheet-level AutoFilter is
-    also present (ws.auto_filter.ref), Excel may "repair" the workbook on open
-    and remove the table. To prevent that, we clear any sheet-level AutoFilter
-    before adding the Table.
-    """
-    max_row = ws.max_row
-    max_col = ws.max_column
-    if max_row < 2 or max_col < 1:
-        return
-
-    # Prevent Excel repair: don't mix worksheet AutoFilter + Table AutoFilter.
-    ws.auto_filter.ref = None
-
-    ref = f"A1:{get_column_letter(max_col)}{max_row}"
-    tab = Table(displayName=table_name, ref=ref)
-    tab.tableStyleInfo = TableStyleInfo(
-        name=style_name,
-        showFirstColumn=False,
-        showLastColumn=False,
-        showRowStripes=True,
-        showColumnStripes=False,
-    )
-    ws.add_table(tab)
+    return _xlsx_fmt._xlsx_add_table(ws, table_name=table_name, style_name=style_name)
 
 
 def _xlsx_set_column_widths(
@@ -3351,128 +3288,26 @@ def _xlsx_set_column_widths(
     min_width: float = 8.0,
     max_width: float = 45.0,
 ) -> None:
-    """Best-effort "auto-fit" widths with sensible caps (fast + readable)."""
-    if df is None or df.empty:
-        return
-
-    overrides = dict(overrides or {})
-
-    # Common dynamic overrides
-    for col in df.columns:
-        if isinstance(col, str) and col.startswith("Value_"):
-            overrides.setdefault(col, 10.0)
-
-    for i, col_name in enumerate(df.columns, start=1):
-        letter = get_column_letter(i)
-
-        # Explicit override wins
-        if col_name in overrides:
-            ws.column_dimensions[letter].width = float(overrides[col_name])
-            continue
-
-        s = df[col_name]
-
-        # Dates (including Python date objects often come through as object dtype)
-        if str(col_name).lower().endswith("date"):
-            ws.column_dimensions[letter].width = 14.0
-            continue
-
-        # Numeric: keep compact
-        if pd.api.types.is_numeric_dtype(s):
-            base = max(len(str(col_name)) + 2, 10)
-            ws.column_dimensions[letter].width = float(min(max(base, min_width), 16.0))
-            continue
-
-        # Boolean: compact
-        if pd.api.types.is_bool_dtype(s):
-            ws.column_dimensions[letter].width = float(max(12.0, len(str(col_name)) + 2))
-            continue
-
-        # Text/object: use a sample to estimate
-        sample = s.dropna().astype(str).head(sample_rows)
-        max_len = int(sample.str.len().max()) if not sample.empty else 0
-        width = min(max(max_len, len(str(col_name))) + 2, int(max_width))
-        width = max(float(width), float(min_width))
-        ws.column_dimensions[letter].width = float(width)
+    return _xlsx_fmt._xlsx_set_column_widths(
+        ws,
+        df,
+        overrides=overrides,
+        sample_rows=sample_rows,
+        min_width=min_width,
+        max_width=max_width,
+    )
 
 
 def _xlsx_apply_number_formats(ws, df: pd.DataFrame, formats_by_col: Dict[str, str]) -> None:
-    """Apply number formats to entire columns (data rows only)."""
-    if df is None or df.empty:
-        return
-
-    max_row = ws.max_row
-    if max_row < 2:
-        return
-
-    cols = list(df.columns)
-    for col_name, fmt in formats_by_col.items():
-        if col_name not in cols:
-            continue
-        col_idx = cols.index(col_name) + 1
-        for r in range(2, max_row + 1):
-            ws.cell(row=r, column=col_idx).number_format = fmt
+    return _xlsx_fmt._xlsx_apply_number_formats(ws, df, formats_by_col)
 
 
 def _xlsx_add_value_color_scale(ws, df: pd.DataFrame, col_name: str) -> None:
-    """Add a red-yellow-green color scale on a value column for readability."""
-    if df is None or df.empty:
-        return
-    if col_name not in df.columns:
-        return
-    max_row = ws.max_row
-    if max_row < 3:
-        return
-
-    col_idx = list(df.columns).index(col_name) + 1
-    col_letter = get_column_letter(col_idx)
-    cell_range = f"{col_letter}2:{col_letter}{max_row}"
-
-    rule = ColorScaleRule(
-        start_type="min",
-        start_color="F8696B",  # red
-        mid_type="percentile",
-        mid_value=50,
-        mid_color="FFEB84",    # yellow
-        end_type="max",
-        end_color="63BE7B",    # green
-    )
-    ws.conditional_formatting.add(cell_range, rule)
+    return _xlsx_fmt._xlsx_add_value_color_scale(ws, df, col_name)
 
 
 def _xlsx_format_player_values(ws, df: pd.DataFrame, table_name: str = "PlayerValuesTbl") -> None:
-    """Formatting for the summary tab."""
-    _xlsx_apply_header_style(ws)
-    _xlsx_set_freeze_filters_and_view(ws, freeze_panes="B2")
-    _xlsx_add_table(ws, table_name=table_name)
-
-    overrides = {
-        "Player": 24.0,
-        "Team": 8.0,
-        "MLBTeam": 8.0,
-        "Pos": 10.0,
-        "OldestProjectionDate": 14.0,
-        "DynastyValue": 12.0,
-        "RawDynastyValue": 14.0,
-        "CenteringBaselineMean": 16.0,
-    }
-    _xlsx_set_column_widths(ws, df, overrides=overrides)
-
-    formats = {
-        "ProjectionsUsed": "0",
-        "Age": "0",
-        "OldestProjectionDate": "yyyy-mm-dd",
-        "DynastyValue": "0.00",
-        "RawDynastyValue": "0.00",
-        "CenteringBaselineMean": "0.00",
-    }
-    for c in df.columns:
-        if isinstance(c, str) and c.startswith("Value_"):
-            formats[c] = "0.00"
-    _xlsx_apply_number_formats(ws, df, formats)
-
-    # Helpful visual cue: color-scale DynastyValue
-    _xlsx_add_value_color_scale(ws, df, "DynastyValue")
+    return _xlsx_fmt._xlsx_format_player_values(ws, df, table_name=table_name)
 
 
 def _xlsx_format_detail_sheet(
@@ -3482,49 +3317,12 @@ def _xlsx_format_detail_sheet(
     table_name: str,
     is_pitch: bool,
 ) -> None:
-    """Formatting for Bat_Aggregated / Pitch_Aggregated."""
-    _xlsx_apply_header_style(ws)
-    # Freeze Player + Year (first two columns) + header row
-    _xlsx_set_freeze_filters_and_view(ws, freeze_panes="C2")
-    _xlsx_add_table(ws, table_name=table_name)
-
-    overrides = {
-        "Player": 24.0,
-        "Team": 8.0,
-        "MLBTeam": 8.0,
-        "Pos": 10.0,
-        "BestSlot": 10.0,
-        "OldestProjectionDate": 14.0,
-        "DynastyValue": 12.0,
-        "RawDynastyValue": 14.0,
-        "YearValue": 10.0,
-    }
-    _xlsx_set_column_widths(ws, df, overrides=overrides)
-
-    # Core formats
-    formats: Dict[str, str] = {
-        "Year": "0",
-        "Age": "0",
-        "ProjectionsUsed": "0",
-        "OldestProjectionDate": "yyyy-mm-dd",
-        "YearValue": "0.00",
-        "DynastyValue": "0.00",
-        "RawDynastyValue": "0.00",
-        "AVG": "0.000",
-        "OBP": "0.000",
-        "SLG": "0.000",
-        "OPS": "0.000",
-        "ERA": "0.00",
-        "WHIP": "0.00",
-        "IP": "0.0",
-    }
-
-    # Apply only formats for columns that exist in this sheet.
-    _xlsx_apply_number_formats(ws, df, formats)
-
-    # Color-scale the most important value columns.
-    _xlsx_add_value_color_scale(ws, df, "YearValue")
-    _xlsx_add_value_color_scale(ws, df, "DynastyValue")
+    return _xlsx_fmt._xlsx_format_detail_sheet(
+        ws,
+        df,
+        table_name=table_name,
+        is_pitch=is_pitch,
+    )
 
 
 # ----------------------------
