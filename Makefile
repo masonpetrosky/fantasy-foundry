@@ -1,4 +1,7 @@
-.PHONY: test test-backend test-backend-fast test-backend-full-regression test-frontend lint lint-backend lint-frontend typecheck check
+.PHONY: guard-generated-artifacts test test-backend test-backend-fast test-backend-full-regression test-frontend lint lint-backend lint-frontend typecheck check
+
+guard-generated-artifacts:
+	./scripts/check_generated_artifacts_untracked.sh
 
 test: test-backend test-frontend
 
@@ -14,7 +17,7 @@ test-backend-full-regression:
 test-frontend:
 	cd frontend && npm test
 
-lint: lint-backend lint-frontend
+lint: guard-generated-artifacts lint-backend lint-frontend
 
 lint-backend:
 	python scripts/check_ruff_per_file_ignores.py

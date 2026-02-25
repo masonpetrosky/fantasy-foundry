@@ -145,10 +145,19 @@ cd frontend
 npm run test:coverage
 ```
 
+Coverage outputs (`.coverage`, `coverage.xml`, `htmlcov/`, `frontend/coverage/`) are generated locally and must remain untracked:
+
+```bash
+./scripts/check_generated_artifacts_untracked.sh
+```
+
 ### Linting
 ```bash
 # Enforce backend Ruff per-file-ignore allowlist
 python scripts/check_ruff_per_file_ignores.py
+
+# Enforce generated coverage artifacts remain untracked
+./scripts/check_generated_artifacts_untracked.sh
 
 # Backend lint
 ruff check backend tests preprocess.py scripts

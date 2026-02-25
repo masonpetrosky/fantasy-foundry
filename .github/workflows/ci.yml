@@ -70,6 +70,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Enforce Generated Artifact Tracking Guard
+        run: ./scripts/check_generated_artifacts_untracked.sh
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:

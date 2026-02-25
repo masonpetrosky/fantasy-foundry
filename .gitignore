@@ -12,6 +12,13 @@ venv/
 .mypy_cache/
 .ruff_cache/
 
+# Coverage artifacts (generated)
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+frontend/coverage/
+
 # OS/editor noise
 .DS_Store
 Thumbs.db
