@@ -307,6 +307,38 @@
   font-size: var(--fs-sm);
 }
 
+.comparison-sparklines {
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.comparison-sparklines svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.comparison-sparkline-legend {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.comparison-sparkline-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.comparison-sparkline-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 3px;
+  border-radius: 2px;
+}
+
 .comparison-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

@@ -4,7 +4,8 @@
 @import "./methodology.css";
 @import "./responsive.css";
 
-:root {
+:root,
+[data-theme="dark"] {
   --bg-primary: #0c1117;
   --bg-secondary: #141b24;
   --bg-tertiary: #1a2332;
@@ -21,7 +22,27 @@
   --green: #4ade80;
   --red: #f87171;
   --blue: #60a5fa;
+  color-scheme: dark;
+}
 
+[data-theme="light"] {
+  --bg-primary: #f8f9fb;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f0f2f5;
+  --bg-card: #ffffff;
+  --bg-hover: #edf0f4;
+  --border: #d4d9e0;
+  --border-subtle: #e2e6eb;
+  --text-primary: #1a1f26;
+  --text-secondary: #4a5568;
+  --text-muted: #718096;
+  --accent: #b8862d;
+  --accent-dim: #9a7024;
+  --accent-glow: rgba(184,134,45,0.12);
+  --green: #22c55e;
+  --red: #ef4444;
+  --blue: #3b82f6;
+  color-scheme: light;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -85,6 +106,65 @@ select:focus-visible,
 .fade-up-1 { animation-delay: 0.1s; }
 .fade-up-2 { animation-delay: 0.2s; }
 .fade-up-3 { animation-delay: 0.3s; }
+
+/* ====== TOAST NOTIFICATIONS ====== */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: 380px;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: var(--fs-sm, 0.85rem);
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  pointer-events: auto;
+  animation: toastIn 0.25s ease-out both;
+}
+
+.toast-success { border-color: var(--green); }
+.toast-error   { border-color: var(--red); }
+.toast-info    { border-color: var(--accent); }
+
+.toast-message { flex: 1; }
+
+.toast-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.toast-dismiss:hover { color: var(--text-primary); }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+  .toast-container {
+    bottom: 80px;
+    right: 12px;
+    left: 12px;
+    max-width: none;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

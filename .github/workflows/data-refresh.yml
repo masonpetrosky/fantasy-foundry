@@ -1,0 +1,50 @@
+name: Data Refresh
+
+on:
+  schedule:
+    # Run every Monday and Thursday at 06:00 UTC
+    - cron: "0 6 * * 1,4"
+  workflow_dispatch:
+    inputs:
+      skip_dynasty_cache:
+        description: "Skip dynasty lookup cache rebuild"
+        required: false
+        default: "false"
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install pandas openpyxl
+
+      - name: Run preprocess
+        run: |
+          SKIP_FLAG=""
+          if [ "${{ github.event.inputs.skip_dynasty_cache }}" = "true" ]; then
+            SKIP_FLAG="--skip-dynasty-cache"
+          fi
+          python preprocess.py --quality-report data/quality_report.json $SKIP_FLAG
+
+      - name: Check for data changes
+        id: changes
+        run: |
+          git diff --quiet data/ && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push updated data
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git commit -m "chore: refresh projection data $(date -u +%Y-%m-%d)"
+          git push

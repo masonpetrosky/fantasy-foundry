@@ -27,8 +27,10 @@ class TestPositionProfile:
         assert _position_profile("1B") == "hitter"
         assert _position_profile("SS") == "hitter"
         assert _position_profile("OF") == "hitter"
-        assert _position_profile("C") == "hitter"
         assert _position_profile("DH") == "hitter"
+
+    def test_catcher_position(self):
+        assert _position_profile("C") == "catcher"
 
     def test_pitcher_sp(self):
         assert _position_profile("SP") == "pitcher"

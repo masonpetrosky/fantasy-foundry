@@ -720,6 +720,17 @@ app.include_router(
 # ---------------------------------------------------------------------------
 # Serve frontend
 # ---------------------------------------------------------------------------
+def _get_unique_player_entity_keys() -> list[str]:
+    """Return deduplicated player entity keys from BAT_DATA + PIT_DATA for sitemap."""
+    seen: set[str] = set()
+    keys: list[str] = []
+    for row in BAT_DATA + PIT_DATA:
+        key = str(row.get("PlayerEntityKey", "")).strip()
+        if key and key not in seen:
+            seen.add(key)
+            keys.append(key)
+    return keys
+
 if FRONTEND_DIR.exists():
     app.include_router(
         build_frontend_assets_router(
@@ -727,5 +738,6 @@ if FRONTEND_DIR.exists():
             assets_root=FRONTEND_DIST_ASSETS_DIR,
             app_build_id=APP_BUILD_ID,
             index_build_token=INDEX_BUILD_TOKEN,
+            player_keys_getter=_get_unique_player_entity_keys,
         )
     )

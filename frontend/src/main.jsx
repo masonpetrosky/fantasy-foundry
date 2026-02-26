@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./styles/app.css";
 import { AUTH_SYNC_ENABLED } from "./supabase_client.js";
 import { AccountPanel } from "./account_panel.jsx";
@@ -11,6 +12,9 @@ import { MobileCalculatorSheet } from "./MobileCalculatorSheet.jsx";
 import { installAnalyticsDebugBridge, setAnalyticsContext, trackEvent } from "./analytics.js";
 import { ErrorBoundary } from "./error_boundary.jsx";
 import { FeatureErrorBoundary } from "./feature_error_boundary.jsx";
+import { ToastProvider } from "./Toast.jsx";
+import { PlayerPage } from "./PlayerPage.jsx";
+import { TradeAnalyzer } from "./TradeAnalyzer.jsx";
 import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProjectionLayoutState.js";
 import { resolveProjectionWindow } from "./formatting_utils.js";
 import { useBottomSheet } from "./hooks/useBottomSheet.js";
@@ -21,6 +25,7 @@ import { useQuickStart } from "./hooks/useQuickStart.js";
 import { useVersionPolling } from "./hooks/useVersionPolling.js";
 import { useAccountMenu } from "./hooks/useAccountMenu.js";
 import { useAccountSync } from "./hooks/useAccountSync.js";
+import { useTheme } from "./hooks/useTheme.js";
 import {
   readLastSuccessfulCalcRun,
   readPlayerWatchlist,
@@ -81,6 +86,8 @@ function App() {
   });
   const { accountMenuOpen, setAccountMenuOpen, accountMenuRef, accountTriggerRef } = useAccountMenu({ section });
   const bottomSheet = useBottomSheet();
+  const { theme, toggleTheme } = useTheme();
+  const [tradeAnalyzerOpen, setTradeAnalyzerOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(() => window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches);
   useEffect(() => {
     const mql = window.matchMedia(MOBILE_BREAKPOINT_QUERY);
@@ -187,6 +194,15 @@ function App() {
               ))}
             </div>
           </nav>
+          <button
+            type="button"
+            className="inline-btn theme-toggle"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            title={theme === "dark" ? "Light mode" : "Dark mode"}
+          >
+            {theme === "dark" ? "☀" : "☾"}
+          </button>
           <div className="account-menu" ref={accountMenuRef}>
             <button
               type="button"
@@ -370,6 +386,23 @@ function App() {
                   </div>
                 )}
               </section>
+              {calculatorOverlayActive && (
+                <div className="trade-analyzer-toggle-wrap">
+                  <button
+                    type="button"
+                    className={`inline-btn ${tradeAnalyzerOpen ? "open" : ""}`.trim()}
+                    onClick={() => setTradeAnalyzerOpen(v => !v)}
+                  >
+                    {tradeAnalyzerOpen ? "Hide Trade Analyzer" : "Open Trade Analyzer"}
+                  </button>
+                </div>
+              )}
+              {tradeAnalyzerOpen && calculatorOverlayActive && (
+                <TradeAnalyzer
+                  calculatorResults={calculatorOverlayByPlayerKey ? Object.values(calculatorOverlayByPlayerKey) : []}
+                  onClose={() => setTradeAnalyzerOpen(false)}
+                />
+              )}
               <div className="projections-content">
                 <FeatureErrorBoundary featureName="Projections Explorer">
                 <ProjectionsExplorer
@@ -448,7 +481,10 @@ function App() {
       </main>
 
       <footer>
-        Projections updated as-needed.
+        {meta?.last_projection_update
+          ? <>Projections updated {meta.last_projection_update}.</>
+          : <>Projections updated as-needed.</>
+        }
         {buildLabel && <span className="build-id">Build {buildLabel}</span>}
       </footer>
     </>
@@ -460,6 +496,13 @@ function App() {
 // ---------------------------------------------------------------------------
 createRoot(document.getElementById("root")).render(
   <ErrorBoundary>
-    <App />
+    <BrowserRouter>
+      <ToastProvider>
+        <Routes>
+          <Route path="/player/:slug" element={<PlayerPage />} />
+          <Route path="*" element={<App />} />
+        </Routes>
+      </ToastProvider>
+    </BrowserRouter>
   </ErrorBoundary>
 );

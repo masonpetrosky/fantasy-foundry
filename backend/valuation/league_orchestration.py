@@ -91,6 +91,9 @@ def _position_profile(pos_value: object) -> str:
         return "pitcher"
     if has_pitch and has_hit:
         return "two_way"
+    # Catcher-only gets steeper aging curve.
+    if tokens == {"C"}:
+        return "catcher"
     return "hitter"
 
 
@@ -103,6 +106,16 @@ def _piecewise_age_factor(age: float, *, profile: str) -> float:
         if age <= 38.0:
             return 0.84 + (0.70 - 0.84) * ((age - 34.0) / 4.0)
         return 0.70
+
+    # Catchers age faster: peak at 27, steeper decline.
+    if profile == "catcher":
+        if age <= 27.0:
+            return 1.0
+        if age <= 33.0:
+            return 1.0 + (0.82 - 1.0) * ((age - 27.0) / 6.0)
+        if age <= 37.0:
+            return 0.82 + (0.65 - 0.82) * ((age - 33.0) / 4.0)
+        return 0.65
 
     if age <= 29.0:
         return 1.0
