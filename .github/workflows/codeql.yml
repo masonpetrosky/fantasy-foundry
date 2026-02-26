@@ -1,10 +1,12 @@
 name: CodeQL
 
+# CodeQL code scanning requires GitHub Advanced Security, which is only
+# available for public repos on the free plan.  While this repo is private
+# the workflow is limited to manual dispatch so it doesn't send failure
+# emails on every push.  Re-enable push/pull_request triggers once the repo
+# is public or Advanced Security is enabled.
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  workflow_dispatch:
   schedule:
     - cron: "17 5 * * 1"
 
