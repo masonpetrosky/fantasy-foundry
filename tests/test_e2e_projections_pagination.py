@@ -281,6 +281,55 @@ class ProjectionsPaginationE2ETests(unittest.TestCase):
         finally:
             page.close()
 
+    def test_activation_diagnostics_panel_renders_and_exports_csv_when_enabled(self) -> None:
+        page = self.browser.new_page()
+        try:
+            page.add_init_script(
+                """
+                () => {
+                  Object.defineProperty(navigator, 'clipboard', {
+                    configurable: true,
+                    value: { writeText: () => Promise.resolve() },
+                  });
+                }
+                """
+            )
+            page.goto(f"{self.base_url}/?activation_debug=1", wait_until="domcontentloaded", timeout=60000)
+
+            panel = page.locator(".activation-diagnostics-panel").first
+            panel.wait_for(state="visible", timeout=20000)
+            self.assertIn("Activation Funnel Snapshot", panel.inner_text())
+
+            panel.get_by_role("button", name="Export CSV").click()
+            page.wait_for_function(
+                """
+                () => {
+                  const status = document.querySelector('.activation-diagnostics-status');
+                  return !!status && (status.textContent || '').includes('Exported analytics CSV.');
+                }
+                """,
+                timeout=10000,
+            )
+
+            panel.get_by_role("button", name="Command Center").click()
+            command_center = page.get_by_role("dialog", name="Activation command center")
+            command_center.wait_for(state="visible", timeout=10000)
+            command_center.get_by_role("button", name="Copy Checkpoint Cmd").click()
+            page.wait_for_function(
+                """
+                () => {
+                  const status = document.querySelector('.activation-diagnostics-status');
+                  if (!status) return false;
+                  const text = String(status.textContent || '');
+                  return text.includes('Copied checkpoint readout command.')
+                    || text.includes('Unable to copy automatically; checkpoint command shown in prompt.');
+                }
+                """,
+                timeout=10000,
+            )
+        finally:
+            page.close()
+
 
 if __name__ == "__main__":
     unittest.main()

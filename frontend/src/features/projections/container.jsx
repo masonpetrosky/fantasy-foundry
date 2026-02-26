@@ -149,6 +149,11 @@ export function ProjectionsExplorer({
     watchlist,
     setWatchlist,
     data,
+    apiBase,
+    tab,
+    careerTotalsView,
+    resolvedYearFilter,
+    calculatorJobId: activeCalculatorJobId,
   });
   const {
     watchlistCount,
@@ -175,6 +180,11 @@ export function ProjectionsExplorer({
     clearCompareRows,
     comparisonColumns,
     copyCompareShareLink,
+    compareShareCopyNotice,
+    clearCompareShareCopyNotice,
+    compareShareHydrating,
+    compareShareNotice,
+    clearCompareShareNotice,
     workspaceHasComparisonActivity,
   } = useProjectionComparisonComposition({
     collections,
@@ -412,6 +422,11 @@ export function ProjectionsExplorer({
         clearPageResetNotice={clearPageResetNotice}
         exportError={exportError}
         clearExportError={clearExportError}
+        compareShareCopyNotice={compareShareCopyNotice}
+        clearCompareShareCopyNotice={clearCompareShareCopyNotice}
+        compareShareHydrating={compareShareHydrating}
+        compareShareNotice={compareShareNotice}
+        clearCompareShareNotice={clearCompareShareNotice}
         lastRefreshedLabel={lastRefreshedLabel}
       />
 
@@ -480,6 +495,7 @@ export function ProjectionsExplorer({
           row={profileRow}
           tab={tab}
           apiBase={apiBase}
+          calculatorJobId={activeCalculatorJobId}
           onClose={handleCloseProfile}
         />
       )}

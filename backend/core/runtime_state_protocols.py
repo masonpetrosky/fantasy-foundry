@@ -68,12 +68,17 @@ class RuntimeOrchestrationState(Protocol):
     CALC_RESULT_CACHE_LOCK: Any
     CALC_RESULT_CACHE: dict[str, Any]
     CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE: int
+    CALCULATOR_SYNC_AUTH_RATE_LIMIT_PER_MINUTE: int
     CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE: int
+    CALCULATOR_JOB_CREATE_AUTH_RATE_LIMIT_PER_MINUTE: int
     CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE: int
+    CALCULATOR_JOB_STATUS_AUTH_RATE_LIMIT_PER_MINUTE: int
+    CALCULATOR_REQUEST_TIMEOUT_SECONDS: int
     PROJECTION_RATE_LIMITS: Any
     REDIS_URL: str
     CALCULATOR_JOB_EXECUTOR: ThreadPoolExecutor
     CALCULATOR_MAX_ACTIVE_JOBS_PER_IP: int
+    CALCULATOR_MAX_ACTIVE_JOBS_TOTAL: int
     EXPORT_INTERNAL_COLUMN_BLOCKLIST: set[str]
     CALC_LOGGER: Any
     CalculateRequest: Any
@@ -91,6 +96,8 @@ class RuntimeOrchestrationState(Protocol):
     def _cleanup_local_result_cache(self, now_ts: float | None = None) -> None: ...
 
     def _rate_limit_bucket_count(self) -> int: ...
+
+    def _rate_limit_activity_snapshot(self) -> dict[str, Any]: ...
 
     def _iso_now(self) -> str: ...
 
@@ -159,9 +166,13 @@ class RuntimeStateHelpersState(Protocol):
     CALCULATOR_JOB_EXECUTOR: Any
     CALC_JOB_CANCELLED_STATUS: str
     CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE: int
+    CALCULATOR_SYNC_AUTH_RATE_LIMIT_PER_MINUTE: int
     CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE: int
+    CALCULATOR_JOB_CREATE_AUTH_RATE_LIMIT_PER_MINUTE: int
     CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE: int
+    CALCULATOR_JOB_STATUS_AUTH_RATE_LIMIT_PER_MINUTE: int
     CALCULATOR_MAX_ACTIVE_JOBS_PER_IP: int
+    CALCULATOR_MAX_ACTIVE_JOBS_TOTAL: int
     REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP: bool
 
     def _current_data_version(self) -> str: ...

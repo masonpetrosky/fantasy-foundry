@@ -100,6 +100,9 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Verify Browser Analytics CSV Contract
+        run: python scripts/check_activation_browser_csv_contract.py
+
       - name: Run Frontend Lint
         working-directory: frontend
         run: npm run lint
@@ -231,7 +234,8 @@ jobs:
 
       - name: Verify preprocessed data artifacts are up to date
         run: |
-          python preprocess.py
+          python preprocess.py --quality-report tmp/projection_quality_report.json
+          python scripts/check_projection_quality_report.py --report tmp/projection_quality_report.json
           if ! git diff --quiet -- data/meta.json data/bat.json data/pitch.json data/dynasty_lookup.json; then
             echo "Preprocessed data artifacts differ from committed files."
             echo "Run 'python preprocess.py' and commit updated files under data/."

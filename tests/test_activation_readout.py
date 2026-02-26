@@ -174,9 +174,9 @@ def test_load_events_supports_csv_alias_columns(tmp_path):
     csv_path.write_text(
         "\n".join(
             [
-                "event_name,session,source,mode,teams,horizon,is_first_run,time_to_first_success_ms",
-                "ff_quickstart_cta_click,s-1,hero_cta,roto,12,20,true,",
-                "ff_calculation_success,s-1,hero_cta,roto,12,20,true,65000",
+                "event_name,session,source,mode,teams,horizon,is_first_run,time_to_first_success_ms,timestamp_ms",
+                "ff_quickstart_cta_click,s-1,hero_cta,roto,12,20,true,,1700000000000",
+                "ff_calculation_success,s-1,hero_cta,roto,12,20,true,65000,1700000005000",
             ]
         ),
         encoding="utf-8",
@@ -187,4 +187,5 @@ def test_load_events_supports_csv_alias_columns(tmp_path):
     assert len(events) == 2
     assert events[0].event == "ff_quickstart_cta_click"
     assert events[0].session_id == "s-1"
+    assert events[0].timestamp == "1700000000000"
     assert events[1].time_to_first_success_ms == 65000.0

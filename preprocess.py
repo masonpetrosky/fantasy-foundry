@@ -24,6 +24,60 @@ PIT_RATE_COLS = {"ERA", "WHIP"}
 PLAYER_KEY_COL = "PlayerKey"
 PLAYER_ENTITY_KEY_COL = "PlayerEntityKey"
 PLAYER_KEY_PATTERN = re.compile(r"[^a-z0-9]+")
+BAT_REQUIRED_COLUMNS = {
+    "Player",
+    "Team",
+    "Age",
+    "Year",
+    "AB",
+    "R",
+    "RBI",
+    "H",
+    "2B",
+    "3B",
+    "HR",
+    "BB",
+    "IBB",
+    "HBP",
+    "SO",
+    "SB",
+    "CS",
+    "SF",
+    "SH",
+    "GDP",
+    "AVG",
+    "OPS",
+    "Pos",
+}
+PIT_REQUIRED_COLUMNS = {
+    "Player",
+    "Team",
+    "Age",
+    "Year",
+    "G",
+    "GS",
+    "IP",
+    "BF",
+    "W",
+    "L",
+    "SV",
+    "HLD",
+    "BS",
+    "QS",
+    "QA3",
+    "K",
+    "BB",
+    "IBB",
+    "HBP",
+    "H",
+    "HR",
+    "R",
+    "ER",
+    "SVH",
+    "ERA",
+    "WHIP",
+    "Pos",
+}
 
 
 def _pick_first_existing_column(df: pd.DataFrame, names: Iterable[str]) -> str | None:
@@ -190,11 +244,170 @@ def _parse_args() -> argparse.Namespace:
         description="Regenerate projection JSON files and optional dynasty lookup cache.",
     )
     parser.add_argument(
+        "--min-year",
+        type=int,
+        default=2026,
+        help="Minimum projection year required in workbook validation (default: 2026).",
+    )
+    parser.add_argument(
+        "--max-year",
+        type=int,
+        default=2045,
+        help="Maximum projection year required in workbook validation (default: 2045).",
+    )
+    parser.add_argument(
         "--skip-dynasty-cache",
         action="store_true",
         help="Skip generation of data/dynasty_lookup.json (faster preprocess, slower first projections load).",
     )
+    parser.add_argument(
+        "--quality-report",
+        default="",
+        help="Optional path for writing workbook validation/quality metrics JSON.",
+    )
     return parser.parse_args()
+
+
+def _text_series(series: pd.Series) -> pd.Series:
+    return series.astype("string").fillna("").str.strip()
+
+
+def _missing_required_columns(df: pd.DataFrame, required_cols: set[str]) -> list[str]:
+    return sorted(col for col in required_cols if col not in df.columns)
+
+
+def _coerce_valid_years(series: pd.Series) -> tuple[set[int], int]:
+    text = _text_series(series)
+    has_value = text != ""
+    numeric = pd.to_numeric(series, errors="coerce")
+    is_whole = numeric.notna() & numeric.mod(1).eq(0)
+    valid_values = set(numeric[is_whole].astype(int).tolist())
+    invalid_count = int((has_value & ~is_whole).sum())
+    return valid_values, invalid_count
+
+
+def _date_coverage_pct(df: pd.DataFrame) -> float | None:
+    if "Date" not in df.columns or len(df.index) == 0:
+        return None
+    text = _text_series(df["Date"]).str.lower()
+    known = ~text.isin({"", "nan", "nat", "none"})
+    return round(float(known.mean()) * 100.0, 1)
+
+
+def _format_years(years: set[int]) -> str:
+    if not years:
+        return "(none)"
+    return ", ".join(str(year) for year in sorted(years))
+
+
+def _year_window_differences(found_years: set[int], expected_years: set[int]) -> tuple[list[int], list[int]]:
+    missing = sorted(expected_years.difference(found_years))
+    unexpected = sorted(found_years.difference(expected_years))
+    return missing, unexpected
+
+
+def _projection_quality_sheet_payload(
+    df: pd.DataFrame,
+    *,
+    years: set[int],
+    invalid_year_count: int,
+    team_col: str,
+) -> dict:
+    player_blank_count = int(_text_series(df["Player"]).eq("").sum()) if "Player" in df.columns else len(df.index)
+    team_blank_count = int(_text_series(df[team_col]).eq("").sum()) if team_col in df.columns else len(df.index)
+    return {
+        "rows": int(len(df.index)),
+        "unique_players": int(df["Player"].dropna().nunique()) if "Player" in df.columns else 0,
+        "years": sorted(years),
+        "invalid_year_values": invalid_year_count,
+        "blank_player_rows": player_blank_count,
+        "blank_team_rows": team_blank_count,
+        "date_coverage_pct": _date_coverage_pct(df),
+    }
+
+
+def validate_projection_workbook_frames(
+    bat: pd.DataFrame,
+    pit: pd.DataFrame,
+    *,
+    min_year: int = 2026,
+    max_year: int = 2045,
+) -> dict:
+    if min_year > max_year:
+        raise ValueError(f"Invalid year window: min_year ({min_year}) must be <= max_year ({max_year}).")
+
+    expected_years = set(range(min_year, max_year + 1))
+    errors: list[str] = []
+
+    bat_missing = _missing_required_columns(bat, BAT_REQUIRED_COLUMNS)
+    if bat_missing:
+        errors.append(f"Bat sheet is missing required columns: {', '.join(bat_missing)}")
+    pit_missing = _missing_required_columns(pit, PIT_REQUIRED_COLUMNS)
+    if pit_missing:
+        errors.append(f"Pitch sheet is missing required columns: {', '.join(pit_missing)}")
+
+    if len(bat.index) <= 0:
+        errors.append("Bat sheet has no rows.")
+    if len(pit.index) <= 0:
+        errors.append("Pitch sheet has no rows.")
+
+    bat_years, bat_invalid_years = _coerce_valid_years(bat["Year"]) if "Year" in bat.columns else (set(), len(bat.index))
+    pit_years, pit_invalid_years = _coerce_valid_years(pit["Year"]) if "Year" in pit.columns else (set(), len(pit.index))
+
+    if bat_invalid_years > 0:
+        errors.append(f"Bat sheet contains {bat_invalid_years} row(s) with non-integer Year values.")
+    if pit_invalid_years > 0:
+        errors.append(f"Pitch sheet contains {pit_invalid_years} row(s) with non-integer Year values.")
+
+    bat_missing_years, bat_unexpected_years = _year_window_differences(bat_years, expected_years)
+    pit_missing_years, pit_unexpected_years = _year_window_differences(pit_years, expected_years)
+
+    if bat_missing_years:
+        errors.append(f"Bat sheet is missing projection years: {', '.join(map(str, bat_missing_years))}")
+    if pit_missing_years:
+        errors.append(f"Pitch sheet is missing projection years: {', '.join(map(str, pit_missing_years))}")
+    if bat_unexpected_years:
+        errors.append(f"Bat sheet contains out-of-window years: {', '.join(map(str, bat_unexpected_years))}")
+    if pit_unexpected_years:
+        errors.append(f"Pitch sheet contains out-of-window years: {', '.join(map(str, pit_unexpected_years))}")
+
+    bat_player_blank_count = int(_text_series(bat["Player"]).eq("").sum()) if "Player" in bat.columns else len(bat.index)
+    pit_player_blank_count = int(_text_series(pit["Player"]).eq("").sum()) if "Player" in pit.columns else len(pit.index)
+    bat_team_blank_count = int(_text_series(bat["Team"]).eq("").sum()) if "Team" in bat.columns else len(bat.index)
+    pit_team_blank_count = int(_text_series(pit["Team"]).eq("").sum()) if "Team" in pit.columns else len(pit.index)
+    if bat_player_blank_count > 0:
+        errors.append(f"Bat sheet contains {bat_player_blank_count} row(s) with blank Player values.")
+    if pit_player_blank_count > 0:
+        errors.append(f"Pitch sheet contains {pit_player_blank_count} row(s) with blank Player values.")
+    if bat_team_blank_count > 0:
+        errors.append(f"Bat sheet contains {bat_team_blank_count} row(s) with blank Team values.")
+    if pit_team_blank_count > 0:
+        errors.append(f"Pitch sheet contains {pit_team_blank_count} row(s) with blank Team values.")
+
+    if errors:
+        joined = "\n- ".join(errors)
+        raise ValueError(f"Projection workbook validation failed:\n- {joined}")
+
+    return {
+        "validation_window": {
+            "min_year": min_year,
+            "max_year": max_year,
+            "expected_years": sorted(expected_years),
+        },
+        "bat": _projection_quality_sheet_payload(
+            bat,
+            years=bat_years,
+            invalid_year_count=bat_invalid_years,
+            team_col="Team",
+        ),
+        "pitch": _projection_quality_sheet_payload(
+            pit,
+            years=pit_years,
+            invalid_year_count=pit_invalid_years,
+            team_col="Team",
+        ),
+        "year_sets_match": sorted(bat_years) == sorted(pit_years),
+    }
 
 
 def _build_dynasty_lookup_cache() -> tuple[int, int]:
@@ -233,6 +446,26 @@ def main():
     bat = pd.read_excel(EXCEL_PATH, sheet_name="Bat")
     pit = pd.read_excel(EXCEL_PATH, sheet_name="Pitch")
 
+    try:
+        quality_report = validate_projection_workbook_frames(
+            bat,
+            pit,
+            min_year=args.min_year,
+            max_year=args.max_year,
+        )
+    except ValueError as exc:
+        print(f"  Error: {exc}")
+        raise SystemExit(1) from exc
+    print(
+        "  Validation: passed "
+        f"(years {_format_years(set(quality_report['validation_window']['expected_years']))})"
+    )
+    print(
+        "  Data quality: "
+        f"bat date coverage {quality_report['bat']['date_coverage_pct']}%, "
+        f"pitch date coverage {quality_report['pitch']['date_coverage_pct']}%"
+    )
+
     # Convert datetime columns to strings for JSON serialization
     bat = convert_datetime_columns_for_json(bat)
     pit = convert_datetime_columns_for_json(pit)
@@ -268,6 +501,13 @@ def main():
         except Exception as exc:
             print(f"  Error: failed to build dynasty lookup cache: {exc}")
             raise SystemExit(1) from exc
+
+    quality_report_path = str(args.quality_report or "").strip()
+    if quality_report_path:
+        out_path = Path(quality_report_path).expanduser().resolve()
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(quality_report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(f"  Quality report: {out_path}")
 
     print(f"  Hitters:  {len(bat):,} rows, {meta['total_hitters']} unique players")
     print(f"  Pitchers: {len(pit):,} rows, {meta['total_pitchers']} unique players")

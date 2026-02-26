@@ -78,6 +78,17 @@ Optional faster run (skips dynasty lookup cache generation):
 python preprocess.py --skip-dynasty-cache
 ```
 
+Optional explicit year-window validation (default window is already `2026-2045`):
+```bash
+python preprocess.py --min-year 2026 --max-year 2045
+```
+
+Optional quality report output:
+```bash
+python preprocess.py --quality-report tmp/projection_quality_report.json
+python scripts/check_projection_quality_report.py --report tmp/projection_quality_report.json
+```
+
 ## Quality Checklist
 - Exactly 20 rows appended per side (`2026`-`2045`).
 - Correct target sheet(s) used (`Bat`, `Pitch`).

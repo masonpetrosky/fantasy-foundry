@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 export function buildProjectionComparisonColumns({
   tab,
@@ -27,26 +27,62 @@ export function buildProjectionComparisonColumns({
   ];
 }
 
+export function buildProjectionCompareShareHref({
+  locationHref,
+  compareRowsByKey,
+}) {
+  const keys = Object.keys(compareRowsByKey || {});
+  if (keys.length === 0) return "";
+  try {
+    const url = new URL(String(locationHref || "").trim());
+    url.searchParams.set("compare", keys.join(","));
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 export function useProjectionComparisonComposition({
   collections,
   tab,
   seasonCol,
 }) {
+  const [compareShareCopyNotice, setCompareShareCopyNotice] = useState("");
   const comparisonColumns = useMemo(
     () => buildProjectionComparisonColumns({ tab, seasonCol }),
     [tab, seasonCol]
   );
 
-  const copyCompareShareLink = useCallback(() => {
-    const keys = Object.keys(collections.compareRowsByKey || {});
-    if (keys.length === 0) return;
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set("compare", keys.join(","));
-      navigator.clipboard.writeText(url.toString()).catch(() => {});
-    } catch {
-      // clipboard not available; silently no-op
+  const clearCompareShareCopyNotice = useCallback(() => {
+    setCompareShareCopyNotice("");
+  }, []);
+
+  const copyCompareShareLink = useCallback(async () => {
+    const href = buildProjectionCompareShareHref({
+      locationHref: typeof window !== "undefined" ? window.location.href : "",
+      compareRowsByKey: collections.compareRowsByKey,
+    });
+    if (!href) {
+      setCompareShareCopyNotice("Add at least one player to comparison before copying a share link.");
+      return;
     }
+
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(href);
+        setCompareShareCopyNotice("Copied comparison share link.");
+        return;
+      } catch {
+        // Clipboard may be unavailable; fall back to prompt when possible.
+      }
+    }
+
+    if (typeof window !== "undefined" && typeof window.prompt === "function") {
+      window.prompt("Copy comparison share link:", href);
+      setCompareShareCopyNotice("Unable to copy automatically; share link shown in prompt.");
+      return;
+    }
+    setCompareShareCopyNotice("Unable to copy share link automatically in this browser.");
   }, [collections.compareRowsByKey]);
 
   return {
@@ -59,6 +95,11 @@ export function useProjectionComparisonComposition({
     clearCompareRows: collections.clearCompareRows,
     comparisonColumns,
     copyCompareShareLink,
+    compareShareCopyNotice,
+    clearCompareShareCopyNotice,
+    compareShareHydrating: collections.compareShareHydrating,
+    compareShareNotice: collections.compareShareNotice,
+    clearCompareShareNotice: collections.clearCompareShareNotice,
     workspaceHasComparisonActivity: collections.compareRows.length > 0,
   };
 }

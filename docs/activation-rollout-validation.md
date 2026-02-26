@@ -38,6 +38,18 @@ For richer validation include:
 - `horizon`
 - `error_message`
 
+### Browser Local Export Path (owner-operator fallback)
+
+If analytics vendor exports are delayed, export from the app's local diagnostics buffer:
+
+1. Open the app with `?activation_debug=1` (or build with `VITE_FF_ACTIVATION_DIAGNOSTICS_PANEL_V1=1`).
+2. In the diagnostics panel, click `Export CSV` (or run `window.ffAnalytics.exportCsv()` in console).
+3. Optional: click `Command Center`, then `Copy Readout Cmd` to copy a prefilled `scripts/run_activation_readout.sh` command.
+4. Optional: in `Command Center`, click `Copy Checkpoint Cmd` to copy a prefilled `scripts/run_activation_readout_checkpoints.sh` command.
+5. Feed the downloaded CSV directly into `scripts/activation_readout.py`.
+
+The readout script accepts browser-export fields including `event`, `session_id`, and `timestamp_ms`.
+
 ### GA4 CSV Checklist (recommended)
 
 - Export only the required activation events listed above.

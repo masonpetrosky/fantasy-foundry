@@ -450,8 +450,11 @@ CALCULATOR_JOB_WORKERS = SETTINGS.calculator_job_workers
 ENABLE_STARTUP_CALC_PREWARM = SETTINGS.enable_startup_calc_prewarm
 CALCULATOR_REQUEST_TIMEOUT_SECONDS = SETTINGS.calculator_request_timeout_seconds
 CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE = SETTINGS.calculator_sync_rate_limit_per_minute
+CALCULATOR_SYNC_AUTH_RATE_LIMIT_PER_MINUTE = SETTINGS.calculator_sync_auth_rate_limit_per_minute
 CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE = SETTINGS.calculator_job_create_rate_limit_per_minute
+CALCULATOR_JOB_CREATE_AUTH_RATE_LIMIT_PER_MINUTE = SETTINGS.calculator_job_create_auth_rate_limit_per_minute
 CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE = SETTINGS.calculator_job_status_rate_limit_per_minute
+CALCULATOR_JOB_STATUS_AUTH_RATE_LIMIT_PER_MINUTE = SETTINGS.calculator_job_status_auth_rate_limit_per_minute
 PROJECTION_RATE_LIMITS = ProjectionRateLimits(
     read_per_minute=SETTINGS.projection_rate_limit_per_minute,
     export_per_minute=SETTINGS.projection_export_rate_limit_per_minute,
@@ -460,6 +463,7 @@ PROJECTION_RATE_LIMITS = ProjectionRateLimits(
 PROJECTION_RATE_LIMIT_PER_MINUTE = PROJECTION_RATE_LIMITS.read_per_minute
 PROJECTION_EXPORT_RATE_LIMIT_PER_MINUTE = PROJECTION_RATE_LIMITS.export_per_minute
 CALCULATOR_MAX_ACTIVE_JOBS_PER_IP = SETTINGS.calculator_max_active_jobs_per_ip
+CALCULATOR_MAX_ACTIVE_JOBS_TOTAL = SETTINGS.calculator_max_active_jobs_total
 CALC_RESULT_CACHE_TTL_SECONDS = SETTINGS.calc_result_cache_ttl_seconds
 CALC_RESULT_CACHE_MAX_ENTRIES = SETTINGS.calc_result_cache_max_entries
 REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP = SETTINGS.require_precomputed_dynasty_lookup
@@ -595,6 +599,7 @@ _cleanup_rate_limit_buckets_locked = RUNTIME_CACHE_JOB_HELPERS.cleanup_rate_limi
 _rate_limit_exceeded = RUNTIME_CACHE_JOB_HELPERS.rate_limit_exceeded
 _enforce_rate_limit = RUNTIME_CACHE_JOB_HELPERS.enforce_rate_limit
 _rate_limit_bucket_count = RUNTIME_CACHE_JOB_HELPERS.rate_limit_bucket_count
+_rate_limit_activity_snapshot = RUNTIME_CACHE_JOB_HELPERS.rate_limit_activity_snapshot
 _redis_active_jobs_key = RUNTIME_CACHE_JOB_HELPERS.redis_active_jobs_key
 _redis_job_client_key = RUNTIME_CACHE_JOB_HELPERS.redis_job_client_key
 _redis_job_cancel_key = RUNTIME_CACHE_JOB_HELPERS.redis_job_cancel_key
@@ -694,6 +699,8 @@ app.include_router(
     build_projections_router(
         projection_response_handler=projection_response,
         projection_export_handler=export_projections,
+        projection_profile_handler=RUNTIME_ENDPOINT_HANDLERS.projection_profile,
+        projection_compare_handler=RUNTIME_ENDPOINT_HANDLERS.projection_compare,
     )
 )
 app.include_router(

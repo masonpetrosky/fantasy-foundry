@@ -80,6 +80,7 @@ export function useQuickStart({
   const reopenQuickStartOnboarding = useCallback(() => {
     setFirstRunState(FIRST_RUN_STATE_NEW);
     writeFirstRunState(FIRST_RUN_STATE_NEW);
+    trackEvent("ff_quickstart_reopen", { source: "activation_reminder" });
   }, []);
 
   const handleRegisterQuickStartRunner = useCallback(runner => {

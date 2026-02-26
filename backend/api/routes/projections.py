@@ -6,10 +6,17 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
-from backend.api.models import ErrorResponse, ProjectionListResponse
+from backend.api.models import (
+    ErrorResponse,
+    ProjectionCompareResponse,
+    ProjectionListResponse,
+    ProjectionProfileResponse,
+)
 
 ProjectionResponseHandler = Callable[..., dict[str, Any]]
 ProjectionExportHandler = Callable[..., Any]
+ProjectionProfileHandler = Callable[..., dict[str, Any]]
+ProjectionCompareHandler = Callable[..., dict[str, Any]]
 
 
 class ProjectionListQueryParams(BaseModel):
@@ -56,6 +63,8 @@ def build_projections_router(
     *,
     projection_response_handler: ProjectionResponseHandler,
     projection_export_handler: ProjectionExportHandler,
+    projection_profile_handler: ProjectionProfileHandler,
+    projection_compare_handler: ProjectionCompareHandler,
 ) -> APIRouter:
     """Create projections query/export routes with injected handlers."""
     router = APIRouter(tags=["projections"])
@@ -157,6 +166,54 @@ def build_projections_router(
             limit=5000,
             offset=0,
             request=request,
+        )
+
+    @router.get(
+        "/api/projections/profile/{player_id}",
+        response_model=ProjectionProfileResponse,
+        responses=PROJECTION_ERROR_RESPONSES,
+    )
+    def get_projection_profile(
+        request: Request,
+        player_id: str,
+        dataset: Literal["all", "bat", "pitch"] = "all",
+        include_dynasty: bool = True,
+        calculator_job_id: str | None = None,
+    ):
+        return projection_profile_handler(
+            request=request,
+            player_id=player_id,
+            dataset=dataset,
+            include_dynasty=include_dynasty,
+            calculator_job_id=calculator_job_id,
+        )
+
+    @router.get(
+        "/api/projections/compare",
+        response_model=ProjectionCompareResponse,
+        responses=PROJECTION_ERROR_RESPONSES,
+    )
+    def compare_projection_profiles(
+        request: Request,
+        player_keys: str = Query(..., min_length=1),
+        dataset: Literal["all", "bat", "pitch"] = "all",
+        include_dynasty: bool = True,
+        calculator_job_id: str | None = None,
+        career_totals: bool = True,
+        year: int | None = None,
+        years: str | None = None,
+        dynasty_years: str | None = None,
+    ):
+        return projection_compare_handler(
+            request=request,
+            player_keys=player_keys,
+            dataset=dataset,
+            include_dynasty=include_dynasty,
+            calculator_job_id=calculator_job_id,
+            career_totals=career_totals,
+            year=year,
+            years=years,
+            dynasty_years=dynasty_years,
         )
 
     @router.get("/api/projections/export/{dataset}")

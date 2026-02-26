@@ -25,6 +25,41 @@ class ProjectionListResponse(BaseModel):
     data: list[ProjectionRow]
 
 
+class ProjectionMatchedPlayer(BaseModel):
+    player_entity_key: str | None = None
+    player_key: str | None = None
+    player: str | None = None
+    team: str | None = None
+    pos: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ProjectionProfileResponse(BaseModel):
+    player_id: str
+    dataset: Literal["all", "bat", "pitch"]
+    include_dynasty: bool
+    series_total: int = Field(ge=0)
+    career_totals_total: int = Field(ge=0)
+    matched_players: list[ProjectionMatchedPlayer]
+    series: list[ProjectionRow]
+    career_totals: list[ProjectionRow]
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ProjectionCompareResponse(BaseModel):
+    dataset: Literal["all", "bat", "pitch"]
+    include_dynasty: bool
+    career_totals: bool
+    requested_player_keys: list[str]
+    matched_player_keys: list[str]
+    total: int = Field(ge=0)
+    data: list[ProjectionRow]
+
+    model_config = ConfigDict(extra="allow")
+
+
 class MetaResponse(BaseModel):
     calculator_guardrails: dict[str, Any]
     projection_freshness: dict[str, Any]

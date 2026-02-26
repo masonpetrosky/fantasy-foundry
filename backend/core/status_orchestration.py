@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 from fastapi import HTTPException, Request
@@ -42,9 +44,16 @@ class StatusOrchestrationContext:
     cleanup_local_result_cache: Callable[[float | None], None]
     calc_result_cache: dict[str, tuple[float, dict]]
     rate_limit_bucket_count_getter: Callable[[], int]
+    rate_limit_activity_snapshot_getter: Callable[[], dict[str, Any]]
     calculator_sync_rate_limit_per_minute: int
+    calculator_sync_auth_rate_limit_per_minute: int
     calculator_job_create_rate_limit_per_minute: int
+    calculator_job_create_auth_rate_limit_per_minute: int
     calculator_job_status_rate_limit_per_minute: int
+    calculator_job_status_auth_rate_limit_per_minute: int
+    calculator_request_timeout_seconds: int
+    calculator_max_active_jobs_per_ip: int
+    calculator_max_active_jobs_total: int
     projection_rate_limit_per_minute: int
     projection_export_rate_limit_per_minute: int
     redis_url: str
@@ -121,21 +130,174 @@ def dynasty_lookup_cache_health_payload(*, ctx: StatusOrchestrationContext) -> d
     return payload
 
 
-def _job_status_counts(*, ctx: StatusOrchestrationContext) -> dict[str, int]:
+def _job_status_counts_and_snapshot(*, ctx: StatusOrchestrationContext) -> tuple[dict[str, int], list[dict[str, Any]]]:
     with ctx.calculator_job_lock:
         ctx.cleanup_calculation_jobs(None)
         counts = {"queued": 0, "running": 0, "completed": 0, "failed": 0, ctx.calc_job_cancelled_status: 0}
+        job_snapshot: list[dict[str, Any]] = []
         for job in ctx.calculator_jobs.values():
+            job_snapshot.append(dict(job))
             status = str(job.get("status") or "").strip().lower()
             if status in counts:
                 counts[status] += 1
+    return counts, job_snapshot
+
+
+def _job_status_counts(*, ctx: StatusOrchestrationContext) -> dict[str, int]:
+    counts, _ = _job_status_counts_and_snapshot(ctx=ctx)
     return counts
+
+
+def _coerce_epoch_seconds(raw: Any) -> float | None:
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _parse_timestamp_epoch_seconds(raw: Any) -> float | None:
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return float(parsed.timestamp())
+
+
+def _queue_pressure_payload(
+    *,
+    ctx: StatusOrchestrationContext,
+    job_status_counts: dict[str, int],
+    job_snapshot: list[dict[str, Any]],
+) -> dict[str, Any]:
+    now_epoch = _parse_timestamp_epoch_seconds(ctx.iso_now())
+    if now_epoch is None:
+        now_epoch = time.time()
+
+    active_total = int(job_status_counts.get("queued", 0)) + int(job_status_counts.get("running", 0))
+    capacity_total = max(1, int(ctx.calculator_max_active_jobs_total))
+    capacity_remaining = max(0, capacity_total - active_total)
+    utilization_ratio = round(active_total / capacity_total, 4)
+    saturation_state = "idle"
+    if active_total >= capacity_total:
+        saturation_state = "critical"
+    elif utilization_ratio >= 0.8:
+        saturation_state = "high"
+    elif active_total > 0:
+        saturation_state = "active"
+
+    recent_window_seconds = 900.0
+    queued_ages: list[float] = []
+    running_ages: list[float] = []
+    running_runtimes: list[float] = []
+    terminal_queue_waits: list[float] = []
+    terminal_runtimes: list[float] = []
+
+    recent_jobs_created = 0
+    recent_jobs_started = 0
+    recent_jobs_completed = 0
+    recent_jobs_failed = 0
+    recent_jobs_cancelled = 0
+    terminal_statuses = {"completed", "failed", ctx.calc_job_cancelled_status}
+
+    for job in job_snapshot:
+        status = str(job.get("status") or "").strip().lower()
+        created_epoch = _coerce_epoch_seconds(job.get("created_ts")) or _parse_timestamp_epoch_seconds(job.get("created_at"))
+        started_epoch = _parse_timestamp_epoch_seconds(job.get("started_at"))
+        completed_epoch = _parse_timestamp_epoch_seconds(job.get("completed_at"))
+
+        if created_epoch is not None and (now_epoch - created_epoch) <= recent_window_seconds:
+            recent_jobs_created += 1
+        if started_epoch is not None and (now_epoch - started_epoch) <= recent_window_seconds:
+            recent_jobs_started += 1
+
+        if status == "queued" and created_epoch is not None:
+            queued_ages.append(max(0.0, now_epoch - created_epoch))
+        elif status == "running":
+            if created_epoch is not None:
+                running_ages.append(max(0.0, now_epoch - created_epoch))
+            if started_epoch is not None:
+                running_runtimes.append(max(0.0, now_epoch - started_epoch))
+
+        if status in terminal_statuses and completed_epoch is not None and (now_epoch - completed_epoch) <= recent_window_seconds:
+            if status == "completed":
+                recent_jobs_completed += 1
+            elif status == "failed":
+                recent_jobs_failed += 1
+            elif status == ctx.calc_job_cancelled_status:
+                recent_jobs_cancelled += 1
+            if created_epoch is not None and started_epoch is not None:
+                terminal_queue_waits.append(max(0.0, started_epoch - created_epoch))
+            if started_epoch is not None:
+                terminal_runtimes.append(max(0.0, completed_epoch - started_epoch))
+
+    queued_oldest_age = round(max(queued_ages), 3) if queued_ages else None
+    running_oldest_age = round(max(running_ages), 3) if running_ages else None
+    running_longest_runtime = round(max(running_runtimes), 3) if running_runtimes else None
+    avg_queue_wait = round(sum(terminal_queue_waits) / len(terminal_queue_waits), 3) if terminal_queue_waits else None
+    avg_runtime = round(sum(terminal_runtimes) / len(terminal_runtimes), 3) if terminal_runtimes else None
+    timeout_seconds = float(ctx.calculator_request_timeout_seconds)
+
+    return {
+        "active_jobs": active_total,
+        "queued_jobs": int(job_status_counts.get("queued", 0)),
+        "running_jobs": int(job_status_counts.get("running", 0)),
+        "capacity_total": capacity_total,
+        "capacity_remaining": capacity_remaining,
+        "utilization_ratio": utilization_ratio,
+        "saturation_state": saturation_state,
+        "at_capacity": active_total >= capacity_total,
+        "queued_oldest_age_seconds": queued_oldest_age,
+        "running_oldest_age_seconds": running_oldest_age,
+        "running_longest_runtime_seconds": running_longest_runtime,
+        "recent_window_seconds": int(recent_window_seconds),
+        "recent_jobs_created": recent_jobs_created,
+        "recent_jobs_started": recent_jobs_started,
+        "recent_jobs_completed": recent_jobs_completed,
+        "recent_jobs_failed": recent_jobs_failed,
+        "recent_jobs_cancelled": recent_jobs_cancelled,
+        "recent_jobs_terminal": recent_jobs_completed + recent_jobs_failed + recent_jobs_cancelled,
+        "avg_queue_wait_seconds_recent_terminal": avg_queue_wait,
+        "avg_run_duration_seconds_recent_terminal": avg_runtime,
+        "alerts": {
+            "queue_wait_exceeds_request_timeout": bool(
+                queued_oldest_age is not None and queued_oldest_age > timeout_seconds
+            ),
+            "runtime_exceeds_request_timeout": bool(
+                running_longest_runtime is not None and running_longest_runtime > timeout_seconds
+            ),
+        },
+    }
 
 
 def _local_result_cache_entries(*, ctx: StatusOrchestrationContext) -> int:
     with ctx.calc_result_cache_lock:
         ctx.cleanup_local_result_cache(None)
         return len(ctx.calc_result_cache)
+
+
+def _queue_capacity_summary(*, ctx: StatusOrchestrationContext, job_status_counts: dict[str, int]) -> dict[str, Any]:
+    active_jobs = int(job_status_counts.get("queued", 0)) + int(job_status_counts.get("running", 0))
+    max_active_jobs_total = max(1, int(ctx.calculator_max_active_jobs_total))
+    return {
+        "active_jobs": active_jobs,
+        "max_active_jobs_total": max_active_jobs_total,
+        "capacity_remaining": max(0, max_active_jobs_total - active_jobs),
+        "at_capacity": active_jobs >= max_active_jobs_total,
+    }
 
 
 def get_meta(request: Request, *, ctx: StatusOrchestrationContext):
@@ -164,6 +326,7 @@ def get_health(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
     ctx.refresh_data_if_needed()
     job_status_counts = _job_status_counts(ctx=ctx)
     local_result_cache_entries = _local_result_cache_entries(ctx=ctx)
+    queue_capacity_summary = _queue_capacity_summary(ctx=ctx, job_status_counts=job_status_counts)
 
     with ctx.calculator_prewarm_lock:
         prewarm = dict(ctx.calculator_prewarm_state)
@@ -179,6 +342,7 @@ def get_health(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
             "total": len(ctx.calculator_jobs),
             **job_status_counts,
         },
+        "queue_pressure": queue_capacity_summary,
         "dynasty_lookup_cache": dynasty_lookup_cache_health_payload(ctx=ctx),
         "result_cache": {
             "local_entries": local_result_cache_entries,
@@ -191,7 +355,12 @@ def get_health(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
 
 def get_ops(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
     ctx.refresh_data_if_needed()
-    job_status_counts = _job_status_counts(ctx=ctx)
+    job_status_counts, job_snapshot = _job_status_counts_and_snapshot(ctx=ctx)
+    job_pressure = _queue_pressure_payload(
+        ctx=ctx,
+        job_status_counts=job_status_counts,
+        job_snapshot=job_snapshot,
+    )
     local_result_cache_entries = _local_result_cache_entries(ctx=ctx)
 
     return {
@@ -211,6 +380,8 @@ def get_ops(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
             "cors_allow_origins": list(ctx.cors_allow_origins),
             "trust_x_forwarded_for": ctx.trust_x_forwarded_for,
             "trusted_proxy_cidrs": list(ctx.trusted_proxy_cidrs),
+            "client_identity_source": "x_forwarded_for" if ctx.trust_x_forwarded_for else "remote_addr",
+            "shared_remote_addr_identity_risk": bool(ctx.environment == "production" and not ctx.trust_x_forwarded_for),
             "canonical_host": ctx.canonical_host or None,
             "require_calculate_auth": ctx.require_calculate_auth,
             "calculate_api_keys_configured": ctx.calculate_api_keys_configured,
@@ -219,14 +390,22 @@ def get_ops(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
         },
         "rate_limits": {
             "calculate_sync_per_minute": ctx.calculator_sync_rate_limit_per_minute,
+            "calculate_sync_authenticated_per_minute": ctx.calculator_sync_auth_rate_limit_per_minute,
             "calculate_job_create_per_minute": ctx.calculator_job_create_rate_limit_per_minute,
+            "calculate_job_create_authenticated_per_minute": ctx.calculator_job_create_auth_rate_limit_per_minute,
             "calculate_job_status_per_minute": ctx.calculator_job_status_rate_limit_per_minute,
+            "calculate_job_status_authenticated_per_minute": ctx.calculator_job_status_auth_rate_limit_per_minute,
+            "calculate_request_timeout_seconds": ctx.calculator_request_timeout_seconds,
+            "calculate_max_active_jobs_per_ip": ctx.calculator_max_active_jobs_per_ip,
+            "calculate_max_active_jobs_total": ctx.calculator_max_active_jobs_total,
             "projections_read_per_minute": ctx.projection_rate_limit_per_minute,
             "projections_export_per_minute": ctx.projection_export_rate_limit_per_minute,
         },
         "queues": {
             "jobs": {"total": sum(job_status_counts.values()), **job_status_counts},
+            "job_pressure": job_pressure,
             "local_rate_limit_buckets": ctx.rate_limit_bucket_count_getter(),
+            "rate_limit_activity": ctx.rate_limit_activity_snapshot_getter(),
             "local_result_cache_entries": local_result_cache_entries,
         },
         "timestamp": ctx.iso_now(),
@@ -260,6 +439,9 @@ def get_ready(*, ctx: StatusOrchestrationContext):
     if not ctx.calculator_worker_available():
         raise HTTPException(status_code=503, detail="Calculation worker is unavailable.")
 
+    job_status_counts = _job_status_counts(ctx=ctx)
+    queue_capacity_summary = _queue_capacity_summary(ctx=ctx, job_status_counts=job_status_counts)
+
     return {
         "status": "ready",
         "build_id": ctx.app_build_id,
@@ -269,6 +451,7 @@ def get_ready(*, ctx: StatusOrchestrationContext):
             "dynasty_lookup_cache": inspection.status,
             "projection_rows": {"bat": bat_rows, "pitch": pit_rows},
             "calculator_worker": True,
+            "queue_capacity": queue_capacity_summary,
         },
         "timestamp": ctx.iso_now(),
     }

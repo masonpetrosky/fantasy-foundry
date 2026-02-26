@@ -190,6 +190,56 @@ class RuntimeEndpointHandlers:
             columns=columns,
         )
 
+    def projection_profile(
+        self,
+        *,
+        request: Request,
+        player_id: str,
+        dataset: Literal["all", "bat", "pitch"] = "all",
+        include_dynasty: bool = True,
+        calculator_job_id: str | None = None,
+    ) -> dict[str, Any]:
+        self._config.enforce_rate_limit_getter()(
+            request,
+            action="proj-read",
+            limit_per_minute=self._config.projection_rate_limit_per_minute_getter(),
+        )
+        return self._config.projection_service_getter().projection_profile(
+            player_id=player_id,
+            dataset=dataset,
+            include_dynasty=include_dynasty,
+            calculator_job_id=calculator_job_id,
+        )
+
+    def projection_compare(
+        self,
+        *,
+        request: Request,
+        player_keys: str,
+        dataset: Literal["all", "bat", "pitch"] = "all",
+        include_dynasty: bool = True,
+        calculator_job_id: str | None = None,
+        career_totals: bool = True,
+        year: int | None = None,
+        years: str | None = None,
+        dynasty_years: str | None = None,
+    ) -> dict[str, Any]:
+        self._config.enforce_rate_limit_getter()(
+            request,
+            action="proj-read",
+            limit_per_minute=self._config.projection_rate_limit_per_minute_getter(),
+        )
+        return self._config.projection_service_getter().projection_compare(
+            player_keys=player_keys,
+            dataset=dataset,
+            include_dynasty=include_dynasty,
+            calculator_job_id=calculator_job_id,
+            career_totals=career_totals,
+            year=year,
+            years=years,
+            dynasty_years=dynasty_years,
+        )
+
     def calculate_dynasty_values(self, req: Any, request: Request):
         return core_calculate_dynasty_values(
             req,

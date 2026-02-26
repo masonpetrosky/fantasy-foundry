@@ -16,7 +16,7 @@ The projections UI consumes rows from `/api/projections/*` and treats each row a
 ## Hook Ownership
 - `useProjectionExportPipeline` owns export request assembly + export in-flight/error state.
 - `useProjectionWatchlistComposition` owns watchlist workspace composition and view-model shaping.
-- `useProjectionComparisonComposition` owns comparison workspace composition and tab-specific compare columns.
+- `useProjectionComparisonComposition` owns comparison workspace composition, share-link copy behavior, and tab-specific compare columns.
 - `useProjectionTelemetry` owns projections empty-state telemetry and last-refresh label state.
 - `useProjectionRowsMarkup` owns card/table row markup rendering and projection-cell formatting.
 - `useProjectionColumnVisibility`, `useProjectionLayoutState`, and `useProjectionFilterPresets` expose pure helper utilities that are covered by focused unit tests.
@@ -26,5 +26,5 @@ The projections UI consumes rows from `/api/projections/*` and treats each row a
 - `ProjectionLayoutControls` owns table/card toggle controls and card-column chooser rendering.
 - `ProjectionResultsShell` owns table/card results rendering states (loading/error/empty/pagination/swipe hint).
 - `ProjectionSectionTabs` owns the all/hitters/pitchers tab controls.
-- `ProjectionStatusMessages` owns page-reset/export/refresh status banner rendering.
+- `ProjectionStatusMessages` owns page-reset/export/refresh status banner rendering plus shared-compare copy/hydration notices.
 - `ProjectionEmptyStateActions` owns empty-state CTA composition.

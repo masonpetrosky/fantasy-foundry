@@ -91,6 +91,13 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(payload.get("jobs", {}).get("total"), 2)
         self.assertEqual(payload.get("jobs", {}).get("queued"), 1)
         self.assertEqual(payload.get("jobs", {}).get("failed"), 1)
+        self.assertIn("queue_pressure", payload)
+        self.assertEqual(payload.get("queue_pressure", {}).get("active_jobs"), 1)
+        self.assertEqual(
+            payload.get("queue_pressure", {}).get("max_active_jobs_total"),
+            app_module.CALCULATOR_MAX_ACTIVE_JOBS_TOTAL,
+        )
+        self.assertFalse(payload.get("queue_pressure", {}).get("at_capacity"))
         self.assertIn("dynasty_lookup_cache", payload)
         self.assertIn("status", payload.get("dynasty_lookup_cache", {}))
         self.assertIn("version_expected", payload.get("dynasty_lookup_cache", {}))
@@ -649,6 +656,10 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(guardrails.get("default_minors_slots"), app_module.COMMON_DEFAULT_MINOR_SLOTS)
         self.assertIn("default_points_scoring", guardrails)
         self.assertIn("playable_by_year", guardrails)
+        self.assertIn("rate_limit_sync_authenticated_per_minute", guardrails)
+        self.assertIn("rate_limit_job_create_authenticated_per_minute", guardrails)
+        self.assertIn("rate_limit_job_status_authenticated_per_minute", guardrails)
+        self.assertIn("max_active_jobs_total", guardrails)
         default_pitcher_categories = guardrails.get("default_roto_pitcher_categories", [])
         self.assertIn("QS", default_pitcher_categories)
         self.assertIn("QA3", default_pitcher_categories)
@@ -955,6 +966,10 @@ class CalculatorValidationTests(unittest.TestCase):
             {"key-a": "api_key:a", "key-b": "api_key:b"},
         ), patch.object(app_module, "CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE", 1), patch.object(
             app_module,
+            "CALCULATOR_SYNC_AUTH_RATE_LIMIT_PER_MINUTE",
+            1,
+        ), patch.object(
+            app_module,
             "_run_calculate_request",
             return_value={"total": 0, "settings": {}, "data": [], "explanations": {}},
         ):
@@ -1140,4 +1155,3 @@ class CalculatorValidationTests(unittest.TestCase):
 
             self.assertEqual(payload["error"]["status_code"], 422)
             self.assertIn("Not enough players", payload["error"]["detail"])
-

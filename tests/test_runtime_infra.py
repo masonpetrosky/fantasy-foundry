@@ -375,6 +375,135 @@ class RuntimeInfraTests(unittest.TestCase):
             )
         self.assertGreaterEqual(logger.warning_calls, 1)
 
+    def test_enforce_rate_limit_reports_decisions_with_callback(self) -> None:
+        redis = _FakeRedis()
+        logger = _Logger()
+        request = types.SimpleNamespace(state=types.SimpleNamespace())
+        buckets = defaultdict(deque)
+        lock = Lock()
+        events: list[dict[str, object]] = []
+
+        runtime_infra.enforce_rate_limit(
+            request,
+            action="calc-sync",
+            limit_per_minute=1,
+            redis_rate_limit_prefix="ff:rl:",
+            redis_client_getter=lambda: redis,
+            calculate_rate_limit_identity=lambda _request: "ip:198.51.100.12",
+            request_rate_limit_lock=lock,
+            request_rate_limit_buckets=buckets,
+            cleanup_rate_limit_buckets_locked=lambda _now, _window_start: None,
+            prune_rate_limit_bucket=lambda bucket, window_start: runtime_infra.prune_rate_limit_bucket(
+                bucket, window_start=window_start
+            ),
+            rate_limit_exceeded=runtime_infra.rate_limit_exceeded,
+            logger=logger,
+            on_decision=events.append,
+        )
+
+        with self.assertRaises(HTTPException):
+            runtime_infra.enforce_rate_limit(
+                request,
+                action="calc-sync",
+                limit_per_minute=1,
+                redis_rate_limit_prefix="ff:rl:",
+                redis_client_getter=lambda: redis,
+                calculate_rate_limit_identity=lambda _request: "ip:198.51.100.12",
+                request_rate_limit_lock=lock,
+                request_rate_limit_buckets=buckets,
+                cleanup_rate_limit_buckets_locked=lambda _now, _window_start: None,
+                prune_rate_limit_bucket=lambda bucket, window_start: runtime_infra.prune_rate_limit_bucket(
+                    bucket, window_start=window_start
+                ),
+                rate_limit_exceeded=runtime_infra.rate_limit_exceeded,
+                logger=logger,
+                on_decision=events.append,
+            )
+
+        self.assertEqual(events[0]["source"], "redis")
+        self.assertEqual(events[0]["outcome"], "allowed")
+        self.assertEqual(events[1]["source"], "redis")
+        self.assertEqual(events[1]["outcome"], "blocked")
+
+    def test_enforce_rate_limit_reports_fallback_and_local_decisions(self) -> None:
+        redis = _FailingRedis()
+        logger = _Logger()
+        request = types.SimpleNamespace(state=types.SimpleNamespace())
+        buckets = defaultdict(deque)
+        lock = Lock()
+        events: list[dict[str, object]] = []
+
+        runtime_infra.enforce_rate_limit(
+            request,
+            action="proj-read",
+            limit_per_minute=1,
+            redis_rate_limit_prefix="ff:rl:",
+            redis_client_getter=lambda: redis,
+            calculate_rate_limit_identity=lambda _request: "ip:198.51.100.13",
+            request_rate_limit_lock=lock,
+            request_rate_limit_buckets=buckets,
+            cleanup_rate_limit_buckets_locked=lambda _now, _window_start: None,
+            prune_rate_limit_bucket=lambda bucket, window_start: runtime_infra.prune_rate_limit_bucket(
+                bucket, window_start=window_start
+            ),
+            rate_limit_exceeded=runtime_infra.rate_limit_exceeded,
+            logger=logger,
+            on_decision=events.append,
+        )
+
+        with self.assertRaises(HTTPException):
+            runtime_infra.enforce_rate_limit(
+                request,
+                action="proj-read",
+                limit_per_minute=1,
+                redis_rate_limit_prefix="ff:rl:",
+                redis_client_getter=lambda: redis,
+                calculate_rate_limit_identity=lambda _request: "ip:198.51.100.13",
+                request_rate_limit_lock=lock,
+                request_rate_limit_buckets=buckets,
+                cleanup_rate_limit_buckets_locked=lambda _now, _window_start: None,
+                prune_rate_limit_bucket=lambda bucket, window_start: runtime_infra.prune_rate_limit_bucket(
+                    bucket, window_start=window_start
+                ),
+                rate_limit_exceeded=runtime_infra.rate_limit_exceeded,
+                logger=logger,
+                on_decision=events.append,
+            )
+
+        sources_and_outcomes = {(event["source"], event["outcome"]) for event in events}
+        self.assertIn(("redis", "fallback"), sources_and_outcomes)
+        self.assertIn(("local", "allowed"), sources_and_outcomes)
+        self.assertIn(("local", "blocked"), sources_and_outcomes)
+
+    def test_enforce_rate_limit_reports_disabled_decision(self) -> None:
+        logger = _Logger()
+        request = types.SimpleNamespace(state=types.SimpleNamespace())
+        events: list[dict[str, object]] = []
+
+        runtime_infra.enforce_rate_limit(
+            request,
+            action="proj-read",
+            limit_per_minute=0,
+            redis_rate_limit_prefix="ff:rl:",
+            redis_client_getter=lambda: None,
+            calculate_rate_limit_identity=lambda _request: "ip:198.51.100.14",
+            request_rate_limit_lock=Lock(),
+            request_rate_limit_buckets=defaultdict(deque),
+            cleanup_rate_limit_buckets_locked=lambda _now, _window_start: None,
+            prune_rate_limit_bucket=lambda _bucket, _window_start: None,
+            rate_limit_exceeded=runtime_infra.rate_limit_exceeded,
+            logger=logger,
+            on_decision=events.append,
+        )
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["action"], "proj-read")
+        self.assertEqual(events[0]["identity"], "ip:198.51.100.14")
+        self.assertEqual(events[0]["source"], "disabled")
+        self.assertEqual(events[0]["outcome"], "disabled")
+        self.assertEqual(events[0]["limit_per_minute"], 0)
+        self.assertIsInstance(events[0]["timestamp_epoch_s"], float)
+
     def test_track_untrack_and_cancel_markers_round_trip(self) -> None:
         redis = _FakeRedis()
         logger = _Logger()

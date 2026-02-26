@@ -20,8 +20,11 @@ class CalculatorOrchestrationContext:
     calculate_request_model: CalculateRequestModel
     enforce_rate_limit: Callable[..., None]
     sync_rate_limit_per_minute: int
+    sync_auth_rate_limit_per_minute: int
     job_create_rate_limit_per_minute: int
+    job_create_auth_rate_limit_per_minute: int
     job_status_rate_limit_per_minute: int
+    job_status_auth_rate_limit_per_minute: int
     flatten_explanations_for_export: Callable[[dict[str, Any]], list[dict]]
     tabular_export_response: Callable[..., Any]
     default_calculator_export_columns: Callable[[list[dict]], list[str]]
@@ -32,6 +35,7 @@ class CalculatorOrchestrationContext:
     iso_now: Callable[[], str]
     active_jobs_for_ip: Callable[[str], int]
     calculator_max_active_jobs_per_ip: int
+    calculator_max_active_jobs_total: int
     calculator_job_lock: Any
     calculator_jobs: dict[str, dict]
     cleanup_calculation_jobs: Callable[[float | None], None]
@@ -47,6 +51,30 @@ class CalculatorOrchestrationContext:
     set_job_cancel_requested: Callable[[str], None]
     clear_job_cancel_requested: Callable[[str], None]
     job_cancel_requested: Callable[[str], bool]
+
+
+def _request_is_calculate_api_key_authenticated(request: Request | Any | None) -> bool:
+    state = getattr(request, "state", None)
+    return bool(getattr(state, "calc_api_key_authenticated", False))
+
+
+def _effective_rate_limit(
+    request: Request | Any | None,
+    *,
+    anonymous_limit: int,
+    authenticated_limit: int,
+) -> int:
+    if _request_is_calculate_api_key_authenticated(request):
+        return max(1, int(authenticated_limit))
+    return max(1, int(anonymous_limit))
+
+
+def _active_job_total(calculator_jobs: dict[str, dict[str, Any]]) -> int:
+    return sum(
+        1
+        for job in calculator_jobs.values()
+        if str(job.get("status") or "").lower() in {"queued", "running"}
+    )
 
 
 def run_calculation_job(
@@ -147,7 +175,15 @@ def calculate_dynasty_values(
     ctx: CalculatorOrchestrationContext,
     run_calculate_request: Callable[..., dict],
 ):
-    ctx.enforce_rate_limit(request, action="calc-sync", limit_per_minute=ctx.sync_rate_limit_per_minute)
+    ctx.enforce_rate_limit(
+        request,
+        action="calc-sync",
+        limit_per_minute=_effective_rate_limit(
+            request,
+            anonymous_limit=ctx.sync_rate_limit_per_minute,
+            authenticated_limit=ctx.sync_auth_rate_limit_per_minute,
+        ),
+    )
     return run_calculate_request(req, source="sync")
 
 
@@ -158,7 +194,15 @@ def export_calculate_dynasty_values(
     ctx: CalculatorOrchestrationContext,
     run_calculate_request: Callable[..., dict],
 ):
-    ctx.enforce_rate_limit(request, action="calc-sync", limit_per_minute=ctx.sync_rate_limit_per_minute)
+    ctx.enforce_rate_limit(
+        request,
+        action="calc-sync",
+        limit_per_minute=_effective_rate_limit(
+            request,
+            anonymous_limit=ctx.sync_rate_limit_per_minute,
+            authenticated_limit=ctx.sync_auth_rate_limit_per_minute,
+        ),
+    )
     payload = req.model_dump()
     export_format = str(payload.pop("format", "csv")).strip().lower()
     include_explanations = bool(payload.pop("include_explanations", False))
@@ -186,7 +230,15 @@ def create_calculate_dynasty_job(
     ctx: CalculatorOrchestrationContext,
     run_calculation_job: RunCalculationJob,
 ):
-    ctx.enforce_rate_limit(request, action="calc-job-create", limit_per_minute=ctx.job_create_rate_limit_per_minute)
+    ctx.enforce_rate_limit(
+        request,
+        action="calc-job-create",
+        limit_per_minute=_effective_rate_limit(
+            request,
+            anonymous_limit=ctx.job_create_rate_limit_per_minute,
+            authenticated_limit=ctx.job_create_auth_rate_limit_per_minute,
+        ),
+    )
     client_ip = ctx.client_ip(request)
     created_at = ctx.iso_now()
     payload = req.model_dump()
@@ -212,6 +264,15 @@ def create_calculate_dynasty_job(
     with ctx.calculator_job_lock:
         ctx.cleanup_calculation_jobs(job["created_ts"])
         if cached_result is None:
+            active_total = _active_job_total(ctx.calculator_jobs)
+            if active_total >= ctx.calculator_max_active_jobs_total:
+                raise HTTPException(
+                    status_code=429,
+                    detail=(
+                        "Calculation queue is full right now. "
+                        "Wait for active jobs to finish and retry."
+                    ),
+                )
             active_for_ip = ctx.active_jobs_for_ip(client_ip)
             if active_for_ip >= ctx.calculator_max_active_jobs_per_ip:
                 raise HTTPException(
@@ -253,7 +314,15 @@ def get_calculate_dynasty_job(
     *,
     ctx: CalculatorOrchestrationContext,
 ):
-    ctx.enforce_rate_limit(request, action="calc-job-status", limit_per_minute=ctx.job_status_rate_limit_per_minute)
+    ctx.enforce_rate_limit(
+        request,
+        action="calc-job-status",
+        limit_per_minute=_effective_rate_limit(
+            request,
+            anonymous_limit=ctx.job_status_rate_limit_per_minute,
+            authenticated_limit=ctx.job_status_auth_rate_limit_per_minute,
+        ),
+    )
     with ctx.calculator_job_lock:
         ctx.cleanup_calculation_jobs(None)
         job = ctx.calculator_jobs.get(job_id)
@@ -271,7 +340,15 @@ def cancel_calculate_dynasty_job(
     *,
     ctx: CalculatorOrchestrationContext,
 ):
-    ctx.enforce_rate_limit(request, action="calc-job-status", limit_per_minute=ctx.job_status_rate_limit_per_minute)
+    ctx.enforce_rate_limit(
+        request,
+        action="calc-job-status",
+        limit_per_minute=_effective_rate_limit(
+            request,
+            anonymous_limit=ctx.job_status_rate_limit_per_minute,
+            authenticated_limit=ctx.job_status_auth_rate_limit_per_minute,
+        ),
+    )
     with ctx.calculator_job_lock:
         ctx.cleanup_calculation_jobs(None)
         job = ctx.calculator_jobs.get(job_id)

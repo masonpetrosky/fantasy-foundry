@@ -157,13 +157,26 @@ def enforce_rate_limit(
     prune_rate_limit_bucket: Callable[[deque[float], float], None],
     rate_limit_exceeded: Callable[[str], HTTPException],
     logger: Any,
+    on_decision: Callable[[dict[str, Any]], None] | None = None,
 ) -> None:
+    now = time.time()
+    identity = calculate_rate_limit_identity(request)
+
     if limit_per_minute <= 0:
+        if on_decision is not None:
+            on_decision(
+                {
+                    "action": action,
+                    "identity": identity,
+                    "source": "disabled",
+                    "outcome": "disabled",
+                    "limit_per_minute": int(limit_per_minute),
+                    "timestamp_epoch_s": float(now),
+                }
+            )
         return
 
-    now = time.time()
     redis_client = redis_client_getter()
-    identity = calculate_rate_limit_identity(request)
     if redis_client is not None:
         minute_window = int(now // 60)
         redis_key = f"{redis_rate_limit_prefix}{action}:{identity}:{minute_window}"
@@ -172,11 +185,46 @@ def enforce_rate_limit(
             if count == 1:
                 redis_client.expire(redis_key, 120)
             if count > limit_per_minute:
+                if on_decision is not None:
+                    on_decision(
+                        {
+                            "action": action,
+                            "identity": identity,
+                            "source": "redis",
+                            "outcome": "blocked",
+                            "limit_per_minute": int(limit_per_minute),
+                            "observed_count": int(count),
+                            "timestamp_epoch_s": float(now),
+                        }
+                    )
                 raise rate_limit_exceeded(action)
+            if on_decision is not None:
+                on_decision(
+                    {
+                        "action": action,
+                        "identity": identity,
+                        "source": "redis",
+                        "outcome": "allowed",
+                        "limit_per_minute": int(limit_per_minute),
+                        "observed_count": int(count),
+                        "timestamp_epoch_s": float(now),
+                    }
+                )
             return
         except HTTPException:
             raise
         except (ConnectionError, TimeoutError, OSError):
+            if on_decision is not None:
+                on_decision(
+                    {
+                        "action": action,
+                        "identity": identity,
+                        "source": "redis",
+                        "outcome": "fallback",
+                        "limit_per_minute": int(limit_per_minute),
+                        "timestamp_epoch_s": float(now),
+                    }
+                )
             logger.warning("failed to enforce redis-backed rate limit; falling back to local buckets", exc_info=True)
 
     window_start = now - 60.0
@@ -186,8 +234,32 @@ def enforce_rate_limit(
         bucket = request_rate_limit_buckets[bucket_key]
         prune_rate_limit_bucket(bucket, window_start)
         if len(bucket) >= limit_per_minute:
+            if on_decision is not None:
+                on_decision(
+                    {
+                        "action": action,
+                        "identity": identity,
+                        "source": "local",
+                        "outcome": "blocked",
+                        "limit_per_minute": int(limit_per_minute),
+                        "observed_count": int(len(bucket)),
+                        "timestamp_epoch_s": float(now),
+                    }
+                )
             raise rate_limit_exceeded(action)
         bucket.append(now)
+        if on_decision is not None:
+            on_decision(
+                {
+                    "action": action,
+                    "identity": identity,
+                    "source": "local",
+                    "outcome": "allowed",
+                    "limit_per_minute": int(limit_per_minute),
+                    "observed_count": int(len(bucket)),
+                    "timestamp_epoch_s": float(now),
+                }
+            )
 
 
 def rate_limit_bucket_count(*, request_rate_limit_lock: Any, request_rate_limit_buckets: dict[tuple[str, str], deque[float]]) -> int:

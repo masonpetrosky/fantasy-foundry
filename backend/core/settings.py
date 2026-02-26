@@ -84,11 +84,15 @@ class AppSettings:
     enable_startup_calc_prewarm: bool
     calculator_request_timeout_seconds: int
     calculator_sync_rate_limit_per_minute: int
+    calculator_sync_auth_rate_limit_per_minute: int
     calculator_job_create_rate_limit_per_minute: int
+    calculator_job_create_auth_rate_limit_per_minute: int
     calculator_job_status_rate_limit_per_minute: int
+    calculator_job_status_auth_rate_limit_per_minute: int
     projection_rate_limit_per_minute: int
     projection_export_rate_limit_per_minute: int
     calculator_max_active_jobs_per_ip: int
+    calculator_max_active_jobs_total: int
     calc_result_cache_ttl_seconds: int
     calc_result_cache_max_entries: int
     require_precomputed_dynasty_lookup: bool
@@ -105,6 +109,14 @@ class AppSettings:
 def load_settings_from_env() -> AppSettings:
     """Build immutable runtime settings from environment variables."""
 
+    calculator_sync_rate_limit_per_minute = _get_int("FF_CALC_SYNC_RATE_LIMIT_PER_MINUTE", default=30, minimum=1)
+    calculator_job_create_rate_limit_per_minute = _get_int(
+        "FF_CALC_JOB_CREATE_RATE_LIMIT_PER_MINUTE", default=15, minimum=1
+    )
+    calculator_job_status_rate_limit_per_minute = _get_int(
+        "FF_CALC_JOB_STATUS_RATE_LIMIT_PER_MINUTE", default=240, minimum=1
+    )
+
     return AppSettings(
         environment=_parse_environment(os.getenv("FF_ENV")),
         calculator_job_ttl_seconds=_get_int("FF_CALC_JOB_TTL_SECONDS", default=1800, minimum=60),
@@ -112,16 +124,28 @@ def load_settings_from_env() -> AppSettings:
         calculator_job_workers=_get_int("FF_CALC_JOB_WORKERS", default=2, minimum=1),
         enable_startup_calc_prewarm=_get_bool("FF_PREWARM_DEFAULT_CALC", default=True),
         calculator_request_timeout_seconds=_get_int("FF_CALC_REQUEST_TIMEOUT_SECONDS", default=600, minimum=60),
-        calculator_sync_rate_limit_per_minute=_get_int("FF_CALC_SYNC_RATE_LIMIT_PER_MINUTE", default=30, minimum=1),
-        calculator_job_create_rate_limit_per_minute=_get_int(
-            "FF_CALC_JOB_CREATE_RATE_LIMIT_PER_MINUTE", default=15, minimum=1
+        calculator_sync_rate_limit_per_minute=calculator_sync_rate_limit_per_minute,
+        calculator_sync_auth_rate_limit_per_minute=_get_int(
+            "FF_CALC_SYNC_AUTH_RATE_LIMIT_PER_MINUTE",
+            default=max(calculator_sync_rate_limit_per_minute, 60),
+            minimum=1,
         ),
-        calculator_job_status_rate_limit_per_minute=_get_int(
-            "FF_CALC_JOB_STATUS_RATE_LIMIT_PER_MINUTE", default=240, minimum=1
+        calculator_job_create_rate_limit_per_minute=calculator_job_create_rate_limit_per_minute,
+        calculator_job_create_auth_rate_limit_per_minute=_get_int(
+            "FF_CALC_JOB_CREATE_AUTH_RATE_LIMIT_PER_MINUTE",
+            default=max(calculator_job_create_rate_limit_per_minute, 30),
+            minimum=1,
+        ),
+        calculator_job_status_rate_limit_per_minute=calculator_job_status_rate_limit_per_minute,
+        calculator_job_status_auth_rate_limit_per_minute=_get_int(
+            "FF_CALC_JOB_STATUS_AUTH_RATE_LIMIT_PER_MINUTE",
+            default=max(calculator_job_status_rate_limit_per_minute, 360),
+            minimum=1,
         ),
         projection_rate_limit_per_minute=_get_int("FF_PROJ_RATE_LIMIT_PER_MINUTE", default=120, minimum=1),
         projection_export_rate_limit_per_minute=_get_int("FF_EXPORT_RATE_LIMIT_PER_MINUTE", default=30, minimum=1),
         calculator_max_active_jobs_per_ip=_get_int("FF_CALC_MAX_ACTIVE_JOBS_PER_IP", default=2, minimum=1),
+        calculator_max_active_jobs_total=_get_int("FF_CALC_MAX_ACTIVE_JOBS_TOTAL", default=24, minimum=1),
         calc_result_cache_ttl_seconds=_get_int("FF_CALC_RESULT_CACHE_TTL_SECONDS", default=1800, minimum=30),
         calc_result_cache_max_entries=_get_int("FF_CALC_RESULT_CACHE_MAX_ENTRIES", default=256, minimum=10),
         require_precomputed_dynasty_lookup=_get_bool("FF_REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP", default=True),

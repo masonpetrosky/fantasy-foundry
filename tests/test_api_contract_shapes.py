@@ -47,12 +47,14 @@ class ApiContractShapeTests(unittest.TestCase):
         self.assertIn("build_id", payload)
         self.assertIn("projection_rows", payload)
         self.assertIn("jobs", payload)
+        self.assertIn("queue_pressure", payload)
         self.assertIn("dynasty_lookup_cache", payload)
         self.assertIn("result_cache", payload)
         self.assertIn("calculator_prewarm", payload)
         self.assertIn("timestamp", payload)
         self.assertIsInstance(payload.get("projection_rows"), dict)
         self.assertIsInstance(payload.get("jobs"), dict)
+        self.assertIsInstance(payload.get("queue_pressure"), dict)
         self.assertIsInstance(payload.get("dynasty_lookup_cache"), dict)
 
     def test_ready_endpoint_contract_shape(self) -> None:
@@ -73,6 +75,7 @@ class ApiContractShapeTests(unittest.TestCase):
         self.assertIn("build_id", payload)
         self.assertIn("data_version", payload)
         self.assertIn("checks", payload)
+        self.assertIn("queue_capacity", payload.get("checks", {}))
         self.assertIn("timestamp", payload)
 
     @pytest.mark.full_regression

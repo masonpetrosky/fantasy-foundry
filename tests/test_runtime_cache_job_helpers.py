@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import types
-from collections import deque
+from collections import defaultdict, deque
 from threading import Lock
 
 import pytest
@@ -37,7 +37,7 @@ def _build_helpers():
     max_entries_state = {"value": 8}
     local_cache: dict[str, tuple[float, dict]] = {}
     local_cache_order: deque[str] = deque()
-    rate_limit_buckets: dict[tuple[str, str], deque[float]] = {}
+    rate_limit_buckets: dict[tuple[str, str], deque[float]] = defaultdict(deque)
     calculator_jobs: dict[str, dict] = {}
 
     helpers = build_runtime_cache_job_helpers(
@@ -114,3 +114,33 @@ def test_cleanup_local_result_cache_uses_dynamic_max_entries_getter():
     assert list(local_cache.keys()) == ["b"]
     assert list(local_cache_order) == ["b"]
 
+
+def test_rate_limit_activity_snapshot_tracks_local_allow_and_block() -> None:
+    helpers, _, _, _, rate_limit_buckets, *_ = _build_helpers()
+    request = types.SimpleNamespace(headers={}, state=types.SimpleNamespace())
+    rate_limit_buckets[("calc-sync", "ip:198.51.100.10")] = deque()
+
+    helpers.enforce_rate_limit(request, action="calc-sync", limit_per_minute=1)
+    with pytest.raises(HTTPException):
+        helpers.enforce_rate_limit(request, action="calc-sync", limit_per_minute=1)
+
+    snapshot = helpers.rate_limit_activity_snapshot()
+    assert snapshot["totals"]["allowed"] == 1
+    assert snapshot["totals"]["blocked"] == 1
+    assert snapshot["totals"]["local_allowed"] == 1
+    assert snapshot["totals"]["local_blocked"] == 1
+    assert snapshot["actions"]["calc-sync"]["allowed"] == 1
+    assert snapshot["actions"]["calc-sync"]["blocked"] == 1
+    assert snapshot["last_blocked"]["action"] == "calc-sync"
+    assert snapshot["last_blocked"]["source"] == "local"
+
+
+def test_rate_limit_activity_snapshot_tracks_disabled_limits() -> None:
+    helpers, *_ = _build_helpers()
+    request = types.SimpleNamespace(headers={}, state=types.SimpleNamespace())
+
+    helpers.enforce_rate_limit(request, action="proj-read", limit_per_minute=0)
+
+    snapshot = helpers.rate_limit_activity_snapshot()
+    assert snapshot["totals"]["disabled"] == 1
+    assert snapshot["actions"]["proj-read"]["disabled"] == 1

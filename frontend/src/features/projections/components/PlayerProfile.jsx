@@ -5,6 +5,13 @@ const KEY_STAT_COLS_BAT = ["Year", "Team", "Pos", "PA", "HR", "RBI", "SB", "AVG"
 const KEY_STAT_COLS_PIT = ["Year", "Team", "Pos", "IP", "W", "K", "SV", "ERA", "WHIP", "DynastyValue"];
 const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
+function parseProjectionProfileRows(payload) {
+  if (!payload || typeof payload !== "object") return [];
+  if (Array.isArray(payload.series)) return payload.series;
+  if (Array.isArray(payload.data)) return payload.data;
+  return [];
+}
+
 function SparkLine({ rows, col }) {
   const values = rows.map(r => Number(r[col] ?? 0)).filter(v => !isNaN(v));
   if (values.length < 2) return null;
@@ -41,7 +48,7 @@ function SparkLine({ rows, col }) {
   );
 }
 
-export function PlayerProfile({ row, tab, apiBase, onClose }) {
+export function PlayerProfile({ row, tab, apiBase, calculatorJobId, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -55,23 +62,40 @@ export function PlayerProfile({ row, tab, apiBase, onClose }) {
   useEffect(() => {
     if (!playerKey) {
       setLoading(false);
+      setData([]);
       return;
     }
     setLoading(true);
     setError(null);
+    const controller = new AbortController();
     const dataset = tab === "bat" ? "bat" : tab === "pitch" ? "pitch" : "all";
-    const url = `${apiBase}/api/projections/player/${encodeURIComponent(playerKey)}?dataset=${dataset}`;
-    fetch(url)
+    const url = new URL(
+      `${String(apiBase || "").trim().replace(/\/+$/, "")}/api/projections/profile/${encodeURIComponent(playerKey)}`
+    );
+    url.searchParams.set("dataset", dataset);
+    const normalizedCalculatorJobId = String(calculatorJobId || "").trim();
+    if (normalizedCalculatorJobId) {
+      url.searchParams.set("calculator_job_id", normalizedCalculatorJobId);
+    }
+    fetch(url.toString(), {
+      signal: controller.signal,
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache" },
+    })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then(json => {
-        setData(json.data || []);
+        setData(parseProjectionProfileRows(json));
         setLoading(false);
       })
       .catch(err => {
+        if (err?.name === "AbortError") return;
         setError(err.message);
         setLoading(false);
       });
-  }, [apiBase, playerKey, tab]);
+    return () => {
+      controller.abort();
+    };
+  }, [apiBase, calculatorJobId, playerKey, tab]);
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement;

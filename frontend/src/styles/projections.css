@@ -422,6 +422,11 @@
   color: var(--red);
 }
 
+.table-refresh-message.warning {
+  border-color: rgba(212, 168, 83, 0.4);
+  color: var(--accent);
+}
+
 .table-last-refreshed {
   border-style: dashed;
 }

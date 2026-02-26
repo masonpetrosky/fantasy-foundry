@@ -177,6 +177,49 @@
     gap: 8px;
   }
 
+  .activation-diagnostics-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .activation-diagnostics-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .activation-diagnostics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .activation-diagnostics-recent li {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .activation-command-center-backdrop {
+    padding: 12px;
+  }
+
+  .activation-command-center {
+    padding: 12px;
+    max-height: 94vh;
+  }
+
+  .activation-command-center-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .activation-command-center-presets {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .activation-command-grid {
+    grid-template-columns: 1fr;
+  }
+
   .calc-last-success-summary,
   .meta-error-panel {
     padding: 12px;

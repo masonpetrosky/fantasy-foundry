@@ -1,13 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  analyticsEventsToCsv,
   buildAnalyticsPayload,
+  clearAnalyticsEventBuffer,
+  downloadAnalyticsEventCsv,
+  installAnalyticsDebugBridge,
+  readAnalyticsEventBuffer,
   resetAnalyticsContext,
   setAnalyticsContext,
+  summarizeActivationFunnel,
   trackEvent,
 } from "./analytics.js";
 
 describe("analytics", () => {
   const originalWindow = globalThis.window;
+  const originalDocument = globalThis.document;
+  const originalUrl = globalThis.URL;
 
   afterEach(() => {
     resetAnalyticsContext();
@@ -16,7 +24,31 @@ describe("analytics", () => {
     } else {
       globalThis.window = originalWindow;
     }
+    if (typeof originalDocument === "undefined") {
+      delete globalThis.document;
+    } else {
+      globalThis.document = originalDocument;
+    }
+    if (typeof originalUrl === "undefined") {
+      delete globalThis.URL;
+    } else {
+      globalThis.URL = originalUrl;
+    }
   });
+
+  function createMemoryStorage(initial = {}) {
+    const store = { ...initial };
+    return {
+      getItem: key => (Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null),
+      setItem: (key, value) => {
+        store[key] = String(value);
+      },
+      removeItem: key => {
+        delete store[key];
+      },
+      __store: store,
+    };
+  }
 
   it("builds payloads with normalized properties", () => {
     const payload = buildAnalyticsPayload("quickstart_click", {
@@ -43,6 +75,7 @@ describe("analytics", () => {
   });
 
   it("publishes events to dataLayer and CustomEvent listeners in browser contexts", () => {
+    const localStorage = createMemoryStorage();
     const dataLayer = [];
     const dispatchEvent = vi.fn();
     class MockCustomEvent {
@@ -53,6 +86,7 @@ describe("analytics", () => {
     }
 
     globalThis.window = {
+      localStorage,
       dataLayer,
       dispatchEvent,
       CustomEvent: MockCustomEvent,
@@ -81,5 +115,93 @@ describe("analytics", () => {
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
     expect(dispatchEvent.mock.calls[0][0].name).toBe("ff:analytics");
     expect(dispatchEvent.mock.calls[0][0].detail.event).toBe("export_click");
+    expect(readAnalyticsEventBuffer()).toHaveLength(1);
+    clearAnalyticsEventBuffer();
+    expect(readAnalyticsEventBuffer()).toHaveLength(0);
+  });
+
+  it("summarizes quick-start funnel metrics from buffered events", () => {
+    const localStorage = createMemoryStorage();
+    globalThis.window = {
+      localStorage,
+      dataLayer: [],
+      dispatchEvent: vi.fn(),
+      CustomEvent: class MockCustomEvent {
+        constructor(name, options) {
+          this.name = name;
+          this.detail = options?.detail;
+        }
+      },
+    };
+
+    trackEvent("ff_quickstart_impression", { source: "activation_strip" });
+    trackEvent("ff_quickstart_cta_click", { source: "activation_strip" });
+    trackEvent("calculator_run_start", { source: "quickstart" });
+    trackEvent("ff_calculation_success", {
+      source: "quickstart",
+      time_to_first_success_ms: 8200,
+    });
+    trackEvent("ff_calculation_error", { source: "quickstart" });
+
+    const summary = summarizeActivationFunnel();
+    expect(summary.quickstart).toMatchObject({
+      impressions: 1,
+      clicks: 1,
+      runs_started: 1,
+      runs_succeeded: 1,
+      runs_failed: 1,
+      click_through_rate_pct: 100,
+      run_start_rate_pct: 100,
+      run_success_rate_pct: 100,
+      median_time_to_first_success_ms: 8200,
+    });
+    expect(summary.window.events_total).toBe(5);
+  });
+
+  it("installs a browser debug bridge for event diagnostics", () => {
+    const localStorage = createMemoryStorage();
+    const createObjectURL = vi.fn(() => "blob:test");
+    const revokeObjectURL = vi.fn();
+    const click = vi.fn();
+    const appendChild = vi.fn();
+    const removeChild = vi.fn();
+
+    globalThis.URL = {
+      createObjectURL,
+      revokeObjectURL,
+    };
+    globalThis.document = {
+      body: { appendChild, removeChild },
+      createElement: vi.fn(() => ({ click })),
+    };
+    globalThis.window = {
+      localStorage,
+      dataLayer: [],
+      dispatchEvent: vi.fn(),
+      CustomEvent: class MockCustomEvent {
+        constructor(name, options) {
+          this.name = name;
+          this.detail = options?.detail;
+        }
+      },
+    };
+
+    expect(installAnalyticsDebugBridge()).toBe(true);
+    expect(typeof globalThis.window.ffAnalytics?.summary).toBe("function");
+    expect(typeof globalThis.window.ffAnalytics?.exportCsv).toBe("function");
+    trackEvent("ff_quickstart_impression", { source: "activation_strip" });
+    const events = globalThis.window.ffAnalytics.events();
+    expect(events).toHaveLength(1);
+    expect(downloadAnalyticsEventCsv("out.csv")).toBe(true);
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledTimes(1);
+
+    const csv = analyticsEventsToCsv(events);
+    expect(csv).toContain("timestamp_ms,timestamp,event,session_id,source");
+    expect(csv).toContain("ff_quickstart_impression");
+
+    globalThis.window.ffAnalytics.clear();
+    expect(globalThis.window.ffAnalytics.events()).toHaveLength(0);
   });
 });

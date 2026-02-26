@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+from threading import Lock
 from typing import Any, Callable
 
 from fastapi import HTTPException, Request
@@ -46,6 +47,103 @@ class RuntimeCacheJobHelperConfig:
 class RuntimeCacheJobHelpers:
     def __init__(self, config: RuntimeCacheJobHelperConfig):
         self._config = config
+        self._rate_limit_activity_lock = Lock()
+        self._rate_limit_activity: dict[str, Any] = {
+            "totals": {
+                "allowed": 0,
+                "blocked": 0,
+                "disabled": 0,
+                "fallback_to_local": 0,
+                "redis_allowed": 0,
+                "redis_blocked": 0,
+                "local_allowed": 0,
+                "local_blocked": 0,
+            },
+            "actions": {},
+            "last_blocked": None,
+            "last_fallback_to_local": None,
+        }
+
+    @staticmethod
+    def _new_action_activity() -> dict[str, int]:
+        return {
+            "allowed": 0,
+            "blocked": 0,
+            "disabled": 0,
+            "fallback_to_local": 0,
+            "redis_allowed": 0,
+            "redis_blocked": 0,
+            "local_allowed": 0,
+            "local_blocked": 0,
+        }
+
+    def _record_rate_limit_decision(self, payload: dict[str, Any]) -> None:
+        action = str(payload.get("action") or "").strip() or "unknown"
+        source = str(payload.get("source") or "").strip().lower()
+        outcome = str(payload.get("outcome") or "").strip().lower()
+        timestamp = payload.get("timestamp_epoch_s")
+        timestamp_value = float(timestamp) if isinstance(timestamp, (float, int)) else None
+
+        with self._rate_limit_activity_lock:
+            totals = self._rate_limit_activity["totals"]
+            per_action = self._rate_limit_activity["actions"].setdefault(action, self._new_action_activity())
+
+            if outcome == "allowed":
+                totals["allowed"] += 1
+                per_action["allowed"] += 1
+                if source == "redis":
+                    totals["redis_allowed"] += 1
+                    per_action["redis_allowed"] += 1
+                elif source == "local":
+                    totals["local_allowed"] += 1
+                    per_action["local_allowed"] += 1
+                return
+
+            if outcome == "blocked":
+                totals["blocked"] += 1
+                per_action["blocked"] += 1
+                if source == "redis":
+                    totals["redis_blocked"] += 1
+                    per_action["redis_blocked"] += 1
+                elif source == "local":
+                    totals["local_blocked"] += 1
+                    per_action["local_blocked"] += 1
+                self._rate_limit_activity["last_blocked"] = {
+                    "action": action,
+                    "source": source or None,
+                    "timestamp_epoch_s": timestamp_value,
+                }
+                return
+
+            if outcome == "disabled":
+                totals["disabled"] += 1
+                per_action["disabled"] += 1
+                return
+
+            if outcome == "fallback":
+                totals["fallback_to_local"] += 1
+                per_action["fallback_to_local"] += 1
+                self._rate_limit_activity["last_fallback_to_local"] = {
+                    "action": action,
+                    "source": source or None,
+                    "timestamp_epoch_s": timestamp_value,
+                }
+
+    def rate_limit_activity_snapshot(self) -> dict[str, Any]:
+        with self._rate_limit_activity_lock:
+            totals = dict(self._rate_limit_activity["totals"])
+            action_activity = {
+                action: dict(counts)
+                for action, counts in sorted(self._rate_limit_activity["actions"].items())
+            }
+            last_blocked = self._rate_limit_activity["last_blocked"]
+            last_fallback = self._rate_limit_activity["last_fallback_to_local"]
+            return {
+                "totals": totals,
+                "actions": action_activity,
+                "last_blocked": dict(last_blocked) if isinstance(last_blocked, dict) else None,
+                "last_fallback_to_local": dict(last_fallback) if isinstance(last_fallback, dict) else None,
+            }
 
     def calculate_rate_limit_identity(self, request: Request | None) -> str:
         return core_runtime_infra.calculate_rate_limit_identity(
@@ -98,6 +196,7 @@ class RuntimeCacheJobHelpers:
             ),
             rate_limit_exceeded=self.rate_limit_exceeded,
             logger=self._config.logger,
+            on_decision=self._record_rate_limit_decision,
         )
 
     def rate_limit_bucket_count(self) -> int:

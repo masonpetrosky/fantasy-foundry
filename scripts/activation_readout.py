@@ -44,7 +44,7 @@ EVENT_REQUIRED_FIELDS = {
 
 FIELD_ALIASES = {
     "event": ("event", "event_name", "name"),
-    "timestamp": ("timestamp", "event_timestamp", "event_time"),
+    "timestamp": ("timestamp", "timestamp_ms", "event_timestamp", "event_time"),
     "session_id": ("session_id", "session", "analytics_session_id"),
     "source": ("source", "cta_source"),
     "mode": ("mode", "quickstart_mode"),

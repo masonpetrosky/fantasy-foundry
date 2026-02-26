@@ -3,10 +3,11 @@ import { createRoot } from "react-dom/client";
 import "./styles/app.css";
 import { AUTH_SYNC_ENABLED } from "./supabase_client.js";
 import { AccountPanel } from "./account_panel.jsx";
+import { ActivationDiagnosticsPanel, resolveActivationDiagnosticsPanelEnabled } from "./activation_diagnostics_panel.jsx";
 import { resolveApiBase } from "./api_base.js";
 import { PRIMARY_NAV_ITEMS } from "./app_content.js";
 import { ProjectionsExplorer } from "./projections_explorer.jsx";
-import { setAnalyticsContext, trackEvent } from "./analytics.js";
+import { installAnalyticsDebugBridge, setAnalyticsContext, trackEvent } from "./analytics.js";
 import { ErrorBoundary } from "./error_boundary.jsx";
 import { FeatureErrorBoundary } from "./feature_error_boundary.jsx";
 import { formatIsoDateLabel, resolveProjectionWindow } from "./formatting_utils.js";
@@ -26,6 +27,9 @@ import {
 
 const API = resolveApiBase();
 const ACTIVATION_SPRINT_ENABLED = String(import.meta.env.VITE_FF_ACTIVATION_SPRINT_V1 || "1").trim() !== "0";
+const ACTIVATION_DIAGNOSTICS_PANEL_ENV_ENABLED = String(
+  import.meta.env.VITE_FF_ACTIVATION_DIAGNOSTICS_PANEL_V1 || "0"
+).trim() === "1";
 const LazyMethodologySection = lazy(() => (
   import("./methodology_section.jsx").then(module => ({ default: module.MethodologySection }))
 ));
@@ -109,6 +113,10 @@ function App() {
     scrollToCalculator,
     focusCalculatorHeading: focusFirstCalculatorInput,
   });
+  const activationDiagnosticsEnabled = useMemo(() => resolveActivationDiagnosticsPanelEnabled({
+    envEnabled: ACTIVATION_DIAGNOSTICS_PANEL_ENV_ENABLED,
+    locationSearch: typeof window !== "undefined" ? window.location.search : "",
+  }), []);
 
   useEffect(() => {
     setAnalyticsContext({
@@ -118,6 +126,10 @@ function App() {
       scoring_mode: resolvedScoringMode,
     });
   }, [authUser, dataVersion, resolvedScoringMode, section]);
+
+  useEffect(() => {
+    installAnalyticsDebugBridge();
+  }, []);
 
   useEffect(() => {
     if (landingTrackedRef.current) return;
@@ -318,6 +330,12 @@ function App() {
                 </button>
               </div>
             </section>
+          )}
+          {activationDiagnosticsEnabled && (
+            <ActivationDiagnosticsPanel
+              section={section}
+              dataVersion={dataVersion}
+            />
           )}
           {sectionNeedsMeta && meta && (
             <div className="data-freshness-banner app-freshness-banner" role="status" aria-live="polite">

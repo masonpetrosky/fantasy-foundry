@@ -268,6 +268,35 @@ This generates per-checkpoint readouts and memos plus:
 
 See [`docs/activation-rollout-validation.md`](docs/activation-rollout-validation.md) for expected columns, thresholds, and rollout decision rules.
 
+### Local Activation Diagnostics (Browser)
+The app stores a capped local analytics buffer (`ff:analytics-events:v1`) and exposes a debug bridge on `window.ffAnalytics`:
+
+```js
+window.ffAnalytics.summary()      // quick-start funnel summary
+window.ffAnalytics.events(200)    // last N events
+window.ffAnalytics.exportCsv()    // download local events as CSV
+window.ffAnalytics.clear()        // clear local buffer
+```
+
+The diagnostics panel also provides a `Command Center` modal with:
+- `Copy Readout Cmd` for `scripts/run_activation_readout.sh`
+- `Copy Checkpoint Cmd` for `scripts/run_activation_readout_checkpoints.sh`
+- Date presets (`Use Today`, `Use Tomorrow`) and editable owner/path fields
+- Live runtime card sourced from `/api/ops` (queue utilization, oldest queued job age, and rate-limit block count), auto-refreshing every 30 seconds
+
+Enable the in-app diagnostics panel with either:
+
+- `VITE_FF_ACTIVATION_DIAGNOSTICS_PANEL_V1=1` at build time, or
+- `?activation_debug=1` in the browser URL.
+
+This is useful for owner-operator validation in staging/prod when vendor analytics exports are delayed.
+
+CI also enforces cross-stack compatibility for this export path:
+
+```bash
+python scripts/check_activation_browser_csv_contract.py
+```
+
 ### Running Browser E2E Tests (Playwright)
 ```bash
 # Install app + dev test dependencies
@@ -317,6 +346,19 @@ If you need a faster preprocess run and are okay with a slower first projections
 python preprocess.py --skip-dynasty-cache
 ```
 
+Strict ingest validation defaults to the 2026-2045 projection window. Override only when intentionally shifting the projection horizon:
+
+```bash
+python preprocess.py --min-year 2026 --max-year 2045
+```
+
+Optional quality report output:
+
+```bash
+python preprocess.py --quality-report tmp/projection_quality_report.json
+python scripts/check_projection_quality_report.py --report tmp/projection_quality_report.json
+```
+
 Production deployments enforce the precomputed cache by default (`FF_REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP=1`), so skipping cache generation will cause projections endpoints to return HTTP 503 until a valid `data/dynasty_lookup.json` is deployed.
 
 ## Deployment
@@ -340,10 +382,22 @@ All three support Dockerfiles out of the box:
 - Current production custom domain: https://fantasy-foundry.com
 
 This Docker image sets these production-friendly runtime defaults:
+- `FF_ENV=production` and explicit `FF_CORS_ALLOW_ORIGINS=https://fantasy-foundry.com`.
 - `FF_PREWARM_DEFAULT_CALC=0` so post-deploy first projections loads are not delayed by calculator prewarm work.
 - `FF_REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP=1` so projections never fall back to expensive runtime dynasty lookup generation.
+- Tightened public rate limits and queue caps:
+  - `FF_CALC_SYNC_RATE_LIMIT_PER_MINUTE=20`
+  - `FF_CALC_SYNC_AUTH_RATE_LIMIT_PER_MINUTE=60`
+  - `FF_CALC_JOB_CREATE_RATE_LIMIT_PER_MINUTE=10`
+  - `FF_CALC_JOB_CREATE_AUTH_RATE_LIMIT_PER_MINUTE=30`
+  - `FF_CALC_JOB_STATUS_RATE_LIMIT_PER_MINUTE=180`
+  - `FF_CALC_JOB_STATUS_AUTH_RATE_LIMIT_PER_MINUTE=360`
+  - `FF_PROJ_RATE_LIMIT_PER_MINUTE=90`
+  - `FF_EXPORT_RATE_LIMIT_PER_MINUTE=20`
+  - `FF_CALC_MAX_ACTIVE_JOBS_PER_IP=1`
+  - `FF_CALC_MAX_ACTIVE_JOBS_TOTAL=24`
 
-If you set Railway service variables manually, keep those two values unless you intentionally want the opposite tradeoff.
+If you set Railway service variables manually, keep these defaults unless you intentionally want the opposite tradeoff.
 
 ### Backend `FF_*` Runtime Settings
 
@@ -356,11 +410,15 @@ If you set Railway service variables manually, keep those two values unless you 
 | `FF_PREWARM_DEFAULT_CALC` | `1` | Prewarm default calculator caches on startup (`Dockerfile` overrides this to `0`). |
 | `FF_CALC_REQUEST_TIMEOUT_SECONDS` | `600` | Calculator request timeout metadata used in guardrails/status payloads. |
 | `FF_CALC_SYNC_RATE_LIMIT_PER_MINUTE` | `30` | Sync calculator request limit per identity per minute. |
+| `FF_CALC_SYNC_AUTH_RATE_LIMIT_PER_MINUTE` | `max(base,60)` | Sync calculator request limit for authenticated API-key callers per minute. |
 | `FF_CALC_JOB_CREATE_RATE_LIMIT_PER_MINUTE` | `15` | Async calculator job-create limit per identity per minute. |
+| `FF_CALC_JOB_CREATE_AUTH_RATE_LIMIT_PER_MINUTE` | `max(base,30)` | Async calculator job-create limit for authenticated API-key callers per minute. |
 | `FF_CALC_JOB_STATUS_RATE_LIMIT_PER_MINUTE` | `240` | Async calculator job status/cancel limit per identity per minute. |
+| `FF_CALC_JOB_STATUS_AUTH_RATE_LIMIT_PER_MINUTE` | `max(base,360)` | Async calculator job status/cancel limit for authenticated API-key callers per minute. |
 | `FF_PROJ_RATE_LIMIT_PER_MINUTE` | `120` | Projections read endpoint limit per identity per minute. |
 | `FF_EXPORT_RATE_LIMIT_PER_MINUTE` | `30` | Projections export endpoint limit per identity per minute. |
 | `FF_CALC_MAX_ACTIVE_JOBS_PER_IP` | `2` | Max queued/running async jobs per client IP. |
+| `FF_CALC_MAX_ACTIVE_JOBS_TOTAL` | `24` | Max queued/running async jobs across one app instance before queue rejection. |
 | `FF_CALC_RESULT_CACHE_TTL_SECONDS` | `1800` | TTL for calculator result cache entries. |
 | `FF_CALC_RESULT_CACHE_MAX_ENTRIES` | `256` | Max local calculator result cache entries before LRU pruning. |
 | `FF_REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP` | `1` | Require a valid `data/dynasty_lookup.json` (otherwise projections return 503). |
@@ -384,20 +442,27 @@ When `FF_ENV=production`, startup fails fast for unsafe config combinations:
 
 Post-deploy sanity checks for projection startup latency:
 - `GET /api/ops` should report `data.dynasty_lookup_cache.status = "ready"` and matching expected/found versions.
+- `GET /api/ops` should expose `queues.rate_limit_activity.totals` so throttling pressure is visible during rollout.
+- `GET /api/ops` should expose `queues.job_pressure` so queue saturation and oldest-job age are visible before timeouts spike.
+- `GET /api/health` should expose `queue_pressure` with `active_jobs`/`at_capacity` for lightweight capacity probes.
 - `GET /api/health` should show calculator prewarm idle/off when `FF_PREWARM_DEFAULT_CALC=0`.
+
+Operational response guide: [`docs/ops-queue-pressure-runbook.md`](docs/ops-queue-pressure-runbook.md)
 
 ## API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/health` | Runtime health summary (projection row counts, cache/job stats) |
-| GET | `/api/ready` | Readiness probe (returns HTTP 503 when required startup prerequisites are not ready) |
-| GET | `/api/ops` | Operational diagnostics (runtime mode, limiter/cache posture, queue/cache stats, and non-secret config flags) |
+| GET | `/api/health` | Runtime health summary (projection row counts, cache/job stats, lightweight queue-pressure capacity signal) |
+| GET | `/api/ready` | Readiness probe (returns HTTP 503 when required startup prerequisites are not ready; includes current queue-capacity context) |
+| GET | `/api/ops` | Operational diagnostics (runtime mode, limiter/cache posture, queue/cache stats, queue-pressure telemetry, live rate-limit activity counters, and non-secret config flags) |
 | GET | `/api/version` | Build metadata (`build_id`, commit SHA, build timestamp) |
 | GET | `/api/meta` | Filter options (teams, years, positions) |
 | GET | `/api/projections/all` | Combined hitter+pitcher rows (query params: player, team, player_keys, year, years, pos, dynasty_years, career_totals, include_dynasty, sort_col, sort_dir, limit, offset) |
 | GET | `/api/projections/bat` | Hitter projections (query params: player, team, player_keys, year, years, pos, dynasty_years, career_totals, include_dynasty, sort_col, sort_dir, limit, offset) |
 | GET | `/api/projections/pitch` | Pitcher projections (same query params as `/api/projections/bat`) |
+| GET | `/api/projections/profile/{player_id}` | Player profile payload (`dataset`, yearly series rows, career totals rows, matched identity metadata) |
+| GET | `/api/projections/compare` | Compare payload for at least two `player_keys` (`dataset`, optional `career_totals/year/years/dynasty_years`, matched keys, and projection rows) |
 | GET | `/api/projections/export/{dataset}` | Export filtered projections as CSV/XLSX (`dataset`: `all`, `bat`, `pitch`; query param: `format`) |
 | POST | `/api/calculate` | Run dynasty value calculator (JSON body with league settings) |
 | POST | `/api/calculate/export` | Export calculator output as CSV/XLSX (`format`, optional `include_explanations`) |

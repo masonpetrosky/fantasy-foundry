@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 import pandas as pd
@@ -112,6 +113,7 @@ class _Harness:
 def _build_harness(
     *,
     max_active_jobs_per_ip: int = 3,
+    max_active_jobs_total: int = 10,
     executor: _Executor | None = None,
 ) -> _Harness:
     jobs: dict[str, dict] = {}
@@ -251,12 +253,16 @@ def _build_harness(
         calc_logger=logger,
         enforce_rate_limit=enforce_rate_limit,
         sync_rate_limit_per_minute=7,
+        sync_auth_rate_limit_per_minute=19,
         job_create_rate_limit_per_minute=5,
+        job_create_auth_rate_limit_per_minute=15,
         job_status_rate_limit_per_minute=11,
+        job_status_auth_rate_limit_per_minute=31,
         client_ip=lambda _request: "127.0.0.1",
         iso_now=iso_now,
         active_jobs_for_ip=active_jobs_for_ip,
         calculator_max_active_jobs_per_ip=max_active_jobs_per_ip,
+        calculator_max_active_jobs_total=max_active_jobs_total,
         calculator_job_lock=threading.Lock(),
         calculator_jobs=jobs,
         cleanup_calculation_jobs=cleanup_calculation_jobs,
@@ -374,6 +380,17 @@ def test_calculate_dynasty_values_enforces_rate_limit_and_uses_sync_source() -> 
     assert harness.rate_limit_calls == [("calc-sync", 7)]
 
 
+def test_calculate_dynasty_values_uses_authenticated_sync_rate_limit() -> None:
+    harness = _build_harness()
+    request = SimpleNamespace(state=SimpleNamespace(calc_api_key_authenticated=True))
+    harness.service._run_calculate_request = lambda _req, *, source: {"source": source, "ok": True}
+
+    response = harness.service.calculate_dynasty_values(CalculateRequest(), request=request)
+
+    assert response["ok"] is True
+    assert harness.rate_limit_calls == [("calc-sync", 19)]
+
+
 def test_export_calculate_values_uses_xlsx_and_includes_explanations_when_requested() -> None:
     harness = _build_harness()
     seen_sources: list[str] = []
@@ -441,6 +458,16 @@ def test_create_calculate_job_rejects_when_active_job_cap_is_reached() -> None:
     harness.jobs["existing"] = _job(job_id="existing", status="queued", client_ip="127.0.0.1")
 
     with pytest.raises(HTTPException, match="Too many active calculation jobs"):
+        harness.service.create_calculate_dynasty_job(CalculateRequest(), request=object())
+
+    assert set(harness.jobs) == {"existing"}
+
+
+def test_create_calculate_job_rejects_when_global_active_job_cap_is_reached() -> None:
+    harness = _build_harness(max_active_jobs_total=1)
+    harness.jobs["existing"] = _job(job_id="existing", status="running", client_ip="10.0.0.1")
+
+    with pytest.raises(HTTPException, match="Calculation queue is full right now"):
         harness.service.create_calculate_dynasty_job(CalculateRequest(), request=object())
 
     assert set(harness.jobs) == {"existing"}

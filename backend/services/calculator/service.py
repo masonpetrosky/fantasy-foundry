@@ -181,12 +181,16 @@ class CalculatorServiceContext:
     calc_logger: Any
     enforce_rate_limit: callable
     sync_rate_limit_per_minute: int
+    sync_auth_rate_limit_per_minute: int
     job_create_rate_limit_per_minute: int
+    job_create_auth_rate_limit_per_minute: int
     job_status_rate_limit_per_minute: int
+    job_status_auth_rate_limit_per_minute: int
     client_ip: callable
     iso_now: callable
     active_jobs_for_ip: callable
     calculator_max_active_jobs_per_ip: int
+    calculator_max_active_jobs_total: int
     calculator_job_lock: Any
     calculator_jobs: dict[str, dict]
     cleanup_calculation_jobs: callable
@@ -208,6 +212,31 @@ class CalculatorService:
     def _value_col_sort_key(col: str) -> tuple[int, int | str]:
         suffix = col.split("_", 1)[1] if "_" in col else col
         return (0, int(suffix)) if str(suffix).isdigit() else (1, suffix)
+
+    @staticmethod
+    def _request_is_calculate_api_key_authenticated(request: Request | Any | None) -> bool:
+        state = getattr(request, "state", None)
+        return bool(getattr(state, "calc_api_key_authenticated", False))
+
+    @classmethod
+    def _effective_rate_limit(
+        cls,
+        request: Request | Any | None,
+        *,
+        anonymous_limit: int,
+        authenticated_limit: int,
+    ) -> int:
+        if cls._request_is_calculate_api_key_authenticated(request):
+            return max(1, int(authenticated_limit))
+        return max(1, int(anonymous_limit))
+
+    @staticmethod
+    def _active_job_total(calculator_jobs: dict[str, dict]) -> int:
+        return sum(
+            1
+            for job in calculator_jobs.values()
+            if str(job.get("status") or "").lower() in {"queued", "running"}
+        )
 
     def _default_export_columns(self, rows: list[dict]) -> list[str]:
         seen: set[str] = set()
@@ -545,7 +574,11 @@ class CalculatorService:
         self._ctx.enforce_rate_limit(
             request,
             action="calc-sync",
-            limit_per_minute=self._ctx.sync_rate_limit_per_minute,
+            limit_per_minute=self._effective_rate_limit(
+                request,
+                anonymous_limit=self._ctx.sync_rate_limit_per_minute,
+                authenticated_limit=self._ctx.sync_auth_rate_limit_per_minute,
+            ),
         )
         return self._run_calculate_request(req, source="sync")
 
@@ -553,7 +586,11 @@ class CalculatorService:
         self._ctx.enforce_rate_limit(
             request,
             action="calc-sync",
-            limit_per_minute=self._ctx.sync_rate_limit_per_minute,
+            limit_per_minute=self._effective_rate_limit(
+                request,
+                anonymous_limit=self._ctx.sync_rate_limit_per_minute,
+                authenticated_limit=self._ctx.sync_auth_rate_limit_per_minute,
+            ),
         )
         payload = req.model_dump()
         export_format = str(payload.pop("format", "csv")).strip().lower()
@@ -584,7 +621,11 @@ class CalculatorService:
         self._ctx.enforce_rate_limit(
             request,
             action="calc-job-create",
-            limit_per_minute=self._ctx.job_create_rate_limit_per_minute,
+            limit_per_minute=self._effective_rate_limit(
+                request,
+                anonymous_limit=self._ctx.job_create_rate_limit_per_minute,
+                authenticated_limit=self._ctx.job_create_auth_rate_limit_per_minute,
+            ),
         )
         client_ip = self._ctx.client_ip(request)
         created_at = self._ctx.iso_now()
@@ -611,6 +652,15 @@ class CalculatorService:
         with self._ctx.calculator_job_lock:
             self._ctx.cleanup_calculation_jobs(job["created_ts"])
             if cached_result is None:
+                active_total = self._active_job_total(self._ctx.calculator_jobs)
+                if active_total >= self._ctx.calculator_max_active_jobs_total:
+                    raise HTTPException(
+                        status_code=429,
+                        detail=(
+                            "Calculation queue is full right now. "
+                            "Wait for active jobs to finish and retry."
+                        ),
+                    )
                 active_for_ip = self._ctx.active_jobs_for_ip(client_ip)
                 if active_for_ip >= self._ctx.calculator_max_active_jobs_per_ip:
                     raise HTTPException(
@@ -646,7 +696,11 @@ class CalculatorService:
         self._ctx.enforce_rate_limit(
             request,
             action="calc-job-status",
-            limit_per_minute=self._ctx.job_status_rate_limit_per_minute,
+            limit_per_minute=self._effective_rate_limit(
+                request,
+                anonymous_limit=self._ctx.job_status_rate_limit_per_minute,
+                authenticated_limit=self._ctx.job_status_auth_rate_limit_per_minute,
+            ),
         )
         with self._ctx.calculator_job_lock:
             self._ctx.cleanup_calculation_jobs()
@@ -662,7 +716,11 @@ class CalculatorService:
         self._ctx.enforce_rate_limit(
             request,
             action="calc-job-status",
-            limit_per_minute=self._ctx.job_status_rate_limit_per_minute,
+            limit_per_minute=self._effective_rate_limit(
+                request,
+                anonymous_limit=self._ctx.job_status_rate_limit_per_minute,
+                authenticated_limit=self._ctx.job_status_auth_rate_limit_per_minute,
+            ),
         )
         with self._ctx.calculator_job_lock:
             self._ctx.cleanup_calculation_jobs()

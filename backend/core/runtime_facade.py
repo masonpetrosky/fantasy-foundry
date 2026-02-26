@@ -562,11 +562,15 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
             trust_x_forwarded_for=state_module.TRUST_X_FORWARDED_FOR,
             rate_limit_bucket_cleanup_interval_seconds=state_module.RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS,
             calculator_sync_rate_limit_per_minute=state_module.CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE,
+            calculator_sync_auth_rate_limit_per_minute=state_module.CALCULATOR_SYNC_AUTH_RATE_LIMIT_PER_MINUTE,
             calculator_job_create_rate_limit_per_minute=state_module.CALCULATOR_JOB_CREATE_RATE_LIMIT_PER_MINUTE,
+            calculator_job_create_auth_rate_limit_per_minute=state_module.CALCULATOR_JOB_CREATE_AUTH_RATE_LIMIT_PER_MINUTE,
             calculator_job_status_rate_limit_per_minute=state_module.CALCULATOR_JOB_STATUS_RATE_LIMIT_PER_MINUTE,
+            calculator_job_status_auth_rate_limit_per_minute=state_module.CALCULATOR_JOB_STATUS_AUTH_RATE_LIMIT_PER_MINUTE,
             projection_rate_limit_per_minute=state_module.PROJECTION_RATE_LIMITS.read_per_minute,
             projection_export_rate_limit_per_minute=state_module.PROJECTION_RATE_LIMITS.export_per_minute,
             calculator_max_active_jobs_per_ip=state_module.CALCULATOR_MAX_ACTIVE_JOBS_PER_IP,
+            calculator_max_active_jobs_total=state_module.CALCULATOR_MAX_ACTIVE_JOBS_TOTAL,
         )
 
     def _iso_now() -> str:

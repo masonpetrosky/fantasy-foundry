@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import threading
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -124,6 +125,7 @@ class _Harness:
 def _build_harness(
     *,
     max_active_jobs_per_ip: int = 3,
+    max_active_jobs_total: int = 10,
     executor: _Executor | None = None,
 ) -> _Harness:
     jobs: dict[str, dict[str, Any]] = {}
@@ -248,8 +250,11 @@ def _build_harness(
         calculate_request_model=_RequestModel,
         enforce_rate_limit=enforce_rate_limit,
         sync_rate_limit_per_minute=13,
+        sync_auth_rate_limit_per_minute=23,
         job_create_rate_limit_per_minute=11,
+        job_create_auth_rate_limit_per_minute=21,
         job_status_rate_limit_per_minute=17,
+        job_status_auth_rate_limit_per_minute=27,
         flatten_explanations_for_export=flatten_explanations_for_export,
         tabular_export_response=tabular_export_response,
         default_calculator_export_columns=lambda _rows: ["Player", "DynastyValue"],
@@ -260,6 +265,7 @@ def _build_harness(
         iso_now=iso_now,
         active_jobs_for_ip=active_jobs_for_ip,
         calculator_max_active_jobs_per_ip=max_active_jobs_per_ip,
+        calculator_max_active_jobs_total=max_active_jobs_total,
         calculator_job_lock=threading.Lock(),
         calculator_jobs=jobs,
         cleanup_calculation_jobs=cleanup_calculation_jobs,
@@ -493,6 +499,20 @@ def test_calculate_dynasty_values_enforces_rate_limit_and_uses_sync_source() -> 
     assert harness.rate_limit_calls == [("calc-sync", 13)]
 
 
+def test_calculate_dynasty_values_uses_authenticated_sync_rate_limit() -> None:
+    harness = _build_harness()
+    request = SimpleNamespace(state=SimpleNamespace(calc_api_key_authenticated=True))
+
+    calculate_dynasty_values(
+        _RequestModel(scoring_mode="points"),
+        request,
+        ctx=harness.ctx,
+        run_calculate_request=lambda _req, *, source: {"source": source, "ok": True},
+    )
+
+    assert harness.rate_limit_calls == [("calc-sync", 23)]
+
+
 def test_export_calculate_dynasty_values_supports_xlsx_with_explanations() -> None:
     harness = _build_harness()
     seen_sources: list[str] = []
@@ -575,6 +595,21 @@ def test_create_calculate_dynasty_job_enforces_active_job_cap() -> None:
     harness.jobs["existing"] = _job(job_id="existing", status="queued")
 
     with pytest.raises(HTTPException, match="Too many active calculation jobs"):
+        create_calculate_dynasty_job(
+            _RequestModel(scoring_mode="roto", teams=12),
+            object(),
+            ctx=harness.ctx,
+            run_calculation_job=lambda _job_id, _payload: None,
+        )
+
+    assert set(harness.jobs) == {"existing"}
+
+
+def test_create_calculate_dynasty_job_enforces_global_active_job_cap() -> None:
+    harness = _build_harness(max_active_jobs_total=1)
+    harness.jobs["existing"] = _job(job_id="existing", status="running", client_ip="10.10.10.10")
+
+    with pytest.raises(HTTPException, match="Calculation queue is full right now"):
         create_calculate_dynasty_job(
             _RequestModel(scoring_mode="roto", teams=12),
             object(),

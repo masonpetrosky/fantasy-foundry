@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import re
 
+import pytest
+from fastapi import HTTPException
+
 from backend.services.projections import ProjectionDynastyHelpers, ProjectionRateLimits
 from backend.services.projections import service as projection_service_module
 from backend.services.projections.service import ProjectionService, ProjectionServiceContext
@@ -265,3 +268,130 @@ def test_sort_validate_overlay_and_merge_delegates(monkeypatch) -> None:
     assert calls["merge"][4] == "OF/RP"
     assert calls["merge"][5] == ("AB", "R", "HR")
     assert calls["merge"][6] == ("IP", "K", "BB", "H", "HR")
+
+
+def test_projection_profile_builds_summary_from_series_and_career_totals(monkeypatch) -> None:
+    service = _build_service()
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    def fake_projection_response(dataset: str, **kwargs):
+        calls.append((dataset, kwargs))
+        if kwargs.get("career_totals"):
+            return {
+                "total": 1,
+                "offset": 0,
+                "limit": 5000,
+                "data": [
+                    {
+                        "Player": "Jane Roe",
+                        "Team": "SEA",
+                        "Pos": "OF",
+                        "PlayerKey": "jane-roe",
+                        "PlayerEntityKey": "jane-roe",
+                        "DynastyValue": 10.0,
+                    }
+                ],
+            }
+        return {
+            "total": 2,
+            "offset": 0,
+            "limit": 5000,
+            "data": [
+                {"Player": "Jane Roe", "Year": 2026, "PlayerEntityKey": "jane-roe"},
+                {"Player": "Jane Roe", "Year": 2027, "PlayerEntityKey": "jane-roe"},
+            ],
+        }
+
+    monkeypatch.setattr(service, "projection_response", fake_projection_response)
+    payload = service.projection_profile(player_id="jane-roe", dataset="all", include_dynasty=True)
+
+    assert payload["player_id"] == "jane-roe"
+    assert payload["series_total"] == 2
+    assert payload["career_totals_total"] == 1
+    assert len(payload["series"]) == 2
+    assert len(payload["career_totals"]) == 1
+    assert payload["matched_players"] == [
+        {
+            "player_entity_key": "jane-roe",
+            "player_key": "jane-roe",
+            "player": "Jane Roe",
+            "team": "SEA",
+            "pos": "OF",
+        }
+    ]
+    assert calls[0][1]["career_totals"] is False
+    assert calls[1][1]["career_totals"] is True
+
+
+def test_projection_compare_requires_two_player_keys() -> None:
+    service = _build_service()
+
+    with pytest.raises(HTTPException, match="at least two"):
+        service.projection_compare(player_keys="jane-roe", dataset="all")
+
+
+def test_projection_compare_returns_matched_identity_keys(monkeypatch) -> None:
+    service = _build_service()
+    seen: dict[str, object] = {}
+
+    def fake_projection_response(dataset: str, **kwargs):
+        seen["dataset"] = dataset
+        seen["player_keys"] = kwargs.get("player_keys")
+        seen["career_totals"] = kwargs.get("career_totals")
+        seen["year"] = kwargs.get("year")
+        seen["years"] = kwargs.get("years")
+        seen["dynasty_years"] = kwargs.get("dynasty_years")
+        return {
+            "total": 2,
+            "offset": 0,
+            "limit": 5000,
+            "data": [
+                {"PlayerEntityKey": "jane-roe", "PlayerKey": "jane-roe", "DynastyValue": 10.0},
+                {"PlayerEntityKey": "john-roe", "PlayerKey": "john-roe", "DynastyValue": 8.0},
+            ],
+        }
+
+    monkeypatch.setattr(service, "projection_response", fake_projection_response)
+    payload = service.projection_compare(
+        player_keys="john-roe, jane-roe",
+        dataset="all",
+        career_totals=False,
+        year=2027,
+        years="2026,2027",
+        dynasty_years="2027",
+    )
+
+    assert seen["dataset"] == "all"
+    assert seen["player_keys"] == "jane-roe,john-roe"
+    assert seen["career_totals"] is False
+    assert seen["year"] == 2027
+    assert seen["years"] == "2026,2027"
+    assert seen["dynasty_years"] == "2027"
+    assert payload["requested_player_keys"] == ["jane-roe", "john-roe"]
+    assert payload["matched_player_keys"] == ["jane-roe", "john-roe"]
+    assert payload["total"] == 2
+
+
+def test_projection_compare_ignores_year_filters_in_career_totals_mode(monkeypatch) -> None:
+    service = _build_service()
+    seen: dict[str, object] = {}
+
+    def fake_projection_response(dataset: str, **kwargs):
+        seen["year"] = kwargs.get("year")
+        seen["years"] = kwargs.get("years")
+        seen["career_totals"] = kwargs.get("career_totals")
+        return {"total": 0, "offset": 0, "limit": 5000, "data": []}
+
+    monkeypatch.setattr(service, "projection_response", fake_projection_response)
+    payload = service.projection_compare(
+        player_keys="john-roe, jane-roe",
+        dataset="all",
+        career_totals=True,
+        year=2027,
+        years="2026,2027",
+    )
+
+    assert seen["career_totals"] is True
+    assert seen["year"] is None
+    assert seen["years"] is None
+    assert payload["career_totals"] is True
