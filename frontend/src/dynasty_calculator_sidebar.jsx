@@ -52,14 +52,12 @@ export function DynastyCalculatorSidebar({
     openMethodologyGlossary,
   } = actions;
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(Boolean(hasSuccessfulRun));
-  const [showDefaultsBanner, setShowDefaultsBanner] = useState(!hasSuccessfulRun);
   const beginnerMode = !hasSuccessfulRun && !showAdvancedSettings;
   const runActionLabel = beginnerMode ? "Run Dynasty Rankings" : "Apply To Main Table";
 
   useEffect(() => {
     if (!hasSuccessfulRun) return;
     setShowAdvancedSettings(true);
-    setShowDefaultsBanner(false);
   }, [hasSuccessfulRun]);
 
   function jumpToGlossaryTerm(term) {
@@ -73,30 +71,6 @@ export function DynastyCalculatorSidebar({
         <h3>League Settings</h3>
         <p className="calc-sidebar-intro">Configure format, roster depth, and scoring. Then apply custom dynasty values to the main projections table.</p>
       </div>
-      {showDefaultsBanner && (
-        <div className="calc-defaults-banner" role="status" aria-live="polite">
-          <p><strong>Recommended defaults are pre-filled.</strong> Run now, then open advanced settings to tune scoring and roster depth.</p>
-          <div className="calc-defaults-banner-actions">
-            <button
-              type="button"
-              className="calc-secondary-btn"
-              onClick={() => setShowDefaultsBanner(false)}
-            >
-              Dismiss
-            </button>
-            <button
-              type="button"
-              className="calc-secondary-btn"
-              onClick={() => {
-                setShowAdvancedSettings(true);
-                setShowDefaultsBanner(false);
-              }}
-            >
-              Open Advanced Settings
-            </button>
-          </div>
-        </div>
-      )}
 
       <div className="calc-summary-grid">
         <div className="calc-summary-chip">
@@ -116,11 +90,6 @@ export function DynastyCalculatorSidebar({
           <strong>{totalPlayersPerTeam} slots</strong>
         </div>
       </div>
-      {beginnerMode && (
-        <div className="calc-beginner-note" role="status" aria-live="polite">
-          Beginner mode is active. Teams, start year, horizon, and setup are the only required inputs for your first run.
-        </div>
-      )}
 
       <div className="calc-section">
         <p className="calc-section-title">Quick Start</p>

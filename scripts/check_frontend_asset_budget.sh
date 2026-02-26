@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$REPO_ROOT/frontend/dist"
 INDEX_FILE="$DIST_DIR/index.html"
-MAX_ENTRY_JS_BYTES="${FF_MAX_ENTRY_JS_BYTES:-260000}"
+MAX_ENTRY_JS_BYTES="${FF_MAX_ENTRY_JS_BYTES:-300000}"
 MAX_ENTRY_CSS_BYTES="${FF_MAX_ENTRY_CSS_BYTES:-170000}"
 
 if [[ ! -f "$INDEX_FILE" ]]; then

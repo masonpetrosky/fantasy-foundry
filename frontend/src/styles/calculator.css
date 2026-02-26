@@ -70,43 +70,6 @@
   color: var(--text-primary);
 }
 
-.calc-beginner-note {
-  margin: 0 0 14px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(212, 168, 83, 0.35);
-  background: linear-gradient(145deg, rgba(212, 168, 83, 0.12), rgba(212, 168, 83, 0.03));
-  color: var(--text-secondary);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-base);
-}
-
-.calc-defaults-banner {
-  margin: 0 0 14px;
-  padding: 10px 11px;
-  border-radius: 8px;
-  border: 1px solid rgba(212, 168, 83, 0.45);
-  background: linear-gradient(145deg, rgba(212, 168, 83, 0.18), rgba(212, 168, 83, 0.05));
-}
-
-.calc-defaults-banner p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-base);
-}
-
-.calc-defaults-banner strong {
-  color: var(--accent);
-}
-
-.calc-defaults-banner-actions {
-  margin-top: 9px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
 .calc-section {
   border-top: 1px solid var(--border-subtle);
   padding-top: 14px;

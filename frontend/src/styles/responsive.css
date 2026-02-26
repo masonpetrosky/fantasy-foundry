@@ -124,11 +124,6 @@
     text-align: center;
   }
 
-  .hero-freshness {
-    margin: -12px 0 24px;
-    max-width: none;
-  }
-
   .hero-stats {
     gap: 16px 24px;
     justify-content: flex-start;
@@ -168,18 +163,6 @@
 
   .activation-strip-link {
     align-self: flex-start;
-  }
-
-  .activation-reminder {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-
-  .activation-reminder-actions {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 8px;
   }
 
   .activation-diagnostics-header {
@@ -225,17 +208,11 @@
     grid-template-columns: 1fr;
   }
 
-  .calc-last-success-summary,
   .meta-error-panel {
     padding: 12px;
   }
 
   .meta-error-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .calc-last-success-actions {
     flex-direction: column;
     align-items: stretch;
   }
@@ -530,7 +507,6 @@
 
   .form-row { grid-template-columns: 1fr; gap: 10px; }
   .calc-summary-grid { grid-template-columns: 1fr; }
-  .calc-defaults-banner-actions { grid-template-columns: 1fr; }
   .calc-inline-actions { grid-template-columns: 1fr; }
   .explain-points-grid { grid-template-columns: 1fr; }
 

@@ -264,16 +264,6 @@
   color: var(--text-muted);
 }
 
-.data-freshness-banner {
-  margin: 0 0 12px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-muted);
-  font-size: var(--fs-xs);
-}
-
 .collection-toolbar {
   display: flex;
   flex-wrap: wrap;

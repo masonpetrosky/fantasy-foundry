@@ -322,13 +322,6 @@ header {
   color: var(--text-primary);
 }
 
-.hero-freshness {
-  margin: -18px auto 30px;
-  color: var(--text-muted);
-  font-size: var(--fs-sm);
-  max-width: 650px;
-}
-
 .hero-stats {
   display: flex;
   justify-content: center;
@@ -482,37 +475,6 @@ header {
 .activation-strip-dismiss:focus-visible {
   border-color: var(--accent-dim);
   color: var(--text-primary);
-}
-
-.activation-reminder {
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px dashed var(--border);
-  background: var(--bg-secondary);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-}
-
-.activation-reminder p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--fs-xs);
-  flex: 1 1 260px;
-}
-
-.activation-reminder-actions {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.activation-reminder-run {
-  border-color: rgba(212, 168, 83, 0.45);
-  color: var(--accent);
 }
 
 .activation-diagnostics-panel {
@@ -771,40 +733,6 @@ header {
 
 .activation-command-item .inline-btn {
   margin-top: 8px;
-}
-
-.app-freshness-banner {
-  margin-bottom: 12px;
-}
-
-.calc-last-success-summary {
-  margin: 0 0 12px;
-  padding: 11px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-}
-
-.calc-last-success-kicker {
-  margin: 0 0 4px;
-  color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: var(--fs-xs);
-  font-family: var(--ff-mono);
-}
-
-.calc-last-success-copy {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--fs-sm);
-}
-
-.calc-last-success-actions {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .error-boundary-panel {

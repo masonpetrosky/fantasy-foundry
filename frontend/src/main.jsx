@@ -12,7 +12,7 @@ import { installAnalyticsDebugBridge, setAnalyticsContext, trackEvent } from "./
 import { ErrorBoundary } from "./error_boundary.jsx";
 import { FeatureErrorBoundary } from "./feature_error_boundary.jsx";
 import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProjectionLayoutState.js";
-import { formatIsoDateLabel, resolveProjectionWindow } from "./formatting_utils.js";
+import { resolveProjectionWindow } from "./formatting_utils.js";
 import { useBottomSheet } from "./hooks/useBottomSheet.js";
 import { useCalculatorOverlay } from "./hooks/useCalculatorOverlay.js";
 import { useCalculatorState } from "./hooks/useCalculatorState.js";
@@ -91,15 +91,6 @@ function App() {
   const landingTrackedRef = useRef(false);
   const accountMenuLabel = !AUTH_SYNC_ENABLED || authUser ? "Account" : "Sign In";
   const sectionNeedsMeta = section === "projections";
-  const projectionFreshness = useMemo(() => (
-    meta?.projection_freshness && typeof meta.projection_freshness === "object" ? meta.projection_freshness : {}
-  ), [meta]);
-  const projectionCoveragePct = Number.isFinite(Number(projectionFreshness?.date_coverage_pct))
-    ? Number(projectionFreshness.date_coverage_pct)
-    : 0;
-  const projectionLastUpdated = String(
-    meta?.last_projection_update || projectionFreshness?.newest_projection_date || ""
-  ).trim();
   const projectionWindow = useMemo(() => resolveProjectionWindow(meta), [meta]);
   const resolvedScoringMode = String(calculatorSettings?.scoring_mode || "").trim().toLowerCase() === "points"
     ? "points"
@@ -109,10 +100,8 @@ function App() {
 
   const {
     showQuickStartOnboarding,
-    showQuickStartReminder,
     requestQuickStartRun,
     dismissQuickStartOnboarding,
-    reopenQuickStartOnboarding,
     handleRegisterQuickStartRunner,
   } = useQuickStart({
     meta,
@@ -234,9 +223,6 @@ function App() {
           <p>Comprehensive player projections from 2026 through 2045. Browse the data, configure your league settings, and generate personalized dynasty rankings.</p>
           {meta && (
             <>
-              <p className="hero-freshness" role="status">
-                Updated {formatIsoDateLabel(projectionLastUpdated)}. Coverage: {projectionCoveragePct.toFixed(1)}% of rows include projection dates.
-              </p>
               <div className="hero-stats fade-up fade-up-2">
                 <div className="hero-stat">
                   <div className="number">{meta.total_hitters}</div>
@@ -293,76 +279,11 @@ function App() {
               </button>
             </section>
           )}
-          {showQuickStartReminder && ACTIVATION_SPRINT_ENABLED && (
-            <section className="activation-reminder" aria-label="Quick start reminder">
-              <p>Quick start is hidden. Reopen it or run the default setup now.</p>
-              <div className="activation-reminder-actions">
-                <button
-                  type="button"
-                  className="inline-btn"
-                  onClick={reopenQuickStartOnboarding}
-                >
-                  Reopen Quick Start
-                </button>
-                <button
-                  type="button"
-                  className="inline-btn activation-reminder-run"
-                  onClick={() => requestQuickStartRun("roto", { source: "activation_reminder" })}
-                >
-                  Run Recommended 5x5 Roto
-                </button>
-              </div>
-            </section>
-          )}
           {activationDiagnosticsEnabled && (
             <ActivationDiagnosticsPanel
               section={section}
               dataVersion={dataVersion}
             />
-          )}
-          {sectionNeedsMeta && meta && (
-            <div className="data-freshness-banner app-freshness-banner" role="status" aria-live="polite">
-              Projection window {projectionWindow.start || "?"}-{projectionWindow.end || "?"} · Last updated {formatIsoDateLabel(projectionLastUpdated)} · Date coverage {projectionCoveragePct.toFixed(1)}%
-            </div>
-          )}
-          {sectionNeedsMeta && lastSuccessfulCalcRun && (
-            <section className="calc-last-success-summary" aria-label="Last successful calculator run">
-              <p className="calc-last-success-kicker">Last successful run</p>
-              <p className="calc-last-success-copy">
-                {lastSuccessfulCalcRun.teams}-team {lastSuccessfulCalcRun.scoringMode === "points" ? "points" : "roto"} ·
-                {" "}start {lastSuccessfulCalcRun.startYear || "default"} ·
-                {" "}{lastSuccessfulCalcRun.horizon}-year horizon ·
-                {" "}{lastSuccessfulCalcRun.playerCount.toLocaleString()} players ·
-                {" "}completed {formatIsoDateLabel(lastSuccessfulCalcRun.completedAt)}.
-              </p>
-              <div className="calc-last-success-actions">
-                <button
-                  type="button"
-                  className="inline-btn"
-                  onClick={() => {
-                    openCalculatorPanel("last_run_review");
-                    window.requestAnimationFrame(() => {
-                      scrollToCalculator();
-                      focusFirstCalculatorInput();
-                    });
-                  }}
-                >
-                  Review calculator settings
-                </button>
-                <button
-                  type="button"
-                  className="inline-btn"
-                  onClick={() => requestQuickStartRun(lastSuccessfulCalcRun.scoringMode, { source: "last_success_rerun" })}
-                >
-                  Run this setup again
-                </button>
-              </div>
-            </section>
-          )}
-          {sectionNeedsMeta && (
-            <p className="methodology-note app-methodology-note">
-              For glossary definitions and detailed valuation notes, open the <strong>Methodology</strong> tab.
-            </p>
           )}
           {sectionNeedsMeta && metaLoading && !metaError && !meta && (
             <p className="methodology-note">Loading projections metadata...</p>
@@ -477,7 +398,7 @@ function App() {
             </Suspense>
           )}
         </div>
-        {section === "projections" && meta && !showQuickStartOnboarding && !showQuickStartReminder && (
+        {section === "projections" && meta && !showQuickStartOnboarding && (
           <button
             type="button"
             className="mobile-run-cta"
