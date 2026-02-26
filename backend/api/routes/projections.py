@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Path, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.api.models import (
@@ -20,36 +20,36 @@ ProjectionCompareHandler = Callable[..., dict[str, Any]]
 
 
 class ProjectionListQueryParams(BaseModel):
-    player: str | None = None
-    team: str | None = None
-    player_keys: str | None = None
+    player: str | None = Field(default=None, max_length=200)
+    team: str | None = Field(default=None, max_length=10)
+    player_keys: str | None = Field(default=None, max_length=5000)
     year: int | None = None
-    years: str | None = None
-    pos: str | None = None
-    dynasty_years: str | None = None
+    years: str | None = Field(default=None, max_length=200)
+    pos: str | None = Field(default=None, max_length=50)
+    dynasty_years: str | None = Field(default=None, max_length=200)
     career_totals: bool = False
     include_dynasty: bool = True
-    calculator_job_id: str | None = None
-    sort_col: str | None = None
+    calculator_job_id: str | None = Field(default=None, max_length=100)
+    sort_col: str | None = Field(default=None, max_length=50)
     sort_dir: Literal["asc", "desc"] = "desc"
     limit: int = Field(default=200, ge=1, le=5000)
     offset: int = Field(default=0, ge=0)
 
 
 class ProjectionExportQueryParams(BaseModel):
-    player: str | None = None
-    team: str | None = None
-    player_keys: str | None = None
+    player: str | None = Field(default=None, max_length=200)
+    team: str | None = Field(default=None, max_length=10)
+    player_keys: str | None = Field(default=None, max_length=5000)
     year: int | None = None
-    years: str | None = None
-    pos: str | None = None
-    dynasty_years: str | None = None
+    years: str | None = Field(default=None, max_length=200)
+    pos: str | None = Field(default=None, max_length=50)
+    dynasty_years: str | None = Field(default=None, max_length=200)
     career_totals: bool = False
     include_dynasty: bool = True
-    calculator_job_id: str | None = None
-    sort_col: str | None = None
+    calculator_job_id: str | None = Field(default=None, max_length=100)
+    sort_col: str | None = Field(default=None, max_length=50)
     sort_dir: Literal["asc", "desc"] = "desc"
-    columns: str | None = None
+    columns: str | None = Field(default=None, max_length=2000)
 
 
 PROJECTION_ERROR_RESPONSES = {
@@ -144,10 +144,10 @@ def build_projections_router(
     @router.get("/api/projections/player/{player_id}", response_model=ProjectionListResponse, responses=PROJECTION_ERROR_RESPONSES)
     def get_player_projection_series(
         request: Request,
-        player_id: str,
+        player_id: str = Path(max_length=100),
         dataset: Literal["all", "bat", "pitch"] = "all",
         include_dynasty: bool = True,
-        calculator_job_id: str | None = None,
+        calculator_job_id: str | None = Query(default=None, max_length=100),
     ):
         return projection_response_handler(
             dataset,
@@ -175,10 +175,10 @@ def build_projections_router(
     )
     def get_projection_profile(
         request: Request,
-        player_id: str,
+        player_id: str = Path(max_length=100),
         dataset: Literal["all", "bat", "pitch"] = "all",
         include_dynasty: bool = True,
-        calculator_job_id: str | None = None,
+        calculator_job_id: str | None = Query(default=None, max_length=100),
     ):
         return projection_profile_handler(
             request=request,
@@ -195,14 +195,14 @@ def build_projections_router(
     )
     def compare_projection_profiles(
         request: Request,
-        player_keys: str = Query(..., min_length=1),
+        player_keys: str = Query(..., min_length=1, max_length=5000),
         dataset: Literal["all", "bat", "pitch"] = "all",
         include_dynasty: bool = True,
-        calculator_job_id: str | None = None,
+        calculator_job_id: str | None = Query(default=None, max_length=100),
         career_totals: bool = True,
         year: int | None = None,
-        years: str | None = None,
-        dynasty_years: str | None = None,
+        years: str | None = Query(default=None, max_length=200),
+        dynasty_years: str | None = Query(default=None, max_length=200),
     ):
         return projection_compare_handler(
             request=request,

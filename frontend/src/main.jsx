@@ -16,6 +16,7 @@ import { useCalculatorState } from "./hooks/useCalculatorState.js";
 import { useMetadata } from "./hooks/useMetadata.js";
 import { useQuickStart } from "./hooks/useQuickStart.js";
 import { useVersionPolling } from "./hooks/useVersionPolling.js";
+import { useAccountMenu } from "./hooks/useAccountMenu.js";
 import { useAccountSync } from "./hooks/useAccountSync.js";
 import {
   readLastSuccessfulCalcRun,
@@ -75,8 +76,7 @@ function App() {
     watchlist,
     setWatchlist,
   });
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const accountMenuRef = useRef(null);
+  const { accountMenuOpen, setAccountMenuOpen, accountMenuRef, accountTriggerRef } = useAccountMenu({ section });
   const landingTrackedRef = useRef(false);
   const accountMenuLabel = !AUTH_SYNC_ENABLED || authUser ? "Account" : "Sign In";
   const sectionNeedsMeta = section === "projections";
@@ -150,35 +150,6 @@ function App() {
     writePlayerWatchlist(watchlist);
   }, [watchlist]);
 
-  useEffect(() => {
-    if (!accountMenuOpen) return undefined;
-
-    function handleOutsideClick(event) {
-      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target)) {
-        setAccountMenuOpen(false);
-      }
-    }
-
-    function handleEscape(event) {
-      if (event.key === "Escape") {
-        setAccountMenuOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleOutsideClick);
-    document.addEventListener("touchstart", handleOutsideClick);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-      document.removeEventListener("touchstart", handleOutsideClick);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [accountMenuOpen]);
-
-  useEffect(() => {
-    setAccountMenuOpen(false);
-  }, [section]);
-
   return (
     <>
       <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -219,6 +190,7 @@ function App() {
           <div className="account-menu" ref={accountMenuRef}>
             <button
               type="button"
+              ref={accountTriggerRef}
               className={`inline-btn account-menu-btn ${accountMenuOpen ? "open" : ""}`.trim()}
               onClick={() => setAccountMenuOpen(open => !open)}
               aria-expanded={accountMenuOpen}

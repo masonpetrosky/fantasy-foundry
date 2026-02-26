@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Path, Request
 from pydantic import BaseModel
 
 CalculateRequestModel = type[BaseModel]
@@ -42,11 +42,11 @@ def build_calculate_router(
         return calculate_job_create_handler(req, request)
 
     @router.get("/api/calculate/jobs/{job_id}")
-    def get_calculate_dynasty_job(job_id: str, request: Request):
+    def get_calculate_dynasty_job(job_id: str = Path(max_length=100), *, request: Request):
         return calculate_job_read_handler(job_id, request)
 
     @router.delete("/api/calculate/jobs/{job_id}")
-    def cancel_calculate_dynasty_job(job_id: str, request: Request):
+    def cancel_calculate_dynasty_job(job_id: str = Path(max_length=100), *, request: Request):
         return calculate_job_cancel_handler(job_id, request)
 
     return router

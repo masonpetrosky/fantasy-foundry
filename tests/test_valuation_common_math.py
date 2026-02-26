@@ -335,6 +335,136 @@ def test_replacement_and_vs_replacement_paths_smoke() -> None:
     assert len(pit_vals) == 1
 
 
+def test_zscore_returns_zeros_when_all_equal() -> None:
+    s = pd.Series([5.0, 5.0, 5.0])
+    result = common_math._zscore(s)
+    assert (result == 0.0).all()
+
+
+def test_zscore_returns_zeros_for_single_value() -> None:
+    s = pd.Series([3.14])
+    result = common_math._zscore(s)
+    assert (result == 0.0).all()
+
+
+def test_zscore_normal_case() -> None:
+    s = pd.Series([1.0, 2.0, 3.0])
+    result = common_math._zscore(s)
+    assert result.iloc[0] < 0  # Below mean
+    assert abs(result.iloc[1]) < 1e-10  # At mean
+    assert result.iloc[2] > 0  # Above mean
+
+
+def test_positive_credit_scale_zero_slot_volume() -> None:
+    scale = common_math._positive_credit_scale(
+        player_volume=50.0,
+        slot_volume_reference=0.0,
+    )
+    assert scale == 1.0
+
+
+def test_positive_credit_scale_full_credit() -> None:
+    scale = common_math._positive_credit_scale(
+        player_volume=200.0,
+        slot_volume_reference=200.0,
+    )
+    assert scale == 1.0
+
+
+def test_positive_credit_scale_below_min_share() -> None:
+    scale = common_math._positive_credit_scale(
+        player_volume=10.0,
+        slot_volume_reference=200.0,
+        min_share_for_positive_credit=0.35,
+    )
+    assert scale == 0.0
+
+
+def test_positive_credit_scale_linear_interpolation() -> None:
+    # 50% share, min=0.35, full=1.0 → linear between 0 and 1
+    scale = common_math._positive_credit_scale(
+        player_volume=100.0,
+        slot_volume_reference=200.0,
+        min_share_for_positive_credit=0.35,
+        full_share_for_positive_credit=1.00,
+    )
+    assert 0.0 < scale < 1.0
+    expected = (0.5 - 0.35) / (1.0 - 0.35)
+    assert math.isclose(scale, expected, rel_tol=1e-6)
+
+
+def test_positive_credit_scale_inverted_min_full() -> None:
+    # When full_share <= min_share, binary behavior
+    scale = common_math._positive_credit_scale(
+        player_volume=60.0,
+        slot_volume_reference=100.0,
+        min_share_for_positive_credit=0.80,
+        full_share_for_positive_credit=0.50,
+    )
+    assert scale == 1.0  # share=0.6 >= full_share=0.5
+
+
+def test_mean_adjacent_rank_gap_basic() -> None:
+    values = np.array([1.0, 3.0, 6.0, 10.0])
+    gap = common_math._mean_adjacent_rank_gap(values, ascending=True)
+    # Sorted ascending: [1, 3, 6, 10] → diffs = [2, 3, 4] → mean = 3.0
+    assert math.isclose(gap, 3.0)
+
+
+def test_mean_adjacent_rank_gap_descending() -> None:
+    values = np.array([1.0, 3.0, 6.0, 10.0])
+    gap = common_math._mean_adjacent_rank_gap(values, ascending=False)
+    # Sorted descending: [10, 6, 3, 1] → diffs = [4, 3, 2] → mean = 3.0
+    assert math.isclose(gap, 3.0)
+
+
+def test_mean_adjacent_rank_gap_single_value() -> None:
+    assert common_math._mean_adjacent_rank_gap(np.array([5.0]), ascending=True) == 0.0
+
+
+def test_mean_adjacent_rank_gap_with_nan_inf() -> None:
+    values = np.array([1.0, float("nan"), 3.0, float("inf"), 5.0])
+    gap = common_math._mean_adjacent_rank_gap(values, ascending=True)
+    # After filtering: [1, 3, 5] → diffs = [2, 2] → mean = 2.0
+    assert math.isclose(gap, 2.0)
+
+
+def test_mean_adjacent_rank_gap_robust_winsorizing() -> None:
+    values = np.array([1.0, 2.0, 3.0, 4.0, 100.0])
+    gap_classic = common_math._mean_adjacent_rank_gap(values, ascending=True, robust=False)
+    gap_robust = common_math._mean_adjacent_rank_gap(
+        values, ascending=True, robust=True, winsor_low_pct=0.1, winsor_high_pct=0.9,
+    )
+    # Robust clips outlier diffs, so gap_robust <= gap_classic
+    assert gap_robust <= gap_classic
+
+
+def test_common_hit_category_totals_basic() -> None:
+    totals = {
+        "AB": 500.0, "H": 150.0, "R": 80.0, "HR": 25.0, "RBI": 90.0,
+        "SB": 10.0, "BB": 60.0, "HBP": 3.0, "SF": 4.0, "2B": 30.0, "3B": 2.0,
+    }
+    result = common_math.common_hit_category_totals(totals)
+    assert math.isclose(result["AVG"], 150 / 500)
+    # OBP = (H + BB + HBP) / (AB + BB + HBP + SF)
+    assert math.isclose(result["OBP"], (150 + 60 + 3) / (500 + 60 + 3 + 4))
+    # TB = H + 2B + 2*3B + 3*HR
+    expected_tb = 150 + 30 + 2 * 2 + 3 * 25
+    assert math.isclose(result["TB"], expected_tb)
+
+
+def test_common_replacement_pitcher_rates_empty_pool() -> None:
+    assigned_pit = pd.DataFrame([
+        {"Player": "P1", "IP": 150.0, "W": 10.0, "K": 150.0, "SV": 0.0, "SVH": 0.0,
+         "QS": 15.0, "QA3": 18.0, "ER": 50.0, "H": 130.0, "BB": 40.0,
+         "ERA": 3.0, "WHIP": 1.13, "AssignedSlot": "P", "weight": 5.0}
+    ])
+    all_pit = assigned_pit.copy()  # Only the rostered pitcher exists
+    rates = common_math.common_replacement_pitcher_rates(all_pit, assigned_pit, n_rep=5)
+    # All rates should be 0 since there are no free agents
+    assert all(v == 0.0 for v in rates.values())
+
+
 def test_combine_two_way_supports_max_and_sum() -> None:
     hit_vals = pd.DataFrame(
         [

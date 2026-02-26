@@ -43,10 +43,16 @@ ENV FF_CALC_MAX_ACTIVE_JOBS_TOTAL=24
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+RUN useradd --system --no-create-home appuser
+
 COPY backend ./backend
 COPY frontend ./frontend
 COPY data ./data
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
+
+RUN chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 8000
 

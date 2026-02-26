@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal, Optional
 from uuid import uuid4
@@ -157,47 +158,47 @@ class CalculateExportRequest(CalculateRequest):
 
 @dataclass(slots=True)
 class CalculatorServiceContext:
-    refresh_data_if_needed: callable
-    coerce_meta_years: callable
-    get_meta: callable
-    calc_result_cache_key: callable
-    result_cache_get: callable
-    result_cache_set: callable
-    calculate_common_dynasty_frame_cached: callable
-    calculate_points_dynasty_frame_cached: callable
-    roto_category_settings_from_dict: callable
-    is_user_fixable_calculation_error: callable
-    player_identity_by_name: callable
-    normalize_player_key: callable
+    refresh_data_if_needed: Callable
+    coerce_meta_years: Callable
+    get_meta: Callable
+    calc_result_cache_key: Callable
+    result_cache_get: Callable
+    result_cache_set: Callable
+    calculate_common_dynasty_frame_cached: Callable
+    calculate_points_dynasty_frame_cached: Callable
+    roto_category_settings_from_dict: Callable
+    is_user_fixable_calculation_error: Callable
+    player_identity_by_name: Callable
+    normalize_player_key: Callable
     player_key_col: str
     player_entity_key_col: str
-    selected_roto_categories: callable
-    start_year_roto_stats_by_entity: callable
-    projection_identity_key: callable
-    build_calculation_explanations: callable
-    clean_records_for_json: callable
-    flatten_explanations_for_export: callable
-    tabular_export_response: callable
+    selected_roto_categories: Callable
+    start_year_roto_stats_by_entity: Callable
+    projection_identity_key: Callable
+    build_calculation_explanations: Callable
+    clean_records_for_json: Callable
+    flatten_explanations_for_export: Callable
+    tabular_export_response: Callable
     calc_logger: Any
-    enforce_rate_limit: callable
+    enforce_rate_limit: Callable
     sync_rate_limit_per_minute: int
     sync_auth_rate_limit_per_minute: int
     job_create_rate_limit_per_minute: int
     job_create_auth_rate_limit_per_minute: int
     job_status_rate_limit_per_minute: int
     job_status_auth_rate_limit_per_minute: int
-    client_ip: callable
-    iso_now: callable
-    active_jobs_for_ip: callable
+    client_ip: Callable
+    iso_now: Callable
+    active_jobs_for_ip: Callable
     calculator_max_active_jobs_per_ip: int
     calculator_max_active_jobs_total: int
     calculator_job_lock: Any
     calculator_jobs: dict[str, dict]
-    cleanup_calculation_jobs: callable
-    cache_calculation_job_snapshot: callable
-    cached_calculation_job_snapshot: callable
-    calculation_job_public_payload: callable
-    mark_job_cancelled_locked: callable
+    cleanup_calculation_jobs: Callable
+    cache_calculation_job_snapshot: Callable
+    cached_calculation_job_snapshot: Callable
+    calculation_job_public_payload: Callable
+    mark_job_cancelled_locked: Callable
     calculator_job_executor: Any
     calc_job_cancelled_status: str
 
@@ -276,7 +277,7 @@ class CalculatorService:
             if req.scoring_mode == "points"
             else self._ctx.calculate_common_dynasty_frame_cached
         )
-        cache_before = active_cache.cache_info()
+        cache_before = active_cache.cache_info()  # type: ignore[attr-defined]  # lru_cache
         result_cache_key = self._ctx.calc_result_cache_key(settings)
         result_cache_hit = False
         status_code = 200
@@ -482,7 +483,7 @@ class CalculatorService:
             raise HTTPException(status_code=500, detail="Internal calculator error.") from exc
         finally:
             duration_ms = round((time.perf_counter() - started) * 1000.0, 1)
-            cache_after = active_cache.cache_info()
+            cache_after = active_cache.cache_info()  # type: ignore[attr-defined]  # lru_cache
             cache_event = "none"
             if result_cache_hit:
                 cache_event = "result-cache-hit"

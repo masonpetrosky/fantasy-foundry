@@ -164,7 +164,7 @@ jobs:
           pip install -r requirements.txt mypy
 
       - name: Run Backend Type Checks
-        run: mypy backend/api/middleware.py backend/core/settings.py backend/core/networking.py backend/core/rate_limit.py backend/core/result_cache.py backend/core/jobs.py backend/core/data_refresh.py
+        run: mypy backend/api/middleware.py backend/core/settings.py backend/core/networking.py backend/core/rate_limit.py backend/core/result_cache.py backend/core/jobs.py backend/core/data_refresh.py backend/valuation/models.py backend/services/calculator/service.py
 
   unit-tests:
     if: github.event_name != 'schedule'
