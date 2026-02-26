@@ -13,6 +13,8 @@ export const ProjectionResultsShell = React.memo(function ProjectionResultsShell
   cardRowsMarkup,
   showMobileSwipeHint,
   swipeHintText,
+  canScrollLeft,
+  canScrollRight,
   showInlineRefreshError,
   loading,
   cols,
@@ -28,6 +30,7 @@ export const ProjectionResultsShell = React.memo(function ProjectionResultsShell
   offset,
   setOffset,
 }) {
+  const scrollIndicatorClass = `table-scroll-indicators${canScrollLeft ? " can-scroll-left" : ""}${canScrollRight ? " can-scroll-right" : ""}`;
   return (
     <>
       {showCards && (
@@ -71,6 +74,7 @@ export const ProjectionResultsShell = React.memo(function ProjectionResultsShell
       {(!showCards || totalRows > limit) && (
         <div className="table-wrapper">
           {!showCards && (
+            <div className={scrollIndicatorClass}>
             <div className="table-scroll" ref={projectionTableScrollRef} onScroll={onTableScroll}>
               <table className="projections-table">
                 <thead>
@@ -118,6 +122,7 @@ export const ProjectionResultsShell = React.memo(function ProjectionResultsShell
                   )}
                 </tbody>
               </table>
+            </div>
             </div>
           )}
           {totalRows > limit && (

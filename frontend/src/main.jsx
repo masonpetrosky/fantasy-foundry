@@ -7,10 +7,13 @@ import { ActivationDiagnosticsPanel, resolveActivationDiagnosticsPanelEnabled } 
 import { resolveApiBase } from "./api_base.js";
 import { PRIMARY_NAV_ITEMS } from "./app_content.js";
 import { ProjectionsExplorer } from "./projections_explorer.jsx";
+import { MobileCalculatorSheet } from "./MobileCalculatorSheet.jsx";
 import { installAnalyticsDebugBridge, setAnalyticsContext, trackEvent } from "./analytics.js";
 import { ErrorBoundary } from "./error_boundary.jsx";
 import { FeatureErrorBoundary } from "./feature_error_boundary.jsx";
+import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProjectionLayoutState.js";
 import { formatIsoDateLabel, resolveProjectionWindow } from "./formatting_utils.js";
+import { useBottomSheet } from "./hooks/useBottomSheet.js";
 import { useCalculatorOverlay } from "./hooks/useCalculatorOverlay.js";
 import { useCalculatorState } from "./hooks/useCalculatorState.js";
 import { useMetadata } from "./hooks/useMetadata.js";
@@ -77,6 +80,14 @@ function App() {
     setWatchlist,
   });
   const { accountMenuOpen, setAccountMenuOpen, accountMenuRef, accountTriggerRef } = useAccountMenu({ section });
+  const bottomSheet = useBottomSheet();
+  const [isMobileViewport, setIsMobileViewport] = useState(() => window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches);
+  useEffect(() => {
+    const mql = window.matchMedia(MOBILE_BREAKPOINT_QUERY);
+    const handler = (e) => setIsMobileViewport(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
   const landingTrackedRef = useRef(false);
   const accountMenuLabel = !AUTH_SYNC_ENABLED || authUser ? "Account" : "Sign In";
   const sectionNeedsMeta = section === "projections";
@@ -390,19 +401,24 @@ function App() {
                     type="button"
                     className={`embedded-calculator-toggle ${calculatorPanelOpen ? "open" : ""}`.trim()}
                     onClick={() => {
-                      setCalculatorPanelOpen(current => {
-                        const nextValue = !current;
-                        if (nextValue) {
-                          calculatorPanelOpenSourceRef.current = "panel_toggle";
-                        }
-                        return nextValue;
-                      });
+                      if (isMobileViewport) {
+                        openCalculatorPanel("panel_toggle");
+                        bottomSheet.open();
+                      } else {
+                        setCalculatorPanelOpen(current => {
+                          const nextValue = !current;
+                          if (nextValue) {
+                            calculatorPanelOpenSourceRef.current = "panel_toggle";
+                          }
+                          return nextValue;
+                        });
+                      }
                     }}
-                    aria-expanded={calculatorPanelOpen}
+                    aria-expanded={isMobileViewport ? bottomSheet.isOpen : calculatorPanelOpen}
                     aria-controls="embedded-calculator-content"
                   >
                     <span className="embedded-calculator-toggle-label">
-                      {calculatorPanelOpen ? "Hide Calculator" : "Show Calculator"}
+                      {(isMobileViewport ? bottomSheet.isOpen : calculatorPanelOpen) ? "Hide Calculator" : "Show Calculator"}
                     </span>
                     <span className="embedded-calculator-toggle-chevron" aria-hidden="true">v</span>
                   </button>
@@ -410,7 +426,7 @@ function App() {
                 <p className="methodology-note embedded-calculator-note">
                   Configure your league settings and apply custom dynasty values directly in the projections table.
                 </p>
-                {calculatorPanelOpen && (
+                {calculatorPanelOpen && !isMobileViewport && (
                   <div id="embedded-calculator-content" className="embedded-calculator-content">
                     <FeatureErrorBoundary featureName="Dynasty Calculator">
                     <Suspense fallback={<p className="methodology-note">Loading calculator...</p>}>
@@ -467,14 +483,46 @@ function App() {
             className="mobile-run-cta"
             onClick={() => {
               openCalculatorPanel("mobile_cta");
-              window.requestAnimationFrame(() => {
-                scrollToCalculator();
-                focusFirstCalculatorInput();
-              });
+              if (isMobileViewport) {
+                bottomSheet.open();
+              } else {
+                window.requestAnimationFrame(() => {
+                  scrollToCalculator();
+                  focusFirstCalculatorInput();
+                });
+              }
             }}
           >
             Run Dynasty Rankings
           </button>
+        )}
+        {isMobileViewport && (
+          <MobileCalculatorSheet
+            isOpen={bottomSheet.isOpen}
+            onClose={bottomSheet.close}
+            sheetRef={bottomSheet.sheetRef}
+            dragHandleProps={bottomSheet.dragHandleProps}
+            sheetStyle={bottomSheet.sheetStyle}
+          >
+            <FeatureErrorBoundary featureName="Dynasty Calculator">
+              <Suspense fallback={<p className="methodology-note">Loading calculator...</p>}>
+                <LazyDynastyCalculator
+                  apiBase={API}
+                  meta={meta}
+                  presets={presets}
+                  setPresets={setPresets}
+                  hasSuccessfulRun={Boolean(lastSuccessfulCalcRun)}
+                  onSettingsChange={setCalculatorSettings}
+                  onApplyToMainTable={applyCalculatorOverlay}
+                  onCalculationSuccess={handleCalculationSuccess}
+                  onClearMainTableOverlay={clearCalculatorOverlay}
+                  mainTableOverlayActive={calculatorOverlayActive}
+                  onRegisterQuickStartRunner={handleRegisterQuickStartRunner}
+                  onOpenMethodologyGlossary={openMethodologyGlossary}
+                />
+              </Suspense>
+            </FeatureErrorBoundary>
+          </MobileCalculatorSheet>
         )}
       </main>
 

@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useRef, useState } from "react";
+import React, { useCallback, useId, useMemo, useRef, useState } from "react";
 import { ColumnChooserControl } from "../../../ui_components.jsx";
 import {
   MenuButton,
@@ -94,6 +94,18 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
   }
 
   const filterToggleId = `${posMenuId}-filter-toggle`;
+  const [filterDiscoverable, setFilterDiscoverable] = useState(() => {
+    try { return !localStorage.getItem("ff:filter-drawer-discovered"); } catch { return false; }
+  });
+  const handleFilterToggle = useCallback(() => {
+    setFilterExpanded(v => {
+      if (!v && filterDiscoverable) {
+        try { localStorage.setItem("ff:filter-drawer-discovered", "1"); } catch { /* noop */ }
+        setFilterDiscoverable(false);
+      }
+      return !v;
+    });
+  }, [filterDiscoverable]);
 
   return (
     <>
@@ -101,10 +113,10 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
         <button
           id={filterToggleId}
           type="button"
-          className={`inline-btn filter-mobile-toggle ${filterExpanded ? "open" : ""}`.trim()}
+          className={`inline-btn filter-mobile-toggle${filterExpanded ? " open" : ""}${filterDiscoverable && !filterExpanded ? " discoverable" : ""}`}
           aria-expanded={filterExpanded}
           aria-controls="filter-controls-panel"
-          onClick={() => setFilterExpanded(v => !v)}
+          onClick={handleFilterToggle}
         >
           {hasActiveFilters ? `Filters (${activeFilterChips.length} active)` : "Filters"}
           <span aria-hidden="true">{filterExpanded ? " ▲" : " ▼"}</span>

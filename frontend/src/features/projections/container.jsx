@@ -474,6 +474,8 @@ export function ProjectionsExplorer({
         cardRowsMarkup={cardRowsMarkup}
         showMobileSwipeHint={showMobileSwipeHint}
         swipeHintText={swipeHintModel.swipeHintText}
+        canScrollLeft={canScrollLeft}
+        canScrollRight={canScrollRight}
         showInlineRefreshError={showInlineRefreshError}
         loading={loading}
         cols={cols}
