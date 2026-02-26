@@ -432,6 +432,29 @@
   color: var(--text-primary);
 }
 
+.calc-tooltip-wrapper {
+  position: relative;
+  display: inline;
+}
+
+.calc-tooltip-popup {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-base);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  white-space: normal;
+}
+
 .calc-preset-status {
   margin: -4px 0 10px;
   font-size: var(--fs-xs);

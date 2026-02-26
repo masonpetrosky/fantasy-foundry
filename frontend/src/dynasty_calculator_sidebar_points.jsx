@@ -3,13 +3,13 @@ import {
   POINTS_BATTING_FIELDS,
   POINTS_PITCHING_FIELDS,
 } from "./dynasty_calculator_config.js";
+import { CalcTooltip } from "./dynasty_calculator_tooltip.jsx";
 
 export const PointsScoringForm = React.memo(function PointsScoringForm({
   settings,
   update,
   pointRulesCount,
   resetPointsScoringDefaults,
-  jumpToGlossaryTerm,
 }) {
   return (
     <div className="calc-section">
@@ -17,7 +17,7 @@ export const PointsScoringForm = React.memo(function PointsScoringForm({
       <p className="calc-note">
         Edit category points below. Defaults align with a common H2H points format ({pointRulesCount} categories).
         {" "}
-        <button type="button" className="calc-method-link" onClick={() => jumpToGlossaryTerm("Dynasty Value")}>Dynasty value context</button>
+        <CalcTooltip label="Dynasty value context">A multi-year estimate of player worth that weighs present production, future seasons, and replacement context instead of only one season.</CalcTooltip>
       </p>
       <p className="calc-subheading">Batting</p>
       <div className="form-row">

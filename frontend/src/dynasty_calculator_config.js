@@ -106,11 +106,6 @@ const ROTO_CATEGORY_FIELDS = [...ROTO_HITTER_CATEGORY_FIELDS, ...ROTO_PITCHER_CA
 export const ROTO_RATE_STAT_COLS = new Set(["AVG", "OBP", "SLG", "OPS", "ERA", "WHIP"]);
 export const ROTO_THREE_DECIMAL_RATE_COLS = new Set(["AVG", "OBP", "SLG", "OPS"]);
 export const ROTO_COUNTING_STAT_COLS = new Set(["R", "RBI", "HR", "SB", "H", "BB", "2B", "TB", "W", "K", "SV", "QS", "QA3", "SVH"]);
-export const PREDICTIVE_TOGGLE_FIELDS = [
-  { key: "enable_playing_time_reliability", label: "Playing-Time Reliability", defaultValue: false },
-  { key: "enable_age_risk_adjustment", label: "Age Risk Adjustment", defaultValue: false },
-  { key: "enable_replacement_blend", label: "Replacement Blend", defaultValue: false },
-];
 
 export function coerceBooleanSetting(value, fallback = false) {
   if (typeof value === "boolean") return value;

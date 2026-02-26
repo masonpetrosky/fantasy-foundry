@@ -4,6 +4,7 @@ import {
   ROTO_PITCHER_CATEGORY_FIELDS,
   coerceBooleanSetting,
 } from "./dynasty_calculator_config.js";
+import { CalcTooltip } from "./dynasty_calculator_tooltip.jsx";
 
 export const RotoCategoriesForm = React.memo(function RotoCategoriesForm({
   settings,
@@ -11,7 +12,6 @@ export const RotoCategoriesForm = React.memo(function RotoCategoriesForm({
   selectedRotoHitCategoryCount,
   selectedRotoPitchCategoryCount,
   resetRotoCategoryDefaults,
-  jumpToGlossaryTerm,
 }) {
   return (
     <div className="calc-section">
@@ -19,7 +19,7 @@ export const RotoCategoriesForm = React.memo(function RotoCategoriesForm({
       <p className="calc-note">
         Choose which categories count toward value in roto mode ({selectedRotoHitCategoryCount} hitting, {selectedRotoPitchCategoryCount} pitching).
         {" "}
-        <button type="button" className="calc-method-link" onClick={() => jumpToGlossaryTerm("Category Impact")}>How category impact works</button>
+        <CalcTooltip label="How category impact works">How much a player&#39;s projected stats move a category relative to league context, roster slots, and innings constraints.</CalcTooltip>
       </p>
 
       <p className="calc-subheading">Hitting</p>

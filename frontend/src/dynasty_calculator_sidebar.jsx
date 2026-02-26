@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { glossaryTermAnchorId } from "./app_content.js";
-import { coerceBooleanSetting } from "./dynasty_calculator_config.js";
+import React from "react";
+import { CalcTooltip } from "./dynasty_calculator_tooltip.jsx";
 import { RotoCategoriesForm } from "./dynasty_calculator_sidebar_categories.jsx";
 import { PointsScoringForm } from "./dynasty_calculator_sidebar_points.jsx";
 import { StarterSlotsForm } from "./dynasty_calculator_sidebar_slots.jsx";
@@ -49,21 +48,8 @@ export function DynastyCalculatorSidebar({
     selectPreset,
     setPresetName,
     update,
-    openMethodologyGlossary,
   } = actions;
-  const [showAdvancedSettings, setShowAdvancedSettings] = useState(Boolean(hasSuccessfulRun));
-  const beginnerMode = !hasSuccessfulRun && !showAdvancedSettings;
-  const runActionLabel = beginnerMode ? "Run Dynasty Rankings" : "Apply To Main Table";
-
-  useEffect(() => {
-    if (!hasSuccessfulRun) return;
-    setShowAdvancedSettings(true);
-  }, [hasSuccessfulRun]);
-
-  function jumpToGlossaryTerm(term) {
-    if (typeof openMethodologyGlossary !== "function") return;
-    openMethodologyGlossary(glossaryTermAnchorId(term));
-  }
+  const runActionLabel = hasSuccessfulRun ? "Apply To Main Table" : "Run Dynasty Rankings";
 
   return (
     <div className="calc-sidebar">
@@ -119,11 +105,11 @@ export function DynastyCalculatorSidebar({
         <p className="calc-note calc-note-links">
           Definitions:
           {" "}
-          <button type="button" className="calc-method-link" onClick={() => jumpToGlossaryTerm("Projection Window")}>Projection Window</button>
+          <CalcTooltip label="Projection Window">The year range included in valuation. Fantasy Foundry provides projections from 2026 through 2045.</CalcTooltip>
           {" · "}
-          <button type="button" className="calc-method-link" onClick={() => jumpToGlossaryTerm("League Configuration")}>League Configuration</button>
+          <CalcTooltip label="League Configuration">Your teams, roster slots, scoring categories, and innings rules. The calculator uses this setup to produce custom rankings.</CalcTooltip>
           {" · "}
-          <button type="button" className="calc-method-link" onClick={() => jumpToGlossaryTerm("SGP (Standings Gain Points)")}>SGP</button>
+          <CalcTooltip label="SGP">A way to convert raw stats into standings movement. One SGP estimates the amount of production needed to gain one place in a category.</CalcTooltip>
         </p>
 
         <div className="form-row">
@@ -165,387 +151,209 @@ export function DynastyCalculatorSidebar({
         </div>
         <p className="calc-note">Switching setup applies the recommended slot defaults for that format.</p>
 
-        {showAdvancedSettings && (
-          <>
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="calc-discount">
-                  Discount
-                  <span
-                    className="field-help"
-                    tabIndex={0}
-                    role="note"
-                    aria-label="Discount help"
-                    title="Applies a yearly value multiplier. Example: 0.94 means each future season is worth 94% of the previous season."
-                  >
-                    ?
-                  </span>
-                </label>
-                <input id="calc-discount" type="number" value={settings.discount} onChange={e => update("discount", e.target.value)} min="0.5" max="1" step="0.01" />
-              </div>
-              <div className="form-group">
-                <label htmlFor="calc-two-way">
-                  Two-Way Value
-                  <span
-                    className="field-help"
-                    tabIndex={0}
-                    role="note"
-                    aria-label="Two-Way Value help"
-                    title="Sum H + P combines both sides for two-way players. Best of H/P keeps whichever side grades higher."
-                  >
-                    ?
-                  </span>
-                </label>
-                <select id="calc-two-way" value={settings.two_way} onChange={e => update("two_way", e.target.value)}>
-                  <option value="sum">Sum H + P</option>
-                  <option value="max">Best of H/P</option>
-                </select>
-              </div>
-            </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="calc-discount">
+              Discount
+              <span
+                className="field-help"
+                tabIndex={0}
+                role="note"
+                aria-label="Discount help"
+                title="Applies a yearly value multiplier. Example: 0.94 means each future season is worth 94% of the previous season."
+              >
+                ?
+              </span>
+            </label>
+            <input id="calc-discount" type="number" value={settings.discount} onChange={e => update("discount", e.target.value)} min="0.5" max="1" step="0.01" />
+          </div>
+          <div className="form-group">
+            <label htmlFor="calc-two-way">
+              Two-Way Value
+              <span
+                className="field-help"
+                tabIndex={0}
+                role="note"
+                aria-label="Two-Way Value help"
+                title="Sum H + P combines both sides for two-way players. Best of H/P keeps whichever side grades higher."
+              >
+                ?
+              </span>
+            </label>
+            <select id="calc-two-way" value={settings.two_way} onChange={e => update("two_way", e.target.value)}>
+              <option value="sum">Sum H + P</option>
+              <option value="max">Best of H/P</option>
+            </select>
+          </div>
+        </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="calc-sims">Simulations</label>
-                <input
-                  id="calc-sims"
-                  type="number"
-                  value={settings.sims}
-                  onChange={e => update("sims", e.target.value)}
-                  min="50"
-                  max="1000"
-                  step="50"
-                  disabled={isPointsMode}
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="calc-recent-projections">
-                  Recent Proj.
-                  <span
-                    className="field-help"
-                    tabIndex={0}
-                    role="note"
-                    aria-label="Recent projections help"
-                    title="Number of newest projection sets averaged per player-year (1-10). Higher values smooth volatility."
-                  >
-                    ?
-                  </span>
-                </label>
-                <input id="calc-recent-projections" type="number" value={settings.recent_projections} onChange={e => update("recent_projections", e.target.value)} min="1" max="10" />
-              </div>
-            </div>
-            {isPointsMode && <p className="calc-note">Points mode ignores the simulations setting and scores directly from projected totals.</p>}
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="calc-sims">Simulations</label>
+            <input
+              id="calc-sims"
+              type="number"
+              value={settings.sims}
+              onChange={e => update("sims", e.target.value)}
+              min="50"
+              max="1000"
+              step="50"
+              disabled={isPointsMode}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="calc-recent-projections">
+              Recent Proj.
+              <span
+                className="field-help"
+                tabIndex={0}
+                role="note"
+                aria-label="Recent projections help"
+                title="Number of newest projection sets averaged per player-year (1-10). Higher values smooth volatility."
+              >
+                ?
+              </span>
+            </label>
+            <input id="calc-recent-projections" type="number" value={settings.recent_projections} onChange={e => update("recent_projections", e.target.value)} min="1" max="10" />
+          </div>
+        </div>
+        {isPointsMode && <p className="calc-note">Points mode ignores the simulations setting and scores directly from projected totals.</p>}
 
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="calc-ip-min">IP Min</label>
-                <input
-                  id="calc-ip-min"
-                  type="number"
-                  value={settings.ip_min}
-                  onChange={e => update("ip_min", e.target.value)}
-                  min="0"
-                  step="100"
-                  disabled={isPointsMode}
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="calc-ip-max">IP Max</label>
-                <input
-                  id="calc-ip-max"
-                  type="text"
-                  value={settings.ip_max}
-                  onChange={e => update("ip_max", e.target.value)}
-                  placeholder="none"
-                  disabled={isPointsMode}
-                />
-              </div>
-            </div>
-            {isPointsMode && <p className="calc-note">IP min/max constraints only apply in roto mode.</p>}
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="calc-ip-min">IP Min</label>
+            <input
+              id="calc-ip-min"
+              type="number"
+              value={settings.ip_min}
+              onChange={e => update("ip_min", e.target.value)}
+              min="0"
+              step="100"
+              disabled={isPointsMode}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="calc-ip-max">IP Max</label>
+            <input
+              id="calc-ip-max"
+              type="text"
+              value={settings.ip_max}
+              onChange={e => update("ip_max", e.target.value)}
+              placeholder="none"
+              disabled={isPointsMode}
+            />
+          </div>
+        </div>
+        {isPointsMode && <p className="calc-note">IP min/max constraints only apply in roto mode.</p>}
+      </div>
 
-            <p className="calc-section-title" style={{ marginTop: "8px" }}>Predictive Accuracy (Roto)</p>
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="calc-sgp-denominator">SGP Denominator</label>
-                <select
-                  id="calc-sgp-denominator"
-                  value={settings.sgp_denominator_mode}
-                  onChange={e => update("sgp_denominator_mode", e.target.value)}
-                  disabled={isPointsMode}
-                >
-                  <option value="classic">Classic</option>
-                  <option value="robust">Robust</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label htmlFor="calc-replacement-blend-alpha">Replacement Blend Alpha</label>
-                <input
-                  id="calc-replacement-blend-alpha"
-                  type="number"
-                  value={settings.replacement_blend_alpha}
-                  onChange={e => update("replacement_blend_alpha", e.target.value)}
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  disabled={isPointsMode || !coerceBooleanSetting(settings.enable_replacement_blend, false)}
-                />
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="calc-sgp-winsor-low">Winsor Low Pct</label>
-                <input
-                  id="calc-sgp-winsor-low"
-                  type="number"
-                  value={settings.sgp_winsor_low_pct}
-                  onChange={e => update("sgp_winsor_low_pct", e.target.value)}
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  disabled={isPointsMode}
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="calc-sgp-winsor-high">Winsor High Pct</label>
-                <input
-                  id="calc-sgp-winsor-high"
-                  type="number"
-                  value={settings.sgp_winsor_high_pct}
-                  onChange={e => update("sgp_winsor_high_pct", e.target.value)}
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  disabled={isPointsMode}
-                />
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="calc-sgp-epsilon-counting">Counting Epsilon</label>
-                <input
-                  id="calc-sgp-epsilon-counting"
-                  type="number"
-                  value={settings.sgp_epsilon_counting}
-                  onChange={e => update("sgp_epsilon_counting", e.target.value)}
-                  min="0"
-                  step="0.01"
-                  disabled={isPointsMode}
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="calc-sgp-epsilon-ratio">Ratio Epsilon</label>
-                <input
-                  id="calc-sgp-epsilon-ratio"
-                  type="number"
-                  value={settings.sgp_epsilon_ratio}
-                  onChange={e => update("sgp_epsilon_ratio", e.target.value)}
-                  min="0"
-                  step="0.0005"
-                  disabled={isPointsMode}
-                />
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="calc-enable-playing-time-reliability">
-                  <input
-                    id="calc-enable-playing-time-reliability"
-                    type="checkbox"
-                    checked={coerceBooleanSetting(settings.enable_playing_time_reliability, false)}
-                    onChange={e => update("enable_playing_time_reliability", e.target.checked)}
-                    disabled={isPointsMode}
-                  />
-                  {" "}Playing-Time Reliability
-                </label>
-              </div>
-              <div className="form-group">
-                <label htmlFor="calc-enable-age-risk-adjustment">
-                  <input
-                    id="calc-enable-age-risk-adjustment"
-                    type="checkbox"
-                    checked={coerceBooleanSetting(settings.enable_age_risk_adjustment, false)}
-                    onChange={e => update("enable_age_risk_adjustment", e.target.checked)}
-                    disabled={isPointsMode}
-                  />
-                  {" "}Age Risk Adjustment
-                </label>
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="calc-enable-replacement-blend">
-                  <input
-                    id="calc-enable-replacement-blend"
-                    type="checkbox"
-                    checked={coerceBooleanSetting(settings.enable_replacement_blend, false)}
-                    onChange={e => update("enable_replacement_blend", e.target.checked)}
-                    disabled={isPointsMode}
-                  />
-                  {" "}Replacement Blend
-                </label>
-              </div>
-            </div>
-            {isPointsMode && <p className="calc-note">Predictive-accuracy controls apply only in roto mode.</p>}
-          </>
+      <div className="calc-section">
+        <p className="calc-section-title">Presets And Sharing</p>
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="calc-preset-name">Preset Name</label>
+            <input
+              id="calc-preset-name"
+              type="text"
+              value={presetName}
+              placeholder="e.g. 12-team H2H Points"
+              onChange={e => setPresetName(e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label>Preset Actions</label>
+            <button type="button" className="calc-secondary-btn" onClick={savePreset} disabled={!canSavePreset}>
+              Save / Update Preset
+            </button>
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="calc-saved-presets">Saved Presets</label>
+            <select
+              id="calc-saved-presets"
+              value={selectedPresetName}
+              onChange={e => selectPreset(e.target.value)}
+            >
+              <option value="">Select Preset</option>
+              {Object.keys(presets).sort((a, b) => a.localeCompare(b)).map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Share</label>
+            <button type="button" className="calc-secondary-btn" onClick={copyShareLink}>
+              Copy Share Link
+            </button>
+          </div>
+        </div>
+        {presetStatus && (
+          <p
+            className={`calc-preset-status ${presetStatusIsError ? "error" : ""}`.trim()}
+            role={presetStatusIsError ? "alert" : "status"}
+            aria-live="polite"
+          >
+            {presetStatus}
+          </p>
+        )}
+        {selectedPresetName && (
+          <div className="calc-inline-actions calc-inline-actions-single">
+            <button type="button" className="calc-secondary-btn danger" onClick={() => deletePreset(selectedPresetName)}>
+              Delete Selected Preset
+            </button>
+          </div>
         )}
       </div>
 
-      {beginnerMode && (
-        <div className="calc-section">
-          <p className="calc-section-title">Run With Current Defaults</p>
-          <p className="calc-note">Generate rankings now, then adjust advanced controls after results load.</p>
-          <button
-            type="button"
-            className="calc-btn calc-btn-first-run"
-            onClick={() => run()}
-            disabled={loading || Boolean(validationError)}
-          >
-            {loading ? "Computing..." : "Run Dynasty Rankings"}
-          </button>
-        </div>
+      <StarterSlotsForm settings={settings} update={update} />
+
+      {!isPointsMode && (
+        <RotoCategoriesForm
+          settings={settings}
+          update={update}
+          selectedRotoHitCategoryCount={selectedRotoHitCategoryCount}
+          selectedRotoPitchCategoryCount={selectedRotoPitchCategoryCount}
+          resetRotoCategoryDefaults={resetRotoCategoryDefaults}
+        />
       )}
 
-      {!showAdvancedSettings && (
-        <div className="calc-section">
-          <p className="calc-note calc-advanced-hint">
-            Advanced controls include discounts, two-way handling, simulations, presets, and scoring-detail overrides.
-          </p>
-        </div>
-      )}
-
-      {showAdvancedSettings && (
-        <div className="calc-section">
-          <p className="calc-section-title">Presets And Sharing</p>
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="calc-preset-name">Preset Name</label>
-              <input
-                id="calc-preset-name"
-                type="text"
-                value={presetName}
-                placeholder="e.g. 12-team H2H Points"
-                onChange={e => setPresetName(e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label>Preset Actions</label>
-              <button type="button" className="calc-secondary-btn" onClick={savePreset} disabled={!canSavePreset}>
-                Save / Update Preset
-              </button>
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="calc-saved-presets">Saved Presets</label>
-              <select
-                id="calc-saved-presets"
-                value={selectedPresetName}
-                onChange={e => selectPreset(e.target.value)}
-              >
-                <option value="">Select Preset</option>
-                {Object.keys(presets).sort((a, b) => a.localeCompare(b)).map(name => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label>Share</label>
-              <button type="button" className="calc-secondary-btn" onClick={copyShareLink}>
-                Copy Share Link
-              </button>
-            </div>
-          </div>
-          {presetStatus && (
-            <p
-              className={`calc-preset-status ${presetStatusIsError ? "error" : ""}`.trim()}
-              role={presetStatusIsError ? "alert" : "status"}
-              aria-live="polite"
-            >
-              {presetStatus}
-            </p>
-          )}
-          {selectedPresetName && (
-            <div className="calc-inline-actions calc-inline-actions-single">
-              <button type="button" className="calc-secondary-btn danger" onClick={() => deletePreset(selectedPresetName)}>
-                Delete Selected Preset
-              </button>
-            </div>
-          )}
-        </div>
+      {isPointsMode && (
+        <PointsScoringForm
+          settings={settings}
+          update={update}
+          pointRulesCount={pointRulesCount}
+          resetPointsScoringDefaults={resetPointsScoringDefaults}
+        />
       )}
 
       <div className="calc-section">
-        <p className="calc-section-title">Advanced Settings</p>
-        <p className="calc-note">
-          Starter slots, scoring categories, and bench/minors depth.
-          {!hasSuccessfulRun && " Run quick start first for a baseline before adjusting these values."}
-        </p>
-        <button
-          type="button"
-          className="calc-secondary-btn"
-          onClick={() => setShowAdvancedSettings(current => !current)}
-        >
-          {showAdvancedSettings ? "Hide Advanced Settings" : "Show Advanced Settings"}
-        </button>
-      </div>
-
-      {showAdvancedSettings && (
-        <>
-          <StarterSlotsForm settings={settings} update={update} />
-
-          {!isPointsMode && (
-            <RotoCategoriesForm
-              settings={settings}
-              update={update}
-              selectedRotoHitCategoryCount={selectedRotoHitCategoryCount}
-              selectedRotoPitchCategoryCount={selectedRotoPitchCategoryCount}
-              resetRotoCategoryDefaults={resetRotoCategoryDefaults}
-              jumpToGlossaryTerm={jumpToGlossaryTerm}
-            />
-          )}
-
-          {isPointsMode && (
-            <PointsScoringForm
-              settings={settings}
-              update={update}
-              pointRulesCount={pointRulesCount}
-              resetPointsScoringDefaults={resetPointsScoringDefaults}
-              jumpToGlossaryTerm={jumpToGlossaryTerm}
-            />
-          )}
-
-          <div className="calc-section">
-            <p className="calc-section-title">Depth And Reset</p>
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="calc-bench">Bench Slots</label>
-                <input id="calc-bench" type="number" value={settings.bench} onChange={e => update("bench", e.target.value)} min="0" max="40" />
-              </div>
-              <div className="form-group">
-                <label htmlFor="calc-minors">Minor Slots</label>
-                <input id="calc-minors" type="number" value={settings.minors} onChange={e => update("minors", e.target.value)} min="0" max="60" />
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="calc-ir">IR Slots</label>
-                <input id="calc-ir" type="number" value={settings.ir} onChange={e => update("ir", e.target.value)} min="0" max="40" />
-              </div>
-              <div className="form-group">
-                <label>Setup Actions</label>
-                <button type="button" className="calc-secondary-btn" onClick={reapplySetupDefaults}>
-                  {isPointsMode ? "Reset Points + Slot Defaults" : "Reapply Roto Slot Defaults"}
-                </button>
-              </div>
-            </div>
-            <p className="calc-note">Reserve depth per team: {reservePerTeam} (bench + minors).</p>
+        <p className="calc-section-title">Depth And Reset</p>
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="calc-bench">Bench Slots</label>
+            <input id="calc-bench" type="number" value={settings.bench} onChange={e => update("bench", e.target.value)} min="0" max="40" />
           </div>
-        </>
-      )}
+          <div className="form-group">
+            <label htmlFor="calc-minors">Minor Slots</label>
+            <input id="calc-minors" type="number" value={settings.minors} onChange={e => update("minors", e.target.value)} min="0" max="60" />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="calc-ir">IR Slots</label>
+            <input id="calc-ir" type="number" value={settings.ir} onChange={e => update("ir", e.target.value)} min="0" max="40" />
+          </div>
+          <div className="form-group">
+            <label>Setup Actions</label>
+            <button type="button" className="calc-secondary-btn" onClick={reapplySetupDefaults}>
+              {isPointsMode ? "Reset Points + Slot Defaults" : "Reapply Roto Slot Defaults"}
+            </button>
+          </div>
+        </div>
+        <p className="calc-note">Reserve depth per team: {reservePerTeam} (bench + minors).</p>
+      </div>
 
       <div className="calc-section">
         <p className="calc-section-title">Main Table Sync</p>

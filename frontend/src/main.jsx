@@ -398,7 +398,7 @@ function App() {
             </Suspense>
           )}
         </div>
-        {section === "projections" && meta && !showQuickStartOnboarding && (
+        {section === "projections" && meta && !showQuickStartOnboarding && !bottomSheet.isOpen && (
           <button
             type="button"
             className="mobile-run-cta"
