@@ -669,6 +669,29 @@
   margin: 0 0 10px;
   font-size: var(--fs-md);
   color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.trade-side-counter {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.trade-limit-notice {
+  margin: 0 0 10px;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.trade-analyzer-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .trade-search-wrap { position: relative; margin-bottom: 10px; }

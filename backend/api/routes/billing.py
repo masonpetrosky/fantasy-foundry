@@ -1,73 +1,101 @@
-"""Stripe billing webhook handler for premium tier subscriptions.
+"""Stripe billing routes for premium tier subscriptions."""
 
-Wire this route only when FF_STRIPE_WEBHOOK_SECRET is configured.
-"""
 from __future__ import annotations
 
 import logging
-import os
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-STRIPE_WEBHOOK_SECRET = os.getenv("FF_STRIPE_WEBHOOK_SECRET", "").strip()
+
+class CheckoutRequest(BaseModel):
+    price_lookup_key: str
+    success_url: str
+    cancel_url: str
+    user_email: str = ""
 
 
-def build_billing_router() -> APIRouter:
-    """Create billing webhook route (Stripe)."""
+def build_billing_router(
+    *,
+    stripe_secret_key: str,
+    stripe_webhook_secret: str,
+    stripe_monthly_price_id: str,
+    stripe_annual_price_id: str,
+    on_checkout_completed: Callable[[dict[str, Any]], Awaitable[None]],
+    on_subscription_updated: Callable[[dict[str, Any]], Awaitable[None]],
+    on_subscription_deleted: Callable[[dict[str, Any]], Awaitable[None]],
+    get_subscription_status: Callable[[str], Awaitable[dict[str, Any]]],
+) -> APIRouter:
+    """Create billing routes (Stripe checkout + webhooks + status)."""
+    import stripe
+
+    stripe.api_key = stripe_secret_key
+
+    price_map = {
+        "monthly": stripe_monthly_price_id,
+        "annual": stripe_annual_price_id,
+    }
+
     router = APIRouter(tags=["billing"])
+
+    @router.post("/api/billing/create-checkout-session")
+    async def create_checkout_session(body: CheckoutRequest) -> JSONResponse:
+        price_id = price_map.get(body.price_lookup_key, "")
+        if not price_id:
+            raise HTTPException(status_code=400, detail="Invalid price_lookup_key. Use 'monthly' or 'annual'.")
+
+        try:
+            session = stripe.checkout.Session.create(
+                mode="subscription",
+                line_items=[{"price": price_id, "quantity": 1}],
+                success_url=body.success_url,
+                cancel_url=body.cancel_url,
+                customer_email=body.user_email or None,
+            )
+        except stripe.StripeError as exc:
+            logger.error("Stripe checkout error: %s", exc)
+            raise HTTPException(status_code=502, detail="Failed to create checkout session.")
+
+        return JSONResponse({"checkout_url": session.url})
 
     @router.post("/api/billing/webhook")
     async def stripe_webhook(request: Request) -> JSONResponse:
-        if not STRIPE_WEBHOOK_SECRET:
-            raise HTTPException(status_code=503, detail="Billing webhooks not configured.")
-
         body = await request.body()
         sig_header = request.headers.get("stripe-signature", "")
-
-        # Verify Stripe signature (simplified — production should use stripe.Webhook.construct_event)
         if not sig_header:
             raise HTTPException(status_code=400, detail="Missing Stripe signature.")
 
         try:
-            import json
-            event = json.loads(body)
+            event = stripe.Webhook.construct_event(body, sig_header, stripe_webhook_secret)
+        except stripe.SignatureVerificationError:
+            raise HTTPException(status_code=400, detail="Invalid Stripe signature.")
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid payload.")
 
         event_type = event.get("type", "")
+        event_object = event.get("data", {}).get("object", {})
         logger.info("Stripe webhook event: %s", event_type)
 
         if event_type == "checkout.session.completed":
-            _handle_checkout_completed(event.get("data", {}).get("object", {}))
+            await on_checkout_completed(event_object)
         elif event_type == "customer.subscription.updated":
-            _handle_subscription_updated(event.get("data", {}).get("object", {}))
+            await on_subscription_updated(event_object)
         elif event_type == "customer.subscription.deleted":
-            _handle_subscription_deleted(event.get("data", {}).get("object", {}))
+            await on_subscription_deleted(event_object)
 
         return JSONResponse({"received": True})
 
+    @router.get("/api/billing/subscription-status")
+    async def subscription_status(email: str = "") -> JSONResponse:
+        email = email.strip()
+        if not email:
+            raise HTTPException(status_code=400, detail="email query parameter required.")
+        result = await get_subscription_status(email)
+        return JSONResponse(result)
+
     return router
-
-
-def _handle_checkout_completed(session: dict[str, Any]) -> None:
-    customer_email = session.get("customer_email", "")
-    subscription_id = session.get("subscription", "")
-    logger.info("Checkout completed: email=%s subscription=%s", customer_email, subscription_id)
-    # TODO: Update user's subscription status in Supabase
-
-
-def _handle_subscription_updated(subscription: dict[str, Any]) -> None:
-    status = subscription.get("status", "")
-    subscription_id = subscription.get("id", "")
-    logger.info("Subscription updated: id=%s status=%s", subscription_id, status)
-    # TODO: Update subscription status in Supabase
-
-
-def _handle_subscription_deleted(subscription: dict[str, Any]) -> None:
-    subscription_id = subscription.get("id", "")
-    logger.info("Subscription deleted: id=%s", subscription_id)
-    # TODO: Revoke premium access in Supabase

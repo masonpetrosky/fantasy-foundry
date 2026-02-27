@@ -14,7 +14,7 @@ describe("frontend index shell metadata", () => {
     expect(html).toContain('<meta name="robots" content="index, follow, max-image-preview:large">');
   });
 
-  it("includes WebSite and SoftwareApplication JSON-LD schemas", () => {
+  it("includes WebSite, SoftwareApplication, and FAQPage JSON-LD schemas", () => {
     const html = readIndexHtml();
     const schemaMatches = [...html.matchAll(/<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/g)];
     const schemas = schemaMatches.map(match => JSON.parse(match[1]));
@@ -22,5 +22,18 @@ describe("frontend index shell metadata", () => {
 
     expect(schemaTypes).toContain("WebSite");
     expect(schemaTypes).toContain("SoftwareApplication");
+    expect(schemaTypes).toContain("FAQPage");
+  });
+
+  it("includes gtag.js snippet", () => {
+    const html = readIndexHtml();
+    expect(html).toContain("googletagmanager.com/gtag/js");
+    expect(html).toContain("VITE_GA4_MEASUREMENT_ID");
+  });
+
+  it("references og-image.png in OG meta tags", () => {
+    const html = readIndexHtml();
+    expect(html).toContain('og:image" content="https://fantasy-foundry.com/assets/og-image.png"');
+    expect(html).toContain('twitter:image" content="https://fantasy-foundry.com/assets/og-image.png"');
   });
 });

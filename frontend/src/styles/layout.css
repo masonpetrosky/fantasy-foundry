@@ -856,3 +856,227 @@ header {
   font-size: var(--fs-md);
   color: var(--text-secondary);
 }
+
+/* ====== PRICING ====== */
+.pricing-section {
+  max-width: 720px;
+  margin: 0 auto 40px;
+}
+
+.pricing-section h2 {
+  text-align: center;
+  font-family: var(--ff-serif);
+  font-size: 1.8rem;
+  margin-bottom: 16px;
+}
+
+.pricing-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.pricing-toggle-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pricing-toggle-btn.active {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.pricing-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.pricing-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  padding: 24px;
+}
+
+.pricing-card-pro {
+  border-color: rgba(212, 168, 83, 0.5);
+  background: linear-gradient(160deg, rgba(212, 168, 83, 0.08), transparent);
+}
+
+.pricing-card h3 {
+  margin: 0 0 8px;
+  font-size: var(--fs-lg);
+  color: var(--text-primary);
+}
+
+.pricing-price {
+  font-family: var(--ff-mono);
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.pricing-savings {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: var(--fs-xs);
+  color: var(--green);
+  font-weight: 600;
+}
+
+.pricing-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+}
+
+.pricing-features li {
+  padding: 4px 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.pricing-features li::before {
+  content: "\2713 ";
+  color: var(--green);
+  margin-right: 6px;
+}
+
+.pricing-card-action {
+  text-align: center;
+}
+
+.pricing-current {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.pricing-upgrade-btn {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 8px;
+  border: 1px solid rgba(212, 168, 83, 0.55);
+  background: linear-gradient(145deg, rgba(212, 168, 83, 0.25), rgba(212, 168, 83, 0.15));
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pricing-upgrade-btn:hover,
+.pricing-upgrade-btn:focus-visible {
+  border-color: var(--accent);
+  background: linear-gradient(145deg, rgba(212, 168, 83, 0.33), rgba(212, 168, 83, 0.2));
+}
+
+.pricing-upgrade-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ====== HERO PROOF ====== */
+.hero-proof {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.hero-proof-sep {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* ====== NEWSLETTER ====== */
+.footer-inner {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.newsletter-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: center;
+}
+
+.newsletter-form input {
+  flex: 1;
+  max-width: 280px;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+}
+
+.newsletter-form input::placeholder {
+  color: var(--text-muted);
+}
+
+.newsletter-form button {
+  min-height: 38px;
+  border-radius: 8px;
+  border: 1px solid rgba(212, 168, 83, 0.55);
+  background: linear-gradient(145deg, rgba(212, 168, 83, 0.25), rgba(212, 168, 83, 0.15));
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  padding: 6px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.newsletter-form button:hover,
+.newsletter-form button:focus-visible {
+  border-color: var(--accent);
+}
+
+.newsletter-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.newsletter-label {
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  margin-top: 16px;
+}
+
+.newsletter-status {
+  font-size: var(--fs-xs);
+  margin-top: 6px;
+}
+
+.newsletter-status.ok { color: var(--green); }
+.newsletter-status.error { color: var(--red); }

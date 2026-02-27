@@ -104,6 +104,13 @@ class AppSettings:
     canonical_host: str
     rate_limit_bucket_cleanup_interval_seconds: float
     cors_allow_origins: tuple[str, ...]
+    stripe_secret_key: str
+    stripe_webhook_secret: str
+    stripe_monthly_price_id: str
+    stripe_annual_price_id: str
+    buttondown_api_key: str
+    supabase_url: str
+    supabase_service_role_key: str
 
 
 def load_settings_from_env() -> AppSettings:
@@ -159,4 +166,13 @@ def load_settings_from_env() -> AppSettings:
             "FF_RATE_LIMIT_BUCKET_CLEANUP_INTERVAL_SECONDS", default=60.0, minimum=5.0
         ),
         cors_allow_origins=_parse_cors_allow_origins(os.getenv("FF_CORS_ALLOW_ORIGINS")),
+        stripe_secret_key=str(os.getenv("STRIPE_SECRET_KEY", os.getenv("FF_STRIPE_SECRET_KEY", ""))).strip(),
+        stripe_webhook_secret=str(
+            os.getenv("STRIPE_WEBHOOK_SECRET", os.getenv("FF_STRIPE_WEBHOOK_SECRET", ""))
+        ).strip(),
+        stripe_monthly_price_id=str(os.getenv("STRIPE_MONTHLY_PRICE_ID", "")).strip(),
+        stripe_annual_price_id=str(os.getenv("STRIPE_ANNUAL_PRICE_ID", "")).strip(),
+        buttondown_api_key=str(os.getenv("BUTTONDOWN_API_KEY", "")).strip(),
+        supabase_url=str(os.getenv("SUPABASE_URL", "")).strip(),
+        supabase_service_role_key=str(os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")).strip(),
     )

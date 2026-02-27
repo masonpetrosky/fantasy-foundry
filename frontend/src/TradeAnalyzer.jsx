@@ -1,8 +1,28 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { fmt } from "./formatting_utils.js";
 import { stablePlayerKeyFromRow } from "./app_state_storage.js";
+import { trackEvent } from "./analytics.js";
 
 const MAX_TRADE_PLAYERS = 6;
+
+function parseTradeParams() {
+  if (typeof window === "undefined") return { a: [], b: [] };
+  const params = new URLSearchParams(window.location.search);
+  const a = (params.get("trade_a") || "").split(",").map(s => s.trim()).filter(Boolean);
+  const b = (params.get("trade_b") || "").split(",").map(s => s.trim()).filter(Boolean);
+  return { a, b };
+}
+
+function buildTradeUrl(sideA, sideB) {
+  const base = `${window.location.origin}${window.location.pathname}`;
+  const keysA = sideA.map(p => stablePlayerKeyFromRow(p)).join(",");
+  const keysB = sideB.map(p => stablePlayerKeyFromRow(p)).join(",");
+  const params = new URLSearchParams();
+  if (keysA) params.set("trade_a", keysA);
+  if (keysB) params.set("trade_b", keysB);
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
+}
 
 function FairnessMeter({ differential, totalValue }) {
   const ratio = totalValue > 0 ? Math.min(Math.abs(differential) / totalValue, 1) : 0;
@@ -21,6 +41,7 @@ function FairnessMeter({ differential, totalValue }) {
 
 function TradeSide({ label, players, allPlayers, searchTerm, onSearchChange, onAdd, onRemove }) {
   const total = players.reduce((sum, p) => sum + (Number(p.DynastyValue) || 0), 0);
+  const atLimit = players.length >= MAX_TRADE_PLAYERS;
   const filteredResults = useMemo(() => {
     if (!searchTerm || searchTerm.length < 2) return [];
     const term = searchTerm.toLowerCase();
@@ -37,8 +58,13 @@ function TradeSide({ label, players, allPlayers, searchTerm, onSearchChange, onA
 
   return (
     <div className="trade-side">
-      <h3>{label}</h3>
-      {players.length < MAX_TRADE_PLAYERS && (
+      <h3>
+        {label}
+        <span className="trade-side-counter">{players.length}/{MAX_TRADE_PLAYERS}</span>
+      </h3>
+      {atLimit ? (
+        <p className="trade-limit-notice">Player limit reached.</p>
+      ) : (
         <div className="trade-search-wrap">
           <input
             type="text"
@@ -55,7 +81,7 @@ function TradeSide({ label, players, allPlayers, searchTerm, onSearchChange, onA
                   <li key={key}>
                     <button type="button" onClick={() => onAdd(p)}>
                       <span className="trade-result-name">{p.Player}</span>
-                      <span className="trade-result-meta">{p.Pos || "—"} · {fmt(p.DynastyValue, 2)}</span>
+                      <span className="trade-result-meta">{p.Pos || "\u2014"} \u00b7 {fmt(p.DynastyValue, 2)}</span>
                     </button>
                   </li>
                 );
@@ -71,7 +97,7 @@ function TradeSide({ label, players, allPlayers, searchTerm, onSearchChange, onA
             <div className="trade-player-card" key={key}>
               <div className="trade-player-info">
                 <strong>{p.Player}</strong>
-                <span>{p.Team || "—"} · {p.Pos || "—"} · Age {fmt(p.Age, 0)}</span>
+                <span>{p.Team || "\u2014"} \u00b7 {p.Pos || "\u2014"} \u00b7 Age {fmt(p.Age, 0)}</span>
               </div>
               <div className="trade-player-value">
                 <span className={Number(p.DynastyValue) >= 0 ? "value-positive" : "value-negative"}>
@@ -103,6 +129,16 @@ export function TradeAnalyzer({ calculatorResults, onClose }) {
   const [searchA, setSearchA] = useState("");
   const [searchB, setSearchB] = useState("");
 
+  // Hydrate from URL params on mount
+  useEffect(() => {
+    if (allPlayers.length === 0) return;
+    const { a, b } = parseTradeParams();
+    if (a.length === 0 && b.length === 0) return;
+    const playerByKey = new Map(allPlayers.map(p => [stablePlayerKeyFromRow(p), p]));
+    setSideA(a.map(k => playerByKey.get(k)).filter(Boolean).slice(0, MAX_TRADE_PLAYERS));
+    setSideB(b.map(k => playerByKey.get(k)).filter(Boolean).slice(0, MAX_TRADE_PLAYERS));
+  }, [allPlayers]);
+
   const addToSide = useCallback((setter, setSearch) => (player) => {
     setter(prev => [...prev, player]);
     setSearch("");
@@ -128,6 +164,15 @@ export function TradeAnalyzer({ calculatorResults, onClose }) {
     return allPlayers.filter(p => !usedKeys.has(stablePlayerKeyFromRow(p)));
   }, [allPlayers, usedKeys]);
 
+  const handleShareTrade = useCallback(() => {
+    const url = buildTradeUrl(sideA, sideB);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).catch(() => {});
+    }
+    window.history.replaceState(null, "", url);
+    trackEvent("ff_trade_share", { side_a_count: sideA.length, side_b_count: sideB.length });
+  }, [sideA, sideB]);
+
   if (allPlayers.length === 0) {
     return (
       <div className="trade-analyzer">
@@ -144,7 +189,14 @@ export function TradeAnalyzer({ calculatorResults, onClose }) {
     <div className="trade-analyzer">
       <div className="trade-analyzer-header">
         <h2>Trade Analyzer</h2>
-        {onClose && <button type="button" className="inline-btn" onClick={onClose}>Close</button>}
+        <div className="trade-analyzer-actions">
+          {(sideA.length > 0 || sideB.length > 0) && (
+            <button type="button" className="inline-btn" onClick={handleShareTrade}>
+              Share Trade
+            </button>
+          )}
+          {onClose && <button type="button" className="inline-btn" onClick={onClose}>Close</button>}
+        </div>
       </div>
 
       {(sideA.length > 0 || sideB.length > 0) && (

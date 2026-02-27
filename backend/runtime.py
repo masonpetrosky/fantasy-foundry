@@ -37,8 +37,10 @@ from backend.api.dependencies import (
     build_calculator_service,
 )
 from backend.api.routes import (
+    build_billing_router,
     build_calculate_router,
     build_frontend_assets_router,
+    build_newsletter_router,
     build_projections_router,
     build_status_router,
 )
@@ -443,6 +445,10 @@ SETTINGS = load_settings_from_env()
 if SETTINGS.environment == "production":
     from backend.core.structured_logging import configure_structured_logging
     configure_structured_logging()
+_sentry_dsn = os.getenv("SENTRY_DSN_BACKEND", "").strip()
+if _sentry_dsn:
+    import sentry_sdk
+    sentry_sdk.init(dsn=_sentry_dsn, traces_sample_rate=0.05, environment=SETTINGS.environment)
 APP_ENVIRONMENT = SETTINGS.environment
 CALCULATOR_JOB_TTL_SECONDS = SETTINGS.calculator_job_ttl_seconds
 CALCULATOR_JOB_MAX_ENTRIES = SETTINGS.calculator_job_max_entries
@@ -715,6 +721,86 @@ app.include_router(
         calculate_authorize_handler=_authorize_calculate_request,
     )
 )
+
+# ---------------------------------------------------------------------------
+# Billing (Stripe) — conditional on credentials
+# ---------------------------------------------------------------------------
+if SETTINGS.stripe_secret_key and SETTINGS.stripe_webhook_secret:
+    from backend.services.billing import (
+        get_subscription_status as _billing_get_status,
+    )
+    from backend.services.billing import (
+        revoke_subscription as _billing_revoke,
+    )
+    from backend.services.billing import (
+        upsert_subscription as _billing_upsert,
+    )
+
+    _supabase_url = SETTINGS.supabase_url
+    _supabase_service_role_key = SETTINGS.supabase_service_role_key
+
+    async def _on_checkout_completed(session):
+        await _billing_upsert(
+            supabase_url=_supabase_url,
+            supabase_service_role_key=_supabase_service_role_key,
+            user_email=str(session.get("customer_email", "")).strip(),
+            stripe_customer_id=str(session.get("customer", "")).strip(),
+            stripe_subscription_id=str(session.get("subscription", "")).strip(),
+            status="active",
+        )
+
+    async def _on_subscription_updated(subscription):
+        customer_email = str(subscription.get("customer_email", "")).strip()
+        if not customer_email:
+            customer_email = str(subscription.get("metadata", {}).get("email", "")).strip()
+        await _billing_upsert(
+            supabase_url=_supabase_url,
+            supabase_service_role_key=_supabase_service_role_key,
+            user_email=customer_email,
+            stripe_customer_id=str(subscription.get("customer", "")).strip(),
+            stripe_subscription_id=str(subscription.get("id", "")).strip(),
+            status=str(subscription.get("status", "")).strip(),
+        )
+
+    async def _on_subscription_deleted(subscription):
+        await _billing_revoke(
+            supabase_url=_supabase_url,
+            supabase_service_role_key=_supabase_service_role_key,
+            stripe_subscription_id=str(subscription.get("id", "")).strip(),
+        )
+
+    async def _get_billing_status(email):
+        return await _billing_get_status(
+            supabase_url=_supabase_url,
+            supabase_service_role_key=_supabase_service_role_key,
+            user_email=email,
+        )
+
+    app.include_router(
+        build_billing_router(
+            stripe_secret_key=SETTINGS.stripe_secret_key,
+            stripe_webhook_secret=SETTINGS.stripe_webhook_secret,
+            stripe_monthly_price_id=SETTINGS.stripe_monthly_price_id,
+            stripe_annual_price_id=SETTINGS.stripe_annual_price_id,
+            on_checkout_completed=_on_checkout_completed,
+            on_subscription_updated=_on_subscription_updated,
+            on_subscription_deleted=_on_subscription_deleted,
+            get_subscription_status=_get_billing_status,
+        )
+    )
+
+# ---------------------------------------------------------------------------
+# Newsletter (Buttondown) — conditional on API key
+# ---------------------------------------------------------------------------
+if SETTINGS.buttondown_api_key:
+    app.include_router(
+        build_newsletter_router(
+            buttondown_api_key=SETTINGS.buttondown_api_key,
+            enforce_rate_limit=_enforce_rate_limit,
+            rate_limit_per_minute=10,
+            client_ip_resolver=_client_ip,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------

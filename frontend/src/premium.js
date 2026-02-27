@@ -41,3 +41,24 @@ export function canUseFeature(tierLimits, feature) {
   if (!tierLimits) return true;
   return Boolean(tierLimits[feature]);
 }
+
+/**
+ * Redirect the user to Stripe Checkout for a subscription.
+ */
+export async function redirectToCheckout(apiBase, { priceLookupKey, userEmail }) {
+  const resp = await fetch(`${apiBase}/api/billing/create-checkout-session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      price_lookup_key: priceLookupKey,
+      success_url: `${window.location.origin}/?billing=success`,
+      cancel_url: `${window.location.origin}/?billing=cancel`,
+      user_email: userEmail || "",
+    }),
+  });
+  if (!resp.ok) throw new Error("Failed to create checkout session.");
+  const data = await resp.json();
+  if (data.checkout_url) {
+    window.location.href = data.checkout_url;
+  }
+}

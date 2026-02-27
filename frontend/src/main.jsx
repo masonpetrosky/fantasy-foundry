@@ -2,6 +2,9 @@ import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "rea
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./styles/app.css";
+import { initSentry } from "./sentry.js";
+
+initSentry();
 import { AUTH_SYNC_ENABLED } from "./supabase_client.js";
 import { AccountPanel } from "./account_panel.jsx";
 import { ActivationDiagnosticsPanel, resolveActivationDiagnosticsPanelEnabled } from "./activation_diagnostics_panel.jsx";
@@ -15,6 +18,8 @@ import { FeatureErrorBoundary } from "./feature_error_boundary.jsx";
 import { ToastProvider } from "./Toast.jsx";
 import { PlayerPage } from "./PlayerPage.jsx";
 import { TradeAnalyzer } from "./TradeAnalyzer.jsx";
+import { PricingSection } from "./PricingSection.jsx";
+import { NewsletterSignup } from "./NewsletterSignup.jsx";
 import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProjectionLayoutState.js";
 import { resolveProjectionWindow } from "./formatting_utils.js";
 import { useBottomSheet } from "./hooks/useBottomSheet.js";
@@ -253,6 +258,11 @@ function App() {
                   <div className="label">Seasons</div>
                 </div>
               </div>
+              <div className="hero-proof fade-up fade-up-2">
+                <span>Updated for the 2026 season</span>
+                <span className="hero-proof-sep" aria-hidden="true" />
+                <span>Used by dynasty leagues worldwide</span>
+              </div>
             </>
           )}
         </div>
@@ -425,6 +435,9 @@ function App() {
               </div>
             </div>
           )}
+          {section === "pricing" && (
+            <PricingSection authUser={authUser} />
+          )}
           {section === "methodology" && (
             <Suspense fallback={<p className="methodology-note">Loading methodology...</p>}>
               <LazyMethodologySection />
@@ -481,11 +494,16 @@ function App() {
       </main>
 
       <footer>
-        {meta?.last_projection_update
-          ? <>Projections updated {meta.last_projection_update}.</>
-          : <>Projections updated as-needed.</>
-        }
-        {buildLabel && <span className="build-id">Build {buildLabel}</span>}
+        <div className="footer-inner">
+          <div>
+            {meta?.last_projection_update
+              ? <>Projections updated {meta.last_projection_update}.</>
+              : <>Projections updated as-needed.</>
+            }
+            {buildLabel && <span className="build-id">Build {buildLabel}</span>}
+          </div>
+          <NewsletterSignup apiBase={API} />
+        </div>
       </footer>
     </>
   );

@@ -13,11 +13,14 @@
 <meta property="og:title" content="Fantasy Foundry | 20-Year Dynasty Baseball Projections">
 <meta property="og:description" content="Custom dynasty rankings powered by 20-year MLB projections and league-specific scoring settings.">
 <meta property="og:url" content="https://fantasy-foundry.com/">
-<meta property="og:image" content="https://fantasy-foundry.com/assets/favicon-512.png">
+<meta property="og:image" content="https://fantasy-foundry.com/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Fantasy Foundry — 20-Year Dynasty Baseball Projections">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Fantasy Foundry | 20-Year Dynasty Baseball Projections">
 <meta name="twitter:description" content="Build league-specific dynasty rankings from 2026-2045 MLB projections.">
-<meta name="twitter:image" content="https://fantasy-foundry.com/assets/favicon-512.png">
+<meta name="twitter:image" content="https://fantasy-foundry.com/assets/og-image.png">
 <link rel="icon" type="image/svg+xml" sizes="any" href="/assets/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png">
@@ -52,6 +55,45 @@
     "priceCurrency": "USD"
   }
 }
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How are dynasty baseball values calculated?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Fantasy Foundry uses Monte Carlo simulations across 20-year MLB projections (2026-2045) combined with league-specific settings like roster slots, scoring categories, and replacement level to produce custom dynasty rankings."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I customize league settings for my dynasty league?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. The Dynasty Calculator lets you configure teams, roster slots, scoring categories (5x5 roto or points), innings limits, and more so values match your specific league format."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How should I interpret Dynasty Value?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Dynasty Value is a relative ranking score, not a dollar amount. Higher values indicate stronger long-term roster impact in your selected format, accounting for projection horizon, positional scarcity, and replacement context."
+      }
+    }
+  ]
+}
+</script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=%VITE_GA4_MEASUREMENT_ID%"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '%VITE_GA4_MEASUREMENT_ID%');
 </script>
 </head>
 <body>

@@ -1,3 +1,7 @@
+if (typeof window !== "undefined") {
+  window.dataLayer = window.dataLayer || [];
+}
+
 const ANALYTICS_SESSION_ID_STORAGE_KEY = "ff:analytics-session-id:v1";
 const ANALYTICS_EVENT_BUFFER_STORAGE_KEY = "ff:analytics-events:v1";
 const ANALYTICS_EVENT_BUFFER_MAX = 400;

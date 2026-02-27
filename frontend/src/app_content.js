@@ -1,6 +1,10 @@
+const PREMIUM_ENABLED = typeof import.meta !== "undefined"
+  && String(import.meta.env?.VITE_FF_PREMIUM_ENABLED || "0").trim() === "1";
+
 export const PRIMARY_NAV_ITEMS = [
   { key: "projections", label: "Projections" },
   { key: "methodology", label: "Methodology" },
+  ...(PREMIUM_ENABLED ? [{ key: "pricing", label: "Pricing" }] : []),
 ];
 
 export function glossaryTermAnchorId(term) {

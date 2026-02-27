@@ -1,0 +1,85 @@
+"""Supabase write layer for subscription management."""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+import httpx
+
+logger = logging.getLogger(__name__)
+
+
+async def upsert_subscription(
+    *,
+    supabase_url: str,
+    supabase_service_role_key: str,
+    user_email: str,
+    stripe_customer_id: str,
+    stripe_subscription_id: str,
+    status: str,
+) -> dict[str, Any]:
+    """Insert or update a subscription row in the Supabase subscriptions table."""
+    url = f"{supabase_url}/rest/v1/subscriptions"
+    headers = {
+        "apikey": supabase_service_role_key,
+        "Authorization": f"Bearer {supabase_service_role_key}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates",
+    }
+    payload = {
+        "user_email": user_email,
+        "stripe_customer_id": stripe_customer_id,
+        "stripe_subscription_id": stripe_subscription_id,
+        "status": status,
+    }
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+    logger.info("Upserted subscription: email=%s status=%s", user_email, status)
+    return payload
+
+
+async def revoke_subscription(
+    *,
+    supabase_url: str,
+    supabase_service_role_key: str,
+    stripe_subscription_id: str,
+) -> None:
+    """Mark a subscription as canceled in Supabase."""
+    url = f"{supabase_url}/rest/v1/subscriptions?stripe_subscription_id=eq.{stripe_subscription_id}"
+    headers = {
+        "apikey": supabase_service_role_key,
+        "Authorization": f"Bearer {supabase_service_role_key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.patch(url, json={"status": "canceled"}, headers=headers)
+        resp.raise_for_status()
+    logger.info("Revoked subscription: subscription_id=%s", stripe_subscription_id)
+
+
+async def get_subscription_status(
+    *,
+    supabase_url: str,
+    supabase_service_role_key: str,
+    user_email: str,
+) -> dict[str, Any]:
+    """Query subscription status for a user email."""
+    url = (
+        f"{supabase_url}/rest/v1/subscriptions"
+        f"?user_email=eq.{user_email}&select=status,stripe_subscription_id&limit=1"
+        f"&order=created_at.desc"
+    )
+    headers = {
+        "apikey": supabase_service_role_key,
+        "Authorization": f"Bearer {supabase_service_role_key}",
+    }
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(url, headers=headers)
+        resp.raise_for_status()
+        rows = resp.json()
+    if rows and len(rows) > 0:
+        return {"status": rows[0].get("status", "none"), "active": rows[0].get("status") == "active"}
+    return {"status": "none", "active": False}
