@@ -1,5 +1,23 @@
 import React from "react";
 
+interface CompareShareNotice {
+  severity: "error" | "warning";
+  message: string;
+}
+
+interface ProjectionStatusMessagesProps {
+  pageResetNotice: string;
+  clearPageResetNotice: () => void;
+  exportError: string;
+  clearExportError: () => void;
+  compareShareCopyNotice: string;
+  clearCompareShareCopyNotice: (() => void) | null;
+  compareShareHydrating: boolean;
+  compareShareNotice: CompareShareNotice | null;
+  clearCompareShareNotice: (() => void) | null;
+  lastRefreshedLabel: string;
+}
+
 export const ProjectionStatusMessages = React.memo(function ProjectionStatusMessages({
   pageResetNotice,
   clearPageResetNotice,
@@ -11,7 +29,7 @@ export const ProjectionStatusMessages = React.memo(function ProjectionStatusMess
   compareShareNotice,
   clearCompareShareNotice,
   lastRefreshedLabel,
-}) {
+}: ProjectionStatusMessagesProps): React.ReactElement | null {
   if (
     !pageResetNotice
     && !exportError

@@ -1,28 +1,37 @@
 import React from "react";
 import { captureException } from "./sentry";
 
-export class FeatureErrorBoundary extends React.Component {
-  constructor(props) {
+interface FeatureErrorBoundaryProps {
+  featureName?: string;
+  children: React.ReactNode;
+}
+
+interface FeatureErrorBoundaryState {
+  error: Error | null;
+}
+
+export class FeatureErrorBoundary extends React.Component<FeatureErrorBoundaryProps, FeatureErrorBoundaryState> {
+  constructor(props: FeatureErrorBoundaryProps) {
     super(props);
     this.state = { error: null };
   }
 
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError(error: Error): FeatureErrorBoundaryState {
     return { error };
   }
 
-  componentDidCatch(error, errorInfo) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     captureException(error, {
       feature: this.props.featureName,
       componentStack: errorInfo?.componentStack,
     });
   }
 
-  handleReset = () => {
+  handleReset = (): void => {
     this.setState({ error: null });
   };
 
-  render() {
+  render(): React.ReactNode {
     if (!this.state.error) return this.props.children;
 
     const featureName = this.props.featureName || "This feature";

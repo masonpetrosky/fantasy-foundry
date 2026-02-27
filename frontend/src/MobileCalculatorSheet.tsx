@@ -1,5 +1,14 @@
 import React from "react";
 
+interface MobileCalculatorSheetProps {
+  isOpen: boolean;
+  onClose: () => void;
+  sheetRef: React.Ref<HTMLDivElement>;
+  dragHandleProps: React.HTMLAttributes<HTMLDivElement>;
+  sheetStyle: React.CSSProperties;
+  children: React.ReactNode;
+}
+
 export const MobileCalculatorSheet = React.memo(function MobileCalculatorSheet({
   isOpen,
   onClose,
@@ -7,7 +16,7 @@ export const MobileCalculatorSheet = React.memo(function MobileCalculatorSheet({
   dragHandleProps,
   sheetStyle,
   children,
-}) {
+}: MobileCalculatorSheetProps): React.ReactElement | null {
   if (!isOpen) return null;
 
   return (

@@ -8,10 +8,79 @@ import {
   mergeCalculatorPresetsPreferLocal,
   normalizeCloudPreferences,
 } from "../app_state_storage";
+import type { CalculatorPreset, PlayerWatchEntry } from "../app_state_storage";
 
-export function useAccountSync({ presets, setPresets, watchlist, setWatchlist }) {
+/** Minimal shape of a Supabase auth user for our sync logic. */
+interface AuthUser {
+  id: string;
+  email?: string;
+  [key: string]: unknown;
+}
+
+/** Supabase-like client returned by loadSupabaseClient(). */
+interface SupabaseClient {
+  auth: {
+    onAuthStateChange: (
+      callback: (event: string, session: { user?: AuthUser | null } | null) => void,
+    ) => { data: { subscription: { unsubscribe: () => void } } };
+    getSession: () => Promise<{
+      data: { session: { user?: AuthUser | null } | null } | null;
+      error: { message?: string } | null;
+    }>;
+    signInWithPassword: (credentials: {
+      email: string;
+      password: string;
+    }) => Promise<{ error: { message?: string } | null }>;
+    signUp: (credentials: {
+      email: string;
+      password: string;
+    }) => Promise<{
+      data: { session: unknown } | null;
+      error: { message?: string } | null;
+    }>;
+    signOut: () => Promise<{ error: { message?: string } | null }>;
+  };
+  from: (table: string) => {
+    select: (columns: string) => {
+      eq: (col: string, val: string) => {
+        maybeSingle: () => Promise<{
+          data: { preferences?: unknown } | null;
+          error: { message?: string } | null;
+        }>;
+      };
+    };
+    upsert: (
+      row: Record<string, unknown>,
+      options?: { onConflict?: string },
+    ) => Promise<{ error: { message?: string } | null }>;
+  };
+}
+
+export interface UseAccountSyncInput {
+  presets: Record<string, CalculatorPreset>;
+  setPresets: React.Dispatch<React.SetStateAction<Record<string, CalculatorPreset>>>;
+  watchlist: Record<string, PlayerWatchEntry>;
+  setWatchlist: React.Dispatch<React.SetStateAction<Record<string, PlayerWatchEntry>>>;
+}
+
+export interface UseAccountSyncReturn {
+  authReady: boolean;
+  authUser: AuthUser | null;
+  authStatus: string;
+  cloudStatus: string;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
+}
+
+export function useAccountSync({
+  presets,
+  setPresets,
+  watchlist,
+  setWatchlist,
+}: UseAccountSyncInput): UseAccountSyncReturn {
   const [authReady, setAuthReady] = useState(!AUTH_SYNC_ENABLED);
-  const [authUser, setAuthUser] = useState(null);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authStatus, setAuthStatus] = useState("");
   const [cloudStatus, setCloudStatus] = useState("");
   const [cloudReadyForSave, setCloudReadyForSave] = useState(false);
@@ -29,15 +98,15 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
   useEffect(() => {
     if (!AUTH_SYNC_ENABLED) return undefined;
     let mounted = true;
-    let unsubscribe = null;
+    let unsubscribe: (() => void) | null = null;
 
-    const setupAuth = async () => {
-      let client = null;
+    const setupAuth = async (): Promise<void> => {
+      let client: SupabaseClient | null = null;
       try {
-        client = await loadSupabaseClient();
-      } catch (error) {
+        client = (await loadSupabaseClient()) as SupabaseClient | null;
+      } catch (error: unknown) {
         if (!mounted) return;
-        setAuthStatus(`Account setup error: ${formatAuthError(error, "Unable to initialize account sync.")}`);
+        setAuthStatus(`Account setup error: ${formatAuthError(error as { message?: string }, "Unable to initialize account sync.")}`);
         setAuthReady(true);
         return;
       }
@@ -67,9 +136,9 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
       setAuthReady(true);
     };
 
-    setupAuth().catch(error => {
+    setupAuth().catch((error: unknown) => {
       if (!mounted) return;
-      setAuthStatus(`Account setup error: ${formatAuthError(error, "Unable to initialize account sync.")}`);
+      setAuthStatus(`Account setup error: ${formatAuthError(error as { message?: string }, "Unable to initialize account sync.")}`);
       setAuthReady(true);
     });
 
@@ -90,13 +159,13 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
     setCloudStatus("Syncing account settings...");
     setCloudReadyForSave(false);
 
-    const loadCloudPreferences = async () => {
-      let client = null;
+    const loadCloudPreferences = async (): Promise<void> => {
+      let client: SupabaseClient | null = null;
       try {
-        client = await loadSupabaseClient();
-      } catch (error) {
+        client = (await loadSupabaseClient()) as SupabaseClient | null;
+      } catch (error: unknown) {
         if (cancelled) return;
-        setCloudStatus(`Cloud sync error: ${formatAuthError(error, "Unable to initialize account settings.")}`);
+        setCloudStatus(`Cloud sync error: ${formatAuthError(error as { message?: string }, "Unable to initialize account settings.")}`);
         return;
       }
       if (!client || cancelled) return;
@@ -117,11 +186,11 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
         const normalized = normalizeCloudPreferences(data.preferences);
         const mergedCalculatorPresets = mergeCalculatorPresetsPreferLocal(
           presetsRef.current,
-          normalized.calculatorPresets
+          normalized.calculatorPresets,
         );
         const shouldPersistMergedPresets = !calculatorPresetsEqual(
           mergedCalculatorPresets,
-          normalized.calculatorPresets
+          normalized.calculatorPresets,
         );
 
         setPresets(mergedCalculatorPresets);
@@ -139,7 +208,7 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
                 user_id: authUser.id,
                 preferences: mergedPayload,
               },
-              { onConflict: "user_id" }
+              { onConflict: "user_id" },
             );
 
           if (cancelled) return;
@@ -169,7 +238,7 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
             user_id: authUser.id,
             preferences: seedPayload,
           },
-          { onConflict: "user_id" }
+          { onConflict: "user_id" },
         );
 
       if (cancelled) return;
@@ -182,9 +251,9 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
       setCloudReadyForSave(true);
     };
 
-    loadCloudPreferences().catch(error => {
+    loadCloudPreferences().catch((error: unknown) => {
       if (cancelled) return;
-      setCloudStatus(`Cloud sync error: ${formatAuthError(error, "Unexpected sync failure.")}`);
+      setCloudStatus(`Cloud sync error: ${formatAuthError(error as { message?: string }, "Unexpected sync failure.")}`);
     });
 
     return () => {
@@ -196,11 +265,11 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
     if (!AUTH_SYNC_ENABLED || !authUser?.id || !cloudReadyForSave) return undefined;
 
     const timer = window.setTimeout(async () => {
-      let client = null;
+      let client: SupabaseClient | null = null;
       try {
-        client = await loadSupabaseClient();
-      } catch (error) {
-        setCloudStatus(`Cloud save error: ${formatAuthError(error, "Unable to initialize cloud sync.")}`);
+        client = (await loadSupabaseClient()) as SupabaseClient | null;
+      } catch (error: unknown) {
+        setCloudStatus(`Cloud save error: ${formatAuthError(error as { message?: string }, "Unable to initialize cloud sync.")}`);
         return;
       }
       if (!client) return;
@@ -216,7 +285,7 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
             user_id: authUser.id,
             preferences: payload,
           },
-          { onConflict: "user_id" }
+          { onConflict: "user_id" },
         );
       if (error) {
         setCloudStatus(`Cloud save error: ${formatAuthError(error, "Unable to save settings.")}`);
@@ -230,7 +299,7 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
     };
   }, [authUser?.id, cloudReadyForSave, presets, watchlist]);
 
-  const signIn = useCallback(async (email, password) => {
+  const signIn = useCallback(async (email: string, password: string): Promise<void> => {
     if (!AUTH_SYNC_ENABLED) return;
     const normalizedEmail = String(email || "").trim();
     const normalizedPassword = String(password || "");
@@ -240,7 +309,7 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
     }
     setAuthStatus("");
     try {
-      const client = await loadSupabaseClient();
+      const client = (await loadSupabaseClient()) as SupabaseClient | null;
       if (!client) return;
       const { error } = await client.auth.signInWithPassword({
         email: normalizedEmail,
@@ -251,12 +320,12 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
         return;
       }
       setAuthStatus("Signed in.");
-    } catch (error) {
-      setAuthStatus(`Sign in failed: ${formatAuthError(error, "Unable to reach account service.")}`);
+    } catch (error: unknown) {
+      setAuthStatus(`Sign in failed: ${formatAuthError(error as { message?: string }, "Unable to reach account service.")}`);
     }
   }, []);
 
-  const signUp = useCallback(async (email, password) => {
+  const signUp = useCallback(async (email: string, password: string): Promise<void> => {
     if (!AUTH_SYNC_ENABLED) return;
     const normalizedEmail = String(email || "").trim();
     const normalizedPassword = String(password || "");
@@ -266,7 +335,7 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
     }
     setAuthStatus("");
     try {
-      const client = await loadSupabaseClient();
+      const client = (await loadSupabaseClient()) as SupabaseClient | null;
       if (!client) return;
       const { data, error } = await client.auth.signUp({
         email: normalizedEmail,
@@ -281,15 +350,15 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
         return;
       }
       setAuthStatus("Account created. Check your email to confirm your login.");
-    } catch (error) {
-      setAuthStatus(`Sign up failed: ${formatAuthError(error, "Unable to reach account service.")}`);
+    } catch (error: unknown) {
+      setAuthStatus(`Sign up failed: ${formatAuthError(error as { message?: string }, "Unable to reach account service.")}`);
     }
   }, []);
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (): Promise<void> => {
     if (!AUTH_SYNC_ENABLED) return;
     try {
-      const client = await loadSupabaseClient();
+      const client = (await loadSupabaseClient()) as SupabaseClient | null;
       if (!client) return;
       const { error } = await client.auth.signOut();
       if (error) {
@@ -298,8 +367,8 @@ export function useAccountSync({ presets, setPresets, watchlist, setWatchlist })
       }
       setAuthStatus("Signed out.");
       setCloudStatus("");
-    } catch (error) {
-      setAuthStatus(`Sign out failed: ${formatAuthError(error, "Unable to reach account service.")}`);
+    } catch (error: unknown) {
+      setAuthStatus(`Sign out failed: ${formatAuthError(error as { message?: string }, "Unable to reach account service.")}`);
     }
   }, []);
 

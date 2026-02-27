@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useMenuInteractions } from "../accessibility_components.jsx";
+import { useMenuInteractions } from "../accessibility_components";
 
 export function useAccountMenu({ section }) {
   const [open, setOpen] = useState(false);

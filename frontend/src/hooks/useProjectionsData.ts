@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedValue } from "../request_helpers";
+import type { ProjectionRow } from "../app_state_storage";
 
 export const DEFAULT_PROJECTIONS_TAB = "all";
 export const DEFAULT_PROJECTIONS_SORT_COL = "DynastyValue";
@@ -10,7 +11,19 @@ const PROJECTION_PAGE_CACHE_MAX = 80;
 const PROJECTION_SEARCH_DEBOUNCE_MS = 220;
 const PROJECTION_INITIAL_FETCH_DELAY_MS = 0;
 
-function projectionCacheGet(cacheMapRef, cacheOrderRef, cacheKey) {
+type ProjectionTab = "all" | "bat" | "pitch";
+type SortDir = "asc" | "desc";
+
+interface CachePayload {
+  rows: ProjectionRow[];
+  total: number;
+}
+
+function projectionCacheGet(
+  cacheMapRef: React.MutableRefObject<Map<string, CachePayload>>,
+  cacheOrderRef: React.MutableRefObject<string[]>,
+  cacheKey: string,
+): CachePayload | null {
   const cached = cacheMapRef.current.get(cacheKey);
   if (!cached) return null;
 
@@ -22,7 +35,12 @@ function projectionCacheGet(cacheMapRef, cacheOrderRef, cacheKey) {
   return cached;
 }
 
-function projectionCacheSet(cacheMapRef, cacheOrderRef, cacheKey, payload) {
+function projectionCacheSet(
+  cacheMapRef: React.MutableRefObject<Map<string, CachePayload>>,
+  cacheOrderRef: React.MutableRefObject<string[]>,
+  cacheKey: string,
+  payload: CachePayload,
+): void {
   cacheMapRef.current.set(cacheKey, payload);
 
   const idx = cacheOrderRef.current.indexOf(cacheKey);
@@ -39,8 +57,29 @@ function projectionCacheSet(cacheMapRef, cacheOrderRef, cacheKey, payload) {
   }
 }
 
-export function buildProjectionCacheKey(resolvedDataVersion, endpointTab, params) {
+export function buildProjectionCacheKey(
+  resolvedDataVersion: string,
+  endpointTab: string,
+  params: URLSearchParams,
+): string {
   return `${resolvedDataVersion}:${endpointTab}?${params.toString()}`;
+}
+
+export interface BuildProjectionQueryParamsInput {
+  debouncedSearch: string;
+  teamFilter: string;
+  watchlistOnly: boolean;
+  watchlistKeysFilter: string;
+  careerTotalsView: boolean;
+  resolvedYearFilter: string;
+  posFilters: string[];
+  selectedDynastyYears: string[];
+  calculatorJobId?: string;
+}
+
+export interface BuildProjectionQueryParamsResult {
+  baseParams: URLSearchParams;
+  shouldReturnEmptyWatchlist: boolean;
 }
 
 export function buildProjectionQueryParams({
@@ -53,7 +92,7 @@ export function buildProjectionQueryParams({
   posFilters,
   selectedDynastyYears,
   calculatorJobId,
-}) {
+}: BuildProjectionQueryParamsInput): BuildProjectionQueryParamsResult {
   const baseParams = new URLSearchParams();
   if (debouncedSearch) baseParams.set("player", debouncedSearch);
   if (teamFilter) baseParams.set("team", teamFilter);
@@ -76,16 +115,66 @@ export function buildProjectionQueryParams({
   };
 }
 
-export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calculatorJobId }) {
+export interface UseProjectionsDataInput {
+  apiBase: string;
+  meta: { years?: (string | number)[] } | null;
+  watchlist: Record<string, unknown>;
+  dataVersion: string;
+  calculatorJobId: string;
+}
+
+export interface UseProjectionsDataReturn {
+  tab: string;
+  setTab: React.Dispatch<React.SetStateAction<string>>;
+  search: string;
+  setSearch: React.Dispatch<React.SetStateAction<string>>;
+  debouncedSearch: string;
+  watchlistOnly: boolean;
+  setWatchlistOnly: React.Dispatch<React.SetStateAction<boolean>>;
+  teamFilter: string;
+  setTeamFilter: React.Dispatch<React.SetStateAction<string>>;
+  yearFilter: string;
+  setYearFilter: React.Dispatch<React.SetStateAction<string>>;
+  posFilters: string[];
+  setPosFilters: React.Dispatch<React.SetStateAction<string[]>>;
+  baseData: ProjectionRow[];
+  totalRows: number;
+  loading: boolean;
+  error: string;
+  pageResetNotice: string;
+  offset: number;
+  setOffset: React.Dispatch<React.SetStateAction<number>>;
+  sortCol: string;
+  setSortCol: React.Dispatch<React.SetStateAction<string>>;
+  sortDir: string;
+  setSortDir: React.Dispatch<React.SetStateAction<string>>;
+  limit: number;
+  availableProjectionYears: string[];
+  resolvedYearFilter: string;
+  careerTotalsView: boolean;
+  watchlistKeysFilter: string;
+  selectedDynastyYears: string[];
+  resolvedDataVersion: string;
+  retryFetch: () => void;
+  clearPageResetNotice: () => void;
+}
+
+export function useProjectionsData({
+  apiBase,
+  meta,
+  watchlist,
+  dataVersion,
+  calculatorJobId,
+}: UseProjectionsDataInput): UseProjectionsDataReturn {
   const API = String(apiBase || "").trim();
-  const [tab, setTab] = useState(DEFAULT_PROJECTIONS_TAB); // all | bat | pitch
+  const [tab, setTab] = useState<string>(DEFAULT_PROJECTIONS_TAB); // all | bat | pitch
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, PROJECTION_SEARCH_DEBOUNCE_MS);
   const [watchlistOnly, setWatchlistOnly] = useState(false);
   const [teamFilter, setTeamFilter] = useState("");
   const [yearFilter, setYearFilter] = useState(CAREER_TOTALS_FILTER_VALUE);
-  const [posFilters, setPosFilters] = useState([]);
-  const [baseData, setBaseData] = useState([]);
+  const [posFilters, setPosFilters] = useState<string[]>([]);
+  const [baseData, setBaseData] = useState<ProjectionRow[]>([]);
   const [totalRows, setTotalRows] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -95,12 +184,15 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
   const [sortCol, setSortCol] = useState(DEFAULT_PROJECTIONS_SORT_COL);
   const [sortDir, setSortDir] = useState(DEFAULT_PROJECTIONS_SORT_DIR);
   const requestSeqRef = useRef(0);
-  const abortControllerRef = useRef(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const hasLoadedProjectionPageRef = useRef(false);
-  const projectionCacheMapRef = useRef(new Map());
-  const projectionCacheOrderRef = useRef([]);
+  const projectionCacheMapRef = useRef(new Map<string, CachePayload>());
+  const projectionCacheOrderRef = useRef<string[]>([]);
   const limit = 100;
-  const availableProjectionYears = useMemo(() => (meta.years || []).map(String), [meta.years]);
+  const availableProjectionYears = useMemo(
+    () => ((meta as Record<string, unknown> | null)?.years as (string | number)[] || []).map(String),
+    [meta],
+  );
   const resolvedYearFilter = useMemo(() => {
     const value = String(yearFilter || "").trim();
     if (value === CAREER_TOTALS_FILTER_VALUE) return CAREER_TOTALS_FILTER_VALUE;
@@ -111,13 +203,13 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
   const resolvedDataVersion = String(dataVersion || "").trim();
   const watchlistKeysFilter = useMemo(
     () => Object.keys(watchlist).sort().join(","),
-    [watchlist]
+    [watchlist],
   );
   const selectedDynastyYears = useMemo(() => {
     if (careerTotalsView) return availableProjectionYears;
     return [resolvedYearFilter];
   }, [availableProjectionYears, careerTotalsView, resolvedYearFilter]);
-  const resetOffsetWithNotice = useCallback(message => {
+  const resetOffsetWithNotice = useCallback((message: string) => {
     setOffset(current => {
       if (current === 0) return current;
       setPageResetNotice(message);
@@ -125,7 +217,11 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
     });
   }, []);
 
-  const prefetchProjectionPage = useCallback(async (endpointTab, paramsWithoutOffset, nextOffset) => {
+  const prefetchProjectionPage = useCallback(async (
+    endpointTab: string,
+    paramsWithoutOffset: URLSearchParams,
+    nextOffset: number,
+  ) => {
     if (nextOffset < 0) return;
     const nextParams = new URLSearchParams(paramsWithoutOffset);
     nextParams.set("offset", String(nextOffset));
@@ -138,9 +234,10 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
         headers: { "Cache-Control": "no-cache" },
       });
       if (!response.ok) return;
-      const payload = await response.json();
-      const pageRows = Array.isArray(payload.data) ? payload.data : [];
-      const parsedTotal = Number(payload.total);
+      const payload: unknown = await response.json();
+      const payloadObj = payload as Record<string, unknown>;
+      const pageRows = Array.isArray(payloadObj.data) ? (payloadObj.data as ProjectionRow[]) : [];
+      const parsedTotal = Number(payloadObj.total);
       const resolvedTotal = Number.isFinite(parsedTotal) && parsedTotal >= 0 ? parsedTotal : pageRows.length;
       const typeTag = endpointTab === "bat" ? "H" : endpointTab === "pitch" ? "P" : "";
       const rows = typeTag ? pageRows.map(row => ({ ...row, Type: typeTag })) : pageRows;
@@ -148,7 +245,7 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
         projectionCacheMapRef,
         projectionCacheOrderRef,
         nextCacheKey,
-        { rows, total: resolvedTotal }
+        { rows, total: resolvedTotal },
       );
     } catch {
       // Prefetch is best-effort only.
@@ -189,7 +286,7 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
     }
 
     try {
-      const endpointTab = tab === "all" ? "all" : tab;
+      const endpointTab: ProjectionTab = tab === "all" ? "all" : (tab as ProjectionTab);
       const paramsWithoutOffset = new URLSearchParams(baseParams);
       paramsWithoutOffset.set("limit", String(limit));
       paramsWithoutOffset.set("sort_col", sortCol);
@@ -224,11 +321,12 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
         throw new Error(`Server returned ${response.status} while loading projections`);
       }
 
-      const payload = await response.json();
+      const payload: unknown = await response.json();
       if (requestSeq !== requestSeqRef.current || controller.signal.aborted) return;
 
-      const pageRows = Array.isArray(payload.data) ? payload.data : [];
-      const parsedTotal = Number(payload.total);
+      const payloadObj = payload as Record<string, unknown>;
+      const pageRows = Array.isArray(payloadObj.data) ? (payloadObj.data as ProjectionRow[]) : [];
+      const parsedTotal = Number(payloadObj.total);
       const resolvedTotal = Number.isFinite(parsedTotal) && parsedTotal >= 0 ? parsedTotal : pageRows.length;
       const typeTag = endpointTab === "bat" ? "H" : endpointTab === "pitch" ? "P" : "";
       const rows = typeTag ? pageRows.map(row => ({ ...row, Type: typeTag })) : pageRows;
@@ -238,7 +336,7 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
         projectionCacheMapRef,
         projectionCacheOrderRef,
         cacheKey,
-        { rows, total: resolvedTotal }
+        { rows, total: resolvedTotal },
       );
       hasLoadedProjectionPageRef.current = true;
       setBaseData(rows);
@@ -247,11 +345,11 @@ export function useProjectionsData({ apiBase, meta, watchlist, dataVersion, calc
       if (resolvedTotal > offset + limit) {
         prefetchProjectionPage(endpointTab, paramsWithoutOffset, offset + limit);
       }
-    } catch (err) {
+    } catch (err: unknown) {
       if (requestSeq !== requestSeqRef.current) return;
-      if (err?.name === "AbortError") return;
+      if ((err as Error)?.name === "AbortError") return;
       setLoading(false);
-      setError(err.message || "Failed to load projections");
+      setError((err as Error)?.message || "Failed to load projections");
     } finally {
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;

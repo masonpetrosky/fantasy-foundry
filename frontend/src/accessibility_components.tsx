@@ -1,8 +1,36 @@
 import React, { useEffect } from "react";
 
-export function VisuallyHidden({ as: elementTag = "span", className = "", ...props }) {
+/* ------------------------------------------------------------------ */
+/*  VisuallyHidden                                                    */
+/* ------------------------------------------------------------------ */
+
+interface VisuallyHiddenProps extends React.HTMLAttributes<HTMLElement> {
+  as?: keyof React.JSX.IntrinsicElements;
+  className?: string;
+}
+
+export function VisuallyHidden({
+  as: elementTag = "span",
+  className = "",
+  ...props
+}: VisuallyHiddenProps): React.ReactElement {
   const mergedClassName = ["sr-only", className].filter(Boolean).join(" ");
   return React.createElement(elementTag, { className: mergedClassName, ...props });
+}
+
+/* ------------------------------------------------------------------ */
+/*  MenuButton                                                        */
+/* ------------------------------------------------------------------ */
+
+interface MenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  controlsId: string;
+  open: boolean;
+  onToggle: () => void;
+  buttonRef?: React.Ref<HTMLButtonElement>;
+  hasPopup?: boolean | "true" | "false" | "dialog" | "grid" | "listbox" | "menu" | "tree";
+  className?: string;
+  label?: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 export function MenuButton({
@@ -15,7 +43,7 @@ export function MenuButton({
   label,
   children,
   ...buttonProps
-}) {
+}: MenuButtonProps): React.ReactElement {
   return (
     <button
       type="button"
@@ -33,24 +61,35 @@ export function MenuButton({
   );
 }
 
-export function useMenuInteractions({ open, setOpen, menuRef, triggerRef }) {
+/* ------------------------------------------------------------------ */
+/*  useMenuInteractions                                               */
+/* ------------------------------------------------------------------ */
+
+interface UseMenuInteractionsOptions {
+  open: boolean;
+  setOpen: (value: boolean) => void;
+  menuRef?: React.RefObject<HTMLElement | null>;
+  triggerRef?: React.RefObject<HTMLElement | null>;
+}
+
+export function useMenuInteractions({ open, setOpen, menuRef, triggerRef }: UseMenuInteractionsOptions): void {
   useEffect(() => {
     if (!open) return undefined;
 
-    const onOutsideInteraction = event => {
-      const target = event.target;
+    const onOutsideInteraction = (event: MouseEvent | TouchEvent): void => {
+      const target = event.target as Node;
       const clickedMenu = Boolean(menuRef?.current && menuRef.current.contains(target));
       const clickedTrigger = Boolean(triggerRef?.current && triggerRef.current.contains(target));
       if (clickedMenu || clickedTrigger) return;
       setOpen(false);
     };
 
-    const onEscape = event => {
+    const onEscape = (event: KeyboardEvent): void => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       setOpen(false);
-      if (triggerRef?.current && typeof triggerRef.current.focus === "function") {
-        triggerRef.current.focus();
+      if (triggerRef?.current && typeof (triggerRef.current as HTMLElement).focus === "function") {
+        (triggerRef.current as HTMLElement).focus();
       }
     };
 
@@ -65,6 +104,19 @@ export function useMenuInteractions({ open, setOpen, menuRef, triggerRef }) {
   }, [menuRef, open, setOpen, triggerRef]);
 }
 
+/* ------------------------------------------------------------------ */
+/*  SortableHeaderCell                                                */
+/* ------------------------------------------------------------------ */
+
+interface SortableHeaderCellProps {
+  columnKey: string;
+  label: string;
+  sortCol: string;
+  sortDir: "asc" | "desc";
+  onSort: (columnKey: string) => void;
+  className?: string;
+}
+
 export function SortableHeaderCell({
   columnKey,
   label,
@@ -72,7 +124,7 @@ export function SortableHeaderCell({
   sortDir,
   onSort,
   className = "",
-}) {
+}: SortableHeaderCellProps): React.ReactElement {
   const isSorted = sortCol === columnKey;
   const ariaSortValue = isSorted ? (sortDir === "asc" ? "ascending" : "descending") : "none";
   const nextSortDirectionLabel = !isSorted || sortDir === "desc" ? "ascending" : "descending";
@@ -89,7 +141,7 @@ export function SortableHeaderCell({
         <span>{label}</span>
         {isSorted && (
           <span className="sort-arrow" aria-hidden="true">
-            {sortDir === "asc" ? "▲" : "▼"}
+            {sortDir === "asc" ? "\u25B2" : "\u25BC"}
           </span>
         )}
         {isSorted && (

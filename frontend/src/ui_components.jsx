@@ -1,5 +1,5 @@
 import React, { useId, useRef, useState } from "react";
-import { MenuButton, useMenuInteractions } from "./accessibility_components.jsx";
+import { MenuButton, useMenuInteractions } from "./accessibility_components";
 
 export function ColumnChooserControl({
   columns,

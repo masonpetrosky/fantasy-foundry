@@ -1,7 +1,7 @@
 import React from "react";
 import { GLOSSARY_TERMS, METHODOLOGY_FAQS, glossaryTermAnchorId } from "./app_content";
 
-export function MethodologySection() {
+export function MethodologySection(): React.ReactElement {
   return (
     <section className="methodology-stack" aria-labelledby="methodology-heading">
       <article className="methodology-card" aria-labelledby="methodology-heading">

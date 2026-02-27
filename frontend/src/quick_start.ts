@@ -46,7 +46,7 @@ function buildQuickStartAnalyticsProps({
 }
 
 export interface TrackQuickStartInput {
-  mode: unknown;
+  mode?: unknown;
   source: unknown;
   isFirstRun?: boolean;
   section?: string;

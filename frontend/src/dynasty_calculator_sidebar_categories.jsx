@@ -4,7 +4,7 @@ import {
   ROTO_PITCHER_CATEGORY_FIELDS,
   coerceBooleanSetting,
 } from "./dynasty_calculator_config";
-import { CalcTooltip } from "./dynasty_calculator_tooltip.jsx";
+import { CalcTooltip } from "./dynasty_calculator_tooltip";
 
 export const RotoCategoriesForm = React.memo(function RotoCategoriesForm({
   settings,

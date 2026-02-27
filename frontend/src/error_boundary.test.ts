@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ErrorBoundary } from "./error_boundary.jsx";
+import { ErrorBoundary } from "./error_boundary";
 
 describe("ErrorBoundary", () => {
   describe("getDerivedStateFromError", () => {
@@ -10,12 +10,12 @@ describe("ErrorBoundary", () => {
     });
 
     it("returns error state from a non-Error value", () => {
-      const state = ErrorBoundary.getDerivedStateFromError("string error");
+      const state = ErrorBoundary.getDerivedStateFromError("string error" as unknown as Error);
       expect(state).toEqual({ error: "string error" });
     });
 
     it("returns error state from null", () => {
-      const state = ErrorBoundary.getDerivedStateFromError(null);
+      const state = ErrorBoundary.getDerivedStateFromError(null as unknown as Error);
       expect(state).toEqual({ error: null });
     });
   });

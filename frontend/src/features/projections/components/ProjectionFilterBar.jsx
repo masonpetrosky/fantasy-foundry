@@ -4,10 +4,10 @@ import {
   MenuButton,
   VisuallyHidden,
   useMenuInteractions,
-} from "../../../accessibility_components.jsx";
+} from "../../../accessibility_components";
 import { parsePosTokens } from "../../../formatting_utils";
 import { DEFAULT_FILTER_SUMMARY_FALLBACK } from "../view_state";
-import { CAREER_TOTALS_FILTER_VALUE } from "../../../hooks/useProjectionsData.js";
+import { CAREER_TOTALS_FILTER_VALUE } from "../../../hooks/useProjectionsData";
 
 export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
   tab,

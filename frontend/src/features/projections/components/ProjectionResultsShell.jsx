@@ -1,5 +1,5 @@
 import React from "react";
-import { SortableHeaderCell } from "../../../accessibility_components.jsx";
+import { SortableHeaderCell } from "../../../accessibility_components";
 
 export const ProjectionResultsShell = React.memo(function ProjectionResultsShell({
   showCards,

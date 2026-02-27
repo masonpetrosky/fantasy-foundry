@@ -1,13 +1,23 @@
 import React, { createContext, useContext } from "react";
-import { useToast } from "./hooks/useToast.js";
+import { useToast, type ToastEntry } from "./hooks/useToast";
 
-const ToastContext = createContext(null);
+interface ToastContextValue {
+  toasts: ToastEntry[];
+  addToast: (message: string, options?: { type?: "success" | "error" | "info"; duration?: number }) => number;
+  dismissToast: (id: number) => void;
+}
 
-export function useToastContext() {
+const ToastContext = createContext<ToastContextValue | null>(null);
+
+export function useToastContext(): ToastContextValue | null {
   return useContext(ToastContext);
 }
 
-export function ToastProvider({ children }) {
+interface ToastProviderProps {
+  children: React.ReactNode;
+}
+
+export function ToastProvider({ children }: ToastProviderProps): React.ReactElement {
   const toast = useToast();
   return (
     <ToastContext.Provider value={toast}>
@@ -17,7 +27,12 @@ export function ToastProvider({ children }) {
   );
 }
 
-function ToastContainer({ toasts, onDismiss }) {
+interface ToastContainerProps {
+  toasts: ToastEntry[];
+  onDismiss: (id: number) => void;
+}
+
+function ToastContainer({ toasts, onDismiss }: ToastContainerProps): React.ReactElement | null {
   if (toasts.length === 0) return null;
   return (
     <div className="toast-container" aria-live="polite" aria-relevant="additions">

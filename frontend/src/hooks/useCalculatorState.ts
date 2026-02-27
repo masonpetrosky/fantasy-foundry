@@ -9,28 +9,62 @@ import {
   writeCalculatorPresets,
   writeLastSuccessfulCalcRun,
 } from "../app_state_storage";
+import type { CalculatorPreset, SuccessfulCalcRun } from "../app_state_storage";
 
 const ACTIVATION_SPRINT_ENABLED = String(import.meta.env.VITE_FF_ACTIVATION_SPRINT_V1 || "1").trim() !== "0";
+
+export interface UseCalculatorStateInput {
+  section: string;
+  setSection: (section: string) => void;
+  meta: Record<string, unknown> | null;
+}
+
+export interface UseCalculatorStateReturn {
+  calculatorPanelOpen: boolean;
+  setCalculatorPanelOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  calculatorSettings: Record<string, unknown> | null;
+  setCalculatorSettings: React.Dispatch<React.SetStateAction<Record<string, unknown> | null>>;
+  lastSuccessfulCalcRun: SuccessfulCalcRun | null;
+  presets: Record<string, CalculatorPreset>;
+  setPresets: React.Dispatch<React.SetStateAction<Record<string, CalculatorPreset>>>;
+  pendingMethodologyAnchor: string;
+  calculatorSectionRef: React.RefObject<HTMLElement | null>;
+  calculatorHeadingRef: React.RefObject<HTMLElement | null>;
+  calculatorPanelOpenSourceRef: React.MutableRefObject<string>;
+  scrollToCalculator: () => void;
+  focusFirstCalculatorInput: () => void;
+  openCalculatorPanel: (source?: string) => void;
+  handleCalculationSuccess: (summary: unknown) => void;
+  openMethodologyGlossary: (anchorId: string) => void;
+}
 
 /**
  * Extracts calculator-related state, refs, effects, and callbacks from App.
  * Accepts { section, setSection, meta } and returns everything the App JSX needs.
  */
-export function useCalculatorState({ section, setSection, meta }) {
-  const [calculatorPanelOpen, setCalculatorPanelOpen] = useState(() => {
+export function useCalculatorState({
+  section,
+  setSection,
+  meta,
+}: UseCalculatorStateInput): UseCalculatorStateReturn {
+  const [calculatorPanelOpen, setCalculatorPanelOpen] = useState<boolean>(() => {
     const params = new URLSearchParams(window.location.search);
     const hasSharedCalculatorState = Boolean(String(params.get(CALC_LINK_QUERY_PARAM) || "").trim());
     if (hasSharedCalculatorState) return true;
     const savedPanelOpenState = readCalculatorPanelOpenPreference();
     return typeof savedPanelOpenState === "boolean" ? savedPanelOpenState : true;
   });
-  const [lastSuccessfulCalcRun, setLastSuccessfulCalcRun] = useState(() => readLastSuccessfulCalcRun());
+  const [lastSuccessfulCalcRun, setLastSuccessfulCalcRun] = useState<SuccessfulCalcRun | null>(
+    () => readLastSuccessfulCalcRun(),
+  );
   const [pendingMethodologyAnchor, setPendingMethodologyAnchor] = useState("");
-  const [presets, setPresets] = useState(() => readCalculatorPresets());
-  const [calculatorSettings, setCalculatorSettings] = useState(null);
+  const [presets, setPresets] = useState<Record<string, CalculatorPreset>>(
+    () => readCalculatorPresets(),
+  );
+  const [calculatorSettings, setCalculatorSettings] = useState<Record<string, unknown> | null>(null);
 
-  const calculatorSectionRef = useRef(null);
-  const calculatorHeadingRef = useRef(null);
+  const calculatorSectionRef = useRef<HTMLElement | null>(null);
+  const calculatorHeadingRef = useRef<HTMLElement | null>(null);
   const calculatorPanelOpenSourceRef = useRef("");
   const previousCalculatorPanelOpenRef = useRef(calculatorPanelOpen);
 
@@ -55,23 +89,24 @@ export function useCalculatorState({ section, setSection, meta }) {
     setCalculatorPanelOpen(true);
   }, [setSection]);
 
-  const handleCalculationSuccess = useCallback(summary => {
-    const teams = Number(summary?.teams);
-    const horizon = Number(summary?.horizon);
+  const handleCalculationSuccess = useCallback((summary: unknown) => {
+    const summaryObj = summary as Record<string, unknown> | null | undefined;
+    const teams = Number(summaryObj?.teams);
+    const horizon = Number(summaryObj?.horizon);
     if (!Number.isFinite(teams) || teams <= 0 || !Number.isFinite(horizon) || horizon <= 0) return;
-    const nextSummary = {
-      scoringMode: String(summary?.scoringMode || "").trim().toLowerCase() === "points" ? "points" : "roto",
+    const nextSummary: SuccessfulCalcRun = {
+      scoringMode: String(summaryObj?.scoringMode || "").trim().toLowerCase() === "points" ? "points" : "roto",
       teams: Math.round(teams),
       horizon: Math.round(horizon),
-      startYear: Number.isFinite(Number(summary?.startYear)) ? Math.round(Number(summary.startYear)) : null,
-      playerCount: Number.isFinite(Number(summary?.playerCount)) ? Math.max(0, Math.round(Number(summary.playerCount))) : 0,
+      startYear: Number.isFinite(Number(summaryObj?.startYear)) ? Math.round(Number(summaryObj?.startYear)) : null,
+      playerCount: Number.isFinite(Number(summaryObj?.playerCount)) ? Math.max(0, Math.round(Number(summaryObj?.playerCount))) : 0,
       completedAt: new Date().toISOString(),
     };
     setLastSuccessfulCalcRun(nextSummary);
     writeLastSuccessfulCalcRun(nextSummary);
   }, []);
 
-  const openMethodologyGlossary = useCallback(anchorId => {
+  const openMethodologyGlossary = useCallback((anchorId: string) => {
     const nextAnchor = String(anchorId || "").trim();
     if (!nextAnchor) return;
     setSection("methodology");

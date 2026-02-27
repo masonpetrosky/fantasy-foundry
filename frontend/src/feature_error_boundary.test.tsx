@@ -2,12 +2,15 @@ import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { createRoot } from "react-dom/client";
 import { act } from "react";
-import { FeatureErrorBoundary } from "./feature_error_boundary.jsx";
+import { FeatureErrorBoundary } from "./feature_error_boundary";
 
-function renderToContainer(element) {
+function renderToContainer(element: React.ReactElement): {
+  container: HTMLDivElement;
+  cleanup: () => void;
+} {
   const container = document.createElement("div");
   document.body.appendChild(container);
-  let root;
+  let root: ReturnType<typeof createRoot>;
   act(() => {
     root = createRoot(container);
     root.render(element);
@@ -21,7 +24,7 @@ function renderToContainer(element) {
   };
 }
 
-function ThrowingChild({ shouldThrow }) {
+function ThrowingChild({ shouldThrow }: { shouldThrow: boolean }): React.ReactElement {
   if (shouldThrow) throw new Error("test crash");
   return <p>working</p>;
 }
@@ -50,7 +53,7 @@ describe("FeatureErrorBoundary", () => {
 
     expect(container.textContent).toContain("Dynasty Calculator encountered an error");
     expect(container.textContent).toContain("test crash");
-    expect(container.querySelector("button").textContent).toContain("Try again");
+    expect(container.querySelector("button")!.textContent).toContain("Try again");
 
     spy.mockRestore();
     cleanup();
@@ -60,7 +63,7 @@ describe("FeatureErrorBoundary", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     let shouldThrow = true;
 
-    function ConditionalThrow() {
+    function ConditionalThrow(): React.ReactElement {
       if (shouldThrow) throw new Error("boom");
       return <p>recovered</p>;
     }
@@ -75,7 +78,7 @@ describe("FeatureErrorBoundary", () => {
 
     shouldThrow = false;
     act(() => {
-      container.querySelector("button").click();
+      container.querySelector("button")!.click();
     });
 
     expect(container.textContent).toContain("recovered");

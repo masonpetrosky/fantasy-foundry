@@ -10,17 +10,17 @@ import { useProjectionFilterPresets } from "./hooks/useProjectionFilterPresets.j
 import { useProjectionTelemetry } from "./hooks/useProjectionTelemetry.js";
 import { useProjectionRowsMarkup } from "./hooks/useProjectionRowsMarkup.jsx";
 import { useProjectionWatchlistComposition } from "./hooks/useProjectionWatchlistComposition.js";
-import { CAREER_TOTALS_FILTER_VALUE, DEFAULT_PROJECTIONS_SORT_COL, DEFAULT_PROJECTIONS_SORT_DIR, DEFAULT_PROJECTIONS_TAB, useProjectionsData } from "../../hooks/useProjectionsData.js";
+import { CAREER_TOTALS_FILTER_VALUE, DEFAULT_PROJECTIONS_SORT_COL, DEFAULT_PROJECTIONS_SORT_DIR, DEFAULT_PROJECTIONS_TAB, useProjectionsData } from "../../hooks/useProjectionsData";
 import { buildActiveFilterChips, resolveProjectionEmptyStateModel, resolveProjectionSwipeHint } from "./view_state";
 import { PlayerProfile } from "./components/PlayerProfile.jsx";
 import { ProjectionCollectionsWorkspace } from "./components/ProjectionCollectionsWorkspace.jsx";
-import { ProjectionEmptyStateActions } from "./components/ProjectionEmptyStateActions.jsx";
+import { ProjectionEmptyStateActions } from "./components/ProjectionEmptyStateActions";
 import { ProjectionFilterBar } from "./components/ProjectionFilterBar.jsx";
 import { ProjectionLayoutControls } from "./components/ProjectionLayoutControls.jsx";
-import { ProjectionOverlayBanner } from "./components/ProjectionOverlayBanner.jsx";
+import { ProjectionOverlayBanner } from "./components/ProjectionOverlayBanner";
 import { ProjectionResultsShell } from "./components/ProjectionResultsShell.jsx";
-import { ProjectionSectionTabs } from "./components/ProjectionSectionTabs.jsx";
-import { ProjectionStatusMessages } from "./components/ProjectionStatusMessages.jsx";
+import { ProjectionSectionTabs } from "./components/ProjectionSectionTabs";
+import { ProjectionStatusMessages } from "./components/ProjectionStatusMessages";
 
 export function ProjectionsExplorer({
   apiBase,

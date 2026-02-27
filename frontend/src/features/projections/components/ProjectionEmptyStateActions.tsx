@@ -1,5 +1,17 @@
 import React from "react";
 
+interface ProjectionEmptyStateActionsProps {
+  clearAllFilters: () => void;
+  clearFiltersDisabled: boolean;
+  showTurnOffWatchlistAction: boolean;
+  setWatchlistOnly: (value: boolean) => void;
+  applyProjectionFilterPreset: (preset: string, source: string) => void;
+  setSearch: (value: string) => void;
+  showSwitchToCareerTotalsAction: boolean;
+  setYearFilter: (value: string) => void;
+  careerTotalsFilterValue: string;
+}
+
 export const ProjectionEmptyStateActions = React.memo(function ProjectionEmptyStateActions({
   clearAllFilters,
   clearFiltersDisabled,
@@ -10,7 +22,7 @@ export const ProjectionEmptyStateActions = React.memo(function ProjectionEmptySt
   showSwitchToCareerTotalsAction,
   setYearFilter,
   careerTotalsFilterValue,
-}) {
+}: ProjectionEmptyStateActionsProps): React.ReactElement {
   return (
     <div className="empty-state-actions">
       <button type="button" className="inline-btn" onClick={clearAllFilters} disabled={clearFiltersDisabled}>

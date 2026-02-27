@@ -6,7 +6,7 @@ const LazyProjectionComparisonPanel = lazy(() => (
   }))
 ));
 const LazyProjectionWatchlistPanel = lazy(() => (
-  import("./ProjectionWatchlistPanel.jsx").then(module => ({
+  import("./ProjectionWatchlistPanel").then(module => ({
     default: module.ProjectionWatchlistPanel,
   }))
 ));

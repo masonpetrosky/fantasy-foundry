@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { ProjectionStatusMessages } from "./ProjectionStatusMessages.jsx";
+import { ProjectionStatusMessages } from "./ProjectionStatusMessages";
 
 describe("ProjectionStatusMessages", () => {
   it("renders nothing when no status sources are present", () => {

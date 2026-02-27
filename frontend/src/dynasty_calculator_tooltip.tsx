@@ -1,19 +1,24 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-export function CalcTooltip({ label, children }) {
+interface CalcTooltipProps {
+  label: React.ReactNode;
+  children: React.ReactNode;
+}
+
+export function CalcTooltip({ label, children }: CalcTooltipProps): React.ReactElement {
   const [open, setOpen] = useState(false);
-  const wrapperRef = useRef(null);
+  const wrapperRef = useRef<HTMLSpanElement>(null);
 
   const close = useCallback(() => setOpen(false), []);
 
   useEffect(() => {
     if (!open) return;
-    function handleClick(e) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+    function handleClick(e: MouseEvent): void {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         close();
       }
     }
-    function handleKey(e) {
+    function handleKey(e: KeyboardEvent): void {
       if (e.key === "Escape") close();
     }
     document.addEventListener("mousedown", handleClick);

@@ -7,7 +7,31 @@ import {
   readFirstRunState,
   writeFirstRunState,
 } from "../app_state_storage";
+import type { QuickStartMode } from "../quick_start";
 import { runQuickStartFlow, trackQuickStartImpression } from "../quick_start";
+
+type QuickStartRunner = (mode: QuickStartMode) => void;
+
+export interface UseQuickStartInput {
+  meta: Record<string, unknown> | null;
+  section: string;
+  dataVersion: string;
+  calculatorPanelOpen: boolean;
+  lastSuccessfulCalcRun: unknown;
+  openCalculatorPanel: (source: string) => void;
+  scrollToCalculator: () => void;
+  focusCalculatorHeading: () => void;
+}
+
+export interface UseQuickStartReturn {
+  firstRunState: string;
+  showQuickStartOnboarding: boolean;
+  showQuickStartReminder: boolean;
+  requestQuickStartRun: (mode: unknown, options?: { source?: string }) => void;
+  dismissQuickStartOnboarding: () => void;
+  reopenQuickStartOnboarding: () => void;
+  handleRegisterQuickStartRunner: (runner: QuickStartRunner) => void;
+}
 
 export function useQuickStart({
   meta,
@@ -18,11 +42,11 @@ export function useQuickStart({
   openCalculatorPanel,
   scrollToCalculator,
   focusCalculatorHeading,
-}) {
+}: UseQuickStartInput): UseQuickStartReturn {
   const [firstRunState, setFirstRunState] = useState(() => readFirstRunState());
   const [pendingQuickStartMode, setPendingQuickStartMode] = useState("");
   const [quickStartRunnerVersion, setQuickStartRunnerVersion] = useState(0);
-  const quickStartRunnerRef = useRef(null);
+  const quickStartRunnerRef = useRef<QuickStartRunner | null>(null);
   const quickStartStripImpressionTrackedRef = useRef(false);
   const quickStartReminderImpressionTrackedRef = useRef(false);
 
@@ -41,7 +65,7 @@ export function useQuickStart({
     firstRunState === FIRST_RUN_STATE_DISMISSED_PRE_SUCCESS
   );
 
-  const requestQuickStartRun = useCallback((mode, options = {}) => {
+  const requestQuickStartRun = useCallback((mode: unknown, options: { source?: string } = {}) => {
     const source = String(options.source || "").trim() || (
       firstRunState === FIRST_RUN_STATE_DISMISSED_PRE_SUCCESS ? "activation_reminder" : "activation_strip"
     );
@@ -83,7 +107,7 @@ export function useQuickStart({
     trackEvent("ff_quickstart_reopen", { source: "activation_reminder" });
   }, []);
 
-  const handleRegisterQuickStartRunner = useCallback(runner => {
+  const handleRegisterQuickStartRunner = useCallback((runner: QuickStartRunner) => {
     quickStartRunnerRef.current = runner;
     setQuickStartRunnerVersion(version => version + 1);
   }, []);
@@ -92,7 +116,7 @@ export function useQuickStart({
     if (!pendingQuickStartMode) return;
     if (section !== "projections" || !calculatorPanelOpen) return;
     if (typeof quickStartRunnerRef.current !== "function") return;
-    quickStartRunnerRef.current(pendingQuickStartMode);
+    quickStartRunnerRef.current(pendingQuickStartMode as QuickStartMode);
     setPendingQuickStartMode("");
   }, [calculatorPanelOpen, pendingQuickStartMode, quickStartRunnerVersion, section]);
 

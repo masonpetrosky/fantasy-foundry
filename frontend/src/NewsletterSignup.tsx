@@ -1,12 +1,18 @@
 import React, { useCallback, useState } from "react";
 import { trackEvent } from "./analytics";
 
-export function NewsletterSignup({ apiBase }) {
+type SubmitStatus = "idle" | "loading" | "success" | "error";
+
+interface NewsletterSignupProps {
+  apiBase: string;
+}
+
+export function NewsletterSignup({ apiBase }: NewsletterSignupProps): React.ReactElement {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState("idle"); // idle | loading | success | error
+  const [status, setStatus] = useState<SubmitStatus>("idle");
   const [message, setMessage] = useState("");
 
-  const handleSubmit = useCallback(async (e) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     const trimmed = email.trim();
     if (!trimmed) return;
@@ -20,16 +26,16 @@ export function NewsletterSignup({ apiBase }) {
         body: JSON.stringify({ email: trimmed }),
       });
       if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
+        const data: { detail?: string } = await resp.json().catch(() => ({}));
         throw new Error(data.detail || "Subscription failed.");
       }
       setStatus("success");
       setMessage("You're subscribed!");
       setEmail("");
       trackEvent("ff_newsletter_subscribe", { source: "footer" });
-    } catch (err) {
+    } catch (err: unknown) {
       setStatus("error");
-      setMessage(String(err.message || "Something went wrong."));
+      setMessage(String((err as Error).message || "Something went wrong."));
     }
   }, [apiBase, email]);
 

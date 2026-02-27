@@ -4,7 +4,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 vi.mock("../app_state_storage", () => ({
   CALC_LINK_QUERY_PARAM: "calc",
   readCalculatorPanelOpenPreference: vi.fn(() => null),
-  readCalculatorPresets: vi.fn(() => []),
+  readCalculatorPresets: vi.fn(() => ({})),
   readLastSuccessfulCalcRun: vi.fn(() => null),
   writeCalculatorPanelOpenPreference: vi.fn(),
   writeCalculatorPresets: vi.fn(),
@@ -16,22 +16,26 @@ vi.mock("../analytics", () => ({
 }));
 
 // Must import after mocks are set up
-const { useCalculatorState } = await import("./useCalculatorState.js");
+const { useCalculatorState } = await import("./useCalculatorState");
 
 // Minimal renderHook implementation using React
 const React = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { act } = await import("react");
 
-function renderHook(hookFn) {
-  let result = { current: null };
-  function TestComponent() {
+interface HookResult<T> {
+  current: T | null;
+}
+
+function renderHook<T>(hookFn: () => T): { result: HookResult<T>; cleanup: () => void } {
+  const result: HookResult<T> = { current: null };
+  function TestComponent(): null {
     result.current = hookFn();
     return null;
   }
   const container = document.createElement("div");
   document.body.appendChild(container);
-  let root;
+  let root: ReturnType<typeof createRoot>;
   act(() => {
     root = createRoot(container);
     root.render(React.createElement(TestComponent));
@@ -56,12 +60,12 @@ describe("useCalculatorState", () => {
       useCalculatorState({ section: "projections", setSection, meta: null })
     );
 
-    expect(result.current.calculatorPanelOpen).toBe(true);
-    expect(result.current.lastSuccessfulCalcRun).toBe(null);
-    expect(result.current.calculatorSettings).toBe(null);
-    expect(typeof result.current.scrollToCalculator).toBe("function");
-    expect(typeof result.current.openCalculatorPanel).toBe("function");
-    expect(typeof result.current.handleCalculationSuccess).toBe("function");
+    expect(result.current!.calculatorPanelOpen).toBe(true);
+    expect(result.current!.lastSuccessfulCalcRun).toBe(null);
+    expect(result.current!.calculatorSettings).toBe(null);
+    expect(typeof result.current!.scrollToCalculator).toBe("function");
+    expect(typeof result.current!.openCalculatorPanel).toBe("function");
+    expect(typeof result.current!.handleCalculationSuccess).toBe("function");
     cleanup();
   });
 
@@ -72,11 +76,11 @@ describe("useCalculatorState", () => {
     );
 
     act(() => {
-      result.current.openCalculatorPanel("test_source");
+      result.current!.openCalculatorPanel("test_source");
     });
 
     expect(setSection).toHaveBeenCalledWith("projections");
-    expect(result.current.calculatorPanelOpen).toBe(true);
+    expect(result.current!.calculatorPanelOpen).toBe(true);
     cleanup();
   });
 });

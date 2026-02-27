@@ -1,5 +1,19 @@
 import React from "react";
 
+interface OverlayStatusMeta {
+  isStale: boolean;
+  chips: string[];
+}
+
+interface ProjectionOverlayBannerProps {
+  hasCalculatorOverlay: boolean;
+  resolvedCalculatorOverlayPlayerCount: number;
+  overlayStatusMeta: OverlayStatusMeta;
+  showOverlayWhy: boolean;
+  setShowOverlayWhy: React.Dispatch<React.SetStateAction<boolean>>;
+  onClearCalculatorOverlay?: (() => void) | null;
+}
+
 export const ProjectionOverlayBanner = React.memo(function ProjectionOverlayBanner({
   hasCalculatorOverlay,
   resolvedCalculatorOverlayPlayerCount,
@@ -7,7 +21,7 @@ export const ProjectionOverlayBanner = React.memo(function ProjectionOverlayBann
   showOverlayWhy,
   setShowOverlayWhy,
   onClearCalculatorOverlay,
-}) {
+}: ProjectionOverlayBannerProps): React.ReactElement | null {
   if (!hasCalculatorOverlay) return null;
 
   return (

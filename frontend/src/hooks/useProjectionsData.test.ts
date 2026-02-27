@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildProjectionCacheKey,
   buildProjectionQueryParams,
-} from "./useProjectionsData.js";
+} from "./useProjectionsData";
 
 describe("buildProjectionQueryParams", () => {
   it("builds year-based projection params with optional filters", () => {

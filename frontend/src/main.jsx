@@ -13,29 +13,29 @@ import { ActivationDiagnosticsPanel, resolveActivationDiagnosticsPanelEnabled } 
 import { resolveApiBase } from "./api_base";
 import { PRIMARY_NAV_ITEMS } from "./app_content";
 import { ProjectionsExplorer } from "./projections_explorer.jsx";
-import { MobileCalculatorSheet } from "./MobileCalculatorSheet.jsx";
+import { MobileCalculatorSheet } from "./MobileCalculatorSheet";
 import { installAnalyticsDebugBridge, setAnalyticsContext, trackEvent } from "./analytics";
-import { ErrorBoundary } from "./error_boundary.jsx";
-import { FeatureErrorBoundary } from "./feature_error_boundary.jsx";
-import { ToastProvider } from "./Toast.jsx";
+import { ErrorBoundary } from "./error_boundary";
+import { FeatureErrorBoundary } from "./feature_error_boundary";
+import { ToastProvider } from "./Toast";
 import { PlayerPage } from "./PlayerPage.jsx";
 import { TradeAnalyzer } from "./TradeAnalyzer.jsx";
 import { PricingSection } from "./PricingSection.jsx";
-import { NewsletterSignup } from "./NewsletterSignup.jsx";
+import { NewsletterSignup } from "./NewsletterSignup";
 import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProjectionLayoutState.js";
 import { resolveProjectionWindow } from "./formatting_utils";
 import { useBottomSheet } from "./hooks/useBottomSheet.js";
 import { useCalculatorOverlay } from "./hooks/useCalculatorOverlay.js";
-import { useCalculatorState } from "./hooks/useCalculatorState.js";
+import { useCalculatorState } from "./hooks/useCalculatorState";
 import { useMetadata } from "./hooks/useMetadata.js";
-import { useQuickStart } from "./hooks/useQuickStart.js";
+import { useQuickStart } from "./hooks/useQuickStart";
 import { useVersionPolling } from "./hooks/useVersionPolling.js";
 import { useAccountMenu } from "./hooks/useAccountMenu.js";
-import { useAccountSync } from "./hooks/useAccountSync.js";
+import { useAccountSync } from "./hooks/useAccountSync";
 import { usePremiumStatus } from "./hooks/usePremiumStatus.js";
 import { useTheme } from "./hooks/useTheme.js";
 import { parseBillingRedirectParam, cleanBillingParam } from "./billing_redirect";
-import { useToastContext } from "./Toast.jsx";
+import { useToastContext } from "./Toast";
 import {
   readLastSuccessfulCalcRun,
   readPlayerWatchlist,
@@ -50,7 +50,7 @@ const ACTIVATION_DIAGNOSTICS_PANEL_ENV_ENABLED = String(
   import.meta.env.VITE_FF_ACTIVATION_DIAGNOSTICS_PANEL_V1 || "0"
 ).trim() === "1";
 const LazyMethodologySection = lazy(() => (
-  import("./methodology_section.jsx").then(module => ({ default: module.MethodologySection }))
+  import("./methodology_section").then(module => ({ default: module.MethodologySection }))
 ));
 const LazyDynastyCalculator = lazy(() => (
   import("./dynasty_calculator.jsx").then(module => ({ default: module.DynastyCalculator }))

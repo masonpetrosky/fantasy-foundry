@@ -8,7 +8,7 @@ import {
   DEFAULT_PROJECTIONS_SORT_COL,
   DEFAULT_PROJECTIONS_SORT_DIR,
   DEFAULT_PROJECTIONS_TAB,
-} from "../../../hooks/useProjectionsData.js";
+} from "../../../hooks/useProjectionsData";
 import { trackEvent } from "../../../analytics";
 
 export function defaultProjectionFilterPreset(tab = DEFAULT_PROJECTIONS_TAB, watchlistOnly = false) {
