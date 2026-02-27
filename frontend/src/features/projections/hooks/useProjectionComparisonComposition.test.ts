@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildProjectionCompareShareHref,
   buildProjectionComparisonColumns,
-} from "./useProjectionComparisonComposition.js";
+} from "./useProjectionComparisonComposition";
 
 describe("buildProjectionComparisonColumns", () => {
   it("returns hitter-focused columns for bat tab", () => {

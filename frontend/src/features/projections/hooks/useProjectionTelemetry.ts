@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { trackEvent } from "../../../analytics";
+import type { ProjectionRow } from "../../../app_state_storage";
+
+export interface BuildEmptyStateMarkerInput {
+  tab: string;
+  resolvedYearFilter: string;
+  teamFilter: string;
+  watchlistOnly: boolean;
+  search: string;
+  posFilters: string[] | null;
+}
 
 export function buildProjectionEmptyStateMarker({
   tab,
@@ -8,7 +18,7 @@ export function buildProjectionEmptyStateMarker({
   watchlistOnly,
   search,
   posFilters,
-}) {
+}: BuildEmptyStateMarkerInput): string {
   return [
     String(tab || "").trim(),
     String(resolvedYearFilter || "").trim(),
@@ -19,12 +29,19 @@ export function buildProjectionEmptyStateMarker({
   ].join("|");
 }
 
+export interface BuildRefreshMarkerInput {
+  tab: string;
+  offset: number;
+  displayedPage: ProjectionRow[];
+  totalRows: number;
+}
+
 export function buildProjectionRefreshMarker({
   tab,
   offset,
   displayedPage,
   totalRows,
-}) {
+}: BuildRefreshMarkerInput): string {
   const rows = Array.isArray(displayedPage) ? displayedPage : [];
   const firstRow = rows[0] || {};
   return [
@@ -36,6 +53,24 @@ export function buildProjectionRefreshMarker({
     String(firstRow.Team || ""),
     String(firstRow.Year || ""),
   ].join("|");
+}
+
+export interface UseProjectionTelemetryInput {
+  loading: boolean;
+  error: unknown;
+  displayedPage: ProjectionRow[];
+  tab: string;
+  resolvedYearFilter: string;
+  teamFilter: string;
+  watchlistOnly: boolean;
+  search: string;
+  posFilters: string[];
+  offset: number;
+  totalRows: number;
+}
+
+export interface UseProjectionTelemetryResult {
+  lastRefreshedLabel: string;
 }
 
 export function useProjectionTelemetry({
@@ -50,7 +85,7 @@ export function useProjectionTelemetry({
   posFilters,
   offset,
   totalRows,
-}) {
+}: UseProjectionTelemetryInput): UseProjectionTelemetryResult {
   const emptyStateTrackedRef = useRef("");
   const lastRefreshMarkerRef = useRef("");
   const [lastRefreshedLabel, setLastRefreshedLabel] = useState("");

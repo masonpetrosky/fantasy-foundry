@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { trackEvent } from "../../../analytics";
 import {
   MAX_COMPARE_PLAYERS,
@@ -6,6 +7,7 @@ import {
   playerWatchEntryFromRow,
   stablePlayerKeyFromRow,
 } from "../../../app_state_storage";
+import type { PlayerWatchEntry, ProjectionRow } from "../../../app_state_storage";
 import { downloadBlob } from "../../../download_helpers";
 import {
   buildProjectionCompareHydrationRequest,
@@ -17,7 +19,8 @@ import {
   resolveProjectionDataset,
   rowCompareIdentityKeys,
   selectHydratedCompareRows,
-} from "./projectionCollectionUtils.js";
+} from "./projectionCollectionUtils";
+import type { CompareShareHydrationNotice } from "./projectionCollectionUtils";
 
 // Re-export pure utility functions so existing imports keep working.
 export {
@@ -25,7 +28,37 @@ export {
   resolveCompareShareHydrationNotice,
   resolveProjectionDataset,
   selectHydratedCompareRows,
-} from "./projectionCollectionUtils.js";
+} from "./projectionCollectionUtils";
+
+export interface UseProjectionCollectionsInput {
+  watchlist: Record<string, PlayerWatchEntry>;
+  setWatchlist: Dispatch<SetStateAction<Record<string, PlayerWatchEntry>>>;
+  data: ProjectionRow[];
+  apiBase: string;
+  tab: string;
+  careerTotalsView: boolean;
+  resolvedYearFilter: string;
+  calculatorJobId: string;
+}
+
+export interface UseProjectionCollectionsResult {
+  watchlistCount: number;
+  compareRowsByKey: Record<string, ProjectionRow>;
+  compareRows: ProjectionRow[];
+  compareShareHydrating: boolean;
+  compareShareNotice: CompareShareHydrationNotice | null;
+  isRowWatched: (row: ProjectionRow) => boolean;
+  toggleRowWatch: (row: ProjectionRow) => void;
+  removeWatchlistEntry: (key: string) => void;
+  clearWatchlist: () => void;
+  exportWatchlistCsv: () => void;
+  toggleCompareRow: (row: ProjectionRow) => void;
+  quickAddRow: (row: ProjectionRow) => void;
+  clearCompareShareNotice: () => void;
+  clearCompareRows: () => void;
+  removeCompareRow: (key: string) => void;
+  maxComparePlayers: number;
+}
 
 export function useProjectionCollections({
   watchlist,
@@ -36,12 +69,12 @@ export function useProjectionCollections({
   careerTotalsView,
   resolvedYearFilter,
   calculatorJobId,
-}) {
-  const [compareRowsByKey, setCompareRowsByKey] = useState({});
+}: UseProjectionCollectionsInput): UseProjectionCollectionsResult {
+  const [compareRowsByKey, setCompareRowsByKey] = useState<Record<string, ProjectionRow>>({});
   const [compareShareHydrating, setCompareShareHydrating] = useState(false);
-  const [compareShareNotice, setCompareShareNotice] = useState(null);
-  const pendingCompareKeys = useRef(parseCompareKeysFromUrl());
-  const compareHydrationAbortRef = useRef(null);
+  const [compareShareNotice, setCompareShareNotice] = useState<CompareShareHydrationNotice | null>(null);
+  const pendingCompareKeys = useRef<string[]>(parseCompareKeysFromUrl());
+  const compareHydrationAbortRef = useRef<AbortController | null>(null);
   const compareHydrationRequestSeqRef = useRef(0);
   const normalizedApiBase = String(apiBase || "").trim();
   const normalizedCalculatorJobId = String(calculatorJobId || "").trim();
@@ -59,7 +92,7 @@ export function useProjectionCollections({
       resolvedYearFilter,
     });
 
-    const matchedPendingKeys = new Set();
+    const matchedPendingKeys = new Set<string>();
     Object.values(seededRowsByKey).forEach(row => {
       rowCompareIdentityKeys(row).forEach(key => {
         if (pending.includes(key)) matchedPendingKeys.add(key);
@@ -91,10 +124,10 @@ export function useProjectionCollections({
     const controller = new AbortController();
     compareHydrationAbortRef.current = controller;
 
-    const hydratedRowsByStableKey = {};
-    const matchedRequestedKeys = new Set();
+    const hydratedRowsByStableKey: Record<string, ProjectionRow> = {};
+    const matchedRequestedKeys = new Set<string>();
     const requestedKeySet = new Set(requestedKeys);
-    const pushHydratedRow = row => {
+    const pushHydratedRow = (row: ProjectionRow | null | undefined) => {
       if (!row || typeof row !== "object") return;
       const stableKey = stablePlayerKeyFromRow(row);
       if (!stableKey) return;
@@ -125,9 +158,10 @@ export function useProjectionCollections({
                 headers: { "Cache-Control": "no-cache" },
               });
               if (response.ok) {
-                const payload = await response.json();
+                const payload: unknown = await response.json();
+                const payloadData = (payload as Record<string, unknown>)?.data;
                 const selectedRowsByKey = selectHydratedCompareRows({
-                  rows: Array.isArray(payload?.data) ? payload.data : [],
+                  rows: Array.isArray(payloadData) ? (payloadData as ProjectionRow[]) : [],
                   requestedKeys,
                   careerTotalsView,
                   resolvedYearFilter,
@@ -158,7 +192,7 @@ export function useProjectionCollections({
                 headers: { "Cache-Control": "no-cache" },
               });
               if (!response.ok) return;
-              const payload = await response.json();
+              const payload: unknown = await response.json();
               const selectedRow = pickPreferredCompareRow(
                 profilePayloadRows(payload, { careerTotalsView }),
                 { careerTotalsView, resolvedYearFilter }
@@ -215,7 +249,7 @@ export function useProjectionCollections({
         compareHydrationAbortRef.current.abort();
         compareHydrationAbortRef.current = null;
       }
-    }
+    };
   }, []);
 
   useEffect(() => {
@@ -223,7 +257,7 @@ export function useProjectionCollections({
     setCompareRowsByKey(current => {
       const keys = Object.keys(current || {});
       if (keys.length === 0) return current;
-      const latestByKey = {};
+      const latestByKey: Record<string, ProjectionRow> = {};
       data.forEach(row => {
         latestByKey[stablePlayerKeyFromRow(row)] = row;
       });
@@ -247,12 +281,12 @@ export function useProjectionCollections({
 
   const watchlistCount = Object.keys(watchlist).length;
 
-  const isRowWatched = useCallback(row => {
+  const isRowWatched = useCallback((row: ProjectionRow): boolean => {
     const key = stablePlayerKeyFromRow(row);
     return Boolean(watchlist[key]);
   }, [watchlist]);
 
-  const toggleRowWatch = useCallback(row => {
+  const toggleRowWatch = useCallback((row: ProjectionRow) => {
     const nextEntry = playerWatchEntryFromRow(row);
     setWatchlist(current => {
       const next = { ...current };
@@ -265,7 +299,7 @@ export function useProjectionCollections({
     });
   }, [setWatchlist]);
 
-  const removeWatchlistEntry = useCallback(key => {
+  const removeWatchlistEntry = useCallback((key: string) => {
     setWatchlist(current => {
       if (!current[key]) return current;
       const next = { ...current };
@@ -283,7 +317,7 @@ export function useProjectionCollections({
     downloadBlob("player-watchlist.csv", csv, "text/csv;charset=utf-8");
   }, [watchlist]);
 
-  const toggleCompareRow = useCallback(row => {
+  const toggleCompareRow = useCallback((row: ProjectionRow) => {
     const key = stablePlayerKeyFromRow(row);
     setCompareRowsByKey(current => {
       if (current[key]) {
@@ -304,7 +338,7 @@ export function useProjectionCollections({
     setCompareShareNotice(null);
   }, []);
 
-  const removeCompareRow = useCallback(key => {
+  const removeCompareRow = useCallback((key: string) => {
     setCompareRowsByKey(current => {
       if (!current[key]) return current;
       const next = { ...current };
@@ -313,7 +347,7 @@ export function useProjectionCollections({
     });
   }, []);
 
-  const quickAddRow = useCallback(row => {
+  const quickAddRow = useCallback((row: ProjectionRow) => {
     const key = stablePlayerKeyFromRow(row);
     const nextEntry = playerWatchEntryFromRow(row);
     const alreadyWatched = Boolean(watchlist[key]);

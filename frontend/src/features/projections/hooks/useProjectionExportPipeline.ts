@@ -1,5 +1,24 @@
 import { useCallback, useMemo, useState } from "react";
-import { useProjectionExport } from "./useProjectionExport.js";
+import { useProjectionExport } from "./useProjectionExport";
+import type { ProjectionExportRequest } from "./useProjectionExport";
+
+export interface BuildProjectionExportRequestInput {
+  apiBase: string;
+  tab: string;
+  search: string;
+  teamFilter: string;
+  watchlistOnly: boolean;
+  watchlistKeysFilter: string;
+  careerTotalsView: boolean;
+  resolvedYearFilter: string;
+  posFilters: string[];
+  selectedDynastyYears: string[];
+  activeCalculatorJobId: string;
+  sortCol: string;
+  sortDir: string;
+  cols: string[];
+  format: string;
+}
 
 export function buildProjectionExportRequest({
   apiBase,
@@ -17,7 +36,7 @@ export function buildProjectionExportRequest({
   sortDir,
   cols,
   format,
-}) {
+}: BuildProjectionExportRequestInput): ProjectionExportRequest {
   const endpointTab = tab === "all" ? "all" : tab;
   const params = new URLSearchParams();
   if (search) params.set("player", search);
@@ -47,6 +66,30 @@ export function buildProjectionExportRequest({
   };
 }
 
+export interface UseProjectionExportPipelineInput {
+  apiBase: string;
+  tab: string;
+  search: string;
+  teamFilter: string;
+  watchlistOnly: boolean;
+  watchlistKeysFilter: string;
+  careerTotalsView: boolean;
+  resolvedYearFilter: string;
+  posFilters: string[];
+  selectedDynastyYears: string[];
+  activeCalculatorJobId: string;
+  sortCol: string;
+  sortDir: string;
+  cols: string[];
+}
+
+export interface UseProjectionExportPipelineResult {
+  exportError: string;
+  exportingFormat: string;
+  exportCurrentProjections: (format: string) => Promise<void>;
+  clearExportError: () => void;
+}
+
 export function useProjectionExportPipeline({
   apiBase,
   tab,
@@ -62,7 +105,7 @@ export function useProjectionExportPipeline({
   sortCol,
   sortDir,
   cols,
-}) {
+}: UseProjectionExportPipelineInput): UseProjectionExportPipelineResult {
   const { executeProjectionExport } = useProjectionExport();
   const [exportError, setExportError] = useState("");
   const [exportingFormat, setExportingFormat] = useState("");
@@ -99,7 +142,7 @@ export function useProjectionExportPipeline({
     watchlistOnly,
   ]);
 
-  const exportCurrentProjections = useCallback(async format => {
+  const exportCurrentProjections = useCallback(async (format: string) => {
     try {
       setExportingFormat(format);
       setExportError("");
@@ -108,8 +151,9 @@ export function useProjectionExportPipeline({
         format,
       });
       await executeProjectionExport(request);
-    } catch (err) {
-      setExportError(err?.message || "Failed to export projections");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to export projections";
+      setExportError(message);
     } finally {
       setExportingFormat("");
     }

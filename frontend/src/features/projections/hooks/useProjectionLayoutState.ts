@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 import {
   PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY,
   safeReadStorage,
@@ -7,13 +8,23 @@ import {
 
 export const MOBILE_BREAKPOINT_QUERY = "(max-width: 768px)";
 
-export function readInitialMobileLayoutMode() {
+export type MobileLayoutMode = "cards" | "table";
+
+export function readInitialMobileLayoutMode(): MobileLayoutMode {
   const saved = String(safeReadStorage(PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY) || "").trim().toLowerCase();
   if (saved === "cards" || saved === "table") return saved;
   return window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches ? "cards" : "table";
 }
 
-export function resolveProjectionHorizontalAffordance(el, isMobileViewport) {
+export interface HorizontalAffordance {
+  canScrollLeft: boolean;
+  canScrollRight: boolean;
+}
+
+export function resolveProjectionHorizontalAffordance(
+  el: HTMLElement | null,
+  isMobileViewport: boolean,
+): HorizontalAffordance {
   if (!el || !isMobileViewport) {
     return {
       canScrollLeft: false,
@@ -27,12 +38,23 @@ export function resolveProjectionHorizontalAffordance(el, isMobileViewport) {
   };
 }
 
-export function useProjectionLayoutState() {
-  const [isMobileViewport, setIsMobileViewport] = useState(() => (
+export interface ProjectionLayoutState {
+  isMobileViewport: boolean;
+  mobileLayoutMode: MobileLayoutMode;
+  setMobileLayoutMode: (mode: MobileLayoutMode) => void;
+  projectionTableScrollRef: RefObject<HTMLElement | null>;
+  canScrollLeft: boolean;
+  canScrollRight: boolean;
+  updateProjectionHorizontalAffordance: () => void;
+  handleProjectionTableScroll: () => void;
+}
+
+export function useProjectionLayoutState(): ProjectionLayoutState {
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => (
     window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches
   ));
-  const [mobileLayoutMode, setMobileLayoutMode] = useState(readInitialMobileLayoutMode);
-  const projectionTableScrollRef = useRef(null);
+  const [mobileLayoutMode, setMobileLayoutMode] = useState<MobileLayoutMode>(readInitialMobileLayoutMode);
+  const projectionTableScrollRef = useRef<HTMLElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
@@ -49,7 +71,7 @@ export function useProjectionLayoutState() {
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(MOBILE_BREAKPOINT_QUERY);
-    const onViewportChange = event => {
+    const onViewportChange = (event: MediaQueryListEvent) => {
       setIsMobileViewport(Boolean(event.matches));
     };
 

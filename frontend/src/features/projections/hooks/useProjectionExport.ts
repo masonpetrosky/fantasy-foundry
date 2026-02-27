@@ -4,6 +4,15 @@ import { parseDownloadFilename } from "../../../download_filename";
 import { triggerBlobDownload } from "../../../download_helpers";
 import { formatApiError, readResponsePayload } from "../../../request_helpers";
 
+export interface ProjectionExportRequest {
+  endpointTab: string;
+  href: string;
+  format: string;
+  watchlistOnly: boolean;
+  yearView: string;
+  hasCalculatorOverlay: boolean;
+}
+
 export async function executeProjectionExportRequest({
   endpointTab,
   href,
@@ -11,7 +20,7 @@ export async function executeProjectionExportRequest({
   watchlistOnly,
   yearView,
   hasCalculatorOverlay,
-}) {
+}: ProjectionExportRequest): Promise<void> {
   trackEvent("export_click", {
     format,
     tab: endpointTab,
@@ -26,7 +35,7 @@ export async function executeProjectionExportRequest({
   });
   if (!response.ok) {
     const parsed = await readResponsePayload(response);
-    throw new Error(formatApiError(response.status, parsed.payload, parsed.rawText));
+    throw new Error(formatApiError(response.status, parsed.payload as Parameters<typeof formatApiError>[1], parsed.rawText));
   }
 
   const blob = await response.blob();
@@ -35,8 +44,12 @@ export async function executeProjectionExportRequest({
   triggerBlobDownload(filename, blob);
 }
 
-export function useProjectionExport() {
-  const executeProjectionExport = useCallback(async request => {
+export interface UseProjectionExportResult {
+  executeProjectionExport: (request: ProjectionExportRequest) => Promise<void>;
+}
+
+export function useProjectionExport(): UseProjectionExportResult {
+  const executeProjectionExport = useCallback(async (request: ProjectionExportRequest) => {
     await executeProjectionExportRequest(request);
   }, []);
 

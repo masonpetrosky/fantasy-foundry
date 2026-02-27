@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildProjectionExportRequest } from "./useProjectionExportPipeline.js";
+import { buildProjectionExportRequest } from "./useProjectionExportPipeline";
 
 describe("buildProjectionExportRequest", () => {
   it("assembles year-based export params with optional filters", () => {

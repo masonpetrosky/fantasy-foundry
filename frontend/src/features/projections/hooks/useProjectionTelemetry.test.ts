@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildProjectionEmptyStateMarker,
   buildProjectionRefreshMarker,
-} from "./useProjectionTelemetry.js";
+} from "./useProjectionTelemetry";
 
 describe("buildProjectionEmptyStateMarker", () => {
   it("builds a stable marker from filter state", () => {

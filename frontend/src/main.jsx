@@ -22,7 +22,7 @@ import { PlayerPage } from "./PlayerPage.jsx";
 import { TradeAnalyzer } from "./TradeAnalyzer.jsx";
 import { PricingSection } from "./PricingSection.jsx";
 import { NewsletterSignup } from "./NewsletterSignup";
-import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProjectionLayoutState.js";
+import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProjectionLayoutState";
 import { resolveProjectionWindow } from "./formatting_utils";
 import { useBottomSheet } from "./hooks/useBottomSheet.js";
 import { useCalculatorOverlay } from "./hooks/useCalculatorOverlay.js";

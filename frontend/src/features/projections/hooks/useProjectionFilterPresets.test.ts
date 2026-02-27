@@ -5,9 +5,10 @@ import {
   matchesProjectionFilterPreset,
   projectionFilterPresetValuesForKey,
   resolveActiveProjectionPresetKey,
-} from "./useProjectionFilterPresets.js";
+} from "./useProjectionFilterPresets";
+import type { FilterState } from "./useProjectionFilterPresets";
 
-const defaultState = {
+const defaultState: FilterState = {
   tab: "all",
   search: "",
   teamFilter: "",

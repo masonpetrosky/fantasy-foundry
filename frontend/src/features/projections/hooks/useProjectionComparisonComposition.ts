@@ -1,9 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
+import type { ProjectionRow } from "../../../app_state_storage";
+import type { CompareShareHydrationNotice } from "./projectionCollectionUtils";
 
 export function buildProjectionComparisonColumns({
   tab,
   seasonCol,
-}) {
+}: {
+  tab: string;
+  seasonCol: string;
+}): string[] {
   if (tab === "bat") {
     return [seasonCol, "DynastyValue", "AB", "R", "HR", "RBI", "SB", "AVG"];
   }
@@ -30,7 +35,10 @@ export function buildProjectionComparisonColumns({
 export function buildProjectionCompareShareHref({
   locationHref,
   compareRowsByKey,
-}) {
+}: {
+  locationHref: string;
+  compareRowsByKey: Record<string, ProjectionRow> | null | undefined;
+}): string {
   const keys = Object.keys(compareRowsByKey || {});
   if (keys.length === 0) return "";
   try {
@@ -42,11 +50,47 @@ export function buildProjectionCompareShareHref({
   }
 }
 
+export interface ComparisonCollections {
+  compareRowsByKey: Record<string, ProjectionRow>;
+  compareRows: ProjectionRow[];
+  maxComparePlayers: number;
+  toggleCompareRow: (row: ProjectionRow) => void;
+  removeCompareRow: (key: string) => void;
+  clearCompareRows: () => void;
+  compareShareHydrating: boolean;
+  compareShareNotice: CompareShareHydrationNotice | null;
+  clearCompareShareNotice: () => void;
+}
+
+export interface UseProjectionComparisonCompositionInput {
+  collections: ComparisonCollections;
+  tab: string;
+  seasonCol: string;
+}
+
+export interface UseProjectionComparisonCompositionResult {
+  compareRowsByKey: Record<string, ProjectionRow>;
+  compareRows: ProjectionRow[];
+  compareRowsCount: number;
+  maxComparePlayers: number;
+  toggleCompareRow: (row: ProjectionRow) => void;
+  removeCompareRow: (key: string) => void;
+  clearCompareRows: () => void;
+  comparisonColumns: string[];
+  copyCompareShareLink: () => Promise<void>;
+  compareShareCopyNotice: string;
+  clearCompareShareCopyNotice: () => void;
+  compareShareHydrating: boolean;
+  compareShareNotice: CompareShareHydrationNotice | null;
+  clearCompareShareNotice: () => void;
+  workspaceHasComparisonActivity: boolean;
+}
+
 export function useProjectionComparisonComposition({
   collections,
   tab,
   seasonCol,
-}) {
+}: UseProjectionComparisonCompositionInput): UseProjectionComparisonCompositionResult {
   const [compareShareCopyNotice, setCompareShareCopyNotice] = useState("");
   const comparisonColumns = useMemo(
     () => buildProjectionComparisonColumns({ tab, seasonCol }),

@@ -4,17 +4,17 @@ import {
   MOBILE_BREAKPOINT_QUERY,
   readInitialMobileLayoutMode,
   resolveProjectionHorizontalAffordance,
-} from "./useProjectionLayoutState.js";
+} from "./useProjectionLayoutState";
 
 function stubWindow({ savedLayout = "", matches = false } = {}) {
-  const storage = {};
+  const storage: Record<string, string> = {};
   if (savedLayout) storage["ff:proj-mobile-layout-mode:v2"] = savedLayout;
   vi.stubGlobal("window", {
     localStorage: {
-      getItem: vi.fn(key => (Object.prototype.hasOwnProperty.call(storage, key) ? storage[key] : null)),
+      getItem: vi.fn((key: string) => (Object.prototype.hasOwnProperty.call(storage, key) ? storage[key] : null)),
       setItem: vi.fn(),
     },
-    matchMedia: vi.fn(query => ({
+    matchMedia: vi.fn((query: string) => ({
       media: query,
       matches,
       addEventListener: vi.fn(),
@@ -56,25 +56,25 @@ describe("resolveProjectionHorizontalAffordance", () => {
       canScrollLeft: false,
       canScrollRight: false,
     });
-    expect(resolveProjectionHorizontalAffordance({ scrollWidth: 1000, clientWidth: 400, scrollLeft: 10 }, false)).toEqual({
+    expect(resolveProjectionHorizontalAffordance({ scrollWidth: 1000, clientWidth: 400, scrollLeft: 10 } as HTMLElement, false)).toEqual({
       canScrollLeft: false,
       canScrollRight: false,
     });
   });
 
   it("returns left/right affordance based on scroll position", () => {
-    const base = { scrollWidth: 1000, clientWidth: 400, scrollLeft: 0 };
+    const base = { scrollWidth: 1000, clientWidth: 400, scrollLeft: 0 } as HTMLElement;
     expect(resolveProjectionHorizontalAffordance(base, true)).toEqual({
       canScrollLeft: false,
       canScrollRight: true,
     });
 
-    expect(resolveProjectionHorizontalAffordance({ ...base, scrollLeft: 200 }, true)).toEqual({
+    expect(resolveProjectionHorizontalAffordance({ ...base, scrollLeft: 200 } as HTMLElement, true)).toEqual({
       canScrollLeft: true,
       canScrollRight: true,
     });
 
-    expect(resolveProjectionHorizontalAffordance({ ...base, scrollLeft: 600 }, true)).toEqual({
+    expect(resolveProjectionHorizontalAffordance({ ...base, scrollLeft: 600 } as HTMLElement, true)).toEqual({
       canScrollLeft: true,
       canScrollRight: false,
     });

@@ -5,7 +5,7 @@ import {
   buildShowAllColumnsOverridesByTab,
   resolveProjectionCardColumnHidden,
   resolveProjectionTableColumnHidden,
-} from "./useProjectionColumnVisibility.js";
+} from "./useProjectionColumnVisibility";
 
 describe("projection table hidden overrides", () => {
   it("falls back to table defaults when no override exists", () => {

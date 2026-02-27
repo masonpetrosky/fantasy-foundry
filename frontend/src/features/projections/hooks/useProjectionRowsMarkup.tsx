@@ -1,8 +1,9 @@
-import { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo } from "react";
 import {
   projectionRowKey,
   stablePlayerKeyFromRow,
 } from "../../../app_state_storage";
+import type { ProjectionRow } from "../../../app_state_storage";
 import {
   INT_COLS,
   THREE_DECIMAL_COLS,
@@ -12,6 +13,28 @@ import {
   fmtInt,
   formatCellValue,
 } from "../../../formatting_utils";
+
+export interface UseProjectionRowsMarkupInput {
+  showCards: boolean;
+  displayedPage: ProjectionRow[];
+  offset: number;
+  cols: string[];
+  colLabels: Record<string, string>;
+  projectionCardColumnsForRow: (row: ProjectionRow) => string[];
+  isRowWatched: (row: ProjectionRow) => boolean;
+  compareRowsByKey: Record<string, ProjectionRow>;
+  compareRowsCount: number;
+  maxComparePlayers: number;
+  toggleRowWatch: (row: ProjectionRow) => void;
+  toggleCompareRow: (row: ProjectionRow) => void;
+  quickAddRow: (row: ProjectionRow) => void;
+  onViewProfile: ((row: ProjectionRow) => void) | null | undefined;
+}
+
+export interface UseProjectionRowsMarkupResult {
+  cardRowsMarkup: React.ReactElement[];
+  tableRowsMarkup: React.ReactElement[];
+}
 
 export function useProjectionRowsMarkup({
   showCards,
@@ -28,17 +51,17 @@ export function useProjectionRowsMarkup({
   toggleCompareRow,
   quickAddRow,
   onViewProfile,
-}) {
+}: UseProjectionRowsMarkupInput): UseProjectionRowsMarkupResult {
   const threeDecimalCols = THREE_DECIMAL_COLS;
   const twoDecimalCols = TWO_DECIMAL_COLS;
   const wholeNumberCols = WHOLE_NUMBER_COLS;
   const intCols = INT_COLS;
 
-  const formatProjectionCell = useCallback((col, row) => {
+  const formatProjectionCell = useCallback((col: string, row: ProjectionRow): React.ReactElement => {
     const val = row[col];
-    if (col === "Player") return <td key={col} className="player-name">{val}</td>;
-    if (col === "Pos") return <td key={col} className="pos">{val}</td>;
-    if (col === "Team") return <td key={col} className="team">{val}</td>;
+    if (col === "Player") return <td key={col} className="player-name">{val as React.ReactNode}</td>;
+    if (col === "Pos") return <td key={col} className="pos">{val as React.ReactNode}</td>;
+    if (col === "Team") return <td key={col} className="team">{val as React.ReactNode}</td>;
     if (col === "DynastyValue" || col.startsWith("Value_")) {
       if ((val == null || val === "") && col === "DynastyValue" && row.DynastyMatchStatus === "no_unique_match") {
         return <td key={col} className="num" style={{ color: "var(--text-muted)" }}>No unique match</td>;
@@ -52,7 +75,7 @@ export function useProjectionRowsMarkup({
     if (wholeNumberCols.has(col)) return <td key={col} className="num">{fmtInt(val, true)}</td>;
     if (intCols.has(col)) return <td key={col} className="num">{fmtInt(val, col !== "Year")}</td>;
     if (typeof val === "number") return <td key={col} className="num">{fmt(val)}</td>;
-    return <td key={col}>{val ?? "—"}</td>;
+    return <td key={col}>{(val as React.ReactNode) ?? "\u2014"}</td>;
   }, [intCols, threeDecimalCols, twoDecimalCols, wholeNumberCols]);
 
   const cardRowsMarkup = useMemo(() => {
@@ -62,14 +85,14 @@ export function useProjectionRowsMarkup({
       const rowWatch = isRowWatched(row);
       const compareKey = stablePlayerKeyFromRow(row);
       const isCompared = Boolean(compareRowsByKey[compareKey]);
-      const rowWithRank = { ...row, Rank: offset + idx + 1 };
+      const rowWithRank: ProjectionRow = { ...row, Rank: offset + idx + 1 };
       const cardCols = projectionCardColumnsForRow(rowWithRank);
       const rowKey = projectionRowKey(row, offset + idx);
 
       return (
         <article className="projection-card" key={rowKey}>
           <div className="projection-card-head">
-            <h4>{row.Player || "Player"}</h4>
+            <h4>{(row.Player as React.ReactNode) || "Player"}</h4>
             <div className="projection-card-actions">
               <button
                 type="button"
@@ -109,7 +132,7 @@ export function useProjectionRowsMarkup({
               )}
             </div>
           </div>
-          <p className="projection-card-meta">{row.Team || "—"} · {row.Pos || "—"}</p>
+          <p className="projection-card-meta">{(row.Team as React.ReactNode) || "\u2014"} · {(row.Pos as React.ReactNode) || "\u2014"}</p>
           <dl>
             {cardCols.map(col => (
               <div className="projection-card-stat" key={`${rowKey}-${col}`}>

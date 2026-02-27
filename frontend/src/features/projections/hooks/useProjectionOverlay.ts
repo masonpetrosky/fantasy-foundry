@@ -1,6 +1,33 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildOverlayStatusMeta } from "../view_state";
+import type { OverlayStatusMeta } from "../view_state";
 import { stablePlayerKeyFromRow } from "../../../app_state_storage";
+import type { ProjectionRow } from "../../../app_state_storage";
+
+interface CalculatorOverlaySummary {
+  scoringMode?: string;
+  startYear?: number;
+  horizon?: number;
+}
+
+export interface UseProjectionOverlayInput {
+  calculatorOverlayByPlayerKey: Record<string, ProjectionRow> | null | undefined;
+  calculatorOverlayActive: boolean;
+  calculatorOverlayJobId: string;
+  calculatorOverlayDataVersion: unknown;
+  calculatorOverlayPlayerCount: number | null | undefined;
+  calculatorOverlaySummary: CalculatorOverlaySummary | null | undefined;
+  dataVersion: unknown;
+}
+
+export interface UseProjectionOverlayResult {
+  hasCalculatorOverlay: boolean;
+  resolvedCalculatorOverlayPlayerCount: number;
+  overlayStatusMeta: OverlayStatusMeta;
+  showOverlayWhy: boolean;
+  setShowOverlayWhy: (show: boolean) => void;
+  applyCalculatorOverlayToRows: (rows: ProjectionRow[]) => ProjectionRow[];
+}
 
 export function useProjectionOverlay({
   calculatorOverlayByPlayerKey,
@@ -10,10 +37,10 @@ export function useProjectionOverlay({
   calculatorOverlayPlayerCount,
   calculatorOverlaySummary,
   dataVersion,
-}) {
+}: UseProjectionOverlayInput): UseProjectionOverlayResult {
   const [showOverlayWhy, setShowOverlayWhy] = useState(false);
 
-  const resolvedCalculatorOverlayByPlayerKey = useMemo(() => (
+  const resolvedCalculatorOverlayByPlayerKey = useMemo<Record<string, ProjectionRow>>(() => (
     calculatorOverlayByPlayerKey && typeof calculatorOverlayByPlayerKey === "object" && !Array.isArray(calculatorOverlayByPlayerKey)
       ? calculatorOverlayByPlayerKey
       : {}
@@ -33,7 +60,7 @@ export function useProjectionOverlay({
   const overlayHorizon = Number(calculatorOverlaySummary?.horizon);
 
   const overlaySummaryParts = useMemo(() => {
-    const parts = [];
+    const parts: string[] = [];
     if (overlayScoringMode === "points") {
       parts.push("Points mode");
     } else if (overlayScoringMode === "roto") {
@@ -55,7 +82,7 @@ export function useProjectionOverlay({
     resolvedDataVersion: dataVersion,
   }), [calculatorOverlayDataVersion, calculatorOverlayJobId, dataVersion, overlaySummaryParts]);
 
-  const applyCalculatorOverlayToRows = useCallback(rows => {
+  const applyCalculatorOverlayToRows = useCallback((rows: ProjectionRow[]): ProjectionRow[] => {
     if (!Array.isArray(rows) || rows.length === 0) return [];
     if (!hasCalculatorOverlay) return rows;
     return rows.map(row => {

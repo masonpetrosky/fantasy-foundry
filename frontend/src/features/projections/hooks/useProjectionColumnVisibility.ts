@@ -5,6 +5,7 @@ import {
   readHiddenColumnOverridesByTab,
   writeHiddenColumnOverridesByTab,
 } from "../../../app_state_storage";
+import type { ProjectionRow } from "../../../app_state_storage";
 import {
   normalizeHiddenColumnOverridesByTab,
   projectionCardColumnCatalog,
@@ -14,15 +15,29 @@ import {
   projectionTableColumnHiddenByDefault,
   resolveProjectionCardColumns,
 } from "../../../projections_view_config";
+import type {
+  HiddenColumnOverrides,
+  HiddenColumnOverridesByTab,
+} from "../../../projections_view_config";
 
-export function resolveProjectionTableColumnHidden(tab, col, hiddenOverridesByTab = {}) {
+type CalculatorSettings = Record<string, unknown> | null | undefined;
+
+export function resolveProjectionTableColumnHidden(
+  tab: string,
+  col: string,
+  hiddenOverridesByTab: HiddenColumnOverrides = {},
+): boolean {
   if (Object.prototype.hasOwnProperty.call(hiddenOverridesByTab, col)) {
     return Boolean(hiddenOverridesByTab[col]);
   }
   return projectionTableColumnHiddenByDefault(tab, col);
 }
 
-export function resolveProjectionCardColumnHidden(col, hiddenOverridesByTab = {}, cardDefaultVisibleSet = new Set()) {
+export function resolveProjectionCardColumnHidden(
+  col: string,
+  hiddenOverridesByTab: HiddenColumnOverrides = {},
+  cardDefaultVisibleSet: ReadonlySet<string> = new Set(),
+): boolean {
   if (Object.prototype.hasOwnProperty.call(hiddenOverridesByTab, col)) {
     return Boolean(hiddenOverridesByTab[col]);
   }
@@ -35,9 +50,15 @@ export function buildHiddenColumnOverridesByTab({
   col,
   hidden,
   defaultHidden,
-}) {
+}: {
+  currentByTab: HiddenColumnOverridesByTab;
+  tab: string;
+  col: string;
+  hidden: boolean;
+  defaultHidden: boolean;
+}): HiddenColumnOverridesByTab {
   const next = normalizeHiddenColumnOverridesByTab(currentByTab);
-  const nextTab = { ...(next[tab] || {}) };
+  const nextTab: HiddenColumnOverrides = { ...(next[tab] || {}) };
   if (hidden === defaultHidden) {
     delete nextTab[col];
   } else {
@@ -52,9 +73,14 @@ export function buildShowAllColumnsOverridesByTab({
   tab,
   columns,
   requiredCols = new Set(),
-}) {
+}: {
+  currentByTab: HiddenColumnOverridesByTab;
+  tab: string;
+  columns: string[];
+  requiredCols?: ReadonlySet<string>;
+}): HiddenColumnOverridesByTab {
   const next = normalizeHiddenColumnOverridesByTab(currentByTab);
-  const nextTab = { ...(next[tab] || {}) };
+  const nextTab: HiddenColumnOverrides = { ...(next[tab] || {}) };
   columns.forEach(col => {
     if (requiredCols.has(col)) return;
     nextTab[col] = false;
@@ -63,16 +89,38 @@ export function buildShowAllColumnsOverridesByTab({
   return next;
 }
 
+export interface UseProjectionColumnVisibilityInput {
+  tab: string;
+  seasonCol: string;
+  dynastyYearCols: string[];
+  activeCalculatorSettings: CalculatorSettings;
+}
+
+export interface UseProjectionColumnVisibilityResult {
+  tableColumnCatalog: string[];
+  requiredProjectionTableCols: ReadonlySet<string>;
+  resolvedProjectionTableHiddenCols: Record<string, boolean>;
+  cols: string[];
+  toggleProjectionTableColumn: (col: string) => void;
+  showAllProjectionTableColumns: () => void;
+  cardColumnCatalog: string[];
+  requiredProjectionCardCols: ReadonlySet<string>;
+  resolvedProjectionCardHiddenCols: Record<string, boolean>;
+  projectionCardColumnsForRow: (row: ProjectionRow) => string[];
+  toggleProjectionCardColumn: (col: string) => void;
+  showAllProjectionCardColumns: () => void;
+}
+
 export function useProjectionColumnVisibility({
   tab,
   seasonCol,
   dynastyYearCols,
   activeCalculatorSettings,
-}) {
-  const [projectionTableHiddenColsByTab, setProjectionTableHiddenColsByTab] = useState(() => (
+}: UseProjectionColumnVisibilityInput): UseProjectionColumnVisibilityResult {
+  const [projectionTableHiddenColsByTab, setProjectionTableHiddenColsByTab] = useState<HiddenColumnOverridesByTab>(() => (
     readHiddenColumnOverridesByTab(PROJECTION_TABLE_HIDDEN_COLS_STORAGE_KEY)
   ));
-  const [projectionCardHiddenColsByTab, setProjectionCardHiddenColsByTab] = useState(() => (
+  const [projectionCardHiddenColsByTab, setProjectionCardHiddenColsByTab] = useState<HiddenColumnOverridesByTab>(() => (
     readHiddenColumnOverridesByTab(PROJECTION_CARD_HIDDEN_COLS_STORAGE_KEY)
   ));
 
@@ -89,15 +137,15 @@ export function useProjectionColumnVisibility({
     [tab, seasonCol, dynastyYearCols, activeCalculatorSettings]
   );
 
-  const activeProjectionTableHiddenCols = projectionTableHiddenColsByTab[tab] || {};
-  const requiredProjectionTableCols = useMemo(() => new Set(["Player"]), []);
+  const activeProjectionTableHiddenCols: HiddenColumnOverrides = projectionTableHiddenColsByTab[tab] || {};
+  const requiredProjectionTableCols = useMemo<ReadonlySet<string>>(() => new Set(["Player"]), []);
 
-  const isProjectionTableColHidden = useCallback((col, hiddenOverrides = activeProjectionTableHiddenCols) => {
+  const isProjectionTableColHidden = useCallback((col: string, hiddenOverrides: HiddenColumnOverrides = activeProjectionTableHiddenCols): boolean => {
     return resolveProjectionTableColumnHidden(tab, col, hiddenOverrides);
   }, [tab, activeProjectionTableHiddenCols]);
 
   const resolvedProjectionTableHiddenCols = useMemo(() => {
-    const hidden = {};
+    const hidden: Record<string, boolean> = {};
     tableColumnCatalog.forEach(col => {
       if (isProjectionTableColHidden(col)) hidden[col] = true;
     });
@@ -114,14 +162,14 @@ export function useProjectionColumnVisibility({
     [tab, seasonCol, dynastyYearCols, activeCalculatorSettings]
   );
 
-  const cardDefaultVisibleSet = useMemo(
+  const cardDefaultVisibleSet = useMemo<ReadonlySet<string>>(
     () => new Set(projectionCardDefaultVisibleColumns(tab, null, activeCalculatorSettings)),
     [tab, activeCalculatorSettings]
   );
 
-  const activeProjectionCardHiddenCols = projectionCardHiddenColsByTab[tab] || {};
+  const activeProjectionCardHiddenCols: HiddenColumnOverrides = projectionCardHiddenColsByTab[tab] || {};
 
-  const isProjectionCardOptionalColHidden = useCallback((col, hiddenOverrides = activeProjectionCardHiddenCols) => {
+  const isProjectionCardOptionalColHidden = useCallback((col: string, hiddenOverrides: HiddenColumnOverrides = activeProjectionCardHiddenCols): boolean => {
     return resolveProjectionCardColumnHidden(col, hiddenOverrides, cardDefaultVisibleSet);
   }, [activeProjectionCardHiddenCols, cardDefaultVisibleSet]);
 
@@ -130,17 +178,17 @@ export function useProjectionColumnVisibility({
     [cardColumnCatalog]
   );
 
-  const requiredProjectionCardCols = useMemo(() => new Set(), []);
+  const requiredProjectionCardCols = useMemo<ReadonlySet<string>>(() => new Set(), []);
 
   const resolvedProjectionCardHiddenCols = useMemo(() => {
-    const hidden = {};
+    const hidden: Record<string, boolean> = {};
     cardColumnCatalog.forEach(col => {
       if (isProjectionCardOptionalColHidden(col)) hidden[col] = true;
     });
     return hidden;
   }, [cardColumnCatalog, isProjectionCardOptionalColHidden]);
 
-  const projectionCardColumnsForRow = useCallback(row => (
+  const projectionCardColumnsForRow = useCallback((row: ProjectionRow): string[] => (
     resolveProjectionCardColumns(
       tab,
       seasonCol,
@@ -151,7 +199,7 @@ export function useProjectionColumnVisibility({
     )
   ), [tab, seasonCol, dynastyYearCols, activeProjectionCardHiddenCols, activeCalculatorSettings]);
 
-  const setProjectionTableColumnHidden = useCallback((col, hidden) => {
+  const setProjectionTableColumnHidden = useCallback((col: string, hidden: boolean) => {
     setProjectionTableHiddenColsByTab(current => buildHiddenColumnOverridesByTab({
       currentByTab: current,
       tab,
@@ -161,7 +209,7 @@ export function useProjectionColumnVisibility({
     }));
   }, [tab]);
 
-  const toggleProjectionTableColumn = useCallback(col => {
+  const toggleProjectionTableColumn = useCallback((col: string) => {
     if (requiredProjectionTableCols.has(col)) return;
     const currentlyHidden = isProjectionTableColHidden(col);
     setProjectionTableColumnHidden(col, !currentlyHidden);
@@ -176,7 +224,7 @@ export function useProjectionColumnVisibility({
     }));
   }, [requiredProjectionTableCols, tab, tableColumnCatalog]);
 
-  const setProjectionCardOptionalColumnHidden = useCallback((col, hidden) => {
+  const setProjectionCardOptionalColumnHidden = useCallback((col: string, hidden: boolean) => {
     setProjectionCardHiddenColsByTab(current => buildHiddenColumnOverridesByTab({
       currentByTab: current,
       tab,
@@ -186,7 +234,7 @@ export function useProjectionColumnVisibility({
     }));
   }, [cardDefaultVisibleSet, tab]);
 
-  const toggleProjectionCardColumn = useCallback(col => {
+  const toggleProjectionCardColumn = useCallback((col: string) => {
     if (requiredProjectionCardCols.has(col)) return;
     const currentlyHidden = isProjectionCardOptionalColHidden(col);
     setProjectionCardOptionalColumnHidden(col, !currentlyHidden);

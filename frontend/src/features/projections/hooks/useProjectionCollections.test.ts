@@ -4,7 +4,7 @@ import {
   buildProjectionCompareHydrationRequest,
   resolveCompareShareHydrationNotice,
   selectHydratedCompareRows,
-} from "./useProjectionCollections.js";
+} from "./useProjectionCollections";
 
 describe("buildProjectionCompareHydrationRequest", () => {
   it("builds compare hydration request with dataset and calculator context", () => {

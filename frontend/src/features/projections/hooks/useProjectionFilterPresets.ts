@@ -3,6 +3,10 @@ import {
   readProjectionFilterPresets,
   writeProjectionFilterPresets,
 } from "../../../app_state_storage";
+import type {
+  ProjectionFilterPreset,
+  ProjectionFilterPresetBundle,
+} from "../../../app_state_storage";
 import {
   CAREER_TOTALS_FILTER_VALUE,
   DEFAULT_PROJECTIONS_SORT_COL,
@@ -11,7 +15,10 @@ import {
 } from "../../../hooks/useProjectionsData";
 import { trackEvent } from "../../../analytics";
 
-export function defaultProjectionFilterPreset(tab = DEFAULT_PROJECTIONS_TAB, watchlistOnly = false) {
+export function defaultProjectionFilterPreset(
+  tab: string = DEFAULT_PROJECTIONS_TAB,
+  watchlistOnly = false,
+): ProjectionFilterPreset {
   return {
     tab,
     search: "",
@@ -27,7 +34,10 @@ export function defaultProjectionFilterPreset(tab = DEFAULT_PROJECTIONS_TAB, wat
 export function projectionFilterPresetValuesForKey({
   presetKey,
   projectionFilterPresets,
-}) {
+}: {
+  presetKey: string;
+  projectionFilterPresets: ProjectionFilterPresetBundle;
+}): ProjectionFilterPreset | null {
   const key = String(presetKey || "").trim().toLowerCase();
   if (!key) return null;
   if (key === "all") return defaultProjectionFilterPreset(DEFAULT_PROJECTIONS_TAB, false);
@@ -38,7 +48,21 @@ export function projectionFilterPresetValuesForKey({
   return null;
 }
 
-export function matchesProjectionFilterPreset(filterState, preset) {
+export interface FilterState {
+  tab: string;
+  search: string;
+  teamFilter: string;
+  resolvedYearFilter: string;
+  posFilters: string[];
+  watchlistOnly: boolean;
+  sortCol: string;
+  sortDir: string;
+}
+
+export function matchesProjectionFilterPreset(
+  filterState: FilterState,
+  preset: ProjectionFilterPreset | null,
+): boolean {
   if (!preset) return false;
   return (
     filterState.tab === (preset.tab || DEFAULT_PROJECTIONS_TAB)
@@ -52,7 +76,10 @@ export function matchesProjectionFilterPreset(filterState, preset) {
   );
 }
 
-export function resolveActiveProjectionPresetKey(filterState, projectionFilterPresets) {
+export function resolveActiveProjectionPresetKey(
+  filterState: FilterState,
+  projectionFilterPresets: ProjectionFilterPresetBundle,
+): string {
   if (matchesProjectionFilterPreset(filterState, defaultProjectionFilterPreset(DEFAULT_PROJECTIONS_TAB, false))) {
     return "all";
   }
@@ -71,8 +98,38 @@ export function resolveActiveProjectionPresetKey(filterState, projectionFilterPr
   return "";
 }
 
-export function useProjectionFilterPresets({ filterActions, filterState, setShowPosMenu }) {
-  const [projectionFilterPresets, setProjectionFilterPresets] = useState(() => readProjectionFilterPresets());
+export interface FilterActions {
+  setSearch: (value: string) => void;
+  setTeamFilter: (value: string) => void;
+  setYearFilter: (value: string) => void;
+  setPosFilters: (value: string[]) => void;
+  setWatchlistOnly: (value: boolean) => void;
+  setSortCol: (value: string) => void;
+  setSortDir: (value: string) => void;
+  setOffset: (value: number) => void;
+  setTab: (value: string) => void;
+}
+
+export interface UseProjectionFilterPresetsInput {
+  filterActions: FilterActions;
+  filterState: FilterState;
+  setShowPosMenu: (value: boolean) => void;
+}
+
+export interface UseProjectionFilterPresetsResult {
+  projectionFilterPresets: ProjectionFilterPresetBundle;
+  applyProjectionFilterPreset: (presetKey: string, source?: string) => void;
+  saveCustomProjectionPreset: () => void;
+  activeProjectionPresetKey: string;
+  clearAllFilters: () => void;
+}
+
+export function useProjectionFilterPresets({
+  filterActions,
+  filterState,
+  setShowPosMenu,
+}: UseProjectionFilterPresetsInput): UseProjectionFilterPresetsResult {
+  const [projectionFilterPresets, setProjectionFilterPresets] = useState<ProjectionFilterPresetBundle>(() => readProjectionFilterPresets());
 
   const clearAllFilters = useCallback(() => {
     filterActions.setSearch("");
@@ -86,11 +143,11 @@ export function useProjectionFilterPresets({ filterActions, filterState, setShow
     filterActions.setOffset(0);
   }, [filterActions, setShowPosMenu]);
 
-  const applyProjectionFilterPreset = useCallback((presetKey, source = "toolbar") => {
+  const applyProjectionFilterPreset = useCallback((presetKey: string, source = "toolbar") => {
     const key = String(presetKey || "").trim().toLowerCase();
     if (!key) return;
 
-    const applyPresetValues = values => {
+    const applyPresetValues = (values: ProjectionFilterPreset) => {
       filterActions.setTab(values.tab || DEFAULT_PROJECTIONS_TAB);
       filterActions.setSearch(values.search || "");
       filterActions.setTeamFilter(values.teamFilter || "");
@@ -120,7 +177,7 @@ export function useProjectionFilterPresets({ filterActions, filterState, setShow
   }, [filterActions, projectionFilterPresets, setShowPosMenu]);
 
   const saveCustomProjectionPreset = useCallback(() => {
-    const customPreset = {
+    const customPreset: ProjectionFilterPreset = {
       tab: filterState.tab,
       search: filterState.search,
       teamFilter: filterState.teamFilter,

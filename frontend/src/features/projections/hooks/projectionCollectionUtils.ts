@@ -2,19 +2,20 @@ import {
   MAX_COMPARE_PLAYERS,
   stablePlayerKeyFromRow,
 } from "../../../app_state_storage";
+import type { ProjectionRow } from "../../../app_state_storage";
 
 const CAREER_TOTALS_FILTER_VALUE = "__career_totals__";
 
-export function normalizeCompareKey(value) {
+export function normalizeCompareKey(value: unknown): string {
   return String(value || "").trim().toLowerCase();
 }
 
-export function parseCompareKeysFromUrl() {
+export function parseCompareKeysFromUrl(): string[] {
   try {
     const params = new URLSearchParams(window.location.search);
     const raw = params.get("compare") || "";
-    const deduped = [];
-    const seen = new Set();
+    const deduped: string[] = [];
+    const seen = new Set<string>();
     raw
       .split(",")
       .map(token => normalizeCompareKey(token))
@@ -30,15 +31,15 @@ export function parseCompareKeysFromUrl() {
   }
 }
 
-export function coerceRowYear(value) {
+export function coerceRowYear(value: unknown): number | null {
   if (value == null || value === "") return null;
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return null;
   return Math.round(parsed);
 }
 
-export function rowCompareIdentityKeys(row) {
-  const keys = new Set();
+export function rowCompareIdentityKeys(row: ProjectionRow | null | undefined): Set<string> {
+  const keys = new Set<string>();
   const entityKey = normalizeCompareKey(row?.PlayerEntityKey);
   const playerKey = normalizeCompareKey(row?.PlayerKey);
   const stableKey = normalizeCompareKey(stablePlayerKeyFromRow(row));
@@ -48,7 +49,15 @@ export function rowCompareIdentityKeys(row) {
   return keys;
 }
 
-export function pickPreferredCompareRow(rows, { careerTotalsView, resolvedYearFilter }) {
+export interface PickPreferredCompareRowOptions {
+  careerTotalsView: boolean;
+  resolvedYearFilter: string;
+}
+
+export function pickPreferredCompareRow(
+  rows: ProjectionRow[] | null | undefined,
+  { careerTotalsView, resolvedYearFilter }: PickPreferredCompareRowOptions,
+): ProjectionRow | null {
   if (!Array.isArray(rows) || rows.length === 0) return null;
   if (careerTotalsView) {
     const careerRows = rows.filter(row => row && (row.Years != null || row.YearStart != null || row.YearEnd != null));
@@ -62,7 +71,7 @@ export function pickPreferredCompareRow(rows, { careerTotalsView, resolvedYearFi
     if (exactYearRow) return exactYearRow;
   }
 
-  let latestRow = null;
+  let latestRow: ProjectionRow | null = null;
   let latestYear = Number.NEGATIVE_INFINITY;
   rows.forEach(row => {
     const year = coerceRowYear(row?.Year);
@@ -74,20 +83,37 @@ export function pickPreferredCompareRow(rows, { careerTotalsView, resolvedYearFi
   return latestRow || rows[0];
 }
 
-export function profilePayloadRows(payload, { careerTotalsView }) {
-  if (!payload || typeof payload !== "object") return [];
-  if (careerTotalsView) {
-    if (Array.isArray(payload.career_totals) && payload.career_totals.length > 0) {
-      return payload.career_totals;
-    }
-  } else if (Array.isArray(payload.series) && payload.series.length > 0) {
-    return payload.series;
-  }
-  return Array.isArray(payload.data) ? payload.data : [];
+export interface ProfilePayloadRowsOptions {
+  careerTotalsView: boolean;
 }
 
-export function mergeCompareRowsWithCap(current, rows) {
-  const next = { ...(current || {}) };
+interface ProfilePayload {
+  career_totals?: unknown[];
+  series?: unknown[];
+  data?: unknown[];
+}
+
+export function profilePayloadRows(
+  payload: unknown,
+  { careerTotalsView }: ProfilePayloadRowsOptions,
+): ProjectionRow[] {
+  if (!payload || typeof payload !== "object") return [];
+  const p = payload as ProfilePayload;
+  if (careerTotalsView) {
+    if (Array.isArray(p.career_totals) && p.career_totals.length > 0) {
+      return p.career_totals as ProjectionRow[];
+    }
+  } else if (Array.isArray(p.series) && p.series.length > 0) {
+    return p.series as ProjectionRow[];
+  }
+  return Array.isArray(p.data) ? (p.data as ProjectionRow[]) : [];
+}
+
+export function mergeCompareRowsWithCap(
+  current: Record<string, ProjectionRow> | null | undefined,
+  rows: (ProjectionRow | null | undefined)[],
+): Record<string, ProjectionRow> {
+  const next: Record<string, ProjectionRow> = { ...(current || {}) };
   let count = Object.keys(next).length;
   rows.forEach(row => {
     if (!row || typeof row !== "object") return;
@@ -104,10 +130,18 @@ export function mergeCompareRowsWithCap(current, rows) {
   return next;
 }
 
+export interface CompareShareHydrationNotice {
+  severity: "warning" | "error";
+  message: string;
+}
+
 export function resolveCompareShareHydrationNotice({
   requestedKeys,
   matchedKeys,
-}) {
+}: {
+  requestedKeys: unknown[];
+  matchedKeys: unknown[];
+}): CompareShareHydrationNotice | null {
   const requested = Array.isArray(requestedKeys)
     ? requestedKeys.map(token => normalizeCompareKey(token)).filter(Boolean)
     : [];
@@ -136,9 +170,20 @@ export function resolveCompareShareHydrationNotice({
   };
 }
 
-export function resolveProjectionDataset(tab) {
+export type ProjectionDataset = "bat" | "pitch" | "all";
+
+export function resolveProjectionDataset(tab: string): ProjectionDataset {
   if (tab === "bat" || tab === "pitch") return tab;
   return "all";
+}
+
+export interface BuildProjectionCompareHydrationRequestOptions {
+  apiBase: string;
+  compareKeys: unknown[];
+  tab: string;
+  careerTotalsView: boolean;
+  resolvedYearFilter: string;
+  calculatorJobId: string;
 }
 
 export function buildProjectionCompareHydrationRequest({
@@ -148,7 +193,7 @@ export function buildProjectionCompareHydrationRequest({
   careerTotalsView,
   resolvedYearFilter,
   calculatorJobId,
-}) {
+}: BuildProjectionCompareHydrationRequestOptions): string {
   const base = String(apiBase || "").trim().replace(/\/+$/, "");
   const requestedKeys = Array.isArray(compareKeys)
     ? compareKeys.map(token => normalizeCompareKey(token)).filter(Boolean)
@@ -171,12 +216,19 @@ export function buildProjectionCompareHydrationRequest({
   return url.toString();
 }
 
+export interface SelectHydratedCompareRowsOptions {
+  rows: ProjectionRow[];
+  requestedKeys: string[];
+  careerTotalsView: boolean;
+  resolvedYearFilter: string;
+}
+
 export function selectHydratedCompareRows({
   rows,
   requestedKeys,
   careerTotalsView,
   resolvedYearFilter,
-}) {
+}: SelectHydratedCompareRowsOptions): Record<string, ProjectionRow> {
   const normalizedRequestedKeys = Array.isArray(requestedKeys)
     ? requestedKeys.map(token => normalizeCompareKey(token)).filter(Boolean)
     : [];
@@ -184,7 +236,7 @@ export function selectHydratedCompareRows({
     return {};
   }
 
-  const candidatesByKey = new Map();
+  const candidatesByKey = new Map<string, ProjectionRow[]>();
   rows.forEach(row => {
     rowCompareIdentityKeys(row).forEach(identityKey => {
       const candidates = candidatesByKey.get(identityKey) || [];
@@ -193,7 +245,7 @@ export function selectHydratedCompareRows({
     });
   });
 
-  const selectedRowsByKey = {};
+  const selectedRowsByKey: Record<string, ProjectionRow> = {};
   normalizedRequestedKeys.forEach(requestedKey => {
     const candidates = candidatesByKey.get(requestedKey);
     const selectedRow = pickPreferredCompareRow(candidates, {
