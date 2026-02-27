@@ -133,7 +133,11 @@ def register_middlewares(app: FastAPI, *, config: MiddlewareConfig) -> None:
             return await call_next(request)
         request.scope["method"] = "GET"
         response = await call_next(request)
-        headers = dict(response.headers)
+        headers = {
+            k: v
+            for k, v in response.headers.items()
+            if k.lower() not in ("content-length", "content-encoding", "transfer-encoding")
+        }
         if hasattr(response, "body_iterator"):
             async for _ in response.body_iterator:
                 pass

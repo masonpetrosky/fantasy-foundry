@@ -72,3 +72,15 @@ class HeadRequestTests(unittest.TestCase):
         response = self.client.get("/ping")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"ok": True})
+
+    def test_head_content_length_is_zero(self) -> None:
+        """HEAD response must not carry the GET Content-Length (Uvicorn enforces match)."""
+        response = self.client.head("/api/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"")
+        self.assertEqual(response.headers.get("content-length"), "0")
+
+    def test_head_strips_content_encoding(self) -> None:
+        """Content-Encoding from a compressed GET must not leak into HEAD."""
+        response = self.client.head("/api/health")
+        self.assertIsNone(response.headers.get("content-encoding"))
