@@ -13,10 +13,88 @@ import {
   ROTO_THREE_DECIMAL_RATE_COLS,
 } from "./dynasty_calculator_config";
 import { fmt } from "./formatting_utils";
+import type { TierLimits } from "./premium";
 
-const POSITION_FILTER_OPTIONS = ["C", "1B", "2B", "3B", "SS", "OF", "SP", "RP"];
+const POSITION_FILTER_OPTIONS = ["C", "1B", "2B", "3B", "SS", "OF", "SP", "RP"] as const;
 
-export function DynastyCalculatorResults({ results, state, refs, actions }) {
+interface RankRow {
+  [key: string]: unknown;
+  Player?: string;
+  Team?: string;
+  Pos?: string;
+  Age?: number;
+  DynastyValue?: number;
+}
+
+interface VirtualRowEntry {
+  row: RankRow;
+  rank: number;
+}
+
+interface ResultsState {
+  activeExplanation: Record<string, unknown> | null | undefined;
+  compareYearCols: string[];
+  columnLabels: Record<string, string>;
+  displayCols: string[];
+  hasRankFilters: boolean;
+  hiddenRankCols: Record<string, boolean>;
+  pinRankKeyColumns: boolean;
+  posFilter: string;
+  rankCompareRows: RankRow[];
+  rankCompareRowsByKey: Record<string, unknown>;
+  rankedFiltered: unknown[];
+  rankSearchIsDebouncing: boolean;
+  rankWatchlistOnly: boolean;
+  searchInput: string;
+  selectedExplainKey: string;
+  selectedExplainYear: string;
+  sortCol: string;
+  sortDir: "asc" | "desc";
+  sortedAll: unknown[];
+  virtualBottomPad: number;
+  virtualRows: VirtualRowEntry[];
+  virtualStartIndex: number;
+  virtualTopPad: number;
+  visibleRankCols: string[];
+  watchlist: Record<string, unknown>;
+  watchlistCount: number;
+  requiredRankCols: Set<string>;
+  tierLimits: TierLimits | null;
+}
+
+interface ResultsActions {
+  clearRankCompareRows: () => void;
+  clearRankFilters: () => void;
+  clearWatchlist: () => void;
+  exportRankings: (format: string) => void;
+  exportWatchlistCsv: () => void;
+  handleSort: (col: string) => void;
+  removeRankCompareRow: (key: string) => void;
+  setPinRankKeyColumns: (updater: (v: boolean) => boolean) => void;
+  setPosFilter: (value: string) => void;
+  setRankWatchlistOnly: (updater: (v: boolean) => boolean) => void;
+  setSearchInput: (value: string) => void;
+  setSelectedExplainKey: (key: string) => void;
+  setSelectedExplainYear: (year: string) => void;
+  showAllRankColumns: () => void;
+  toggleRankColumn: (col: string) => void;
+  toggleRankCompareRow: (row: RankRow) => void;
+  toggleRowWatch: (row: RankRow) => void;
+}
+
+interface ResultsRefs {
+  handleRankScroll: (e: React.UIEvent<HTMLDivElement>) => void;
+  rankTableScrollRef: React.RefObject<HTMLDivElement | null>;
+}
+
+interface DynastyCalculatorResultsProps {
+  results: unknown;
+  state: ResultsState;
+  refs: ResultsRefs;
+  actions: ResultsActions;
+}
+
+export function DynastyCalculatorResults({ results, state, refs, actions }: DynastyCalculatorResultsProps): React.ReactElement {
   if (!results) {
     return (
       <div className="calc-empty-state">
@@ -124,8 +202,8 @@ export function DynastyCalculatorResults({ results, state, refs, actions }) {
         <button type="button" className="inline-btn" onClick={() => setPinRankKeyColumns(v => !v)}>
           {pinRankKeyColumns ? "Unpin Key Columns" : "Pin Key Columns"}
         </button>
-        <button type="button" className="inline-btn" onClick={exportWatchlistCsv} disabled={watchlistCount === 0 || (tierLimits && !tierLimits.allowExport)}>
-          {tierLimits && !tierLimits.allowExport ? "Export Watchlist CSV (Pro)" : "Export Watchlist CSV"}
+        <button type="button" className="inline-btn" onClick={exportWatchlistCsv} disabled={watchlistCount === 0 || (tierLimits != null && !tierLimits.allowExport)}>
+          {tierLimits != null && !tierLimits.allowExport ? "Export Watchlist CSV (Pro)" : "Export Watchlist CSV"}
         </button>
         <button type="button" className="inline-btn" onClick={clearWatchlist} disabled={watchlistCount === 0}>
           Clear Watchlist
@@ -133,11 +211,11 @@ export function DynastyCalculatorResults({ results, state, refs, actions }) {
         <button type="button" className="inline-btn" onClick={clearRankCompareRows} disabled={rankCompareRows.length === 0}>
           Clear Compare
         </button>
-        <button type="button" className="inline-btn" onClick={() => exportRankings("csv")} disabled={tierLimits && !tierLimits.allowExport}>
-          {tierLimits && !tierLimits.allowExport ? "Export CSV (Pro)" : "Export CSV"}
+        <button type="button" className="inline-btn" onClick={() => exportRankings("csv")} disabled={tierLimits != null && !tierLimits.allowExport}>
+          {tierLimits != null && !tierLimits.allowExport ? "Export CSV (Pro)" : "Export CSV"}
         </button>
-        <button type="button" className="inline-btn" onClick={() => exportRankings("xlsx")} disabled={tierLimits && !tierLimits.allowExport}>
-          {tierLimits && !tierLimits.allowExport ? "Export XLSX (Pro)" : "Export XLSX"}
+        <button type="button" className="inline-btn" onClick={() => exportRankings("xlsx")} disabled={tierLimits != null && !tierLimits.allowExport}>
+          {tierLimits != null && !tierLimits.allowExport ? "Export XLSX (Pro)" : "Export XLSX"}
         </button>
       </div>
       {rankCompareRows.length > 0 && (
@@ -155,7 +233,7 @@ export function DynastyCalculatorResults({ results, state, refs, actions }) {
                     <h4>{row.Player || "Player"}</h4>
                     <button type="button" className="inline-btn" onClick={() => removeRankCompareRow(key)}>Remove</button>
                   </div>
-                  <p>{row.Team || "—"} · {row.Pos || "—"} · Age {fmt(row.Age, 0)}</p>
+                  <p>{row.Team || "\u2014"} · {row.Pos || "\u2014"} · Age {fmt(row.Age, 0)}</p>
                   <dl>
                     <dt>Dynasty Value</dt>
                     <dd>{fmt(row.DynastyValue, 2)}</dd>
@@ -204,7 +282,7 @@ export function DynastyCalculatorResults({ results, state, refs, actions }) {
                     aria-sort={sortCol === c ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                   >
                     {columnLabels[c] || c.replace("Value_", "")}
-                    {sortCol === c && <span className="sort-arrow">{sortDir === "asc" ? "▲" : "▼"}</span>}
+                    {sortCol === c && <span className="sort-arrow">{sortDir === "asc" ? "\u25B2" : "\u25BC"}</span>}
                   </th>
                 ))}
                 <th scope="col">Actions</th>
@@ -244,9 +322,9 @@ export function DynastyCalculatorResults({ results, state, refs, actions }) {
                         : pinRankKeyColumns && c === "DynastyValue"
                           ? "rank-pin-value"
                           : "";
-                      if (c === "Player") return <td key={c} className={`player-name ${pinClass}`.trim()}>{val}</td>;
-                      if (c === "Pos") return <td key={c} className={`pos ${pinClass}`.trim()}>{val}</td>;
-                      if (c === "Team") return <td key={c} className={`team ${pinClass}`.trim()}>{val}</td>;
+                      if (c === "Player") return <td key={c} className={`player-name ${pinClass}`.trim()}>{val as string}</td>;
+                      if (c === "Pos") return <td key={c} className={`pos ${pinClass}`.trim()}>{val as string}</td>;
+                      if (c === "Team") return <td key={c} className={`team ${pinClass}`.trim()}>{val as string}</td>;
                       if (c === "DynastyValue" || c.startsWith("Value_")) {
                         const n = Number(val);
                         const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
@@ -256,7 +334,7 @@ export function DynastyCalculatorResults({ results, state, refs, actions }) {
                         return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, 2)}</td>;
                       }
                       if (POINTS_RESULT_SLOT_COLS.has(c)) {
-                        return <td key={c} className={pinClass}>{val || "—"}</td>;
+                        return <td key={c} className={pinClass}>{(val as string) || "\u2014"}</td>;
                       }
                       if (ROTO_COUNTING_STAT_COLS.has(c)) {
                         return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, 0)}</td>;
@@ -266,7 +344,7 @@ export function DynastyCalculatorResults({ results, state, refs, actions }) {
                         return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, decimals)}</td>;
                       }
                       if (typeof val === "number") return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, Number.isInteger(val) ? 0 : 1)}</td>;
-                      return <td key={c} className={pinClass}>{val ?? "—"}</td>;
+                      return <td key={c} className={pinClass}>{(val as string) ?? "\u2014"}</td>;
                     })}
                     <td className="row-actions-cell">
                       <button

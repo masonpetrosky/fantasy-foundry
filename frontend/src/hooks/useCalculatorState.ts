@@ -129,7 +129,7 @@ export function useCalculatorState({
   useEffect(() => {
     if (!ACTIVATION_SPRINT_ENABLED) return;
     if (section !== "projections" || !meta) return;
-    void import("../dynasty_calculator.jsx");
+    void import("../dynasty_calculator");
   }, [meta, section]);
 
   // Persist presets

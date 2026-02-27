@@ -3,6 +3,62 @@ import { CalcTooltip } from "./dynasty_calculator_tooltip";
 import { RotoCategoriesForm } from "./dynasty_calculator_sidebar_categories";
 import { PointsScoringForm } from "./dynasty_calculator_sidebar_points";
 import { StarterSlotsForm } from "./dynasty_calculator_sidebar_slots";
+import type { CalculatorSettings } from "./dynasty_calculator_config";
+import type { TierLimits } from "./premium";
+
+interface SidebarState {
+  canSavePreset: boolean;
+  hittersPerTeam: number;
+  isPointsMode: boolean;
+  lastRunTotal: number;
+  loading: boolean;
+  mainTableOverlayActive: boolean;
+  pointRulesCount: number;
+  presetName: string;
+  presetStatus: string;
+  presetStatusIsError: boolean;
+  pitchersPerTeam: number;
+  reservePerTeam: number;
+  selectedPresetName: string;
+  selectedRotoHitCategoryCount: number;
+  selectedRotoPitchCategoryCount: number;
+  status: string;
+  statusIsError: boolean;
+  totalPlayersPerTeam: number;
+  validationError: string;
+  validationWarning: string;
+  hasSuccessfulRun: boolean;
+  tierLimits: TierLimits | null;
+}
+
+interface SidebarActions {
+  applyQuickStartAndRun: (mode: string) => void;
+  applyScoringSetup: (mode: string) => void;
+  clearAppliedValues: () => void;
+  copyShareLink: () => void;
+  deletePreset: (name: string) => void;
+  reapplySetupDefaults: () => void;
+  resetPointsScoringDefaults: () => void;
+  resetRotoCategoryDefaults: () => void;
+  run: () => void;
+  savePreset: () => void;
+  selectPreset: (name: string) => void;
+  setPresetName: (name: string) => void;
+  update: (key: string, val: unknown) => void;
+}
+
+interface CalculatorMeta {
+  years: number[];
+  [key: string]: unknown;
+}
+
+interface DynastyCalculatorSidebarProps {
+  meta: CalculatorMeta;
+  presets: Record<string, unknown>;
+  settings: CalculatorSettings;
+  state: SidebarState;
+  actions: SidebarActions;
+}
 
 export function DynastyCalculatorSidebar({
   meta,
@@ -10,7 +66,7 @@ export function DynastyCalculatorSidebar({
   settings,
   state,
   actions,
-}) {
+}: DynastyCalculatorSidebarProps): React.ReactElement {
   const {
     canSavePreset,
     hittersPerTeam,
@@ -147,8 +203,8 @@ export function DynastyCalculatorSidebar({
               disabled={settings.mode === "league"}
             >
               <option value="roto">Roto Focused</option>
-              <option value="points" disabled={tierLimits && !tierLimits.allowPointsMode}>
-                {tierLimits && !tierLimits.allowPointsMode ? "Points Focused (Pro)" : "Points Focused"}
+              <option value="points" disabled={tierLimits != null && !tierLimits.allowPointsMode}>
+                {tierLimits != null && !tierLimits.allowPointsMode ? "Points Focused (Pro)" : "Points Focused"}
               </option>
             </select>
           </div>
@@ -230,7 +286,7 @@ export function DynastyCalculatorSidebar({
           <div className="form-group">
             <label htmlFor="calc-sims">
               Simulations
-              {tierLimits && tierLimits.maxSims < 5000 && <span className="field-pro-badge">(Pro unlocks more)</span>}
+              {tierLimits != null && tierLimits.maxSims < 5000 && <span className="field-pro-badge">(Pro unlocks more)</span>}
             </label>
             <input
               id="calc-sims"
@@ -279,7 +335,7 @@ export function DynastyCalculatorSidebar({
             <input
               id="calc-ip-max"
               type="text"
-              value={settings.ip_max}
+              value={settings.ip_max ?? ""}
               onChange={e => update("ip_max", e.target.value)}
               placeholder="none"
               disabled={isPointsMode}

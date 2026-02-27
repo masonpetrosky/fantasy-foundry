@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cancelCalculationJob, runCalculationJob } from "./calculation_jobs";
-import { DynastyCalculatorSidebar } from "./dynasty_calculator_sidebar.jsx";
+import { DynastyCalculatorSidebar } from "./dynasty_calculator_sidebar";
 import { trackEvent } from "./analytics";
 import { normalizeCalculatorRunSettingsInput } from "./calculator_submit";
 import { trackQuickStartClick } from "./quick_start";
@@ -27,6 +27,30 @@ import {
   resolveRotoCategoryDefaults,
   resolveRotoSlotDefaults,
 } from "./dynasty_calculator_config";
+import type { CalculatorSettings } from "./dynasty_calculator_config";
+import type { TierLimits } from "./premium";
+
+interface CalculatorMeta {
+  years?: number[];
+  calculator_guardrails?: {
+    default_ir_slots?: number;
+    default_minors_slots?: number;
+    job_timeout_seconds?: number;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+interface QuickStartInput {
+  mode: string;
+  settings: CalculatorSettings;
+  availableYears: number[];
+  meta: CalculatorMeta;
+  rotoSlotDefaults: Record<string, unknown>;
+  rotoCategoryDefaults: Record<string, unknown>;
+  pointsSlotDefaults: Record<string, unknown>;
+  pointsScoringDefaults: Record<string, unknown>;
+}
 
 export function buildQuickStartSettings({
   mode,
@@ -37,7 +61,7 @@ export function buildQuickStartSettings({
   rotoCategoryDefaults,
   pointsSlotDefaults,
   pointsScoringDefaults,
-}) {
+}: QuickStartInput): CalculatorSettings {
   const availableStartYear = availableYears.length > 0
     ? availableYears[0]
     : Number(meta?.years?.[0] ?? 2026);
@@ -46,7 +70,7 @@ export function buildQuickStartSettings({
   const guardrails = meta?.calculator_guardrails || {};
   const defaultIr = Number(guardrails.default_ir_slots);
   const defaultMinors = Number(guardrails.default_minors_slots);
-  const commonBase = {
+  const commonBase: CalculatorSettings = {
     ...settings,
     teams: 12,
     horizon: 20,
@@ -77,7 +101,7 @@ export function buildQuickStartSettings({
       scoring_mode: "points",
       ...pointsSlotDefaults,
       ...pointsScoringDefaults,
-    };
+    } as CalculatorSettings;
   }
 
   return {
@@ -85,7 +109,53 @@ export function buildQuickStartSettings({
     scoring_mode: "roto",
     ...rotoSlotDefaults,
     ...rotoCategoryDefaults,
-  };
+  } as CalculatorSettings;
+}
+
+interface RunContext {
+  source?: string;
+  quickStartMode?: string;
+  quickStartSource?: string;
+}
+
+interface QuickStartRunOptions {
+  source?: string;
+  trackClick?: boolean;
+}
+
+interface CalculationResult {
+  total?: number;
+  data?: unknown[];
+  [key: string]: unknown;
+}
+
+interface RunMeta {
+  jobId?: string;
+  [key: string]: unknown;
+}
+
+interface CalculationSuccessInfo {
+  scoringMode: string;
+  startYear: number;
+  horizon: number;
+  teams: number;
+  playerCount: number;
+}
+
+interface DynastyCalculatorProps {
+  apiBase: string;
+  meta: CalculatorMeta;
+  presets: Record<string, unknown>;
+  setPresets: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
+  hasSuccessfulRun: boolean;
+  onApplyToMainTable?: (result: CalculationResult, settings: CalculatorSettings, runMeta: RunMeta | undefined) => void;
+  onCalculationSuccess?: (info: CalculationSuccessInfo) => void;
+  onClearMainTableOverlay?: () => void;
+  mainTableOverlayActive?: boolean;
+  onSettingsChange?: (settings: CalculatorSettings) => void;
+  onRegisterQuickStartRunner?: (runner: ((mode: string) => void) | null) => void;
+  onOpenMethodologyGlossary?: () => void;
+  tierLimits?: TierLimits | null;
 }
 
 export function DynastyCalculator({
@@ -102,9 +172,9 @@ export function DynastyCalculator({
   onRegisterQuickStartRunner,
   onOpenMethodologyGlossary,
   tierLimits,
-}) {
+}: DynastyCalculatorProps): React.ReactElement {
   const API = String(apiBase || "").trim();
-  const [settings, setSettings] = useState(() => buildDefaultCalculatorSettings(meta));
+  const [settings, setSettings] = useState<CalculatorSettings>(() => buildDefaultCalculatorSettings(meta));
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [presetStatus, setPresetStatus] = useState("");
@@ -112,9 +182,9 @@ export function DynastyCalculator({
   const [selectedPresetName, setSelectedPresetName] = useState("");
   const [lastRunTotal, setLastRunTotal] = useState(0);
   const calcRequestSeqRef = useRef(0);
-  const calcAbortControllerRef = useRef(null);
+  const calcAbortControllerRef = useRef<AbortController | null>(null);
   const calcActiveJobIdRef = useRef("");
-  const quickStartRunRef = useRef(null);
+  const quickStartRunRef = useRef<((mode: string) => void) | null>(null);
   const firstSuccessTrackedRef = useRef(Boolean(hasSuccessfulRun));
 
   const availableYears = useMemo(
@@ -171,7 +241,7 @@ export function DynastyCalculator({
     if (!encoded) return;
     const parsed = decodeCalculatorSettings(encoded);
     if (!parsed) return;
-    setSettings(current => mergeKnownCalculatorSettings(current, parsed));
+    setSettings(current => mergeKnownCalculatorSettings(current, parsed) as CalculatorSettings);
     setStatus("Loaded calculator settings from share link.");
   }, []);
 
@@ -190,11 +260,11 @@ export function DynastyCalculator({
     };
   }, []);
 
-  function update(key, val) {
+  function update(key: string, val: unknown): void {
     setSettings(current => ({ ...current, [key]: val }));
   }
 
-  function applyScoringSetup(nextMode) {
+  function applyScoringSetup(nextMode: string): void {
     setSettings(curr => {
       const slotDefaults = nextMode === "points" ? pointsSlotDefaults : rotoSlotDefaults;
       return {
@@ -205,15 +275,15 @@ export function DynastyCalculator({
     });
   }
 
-  function resetPointsScoringDefaults() {
+  function resetPointsScoringDefaults(): void {
     setSettings(curr => ({ ...curr, ...pointsScoringDefaults }));
   }
 
-  function resetRotoCategoryDefaults() {
+  function resetRotoCategoryDefaults(): void {
     setSettings(curr => ({ ...curr, ...rotoCategoryDefaults }));
   }
 
-  function reapplySetupDefaults() {
+  function reapplySetupDefaults(): void {
     setSettings(curr => (
       curr.scoring_mode === "points"
         ? { ...curr, ...pointsSlotDefaults, ...pointsScoringDefaults }
@@ -221,7 +291,7 @@ export function DynastyCalculator({
     ));
   }
 
-  function applyQuickStartAndRun(mode, options = {}) {
+  function applyQuickStartAndRun(mode: string, options: QuickStartRunOptions = {}): void {
     const normalizedMode = mode === "points" ? "points" : "roto";
     const source = String(options.source || "calculator_sidebar").trim() || "calculator_sidebar";
     const shouldTrackQuickStartClick = options.trackClick !== false;
@@ -251,14 +321,14 @@ export function DynastyCalculator({
       quickStartSource: source,
     });
   }
-  quickStartRunRef.current = mode => applyQuickStartAndRun(mode, {
+  quickStartRunRef.current = (mode: string) => applyQuickStartAndRun(mode, {
     source: "activation_strip",
     trackClick: false,
   });
 
   useEffect(() => {
     if (typeof onRegisterQuickStartRunner !== "function") return undefined;
-    onRegisterQuickStartRunner(mode => {
+    onRegisterQuickStartRunner((mode: string) => {
       if (typeof quickStartRunRef.current === "function") {
         quickStartRunRef.current(mode);
       }
@@ -268,7 +338,7 @@ export function DynastyCalculator({
     };
   }, [onRegisterQuickStartRunner]);
 
-  function savePreset() {
+  function savePreset(): void {
     const name = String(presetName || "").trim();
     if (!name) {
       setPresetStatus("Error: Enter a preset name before saving.");
@@ -282,19 +352,19 @@ export function DynastyCalculator({
     setPresetStatus(`${isUpdate ? "Updated" : "Saved new"} preset '${name}'.`);
   }
 
-  function loadPreset(name) {
+  function loadPreset(name: string): void {
     const preset = presets[name];
     if (!preset || typeof preset !== "object") {
       setPresetStatus(`Error: Preset '${name}' was not found.`);
       return;
     }
-    setSettings(current => mergeKnownCalculatorSettings(current, preset));
+    setSettings(current => mergeKnownCalculatorSettings(current, preset as Record<string, unknown>) as CalculatorSettings);
     setPresetName(name);
     setSelectedPresetName(name);
     setPresetStatus(`Loaded preset '${name}'.`);
   }
 
-  function selectPreset(name) {
+  function selectPreset(name: string): void {
     const normalizedName = String(name || "").trim();
     setSelectedPresetName(normalizedName);
     if (!normalizedName) {
@@ -304,7 +374,7 @@ export function DynastyCalculator({
     loadPreset(normalizedName);
   }
 
-  function deletePreset(name) {
+  function deletePreset(name: string): void {
     const normalizedName = String(name || "").trim();
     if (!normalizedName) return;
     if (!window.confirm(`Delete preset '${normalizedName}'?`)) {
@@ -320,7 +390,7 @@ export function DynastyCalculator({
     setPresetStatus(`Deleted preset '${normalizedName}'.`);
   }
 
-  async function copyShareLink() {
+  async function copyShareLink(): Promise<void> {
     const encoded = encodeCalculatorSettings(settings);
     if (!encoded) {
       setStatus("Error: Unable to encode settings for sharing.");
@@ -342,14 +412,14 @@ export function DynastyCalculator({
     }
   }
 
-  function clearAppliedValues() {
+  function clearAppliedValues(): void {
     if (typeof onClearMainTableOverlay === "function") {
       onClearMainTableOverlay();
     }
     setStatus("Cleared custom calculator values from the main table.");
   }
 
-  function run(runSettings = settings, runContext = {}) {
+  function run(runSettings: unknown = settings, runContext: RunContext = {}): void {
     const normalizedSettings = normalizeCalculatorRunSettingsInput(runSettings, settings);
     const payload = buildCalculatorPayload(normalizedSettings, availableYears, meta);
     if (payload.error || !payload.payload) {
@@ -372,8 +442,8 @@ export function DynastyCalculator({
     calcAbortControllerRef.current = controller;
     trackEvent("calculator_run_start", {
       source: String(runContext.source || "manual").trim() || "manual",
-      quickStartMode: runContext.quickStartMode,
-      quickStartSource: runContext.quickStartSource,
+      quickStartMode: runContext.quickStartMode || "",
+      quickStartSource: runContext.quickStartSource || "",
       scoringMode: String(normalizedSettings.scoring_mode || "").trim() || "roto",
       startYear: Number(normalizedSettings.start_year),
       horizon: Number(normalizedSettings.horizon),
@@ -398,8 +468,8 @@ export function DynastyCalculator({
       requestSeqRef: calcRequestSeqRef,
       activeJobIdRef: calcActiveJobIdRef,
       timeoutSeconds: Number(meta?.calculator_guardrails?.job_timeout_seconds),
-      onStatus: nextStatus => setStatus(nextStatus),
-      onCompleted: (result, runMeta) => {
+      onStatus: (nextStatus: string) => setStatus(nextStatus),
+      onCompleted: (result: CalculationResult, runMeta: RunMeta | undefined) => {
         const total = Number(result?.total);
         const resolvedTotal = Number.isFinite(total)
           ? total
@@ -454,12 +524,12 @@ export function DynastyCalculator({
         });
         trackEvent("calculator_run_success", {
           source: String(runContext.source || "manual").trim() || "manual",
-          quickStartMode: runContext.quickStartMode,
-          quickStartSource: runContext.quickStartSource,
+          quickStartMode: runContext.quickStartMode || "",
+          quickStartSource: runContext.quickStartSource || "",
           scoringMode: String(normalizedSettings.scoring_mode || "").trim() || "roto",
           startYear: Number(normalizedSettings.start_year),
           horizon: Number(normalizedSettings.horizon),
-          jobId: runMeta?.jobId,
+          jobId: runMeta?.jobId || "",
           playerCount: resolvedTotal,
         });
         setLoading(false);
@@ -469,7 +539,7 @@ export function DynastyCalculator({
         setLoading(false);
         setStatus("Calculation cancelled.");
       },
-      onError: message => {
+      onError: (message: string) => {
         setLoading(false);
         setStatus(`Error: ${message}`);
         trackEvent("ff_calculation_error", {
@@ -536,7 +606,7 @@ export function DynastyCalculator({
     validationError,
     validationWarning,
     hasSuccessfulRun: Boolean(hasSuccessfulRun) || firstSuccessTrackedRef.current,
-    tierLimits,
+    tierLimits: tierLimits ?? null,
   };
 
   const sidebarActions = {
@@ -559,7 +629,7 @@ export function DynastyCalculator({
   return (
     <div className="fade-up fade-up-1">
       <DynastyCalculatorSidebar
-        meta={meta}
+        meta={meta as { years: number[]; [key: string]: unknown }}
         presets={presets}
         settings={settings}
         state={sidebarState}

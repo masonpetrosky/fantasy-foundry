@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildQuickStartSettings } from "./dynasty_calculator.jsx";
+import { buildQuickStartSettings } from "./dynasty_calculator";
 
 const baseSettings = {
   scoring_mode: "roto",
+  mode: "common",
   teams: 20,
   sims: 500,
   horizon: 10,
@@ -11,10 +12,19 @@ const baseSettings = {
   minors: 7,
   ir: 4,
   ip_min: 300,
-  ip_max: 1400,
+  ip_max: 1400 as string | number,
   two_way: "max",
   start_year: 2027,
   recent_projections: 5,
+  sgp_denominator_mode: "classic",
+  sgp_winsor_low_pct: 0.1,
+  sgp_winsor_high_pct: 0.9,
+  sgp_epsilon_counting: 0.15,
+  sgp_epsilon_ratio: 0.0015,
+  enable_playing_time_reliability: false,
+  enable_age_risk_adjustment: false,
+  enable_replacement_blend: false,
+  replacement_blend_alpha: 0.7,
 };
 
 describe("buildQuickStartSettings", () => {
@@ -56,9 +66,9 @@ describe("buildQuickStartSettings", () => {
     expect(settings.recent_projections).toBe(3);
     expect(settings.sims).toBe(300);
     expect(settings.start_year).toBe(2027);
-    expect(settings.hit_of).toBe(3);
-    expect(settings.pit_sp).toBe(5);
-    expect(settings.pts_hit_hr).toBe(4);
+    expect(settings["hit_of"]).toBe(3);
+    expect(settings["pit_sp"]).toBe(5);
+    expect(settings["pts_hit_hr"]).toBe(4);
   });
 
   it("falls back to first available year for roto quick start when current year is invalid", () => {
@@ -80,9 +90,9 @@ describe("buildQuickStartSettings", () => {
 
     expect(settings.scoring_mode).toBe("roto");
     expect(settings.start_year).toBe(2026);
-    expect(settings.hit_of).toBe(5);
-    expect(settings.pit_p).toBe(9);
-    expect(settings.roto_hit_hr).toBe(true);
-    expect(settings.roto_pit_k).toBe(true);
+    expect(settings["hit_of"]).toBe(5);
+    expect(settings["pit_p"]).toBe(9);
+    expect(settings["roto_hit_hr"]).toBe(true);
+    expect(settings["roto_pit_k"]).toBe(true);
   });
 });

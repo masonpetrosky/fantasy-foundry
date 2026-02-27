@@ -9,10 +9,10 @@ initSentry();
 initGA4();
 import { AUTH_SYNC_ENABLED } from "./supabase_client";
 import { AccountPanel } from "./account_panel";
-import { ActivationDiagnosticsPanel, resolveActivationDiagnosticsPanelEnabled } from "./activation_diagnostics_panel.jsx";
+import { ActivationDiagnosticsPanel, resolveActivationDiagnosticsPanelEnabled } from "./activation_diagnostics_panel";
 import { resolveApiBase } from "./api_base";
 import { PRIMARY_NAV_ITEMS } from "./app_content";
-import { ProjectionsExplorer } from "./projections_explorer.jsx";
+import { ProjectionsExplorer } from "./projections_explorer";
 import { MobileCalculatorSheet } from "./MobileCalculatorSheet";
 import { installAnalyticsDebugBridge, setAnalyticsContext, trackEvent } from "./analytics";
 import { ErrorBoundary } from "./error_boundary";
@@ -30,7 +30,7 @@ import { useCalculatorState } from "./hooks/useCalculatorState";
 import { useMetadata } from "./hooks/useMetadata.js";
 import { useQuickStart } from "./hooks/useQuickStart";
 import { useVersionPolling } from "./hooks/useVersionPolling.js";
-import { useAccountMenu } from "./hooks/useAccountMenu.js";
+import { useAccountMenu } from "./hooks/useAccountMenu";
 import { useAccountSync } from "./hooks/useAccountSync";
 import { usePremiumStatus } from "./hooks/usePremiumStatus.js";
 import { useTheme } from "./hooks/useTheme.js";
@@ -53,7 +53,7 @@ const LazyMethodologySection = lazy(() => (
   import("./methodology_section").then(module => ({ default: module.MethodologySection }))
 ));
 const LazyDynastyCalculator = lazy(() => (
-  import("./dynasty_calculator.jsx").then(module => ({ default: module.DynastyCalculator }))
+  import("./dynasty_calculator").then(module => ({ default: module.DynastyCalculator }))
 ));
 
 function App() {

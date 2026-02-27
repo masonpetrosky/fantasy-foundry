@@ -21,6 +21,27 @@ import { ProjectionOverlayBanner } from "./components/ProjectionOverlayBanner";
 import { ProjectionResultsShell } from "./components/ProjectionResultsShell";
 import { ProjectionSectionTabs } from "./components/ProjectionSectionTabs";
 import { ProjectionStatusMessages } from "./components/ProjectionStatusMessages";
+import type { TierLimits } from "../../premium";
+import type { CalculatorSettings } from "../../dynasty_calculator_config";
+import type { PlayerWatchEntry } from "../../app_state_storage";
+
+interface ProjectionsExplorerProps {
+  apiBase: string;
+  meta: Record<string, unknown> & { years?: (string | number)[]; teams?: string[] };
+  dataVersion: string;
+  watchlist: Record<string, PlayerWatchEntry>;
+  setWatchlist: React.Dispatch<React.SetStateAction<Record<string, PlayerWatchEntry>>>;
+  hasSuccessfulCalcRun: boolean;
+  activeCalculatorSettings: CalculatorSettings | null;
+  calculatorOverlayByPlayerKey: Record<string, unknown> | null;
+  calculatorOverlayActive: boolean;
+  calculatorOverlayJobId: string;
+  calculatorOverlayDataVersion: string;
+  calculatorOverlayPlayerCount: number;
+  calculatorOverlaySummary: Record<string, unknown> | null;
+  onClearCalculatorOverlay: () => void;
+  tierLimits: TierLimits | null;
+}
 
 export function ProjectionsExplorer({
   apiBase,
@@ -38,7 +59,7 @@ export function ProjectionsExplorer({
   calculatorOverlaySummary,
   onClearCalculatorOverlay,
   tierLimits,
-}) {
+}: ProjectionsExplorerProps): React.ReactElement {
   const activeCalculatorJobId = calculatorOverlayActive
     ? String(calculatorOverlayJobId || "").trim()
     : "";
@@ -92,8 +113,8 @@ export function ProjectionsExplorer({
   } = useProjectionLayoutState();
 
   const [, setShowPosMenu] = useState(false);
-  const [profileRow, setProfileRow] = useState(null);
-  const handleViewProfile = useCallback(row => setProfileRow(row), []);
+  const [profileRow, setProfileRow] = useState<Record<string, unknown> | null>(null);
+  const handleViewProfile = useCallback((row: Record<string, unknown>) => setProfileRow(row), []);
   const handleCloseProfile = useCallback(() => setProfileRow(null), []);
 
   const {
@@ -104,6 +125,7 @@ export function ProjectionsExplorer({
     setShowOverlayWhy,
     applyCalculatorOverlayToRows,
   } = useProjectionOverlay({
+    // @ts-expect-error - overlay map is structurally compatible
     calculatorOverlayByPlayerKey,
     calculatorOverlayActive,
     calculatorOverlayJobId,
@@ -193,7 +215,7 @@ export function ProjectionsExplorer({
     seasonCol: careerTotalsView ? "Years" : "Year",
   });
 
-  function handleSort(col) {
+  function handleSort(col: string): void {
     if (sortCol === col) {
       setSortDir(d => d === "asc" ? "desc" : "asc");
     } else {
@@ -202,7 +224,7 @@ export function ProjectionsExplorer({
     }
   }
 
-  function handleSelectTab(nextTab) {
+  function handleSelectTab(nextTab: string): void {
     const resolvedTab = nextTab === "bat" || nextTab === "pitch"
       ? nextTab
       : DEFAULT_PROJECTIONS_TAB;
@@ -259,7 +281,7 @@ export function ProjectionsExplorer({
   });
 
   const colLabels = useMemo(() => {
-    const labels = {
+    const labels: Record<string, string> = {
       Type: "Side",
       ProjectionsUsed: "Proj Count",
       OldestProjectionDate: "Oldest Proj Date",
@@ -338,7 +360,7 @@ export function ProjectionsExplorer({
   });
 
   useEffect(() => {
-    const onResize = () => updateProjectionHorizontalAffordance();
+    const onResize = (): void => updateProjectionHorizontalAffordance();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [updateProjectionHorizontalAffordance]);
@@ -375,11 +397,11 @@ export function ProjectionsExplorer({
 
   return (
     <div className="fade-up fade-up-1">
-      <ProjectionSectionTabs tab={tab} onSelectTab={handleSelectTab} />
+      <ProjectionSectionTabs tab={tab as "bat" | "pitch" | "all"} onSelectTab={handleSelectTab} />
 
       <ProjectionFilterBar
         tab={tab}
-        meta={meta}
+        meta={meta as { years: (string | number)[]; teams: string[] }}
         search={search}
         resolvedYearFilter={resolvedYearFilter}
         teamFilter={teamFilter}
@@ -402,8 +424,8 @@ export function ProjectionsExplorer({
         hasActiveFilters={hasActiveFilters}
         activeFilterChips={activeFilterChips}
         tableColumnCatalog={tableColumnCatalog}
-        resolvedProjectionTableHiddenCols={resolvedProjectionTableHiddenCols}
-        requiredProjectionTableCols={requiredProjectionTableCols}
+        resolvedProjectionTableHiddenCols={resolvedProjectionTableHiddenCols as Record<string, boolean>}
+        requiredProjectionTableCols={requiredProjectionTableCols as Set<string>}
         toggleProjectionTableColumn={toggleProjectionTableColumn}
         showAllProjectionTableColumns={showAllProjectionTableColumns}
         colLabels={colLabels}
@@ -416,7 +438,7 @@ export function ProjectionsExplorer({
         resolvedCalculatorOverlayPlayerCount={resolvedCalculatorOverlayPlayerCount}
         overlayStatusMeta={overlayStatusMeta}
         showOverlayWhy={showOverlayWhy}
-        setShowOverlayWhy={setShowOverlayWhy}
+        setShowOverlayWhy={setShowOverlayWhy as React.Dispatch<React.SetStateAction<boolean>>}
         onClearCalculatorOverlay={onClearCalculatorOverlay}
       />
       <ProjectionStatusMessages
@@ -436,7 +458,7 @@ export function ProjectionsExplorer({
         showCollectionsWorkspace={showCollectionsWorkspace}
         watchlistCount={watchlistCount}
         watchlistOnly={watchlistOnly}
-        watchlist={resolvedWatchlist}
+        watchlist={resolvedWatchlist as unknown as Record<string, { player?: string; [key: string]: unknown }>}
         watchlistEntries={sortedWatchlistEntries}
         clearWatchlist={clearWatchlist}
         exportWatchlistCsv={exportWatchlistCsv}
@@ -455,10 +477,10 @@ export function ProjectionsExplorer({
       <ProjectionLayoutControls
         isMobileViewport={isMobileViewport}
         mobileLayoutMode={mobileLayoutMode}
-        setMobileLayoutMode={setMobileLayoutMode}
+        setMobileLayoutMode={setMobileLayoutMode as (mode: string) => void}
         cardColumnCatalog={cardColumnCatalog}
-        resolvedProjectionCardHiddenCols={resolvedProjectionCardHiddenCols}
-        requiredProjectionCardCols={requiredProjectionCardCols}
+        resolvedProjectionCardHiddenCols={resolvedProjectionCardHiddenCols as Record<string, boolean>}
+        requiredProjectionCardCols={requiredProjectionCardCols as Set<string>}
         toggleProjectionCardColumn={toggleProjectionCardColumn}
         showAllProjectionCardColumns={showAllProjectionCardColumns}
         colLabels={colLabels}
@@ -483,9 +505,9 @@ export function ProjectionsExplorer({
         cols={cols}
         colLabels={colLabels}
         sortCol={sortCol}
-        sortDir={sortDir}
+        sortDir={sortDir as "asc" | "desc"}
         onSort={handleSort}
-        projectionTableScrollRef={projectionTableScrollRef}
+        projectionTableScrollRef={projectionTableScrollRef as React.RefObject<HTMLDivElement | null>}
         onTableScroll={handleProjectionTableScroll}
         tableRowsMarkup={tableRowsMarkup}
         totalRows={totalRows}

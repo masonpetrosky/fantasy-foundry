@@ -5,6 +5,7 @@ import {
   readAnalyticsEventBuffer,
   summarizeActivationFunnel,
 } from "./analytics";
+import type { ActivationFunnel, AnalyticsPayload } from "./analytics";
 
 const ACTIVATION_DIAGNOSTICS_QUERY_PARAM = "activation_debug";
 const DEFAULT_READOUT_CURRENT_PATH = "tmp/activation_current.csv";
@@ -17,13 +18,13 @@ const DEFAULT_READOUT_OWNER = "Analytics Team";
 const DEFAULT_OPS_REFRESH_INTERVAL_MS = 30000;
 const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
-function formatPercent(value) {
+function formatPercent(value: unknown): string {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return "n/a";
   return `${numeric.toFixed(1)}%`;
 }
 
-function formatDuration(value) {
+function formatDuration(value: unknown): string {
   const numeric = Number(value);
   if (!Number.isFinite(numeric) || numeric < 0) return "n/a";
   if (numeric < 1000) return `${Math.round(numeric)} ms`;
@@ -34,27 +35,27 @@ function formatDuration(value) {
   return `${minutes}m ${remSeconds.toFixed(1)}s`;
 }
 
-function formatTimestamp(value) {
+function formatTimestamp(value: unknown): string {
   const numeric = Number(value);
   if (!Number.isFinite(numeric) || numeric <= 0) return "n/a";
   return new Date(numeric).toLocaleString();
 }
 
-function formatSecondsAsDuration(value) {
+function formatSecondsAsDuration(value: unknown): string {
   const numeric = Number(value);
   if (!Number.isFinite(numeric) || numeric < 0) return "n/a";
   return formatDuration(numeric * 1000);
 }
 
-function resolveReportDate(now = new Date()) {
-  const dateValue = now instanceof Date ? now : new Date(now);
+function resolveReportDate(now: Date | unknown = new Date()): string {
+  const dateValue = now instanceof Date ? now : new Date(now as string | number);
   if (Number.isNaN(dateValue.getTime())) {
     return new Date().toISOString().slice(0, 10);
   }
   return dateValue.toISOString().slice(0, 10);
 }
 
-function addDaysToIsoDate(dateText, days = 0) {
+function addDaysToIsoDate(dateText: string, days = 0): string {
   const normalizedDate = String(dateText || "").trim();
   if (!normalizedDate) return resolveReportDate();
   const parsed = new Date(`${normalizedDate}T00:00:00Z`);
@@ -64,7 +65,7 @@ function addDaysToIsoDate(dateText, days = 0) {
   return next.toISOString().slice(0, 10);
 }
 
-function describeDatePresetOffset(offsetDays) {
+function describeDatePresetOffset(offsetDays: number): string {
   const offset = Math.trunc(Number(offsetDays) || 0);
   if (offset === 0) return "today";
   if (offset === 1) return "tomorrow";
@@ -74,13 +75,13 @@ function describeDatePresetOffset(offsetDays) {
   return `${offset > 0 ? "+" : ""}${offset} ${suffix}`;
 }
 
-function shellQuoted(value) {
+function shellQuoted(value: unknown): string {
   const text = String(value || "").trim();
   if (!text) return "''";
   return `'${text.replace(/'/g, "'\"'\"'")}'`;
 }
 
-function copyTextToClipboard(text) {
+function copyTextToClipboard(text: string): Promise<boolean> {
   const value = String(text || "").trim();
   if (!value) return Promise.resolve(false);
   if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
@@ -92,7 +93,29 @@ function copyTextToClipboard(text) {
   return Promise.resolve(false);
 }
 
-async function fetchOpsSnapshotFromApi() {
+interface OpsSnapshot {
+  timestamp?: string;
+  queues?: {
+    job_pressure?: {
+      utilization_ratio?: number;
+      active_jobs?: number;
+      capacity_total?: number;
+      queued_oldest_age_seconds?: number;
+      alerts?: {
+        queue_wait_exceeds_request_timeout?: boolean;
+        runtime_exceeds_request_timeout?: boolean;
+      };
+    };
+    rate_limit_activity?: {
+      totals?: {
+        blocked?: number;
+      };
+    };
+  };
+  [key: string]: unknown;
+}
+
+async function fetchOpsSnapshotFromApi(): Promise<OpsSnapshot | null> {
   if (typeof fetch !== "function") return null;
   try {
     const response = await fetch("/api/ops", {
@@ -100,11 +123,18 @@ async function fetchOpsSnapshotFromApi() {
       headers: { "Cache-Control": "no-cache" },
     });
     if (!response.ok) return null;
-    const payload = await response.json();
-    return payload && typeof payload === "object" ? payload : null;
+    const payload: unknown = await response.json();
+    return payload && typeof payload === "object" ? payload as OpsSnapshot : null;
   } catch {
     return null;
   }
+}
+
+interface BuildReadoutCommandInput {
+  currentPath?: string;
+  baselinePath?: string;
+  reportDate?: string;
+  owner?: string;
 }
 
 export function buildActivationReadoutCommand({
@@ -112,7 +142,7 @@ export function buildActivationReadoutCommand({
   baselinePath = DEFAULT_READOUT_BASELINE_PATH,
   reportDate = "",
   owner = DEFAULT_READOUT_OWNER,
-} = {}) {
+}: BuildReadoutCommandInput = {}): string {
   const resolvedDate = String(reportDate || "").trim() || resolveReportDate();
   const resolvedCurrent = String(currentPath || "").trim() || DEFAULT_READOUT_CURRENT_PATH;
   const resolvedBaseline = String(baselinePath || "").trim() || DEFAULT_READOUT_BASELINE_PATH;
@@ -126,6 +156,16 @@ export function buildActivationReadoutCommand({
   ].join(" ");
 }
 
+interface BuildCheckpointReadoutCommandInput {
+  current24hPath?: string;
+  baseline24hPath?: string;
+  current48hPath?: string;
+  baseline48hPath?: string;
+  date24h?: string;
+  date48h?: string;
+  owner?: string;
+}
+
 export function buildActivationCheckpointReadoutCommand({
   current24hPath = DEFAULT_CHECKPOINT_CURRENT_24H_PATH,
   baseline24hPath = DEFAULT_CHECKPOINT_BASELINE_24H_PATH,
@@ -134,7 +174,7 @@ export function buildActivationCheckpointReadoutCommand({
   date24h = "",
   date48h = "",
   owner = DEFAULT_READOUT_OWNER,
-} = {}) {
+}: BuildCheckpointReadoutCommandInput = {}): string {
   const resolvedDate24h = String(date24h || "").trim() || resolveReportDate();
   const resolvedDate48h = String(date48h || "").trim() || addDaysToIsoDate(resolvedDate24h, 1);
   const resolvedCurrent24h = String(current24hPath || "").trim() || DEFAULT_CHECKPOINT_CURRENT_24H_PATH;
@@ -154,10 +194,21 @@ export function buildActivationCheckpointReadoutCommand({
   ].join(" ");
 }
 
+interface DatePresetInput {
+  anchorDate?: string;
+  offsetDays?: number;
+}
+
+interface DatePresetResult {
+  readoutDate: string;
+  date24h: string;
+  date48h: string;
+}
+
 export function resolveActivationDatePreset({
   anchorDate = "",
   offsetDays = 0,
-} = {}) {
+}: DatePresetInput = {}): DatePresetResult {
   const baseDate = String(anchorDate || "").trim() || resolveReportDate();
   const readoutDate = addDaysToIsoDate(baseDate, offsetDays);
   return {
@@ -167,10 +218,15 @@ export function resolveActivationDatePreset({
   };
 }
 
+interface DiagnosticsPanelEnabledInput {
+  envEnabled?: boolean | string;
+  locationSearch?: string;
+}
+
 export function resolveActivationDiagnosticsPanelEnabled({
   envEnabled = false,
   locationSearch = "",
-} = {}) {
+}: DiagnosticsPanelEnabledInput = {}): boolean {
   const resolvedEnvEnabled = envEnabled === true || String(envEnabled).trim() === "1";
   let queryEnabled = false;
   try {
@@ -183,6 +239,17 @@ export function resolveActivationDiagnosticsPanelEnabled({
   return resolvedEnvEnabled || queryEnabled;
 }
 
+interface ActivationDiagnosticsPanelProps {
+  section: string;
+  dataVersion: string;
+  readEvents?: () => AnalyticsPayload[];
+  summarize?: (events: AnalyticsPayload[]) => ActivationFunnel;
+  clearEvents?: () => void;
+  exportCsv?: (filename: string) => boolean;
+  fetchOpsSnapshot?: () => Promise<OpsSnapshot | null>;
+  opsRefreshIntervalMs?: number;
+}
+
 export function ActivationDiagnosticsPanel({
   section,
   dataVersion,
@@ -192,7 +259,7 @@ export function ActivationDiagnosticsPanel({
   exportCsv = downloadAnalyticsEventCsv,
   fetchOpsSnapshot = fetchOpsSnapshotFromApi,
   opsRefreshIntervalMs = DEFAULT_OPS_REFRESH_INTERVAL_MS,
-}) {
+}: ActivationDiagnosticsPanelProps): React.ReactElement {
   const [refreshToken, setRefreshToken] = useState(0);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [commandCenterOpen, setCommandCenterOpen] = useState(false);
@@ -208,11 +275,11 @@ export function ActivationDiagnosticsPanel({
   const [current48hPath, setCurrent48hPath] = useState(DEFAULT_CHECKPOINT_CURRENT_48H_PATH);
   const [baseline48hPath, setBaseline48hPath] = useState(DEFAULT_CHECKPOINT_BASELINE_48H_PATH);
   const [statusMessage, setStatusMessage] = useState("");
-  const [opsSnapshot, setOpsSnapshot] = useState(null);
+  const [opsSnapshot, setOpsSnapshot] = useState<OpsSnapshot | null>(null);
   const [opsLoading, setOpsLoading] = useState(false);
   const [opsError, setOpsError] = useState("");
-  const commandCenterRef = useRef(null);
-  const previousFocusRef = useRef(null);
+  const commandCenterRef = useRef<HTMLDivElement | null>(null);
+  const previousFocusRef = useRef<Element | null>(null);
   const opsRequestTokenRef = useRef(0);
 
   const events = useMemo(
@@ -228,8 +295,8 @@ export function ActivationDiagnosticsPanel({
     [events]
   );
 
-  const eventWindow = summary?.window || {};
-  const quickstart = summary?.quickstart || {};
+  const eventWindow = summary?.window || { events_total: 0, first_event_at_ms: null, last_event_at_ms: null };
+  const quickstart = summary?.quickstart || { impressions: 0, clicks: 0, runs_started: 0, runs_succeeded: 0, runs_failed: 0, click_through_rate_pct: null, run_start_rate_pct: null, run_success_rate_pct: null, median_time_to_first_success_ms: null };
   const lastEventAtLabel = formatTimestamp(eventWindow.last_event_at_ms);
   const queuePressure = opsSnapshot?.queues?.job_pressure || {};
   const rateLimitTotals = opsSnapshot?.queues?.rate_limit_activity?.totals || {};
@@ -306,14 +373,14 @@ export function ActivationDiagnosticsPanel({
     window.requestAnimationFrame(() => {
       commandCenterRef.current?.focus();
     });
-    function handleKeyDown(event) {
+    function handleKeyDown(event: KeyboardEvent): void {
       if (event.key === "Escape") {
         setCommandCenterOpen(false);
         return;
       }
       if (event.key === "Tab" && commandCenterRef.current) {
         const focusable = Array.from(commandCenterRef.current.querySelectorAll(FOCUSABLE_SELECTOR))
-          .filter(element => !element.disabled);
+          .filter(element => !(element as HTMLButtonElement).disabled) as HTMLElement[];
         if (focusable.length === 0) return;
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
@@ -333,28 +400,28 @@ export function ActivationDiagnosticsPanel({
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      previousFocusRef.current?.focus();
+      (previousFocusRef.current as HTMLElement | null)?.focus();
     };
   }, [commandCenterOpen]);
 
-  function handleRefresh() {
+  function handleRefresh(): void {
     setRefreshToken(version => version + 1);
     void loadOpsSnapshot();
   }
 
-  function handleClear() {
+  function handleClear(): void {
     clearEvents();
     setRefreshToken(version => version + 1);
     setStatusMessage("Cleared local analytics events.");
   }
 
-  function handleExportCsv() {
+  function handleExportCsv(): void {
     const dateTag = new Date().toISOString().slice(0, 10);
     const exported = exportCsv(`ff-analytics-events-${dateTag}.csv`);
     setStatusMessage(exported ? "Exported analytics CSV." : "CSV export failed; check browser permissions.");
   }
 
-  async function handleCopyReadoutCommand() {
+  async function handleCopyReadoutCommand(): Promise<void> {
     const copied = await copyTextToClipboard(readoutCommand);
     if (copied) {
       setStatusMessage("Copied activation readout command.");
@@ -366,7 +433,7 @@ export function ActivationDiagnosticsPanel({
     setStatusMessage("Unable to copy automatically; command shown in prompt.");
   }
 
-  async function handleCopyCheckpointReadoutCommand() {
+  async function handleCopyCheckpointReadoutCommand(): Promise<void> {
     const copied = await copyTextToClipboard(checkpointCommand);
     if (copied) {
       setStatusMessage("Copied checkpoint readout command.");
@@ -378,7 +445,7 @@ export function ActivationDiagnosticsPanel({
     setStatusMessage("Unable to copy automatically; checkpoint command shown in prompt.");
   }
 
-  function applyDatePreset(offsetDays) {
+  function applyDatePreset(offsetDays: number): void {
     const next = resolveActivationDatePreset({ offsetDays });
     setReadoutDate(next.readoutDate);
     setDate24h(next.date24h);

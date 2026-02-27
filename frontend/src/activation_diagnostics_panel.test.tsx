@@ -9,12 +9,12 @@ import {
   buildActivationReadoutCommand,
   resolveActivationDatePreset,
   resolveActivationDiagnosticsPanelEnabled,
-} from "./activation_diagnostics_panel.jsx";
+} from "./activation_diagnostics_panel";
 
-function renderToContainer(element) {
+function renderToContainer(element: React.ReactElement): { container: HTMLDivElement; cleanup: () => void } {
   const container = document.createElement("div");
   document.body.appendChild(container);
-  let root;
+  let root: ReturnType<typeof createRoot>;
   act(() => {
     root = createRoot(container);
     root.render(element);
@@ -28,7 +28,7 @@ function renderToContainer(element) {
   };
 }
 
-let previousActEnvironmentFlag;
+let previousActEnvironmentFlag: unknown;
 
 beforeAll(() => {
   previousActEnvironmentFlag = globalThis.IS_REACT_ACT_ENVIRONMENT;
@@ -36,7 +36,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  globalThis.IS_REACT_ACT_ENVIRONMENT = previousActEnvironmentFlag;
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = previousActEnvironmentFlag;
 });
 
 describe("resolveActivationDiagnosticsPanelEnabled", () => {
@@ -152,7 +152,7 @@ describe("ActivationDiagnosticsPanel", () => {
         section="projections"
         dataVersion="v-test"
         readEvents={() => []}
-        summarize={() => ({ window: {}, quickstart: {} })}
+        summarize={() => ({ window: { events_total: 0, first_event_at_ms: null, last_event_at_ms: null }, quickstart: { impressions: 0, clicks: 0, runs_started: 0, runs_succeeded: 0, runs_failed: 0, click_through_rate_pct: null, run_start_rate_pct: null, run_success_rate_pct: null, median_time_to_first_success_ms: null } })}
         clearEvents={vi.fn()}
         exportCsv={vi.fn(() => true)}
         fetchOpsSnapshot={fetchOpsSnapshot}
@@ -168,7 +168,7 @@ describe("ActivationDiagnosticsPanel", () => {
     );
     expect(commandCenterButton).toBeTruthy();
     act(() => {
-      commandCenterButton.click();
+      commandCenterButton!.click();
     });
     expect(container.querySelector('[role="dialog"][aria-label="Activation command center"]')).toBeTruthy();
 
@@ -177,7 +177,7 @@ describe("ActivationDiagnosticsPanel", () => {
     );
     expect(tomorrowButton).toBeTruthy();
     act(() => {
-      tomorrowButton.click();
+      tomorrowButton!.click();
     });
     expect(container.textContent).toContain("Applied date preset (tomorrow).");
 
@@ -197,14 +197,14 @@ describe("ActivationDiagnosticsPanel", () => {
       configurable: true,
       value: undefined,
     });
-    let cleanup = null;
+    let cleanup: (() => void) | null = null;
     try {
       const rendered = renderToContainer(
         <ActivationDiagnosticsPanel
           section="projections"
           dataVersion="v-test"
           readEvents={() => []}
-          summarize={() => ({ window: {}, quickstart: {} })}
+          summarize={() => ({ window: { events_total: 0, first_event_at_ms: null, last_event_at_ms: null }, quickstart: { impressions: 0, clicks: 0, runs_started: 0, runs_succeeded: 0, runs_failed: 0, click_through_rate_pct: null, run_start_rate_pct: null, run_success_rate_pct: null, median_time_to_first_success_ms: null } })}
           clearEvents={vi.fn()}
           exportCsv={vi.fn(() => true)}
           fetchOpsSnapshot={fetchOpsSnapshot}
@@ -221,7 +221,7 @@ describe("ActivationDiagnosticsPanel", () => {
         button => button.textContent?.trim() === "Command Center"
       );
       act(() => {
-        commandCenterButton.click();
+        commandCenterButton!.click();
       });
 
       const copyCheckpointButton = Array.from(container.querySelectorAll("button")).find(
@@ -229,7 +229,7 @@ describe("ActivationDiagnosticsPanel", () => {
       );
       expect(copyCheckpointButton).toBeTruthy();
       await act(async () => {
-        copyCheckpointButton.click();
+        copyCheckpointButton!.click();
         await Promise.resolve();
       });
 
@@ -275,7 +275,7 @@ describe("ActivationDiagnosticsPanel", () => {
         section="projections"
         dataVersion="v-test"
         readEvents={() => []}
-        summarize={() => ({ window: {}, quickstart: {} })}
+        summarize={() => ({ window: { events_total: 0, first_event_at_ms: null, last_event_at_ms: null }, quickstart: { impressions: 0, clicks: 0, runs_started: 0, runs_succeeded: 0, runs_failed: 0, click_through_rate_pct: null, run_start_rate_pct: null, run_success_rate_pct: null, median_time_to_first_success_ms: null } })}
         clearEvents={vi.fn()}
         exportCsv={vi.fn(() => true)}
         fetchOpsSnapshot={fetchOpsSnapshot}
@@ -307,7 +307,7 @@ describe("ActivationDiagnosticsPanel", () => {
         section="projections"
         dataVersion="v-test"
         readEvents={() => []}
-        summarize={() => ({ window: {}, quickstart: {} })}
+        summarize={() => ({ window: { events_total: 0, first_event_at_ms: null, last_event_at_ms: null }, quickstart: { impressions: 0, clicks: 0, runs_started: 0, runs_succeeded: 0, runs_failed: 0, click_through_rate_pct: null, run_start_rate_pct: null, run_success_rate_pct: null, median_time_to_first_success_ms: null } })}
         clearEvents={vi.fn()}
         exportCsv={vi.fn(() => true)}
         fetchOpsSnapshot={fetchOpsSnapshot}
