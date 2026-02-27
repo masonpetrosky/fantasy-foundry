@@ -8,27 +8,27 @@ const INDEX_BUILD_ID = (() => {
 })();
 const VERSION_POLL_INTERVAL_MS = 60000;
 
-export function useVersionPolling(apiBase) {
+export function useVersionPolling(apiBase: string): { buildLabel: string; dataVersion: string } {
   const [buildLabel, setBuildLabel] = useState("");
   const [dataVersion, setDataVersion] = useState("");
   const versionEtagRef = useRef("");
 
   useEffect(() => {
     let cancelled = false;
-    let timer = null;
-    let activeController = null;
+    let timer: number | null = null;
+    let activeController: AbortController | null = null;
 
-    const scheduleNextPoll = () => {
+    const scheduleNextPoll = (): void => {
       if (cancelled) return;
       timer = window.setTimeout(runVersionCheck, VERSION_POLL_INTERVAL_MS);
     };
 
-    const runVersionCheck = async () => {
+    const runVersionCheck = async (): Promise<void> => {
       if (cancelled) return;
       if (activeController) activeController.abort();
       const controller = new AbortController();
       activeController = controller;
-      const headers = { "Cache-Control": "no-cache" };
+      const headers: Record<string, string> = { "Cache-Control": "no-cache" };
       if (versionEtagRef.current) {
         headers["If-None-Match"] = versionEtagRef.current;
       }
@@ -63,8 +63,6 @@ export function useVersionPolling(apiBase) {
         const url = new URL(window.location.href);
         const urlBuildId = String(url.searchParams.get(BUILD_QUERY_PARAM) || "").trim();
 
-        // If the currently loaded HTML build is stale (or we previously saw a
-        // different build), force one cache-busting navigation to the latest build.
         const pageIsStale = Boolean(INDEX_BUILD_ID && INDEX_BUILD_ID !== buildId);
         const seenBuildChange = Boolean(previousBuildId && previousBuildId !== buildId);
         if ((pageIsStale || seenBuildChange) && urlBuildId !== buildId) {
@@ -80,7 +78,7 @@ export function useVersionPolling(apiBase) {
 
         safeWriteStorage(BUILD_STORAGE_KEY, buildId);
       } catch (err) {
-        if (err?.name === "AbortError" || cancelled) return;
+        if ((err as Error)?.name === "AbortError" || cancelled) return;
         console.warn("Version check failed:", err);
       } finally {
         if (activeController === controller) {

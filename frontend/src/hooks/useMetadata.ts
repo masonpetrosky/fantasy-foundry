@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { trackEvent } from "../analytics";
 
-export function useMetadata(apiBase) {
-  const [meta, setMeta] = useState(null);
+export function useMetadata(apiBase: string): {
+  meta: Record<string, unknown> | null;
+  metaError: string;
+  metaLoading: boolean;
+  retryMetaLoad: () => void;
+} {
+  const [meta, setMeta] = useState<Record<string, unknown> | null>(null);
   const [metaError, setMetaError] = useState("");
   const [metaLoading, setMetaLoading] = useState(true);
   const [metaRequestNonce, setMetaRequestNonce] = useState(0);
@@ -27,8 +32,8 @@ export function useMetadata(apiBase) {
         setMetaLoading(false);
       })
       .catch(err => {
-        if (err?.name === "AbortError") return;
-        const message = String(err?.message || "").trim();
+        if ((err as Error)?.name === "AbortError") return;
+        const message = String((err as Error)?.message || "").trim();
         setMetaError(message || "Failed to load metadata.");
         setMetaLoading(false);
         trackEvent("meta_load_error", { message: message || "unknown", section: "projections" });

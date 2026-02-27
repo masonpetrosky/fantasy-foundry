@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 
 const THEME_STORAGE_KEY = "ff:theme";
 
-function getInitialTheme() {
+export type Theme = "light" | "dark";
+
+function getInitialTheme(): Theme {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
     if (stored === "light" || stored === "dark") return stored;
@@ -12,8 +14,8 @@ function getInitialTheme() {
   return "dark";
 }
 
-export function useTheme() {
-  const [theme, setThemeState] = useState(getInitialTheme);
+export function useTheme(): { theme: Theme; toggleTheme: () => void } {
+  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);

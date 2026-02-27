@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
-import { resolveTierLimits } from "../premium";
+import { resolveTierLimits, Subscription, TierLimits } from "../premium";
 import { resolveApiBase } from "../api_base";
 
 const API = resolveApiBase();
 
-export function usePremiumStatus(authUser) {
-  const [subscription, setSubscription] = useState(null);
+interface AuthUser {
+  email?: string;
+}
+
+export function usePremiumStatus(authUser: AuthUser | null | undefined): {
+  subscription: Subscription | null;
+  tierLimits: TierLimits;
+  premiumLoading: boolean;
+} {
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [premiumLoading, setPremiumLoading] = useState(false);
 
   useEffect(() => {

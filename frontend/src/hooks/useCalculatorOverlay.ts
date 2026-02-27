@@ -1,15 +1,27 @@
 import { useCallback, useState } from "react";
 import { stablePlayerKeyFromRow } from "../app_state_storage";
 
-function buildCalculatorOverlayMap(result) {
-  const rows = Array.isArray(result?.data) ? result.data : [];
-  const byPlayerKey = {};
+interface OverlayRow {
+  [col: string]: unknown;
+}
+
+interface OverlaySummary {
+  scoringMode: "roto" | "points";
+  startYear: number;
+  horizon: number;
+}
+
+function buildCalculatorOverlayMap(result: unknown): Record<string, OverlayRow> {
+  const rows = Array.isArray((result as Record<string, unknown>)?.data)
+    ? (result as Record<string, unknown>).data as Record<string, unknown>[]
+    : [];
+  const byPlayerKey: Record<string, OverlayRow> = {};
 
   rows.forEach(row => {
     const key = stablePlayerKeyFromRow(row);
     if (!key) return;
 
-    const overlayRow = {};
+    const overlayRow: OverlayRow = {};
     if (row?.DynastyValue != null && row?.DynastyValue !== "") {
       overlayRow.DynastyValue = row.DynastyValue;
     }
@@ -26,16 +38,25 @@ function buildCalculatorOverlayMap(result) {
   return byPlayerKey;
 }
 
-export function useCalculatorOverlay(dataVersion) {
-  const [calculatorOverlayByPlayerKey, setCalculatorOverlayByPlayerKey] = useState({});
+export function useCalculatorOverlay(dataVersion: string): {
+  calculatorOverlayByPlayerKey: Record<string, OverlayRow>;
+  calculatorOverlayActive: boolean;
+  calculatorOverlayJobId: string;
+  calculatorOverlayDataVersion: string;
+  calculatorOverlaySummary: OverlaySummary | null;
+  calculatorOverlayPlayerCount: number;
+  applyCalculatorOverlay: (result: unknown, settings: Record<string, unknown>, runMeta: { jobId?: string }) => void;
+  clearCalculatorOverlay: () => void;
+} {
+  const [calculatorOverlayByPlayerKey, setCalculatorOverlayByPlayerKey] = useState<Record<string, OverlayRow>>({});
   const [calculatorOverlayActive, setCalculatorOverlayActive] = useState(false);
   const [calculatorOverlayJobId, setCalculatorOverlayJobId] = useState("");
   const [calculatorOverlayDataVersion, setCalculatorOverlayDataVersion] = useState("");
-  const [calculatorOverlaySummary, setCalculatorOverlaySummary] = useState(null);
+  const [calculatorOverlaySummary, setCalculatorOverlaySummary] = useState<OverlaySummary | null>(null);
 
   const calculatorOverlayPlayerCount = Object.keys(calculatorOverlayByPlayerKey).length;
 
-  const applyCalculatorOverlay = useCallback((result, settings, runMeta) => {
+  const applyCalculatorOverlay = useCallback((result: unknown, settings: Record<string, unknown>, runMeta: { jobId?: string }) => {
     const nextOverlay = buildCalculatorOverlayMap(result);
     const hasOverlay = Object.keys(nextOverlay).length > 0;
     const nextJobId = hasOverlay ? String(runMeta?.jobId || "").trim() : "";

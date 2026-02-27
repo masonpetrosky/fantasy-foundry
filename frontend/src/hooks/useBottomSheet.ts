@@ -7,19 +7,34 @@ const DISMISS_THRESHOLD = 0.4;
  * Resolve whether the user prefers reduced motion.
  * Exported for testing.
  */
-export function prefersReducedMotion() {
+export function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+export interface DragHandleProps {
+  onTouchStart: (e: React.TouchEvent) => void;
+  onTouchMove: (e: React.TouchEvent) => void;
+  onTouchEnd: () => void;
+}
+
+export interface BottomSheetReturn {
+  isOpen: boolean;
+  open: () => void;
+  close: () => void;
+  sheetRef: React.RefObject<HTMLDivElement | null>;
+  dragHandleProps: DragHandleProps;
+  sheetStyle: React.CSSProperties | undefined;
 }
 
 /**
  * Hook for a mobile bottom sheet with drag-to-dismiss, focus trap,
  * body scroll lock, and escape-to-close.
  */
-export function useBottomSheet() {
+export function useBottomSheet(): BottomSheetReturn {
   const [isOpen, setIsOpen] = useState(false);
-  const sheetRef = useRef(null);
-  const previousFocusRef = useRef(null);
-  const dragStartYRef = useRef(null);
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  const previousFocusRef = useRef<Element | null>(null);
+  const dragStartYRef = useRef<number | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
 
   const open = useCallback(() => {
@@ -31,7 +46,7 @@ export function useBottomSheet() {
   const close = useCallback(() => {
     setIsOpen(false);
     setDragOffset(0);
-    previousFocusRef.current?.focus();
+    (previousFocusRef.current as HTMLElement | null)?.focus();
   }, []);
 
   // Body scroll lock
@@ -49,15 +64,15 @@ export function useBottomSheet() {
     if (!isOpen) return;
     requestAnimationFrame(() => sheetRef.current?.focus());
 
-    const handler = (e) => {
+    const handler = (e: KeyboardEvent): void => {
       if (e.key === "Escape") {
         close();
         return;
       }
       if (e.key === "Tab" && sheetRef.current) {
         const focusable = Array.from(
-          sheetRef.current.querySelectorAll(FOCUSABLE_SELECTOR),
-        ).filter((el) => !el.disabled);
+          sheetRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+        ).filter((el) => !el.hasAttribute("disabled"));
         if (focusable.length === 0) return;
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
@@ -79,11 +94,11 @@ export function useBottomSheet() {
   }, [isOpen, close]);
 
   // Drag handle touch events
-  const onTouchStart = useCallback((e) => {
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
     dragStartYRef.current = e.touches[0].clientY;
   }, []);
 
-  const onTouchMove = useCallback((e) => {
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
     if (dragStartYRef.current == null) return;
     const delta = e.touches[0].clientY - dragStartYRef.current;
     setDragOffset(Math.max(0, delta));
@@ -100,13 +115,13 @@ export function useBottomSheet() {
     dragStartYRef.current = null;
   }, [close, dragOffset]);
 
-  const dragHandleProps = {
+  const dragHandleProps: DragHandleProps = {
     onTouchStart,
     onTouchMove,
     onTouchEnd,
   };
 
-  const sheetStyle = dragOffset > 0
+  const sheetStyle: React.CSSProperties | undefined = dragOffset > 0
     ? { transform: `translateY(${dragOffset}px)`, transition: "none" }
     : undefined;
 

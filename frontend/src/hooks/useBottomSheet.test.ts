@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { prefersReducedMotion } from "./useBottomSheet.js";
+import { prefersReducedMotion } from "./useBottomSheet";
 
-function stubMatchMedia(matches = false) {
+function stubMatchMedia(matches = false): void {
   vi.stubGlobal("window", {
     ...window,
     matchMedia: vi.fn(() => ({ matches })),

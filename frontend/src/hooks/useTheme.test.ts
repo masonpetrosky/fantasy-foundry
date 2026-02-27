@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 
 describe("useTheme", () => {
   it("module exports useTheme", async () => {
-    const mod = await import("./useTheme.js");
+    const mod = await import("./useTheme");
     expect(typeof mod.useTheme).toBe("function");
   });
 
