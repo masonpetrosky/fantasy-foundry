@@ -754,9 +754,9 @@ if SETTINGS.stripe_secret_key and SETTINGS.stripe_webhook_secret:
         if sub_id:
             try:
                 sub_obj = stripe.Subscription.retrieve(sub_id)
-                period_end = getattr(sub_obj, "current_period_end", None)
+                period_end = sub_obj.get("current_period_end")
             except Exception:
-                pass
+                logging.getLogger(__name__).warning("Could not retrieve subscription %s for period_end", sub_id, exc_info=True)
         user_id = await _billing_resolve_user_id(
             supabase_url=_supabase_url,
             supabase_service_role_key=_supabase_service_role_key,

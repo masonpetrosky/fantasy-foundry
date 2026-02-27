@@ -20,22 +20,27 @@ async def resolve_supabase_user_id(
     """Look up a Supabase auth user ID by email. Returns None if not found."""
     if not email:
         return None
-    url = f"{supabase_url}/auth/v1/admin/users?page=1&per_page=1"
     headers = {
         "apikey": supabase_service_role_key,
         "Authorization": f"Bearer {supabase_service_role_key}",
     }
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-        users = data.get("users", []) if isinstance(data, dict) else data
-        for user in users:
-            if str(user.get("email", "")).lower() == email.lower():
-                return str(user["id"])
+        page = 1
+        while True:
+            url = f"{supabase_url}/auth/v1/admin/users?page={page}&per_page=50"
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(url, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+            users = data.get("users", []) if isinstance(data, dict) else data
+            if not users:
+                break
+            for user in users:
+                if str(user.get("email", "")).lower() == email.lower():
+                    return str(user["id"])
+            page += 1
     except Exception:
-        logger.warning("Could not resolve Supabase user_id for email=%s", email)
+        logger.warning("Could not resolve Supabase user_id for email=%s", email, exc_info=True)
     return None
 
 
@@ -48,7 +53,7 @@ async def upsert_subscription(
     stripe_subscription_id: str,
     status: str,
     user_id: str | None = None,
-    current_period_end: int | None = None,
+    current_period_end: int | float | None = None,
 ) -> dict[str, Any]:
     """Insert or update a subscription row in the Supabase subscriptions table.
 
@@ -70,14 +75,21 @@ async def upsert_subscription(
     }
     if user_id:
         payload["user_id"] = user_id
-    if current_period_end and isinstance(current_period_end, int):
-        payload["current_period_end"] = datetime.fromtimestamp(
-            current_period_end, tz=timezone.utc,
-        ).isoformat()
+    if current_period_end is not None:
+        try:
+            ts = int(current_period_end)
+            payload["current_period_end"] = datetime.fromtimestamp(
+                ts, tz=timezone.utc,
+            ).isoformat()
+        except (TypeError, ValueError, OverflowError):
+            logger.warning("Invalid current_period_end value: %r", current_period_end)
+    logger.info(
+        "Upserting subscription: email=%s status=%s user_id=%s period_end=%s",
+        user_email, status, payload.get("user_id"), payload.get("current_period_end"),
+    )
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(url, json=payload, headers=headers)
         resp.raise_for_status()
-    logger.info("Upserted subscription: email=%s status=%s", user_email, status)
     return payload
 
 
