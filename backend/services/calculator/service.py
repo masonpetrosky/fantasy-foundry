@@ -20,7 +20,7 @@ from backend.domain.constants import (
 
 
 class CalculateRequest(BaseModel):
-    mode: Literal["common"] = "common"
+    mode: Literal["common", "league"] = "common"
     scoring_mode: Literal["roto", "points"] = "roto"
     two_way: Literal["sum", "max"] = "sum"
     sgp_denominator_mode: Literal["classic", "robust"] = "classic"
@@ -116,6 +116,8 @@ class CalculateRequest(BaseModel):
             raise ValueError("At least one hitter slot must be greater than 0.")
         if total_pitcher_slots <= 0:
             raise ValueError("At least one pitcher slot must be greater than 0.")
+        if self.mode == "league" and self.scoring_mode != "roto":
+            raise ValueError("League mode only supports roto scoring.")
         if self.scoring_mode == "roto":
             if not any(bool(getattr(self, field_key, False)) for field_key, _stat_col, _default in ROTO_HITTER_CATEGORY_FIELDS):
                 raise ValueError("Roto scoring must include at least one hitting category.")
@@ -166,6 +168,7 @@ class CalculatorServiceContext:
     result_cache_set: Callable
     calculate_common_dynasty_frame_cached: Callable
     calculate_points_dynasty_frame_cached: Callable
+    calculate_league_dynasty_frame_cached: Callable
     roto_category_settings_from_dict: Callable
     is_user_fixable_calculation_error: Callable
     player_identity_by_name: Callable
@@ -272,11 +275,12 @@ class CalculatorService:
     def _run_calculate_request(self, req: CalculateRequest, *, source: str) -> dict:
         started = time.perf_counter()
         settings = req.model_dump()
-        active_cache = (
-            self._ctx.calculate_points_dynasty_frame_cached
-            if req.scoring_mode == "points"
-            else self._ctx.calculate_common_dynasty_frame_cached
-        )
+        if req.scoring_mode == "points":
+            active_cache = self._ctx.calculate_points_dynasty_frame_cached
+        elif req.mode == "league":
+            active_cache = self._ctx.calculate_league_dynasty_frame_cached
+        else:
+            active_cache = self._ctx.calculate_common_dynasty_frame_cached
         cache_before = active_cache.cache_info()  # type: ignore[attr-defined]  # lru_cache
         result_cache_key = self._ctx.calc_result_cache_key(settings)
         result_cache_hit = False
@@ -338,6 +342,42 @@ class CalculatorService:
                         pts_pit_h=req.pts_pit_h,
                         pts_pit_er=req.pts_pit_er,
                         pts_pit_bb=req.pts_pit_bb,
+                    ).copy(deep=True)
+                elif req.mode == "league":
+                    out = self._ctx.calculate_league_dynasty_frame_cached(
+                        teams=req.teams,
+                        sims=req.sims,
+                        horizon=req.horizon,
+                        discount=req.discount,
+                        hit_c=req.hit_c,
+                        hit_1b=req.hit_1b,
+                        hit_2b=req.hit_2b,
+                        hit_3b=req.hit_3b,
+                        hit_ss=req.hit_ss,
+                        hit_ci=req.hit_ci,
+                        hit_mi=req.hit_mi,
+                        hit_of=req.hit_of,
+                        hit_ut=req.hit_ut,
+                        pit_p=req.pit_p,
+                        pit_sp=req.pit_sp,
+                        pit_rp=req.pit_rp,
+                        bench=req.bench,
+                        minors=req.minors,
+                        ir=req.ir,
+                        ip_min=req.ip_min,
+                        ip_max=req.ip_max,
+                        two_way=req.two_way,
+                        start_year=req.start_year,
+                        recent_projections=req.recent_projections,
+                        sgp_denominator_mode=req.sgp_denominator_mode,
+                        sgp_winsor_low_pct=req.sgp_winsor_low_pct,
+                        sgp_winsor_high_pct=req.sgp_winsor_high_pct,
+                        sgp_epsilon_counting=req.sgp_epsilon_counting,
+                        sgp_epsilon_ratio=req.sgp_epsilon_ratio,
+                        enable_playing_time_reliability=req.enable_playing_time_reliability,
+                        enable_age_risk_adjustment=req.enable_age_risk_adjustment,
+                        enable_replacement_blend=req.enable_replacement_blend,
+                        replacement_blend_alpha=req.replacement_blend_alpha,
                     ).copy(deep=True)
                 else:
                     out = self._ctx.calculate_common_dynasty_frame_cached(

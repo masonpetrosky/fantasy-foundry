@@ -131,6 +131,7 @@ from backend.core.jobs import (
 from backend.core.jobs import (
     mark_job_cancelled_locked as core_mark_job_cancelled_locked,
 )
+from backend.core.league_calculator import calculate_league_dynasty_frame as core_calculate_league_dynasty_frame
 from backend.core.networking import (
     client_ip as core_client_ip,
 )
@@ -310,6 +311,7 @@ _RUNTIME_STATE_EXPORTS = (
     build_calculator_service,
     core_inspect_precomputed_default_dynasty_lookup,
     core_calculate_common_dynasty_frame,
+    core_calculate_league_dynasty_frame,
     PointsCalculatorContext,
     core_calculate_points_dynasty_frame,
     POSITION_DISPLAY_ORDER,

@@ -35,6 +35,7 @@ REQUIRED_RUNTIME_FACADE_ALIAS_KEYS = frozenset(
         "_set_request_rate_limit_last_sweep_ts",
         "_ensure_backend_module_path",
         "_calculate_common_dynasty_frame_cached",
+        "_calculate_league_dynasty_frame_cached",
         "_stat_or_zero",
         "_coerce_minor_eligible",
         "_projection_identity_key",
@@ -272,6 +273,79 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
             enable_replacement_blend=enable_replacement_blend,
             replacement_blend_alpha=replacement_blend_alpha,
             roto_category_settings=roto_category_settings,
+        )
+
+    @lru_cache(maxsize=16)
+    def _calculate_league_dynasty_frame_cached(
+        teams: int,
+        sims: int,
+        horizon: int,
+        discount: float,
+        hit_c: int,
+        hit_1b: int,
+        hit_2b: int,
+        hit_3b: int,
+        hit_ss: int,
+        hit_ci: int,
+        hit_mi: int,
+        hit_of: int,
+        hit_ut: int,
+        pit_p: int,
+        pit_sp: int,
+        pit_rp: int,
+        bench: int,
+        minors: int,
+        ir: int,
+        ip_min: float,
+        ip_max: float | None,
+        two_way: str,
+        start_year: int,
+        recent_projections: int,
+        sgp_denominator_mode: str = "classic",
+        sgp_winsor_low_pct: float = 0.10,
+        sgp_winsor_high_pct: float = 0.90,
+        sgp_epsilon_counting: float = 0.15,
+        sgp_epsilon_ratio: float = 0.0015,
+        enable_playing_time_reliability: bool = False,
+        enable_age_risk_adjustment: bool = False,
+        enable_replacement_blend: bool = False,
+        replacement_blend_alpha: float = 0.70,
+    ) -> pd.DataFrame:
+        return state_module.core_runtime_state_helpers.calculate_league_dynasty_frame_cached(
+            state=state_module,
+            teams=teams,
+            sims=sims,
+            horizon=horizon,
+            discount=discount,
+            hit_c=hit_c,
+            hit_1b=hit_1b,
+            hit_2b=hit_2b,
+            hit_3b=hit_3b,
+            hit_ss=hit_ss,
+            hit_ci=hit_ci,
+            hit_mi=hit_mi,
+            hit_of=hit_of,
+            hit_ut=hit_ut,
+            pit_p=pit_p,
+            pit_sp=pit_sp,
+            pit_rp=pit_rp,
+            bench=bench,
+            minors=minors,
+            ir=ir,
+            ip_min=ip_min,
+            ip_max=ip_max,
+            two_way=two_way,
+            start_year=start_year,
+            recent_projections=recent_projections,
+            sgp_denominator_mode=sgp_denominator_mode,
+            sgp_winsor_low_pct=sgp_winsor_low_pct,
+            sgp_winsor_high_pct=sgp_winsor_high_pct,
+            sgp_epsilon_counting=sgp_epsilon_counting,
+            sgp_epsilon_ratio=sgp_epsilon_ratio,
+            enable_playing_time_reliability=enable_playing_time_reliability,
+            enable_age_risk_adjustment=enable_age_risk_adjustment,
+            enable_replacement_blend=enable_replacement_blend,
+            replacement_blend_alpha=replacement_blend_alpha,
         )
 
     def _stat_or_zero(row: dict | None, key: str) -> float:
@@ -675,6 +749,7 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
         if hasattr(state_module, "PROJECTION_SERVICE"):
             state_module.PROJECTION_SERVICE.clear_caches()
         _calculate_common_dynasty_frame_cached.cache_clear()
+        _calculate_league_dynasty_frame_cached.cache_clear()
         _calculate_points_dynasty_frame_cached.cache_clear()
         _playable_pool_counts_by_year.cache_clear()
         _get_default_dynasty_lookup.cache_clear()
@@ -720,6 +795,7 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
         "_set_request_rate_limit_last_sweep_ts": _set_request_rate_limit_last_sweep_ts,
         "_ensure_backend_module_path": _ensure_backend_module_path,
         "_calculate_common_dynasty_frame_cached": _calculate_common_dynasty_frame_cached,
+        "_calculate_league_dynasty_frame_cached": _calculate_league_dynasty_frame_cached,
         "_stat_or_zero": _stat_or_zero,
         "_coerce_minor_eligible": _coerce_minor_eligible,
         "_projection_identity_key": _projection_identity_key,

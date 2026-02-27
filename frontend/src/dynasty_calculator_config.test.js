@@ -288,6 +288,7 @@ describe("buildDefaultCalculatorSettings", () => {
   it("returns a complete settings object for empty meta", () => {
     const settings = buildDefaultCalculatorSettings({});
     expect(settings.scoring_mode).toBe("roto");
+    expect(settings.mode).toBe("common");
     expect(settings.teams).toBe(12);
     expect(settings.horizon).toBe(20);
     expect(settings.discount).toBe(0.94);
@@ -298,5 +299,41 @@ describe("buildDefaultCalculatorSettings", () => {
   it("uses meta years for start_year when available", () => {
     const settings = buildDefaultCalculatorSettings({ years: [2027, 2028] });
     expect(settings.start_year).toBe(2027);
+  });
+});
+
+describe("buildCalculatorPayload mode field", () => {
+  it("includes mode in the payload", () => {
+    const settings = buildValidRotoSettings({ mode: "common" });
+    const result = buildCalculatorPayload(settings, [2026], {});
+    expect(result.error).toBeUndefined();
+    expect(result.payload.mode).toBe("common");
+  });
+
+  it("accepts league mode with roto scoring", () => {
+    const settings = buildValidRotoSettings({ mode: "league" });
+    const result = buildCalculatorPayload(settings, [2026], {});
+    expect(result.error).toBeUndefined();
+    expect(result.payload.mode).toBe("league");
+  });
+
+  it("rejects league mode with points scoring", () => {
+    const settings = buildValidRotoSettings({ mode: "league", scoring_mode: "points" });
+    const result = buildCalculatorPayload(settings, [2026], {});
+    expect(result.error).toMatch(/league mode only supports roto/i);
+  });
+
+  it("rejects invalid mode values", () => {
+    const settings = buildValidRotoSettings({ mode: "invalid" });
+    const result = buildCalculatorPayload(settings, [2026], {});
+    expect(result.error).toMatch(/valuation mode/i);
+  });
+
+  it("defaults mode to common when not specified", () => {
+    const settings = buildValidRotoSettings();
+    delete settings.mode;
+    const result = buildCalculatorPayload(settings, [2026], {});
+    expect(result.error).toBeUndefined();
+    expect(result.payload.mode).toBe("common");
   });
 });

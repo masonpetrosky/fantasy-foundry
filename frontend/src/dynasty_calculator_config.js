@@ -200,6 +200,7 @@ export function buildDefaultCalculatorSettings(meta) {
   const defaultIr = Number(guardrails?.default_ir_slots);
   const defaultMinors = Number(guardrails?.default_minors_slots);
   return {
+    mode: "common",
     scoring_mode: "roto",
     teams: 12,
     sims: 300,
@@ -228,9 +229,18 @@ export function buildDefaultCalculatorSettings(meta) {
   };
 }
 export function buildCalculatorPayload(settings, availableYears, meta) {
+  const mode = String(settings.mode ?? "").trim().toLowerCase() || "common";
+  if (mode !== "common" && mode !== "league") {
+    return { error: "Valuation Mode must be either 'common' or 'league'." };
+  }
+
   const scoringMode = String(settings.scoring_mode ?? "").trim().toLowerCase() || "roto";
   if (scoringMode !== "roto" && scoringMode !== "points") {
     return { error: "Scoring Mode must be either 'roto' or 'points'." };
+  }
+
+  if (mode === "league" && scoringMode !== "roto") {
+    return { error: "League mode only supports roto scoring." };
   }
 
   const parsedSlots = {};
@@ -386,6 +396,7 @@ export function buildCalculatorPayload(settings, availableYears, meta) {
 
   const payload = {
     ...settings,
+    mode,
     teams,
     sims,
     horizon,
