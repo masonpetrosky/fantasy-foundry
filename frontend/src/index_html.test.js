@@ -25,10 +25,9 @@ describe("frontend index shell metadata", () => {
     expect(schemaTypes).toContain("FAQPage");
   });
 
-  it("includes gtag.js snippet", () => {
+  it("does not include inline gtag.js snippet (GA4 is injected dynamically via ga4.js)", () => {
     const html = readIndexHtml();
-    expect(html).toContain("googletagmanager.com/gtag/js");
-    expect(html).toContain("VITE_GA4_MEASUREMENT_ID");
+    expect(html).not.toContain("VITE_GA4_MEASUREMENT_ID");
   });
 
   it("references og-image.png in OG meta tags", () => {

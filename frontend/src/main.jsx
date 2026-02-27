@@ -3,8 +3,10 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./styles/app.css";
 import { initSentry } from "./sentry.js";
+import { initGA4 } from "./ga4.js";
 
 initSentry();
+initGA4();
 import { AUTH_SYNC_ENABLED } from "./supabase_client.js";
 import { AccountPanel } from "./account_panel.jsx";
 import { ActivationDiagnosticsPanel, resolveActivationDiagnosticsPanelEnabled } from "./activation_diagnostics_panel.jsx";
