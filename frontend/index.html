@@ -50,9 +50,11 @@
   "url": "https://fantasy-foundry.com/",
   "description": "Generate league-specific dynasty rankings from 2026-2045 MLB projections.",
   "offers": {
-    "@type": "Offer",
-    "price": "0",
-    "priceCurrency": "USD"
+    "@type": "AggregateOffer",
+    "lowPrice": "0",
+    "highPrice": "4.99",
+    "priceCurrency": "USD",
+    "offerCount": 2
   }
 }
 </script>
@@ -83,6 +85,30 @@
       "acceptedAnswer": {
         "@type": "Answer",
         "text": "Dynasty Value is a relative ranking score, not a dollar amount. Higher values indicate stronger long-term roster impact in your selected format, accounting for projection horizon, positional scarcity, and replacement context."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How are two-way players handled?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Two-way valuation follows your selected calculator option: sum hitting and pitching value, or keep the higher of the two sides."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Why do rankings change when I edit league settings?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Value depends on scarcity and scoring context. Changing format, roster depth, or categories changes replacement level and category impact."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Why might a player with strong stats rank lower than expected?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Multi-year value accounts for projection horizon, discounting, replacement context, and slot constraints, not just one-season counting stats."
       }
     }
   ]

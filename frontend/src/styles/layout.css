@@ -1013,6 +1013,57 @@ header {
   opacity: 0.5;
 }
 
+/* ====== HOW IT WORKS ====== */
+.how-it-works {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 32px 20px 40px;
+}
+
+.how-it-works-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+}
+
+.how-it-works-step {
+  text-align: center;
+}
+
+.how-it-works-step h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.how-it-works-step p {
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-relaxed);
+  margin: 0;
+}
+
+.how-it-works-number {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: var(--fs-sm);
+}
+
+@media (max-width: 600px) {
+  .how-it-works-steps {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
 /* ====== NEWSLETTER ====== */
 .footer-inner {
   max-width: 600px;
