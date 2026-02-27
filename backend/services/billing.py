@@ -19,8 +19,12 @@ async def upsert_subscription(
     stripe_subscription_id: str,
     status: str,
 ) -> dict[str, Any]:
-    """Insert or update a subscription row in the Supabase subscriptions table."""
-    url = f"{supabase_url}/rest/v1/subscriptions"
+    """Insert or update a subscription row in the Supabase subscriptions table.
+
+    Requires a UNIQUE constraint on ``stripe_subscription_id`` in Supabase so
+    PostgREST can resolve the conflict via ``on_conflict``.
+    """
+    url = f"{supabase_url}/rest/v1/subscriptions?on_conflict=stripe_subscription_id"
     headers = {
         "apikey": supabase_service_role_key,
         "Authorization": f"Bearer {supabase_service_role_key}",

@@ -728,6 +728,8 @@ app.include_router(
 # Billing (Stripe) — conditional on credentials
 # ---------------------------------------------------------------------------
 if SETTINGS.stripe_secret_key and SETTINGS.stripe_webhook_secret:
+    import stripe
+
     from backend.services.billing import (
         get_subscription_status as _billing_get_status,
     )
@@ -738,6 +740,7 @@ if SETTINGS.stripe_secret_key and SETTINGS.stripe_webhook_secret:
         upsert_subscription as _billing_upsert,
     )
 
+    stripe.api_key = SETTINGS.stripe_secret_key
     _supabase_url = SETTINGS.supabase_url
     _supabase_service_role_key = SETTINGS.supabase_service_role_key
 
@@ -752,14 +755,19 @@ if SETTINGS.stripe_secret_key and SETTINGS.stripe_webhook_secret:
         )
 
     async def _on_subscription_updated(subscription):
-        customer_email = str(subscription.get("customer_email", "")).strip()
-        if not customer_email:
-            customer_email = str(subscription.get("metadata", {}).get("email", "")).strip()
+        customer_id = str(subscription.get("customer", "")).strip()
+        customer_email = str(subscription.get("metadata", {}).get("email", "")).strip()
+        if not customer_email and customer_id:
+            try:
+                customer = stripe.Customer.retrieve(customer_id)
+                customer_email = str(getattr(customer, "email", "") or "").strip()
+            except Exception:
+                logging.getLogger(__name__).warning("Could not retrieve customer email for %s", customer_id)
         await _billing_upsert(
             supabase_url=_supabase_url,
             supabase_service_role_key=_supabase_service_role_key,
             user_email=customer_email,
-            stripe_customer_id=str(subscription.get("customer", "")).strip(),
+            stripe_customer_id=customer_id,
             stripe_subscription_id=str(subscription.get("id", "")).strip(),
             status=str(subscription.get("status", "")).strip(),
         )
