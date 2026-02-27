@@ -734,6 +734,9 @@ if SETTINGS.stripe_secret_key and SETTINGS.stripe_webhook_secret:
         get_subscription_status as _billing_get_status,
     )
     from backend.services.billing import (
+        resolve_supabase_user_id as _billing_resolve_user_id,
+    )
+    from backend.services.billing import (
         revoke_subscription as _billing_revoke,
     )
     from backend.services.billing import (
@@ -745,13 +748,29 @@ if SETTINGS.stripe_secret_key and SETTINGS.stripe_webhook_secret:
     _supabase_service_role_key = SETTINGS.supabase_service_role_key
 
     async def _on_checkout_completed(session):
+        email = str(session.get("customer_email", "")).strip()
+        sub_id = str(session.get("subscription", "")).strip()
+        period_end = None
+        if sub_id:
+            try:
+                sub_obj = stripe.Subscription.retrieve(sub_id)
+                period_end = getattr(sub_obj, "current_period_end", None)
+            except Exception:
+                pass
+        user_id = await _billing_resolve_user_id(
+            supabase_url=_supabase_url,
+            supabase_service_role_key=_supabase_service_role_key,
+            email=email,
+        )
         await _billing_upsert(
             supabase_url=_supabase_url,
             supabase_service_role_key=_supabase_service_role_key,
-            user_email=str(session.get("customer_email", "")).strip(),
+            user_email=email,
             stripe_customer_id=str(session.get("customer", "")).strip(),
-            stripe_subscription_id=str(session.get("subscription", "")).strip(),
+            stripe_subscription_id=sub_id,
             status="active",
+            user_id=user_id,
+            current_period_end=period_end,
         )
 
     async def _on_subscription_updated(subscription):
@@ -763,6 +782,11 @@ if SETTINGS.stripe_secret_key and SETTINGS.stripe_webhook_secret:
                 customer_email = str(getattr(customer, "email", "") or "").strip()
             except Exception:
                 logging.getLogger(__name__).warning("Could not retrieve customer email for %s", customer_id)
+        user_id = await _billing_resolve_user_id(
+            supabase_url=_supabase_url,
+            supabase_service_role_key=_supabase_service_role_key,
+            email=customer_email,
+        )
         await _billing_upsert(
             supabase_url=_supabase_url,
             supabase_service_role_key=_supabase_service_role_key,
@@ -770,6 +794,8 @@ if SETTINGS.stripe_secret_key and SETTINGS.stripe_webhook_secret:
             stripe_customer_id=customer_id,
             stripe_subscription_id=str(subscription.get("id", "")).strip(),
             status=str(subscription.get("status", "")).strip(),
+            user_id=user_id,
+            current_period_end=subscription.get("current_period_end"),
         )
 
     async def _on_subscription_deleted(subscription):

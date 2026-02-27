@@ -3,11 +3,40 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+async def resolve_supabase_user_id(
+    *,
+    supabase_url: str,
+    supabase_service_role_key: str,
+    email: str,
+) -> str | None:
+    """Look up a Supabase auth user ID by email. Returns None if not found."""
+    if not email:
+        return None
+    url = f"{supabase_url}/auth/v1/admin/users?page=1&per_page=1"
+    headers = {
+        "apikey": supabase_service_role_key,
+        "Authorization": f"Bearer {supabase_service_role_key}",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+        users = data.get("users", []) if isinstance(data, dict) else data
+        for user in users:
+            if str(user.get("email", "")).lower() == email.lower():
+                return str(user["id"])
+    except Exception:
+        logger.warning("Could not resolve Supabase user_id for email=%s", email)
+    return None
 
 
 async def upsert_subscription(
@@ -18,6 +47,8 @@ async def upsert_subscription(
     stripe_customer_id: str,
     stripe_subscription_id: str,
     status: str,
+    user_id: str | None = None,
+    current_period_end: int | None = None,
 ) -> dict[str, Any]:
     """Insert or update a subscription row in the Supabase subscriptions table.
 
@@ -31,12 +62,18 @@ async def upsert_subscription(
         "Content-Type": "application/json",
         "Prefer": "resolution=merge-duplicates",
     }
-    payload = {
+    payload: dict[str, Any] = {
         "user_email": user_email,
         "stripe_customer_id": stripe_customer_id,
         "stripe_subscription_id": stripe_subscription_id,
         "status": status,
     }
+    if user_id:
+        payload["user_id"] = user_id
+    if current_period_end and isinstance(current_period_end, int):
+        payload["current_period_end"] = datetime.fromtimestamp(
+            current_period_end, tz=timezone.utc,
+        ).isoformat()
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(url, json=payload, headers=headers)
         resp.raise_for_status()
