@@ -1011,6 +1011,38 @@ class CalculatorValidationTests(unittest.TestCase):
             resolved = app_module._client_ip(request)
         self.assertEqual(resolved, "198.51.100.55")
 
+    def test_client_ip_prefers_cf_connecting_ip_when_trusted(self) -> None:
+        request = types.SimpleNamespace(
+            headers={
+                "cf-connecting-ip": "203.0.113.50",
+                "x-forwarded-for": "198.51.100.99",
+            },
+            client=types.SimpleNamespace(host="10.0.0.1"),
+        )
+        with patch.object(app_module, "TRUST_X_FORWARDED_FOR", True), patch.object(
+            app_module,
+            "TRUSTED_PROXY_NETWORKS",
+            (),
+        ):
+            resolved = app_module._client_ip(request)
+        self.assertEqual(resolved, "203.0.113.50")
+
+    def test_client_ip_ignores_cf_connecting_ip_when_untrusted(self) -> None:
+        request = types.SimpleNamespace(
+            headers={
+                "cf-connecting-ip": "203.0.113.50",
+                "x-forwarded-for": "198.51.100.99",
+            },
+            client=types.SimpleNamespace(host="192.0.2.1"),
+        )
+        with patch.object(app_module, "TRUST_X_FORWARDED_FOR", False), patch.object(
+            app_module,
+            "TRUSTED_PROXY_NETWORKS",
+            (),
+        ):
+            resolved = app_module._client_ip(request)
+        self.assertEqual(resolved, "192.0.2.1")
+
     def test_rate_limit_bucket_cleanup_evicts_stale_keys(self) -> None:
         with app_module.REQUEST_RATE_LIMIT_LOCK:
             app_module.REQUEST_RATE_LIMIT_BUCKETS.clear()

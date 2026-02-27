@@ -58,6 +58,12 @@ def client_ip(
     if request is None:
         return "unknown"
 
+    # Prefer CF-Connecting-IP (set by Cloudflare, not spoofable by clients)
+    if trust_x_forwarded_for or trusted_proxy_networks:
+        cf_ip = parse_ip_text(request.headers.get("cf-connecting-ip"))
+        if cf_ip is not None:
+            return str(cf_ip)
+
     peer_host = str(request.client.host) if request.client and request.client.host else ""
     peer_ip = parse_ip_text(peer_host)
     forwarded_chain = forwarded_for_chain(request.headers.get("x-forwarded-for"))
