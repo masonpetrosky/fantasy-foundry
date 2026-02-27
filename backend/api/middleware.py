@@ -11,7 +11,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 CallNext = Callable[[Request], Awaitable[Any]]
 
@@ -125,6 +125,23 @@ def register_middlewares(app: FastAPI, *, config: MiddlewareConfig) -> None:
         if str(config.environment).strip().lower() == "production" and request_scheme == "https":
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
         return response
+
+    @app.middleware("http")
+    async def handle_head_requests(request: Request, call_next: CallNext):
+        """Convert HEAD to GET, run normally, return headers without body."""
+        if request.method != "HEAD":
+            return await call_next(request)
+        request.scope["method"] = "GET"
+        response = await call_next(request)
+        headers = dict(response.headers)
+        if hasattr(response, "body_iterator"):
+            async for _ in response.body_iterator:
+                pass
+        return Response(
+            status_code=response.status_code,
+            headers=headers,
+            background=response.background,
+        )
 
     @app.middleware("http")
     async def log_api_request(request: Request, call_next: CallNext):
