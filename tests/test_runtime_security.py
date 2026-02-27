@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from backend.core.runtime_security import (
+    CLOUDFLARE_IP_RANGES,
     extract_calculate_api_key,
     load_trusted_proxy_networks,
     parse_calculate_api_key_identities,
@@ -33,3 +34,18 @@ def test_extract_calculate_api_key_prefers_explicit_header():
 def test_extract_calculate_api_key_accepts_bearer_token():
     request = SimpleNamespace(headers={"authorization": "Bearer token-value"})
     assert extract_calculate_api_key(request) == "token-value"
+
+
+def test_load_trusted_proxy_networks_cloudflare_keyword():
+    networks = load_trusted_proxy_networks("cloudflare")
+    assert len(networks) == len(CLOUDFLARE_IP_RANGES)
+
+
+def test_load_trusted_proxy_networks_cloudflare_case_insensitive():
+    networks = load_trusted_proxy_networks("Cloudflare")
+    assert len(networks) == len(CLOUDFLARE_IP_RANGES)
+
+
+def test_load_trusted_proxy_networks_cloudflare_mixed_with_custom():
+    networks = load_trusted_proxy_networks("cloudflare,10.0.0.0/8")
+    assert len(networks) == len(CLOUDFLARE_IP_RANGES) + 1
