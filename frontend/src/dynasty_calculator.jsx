@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { cancelCalculationJob, runCalculationJob } from "./calculation_jobs.js";
+import { cancelCalculationJob, runCalculationJob } from "./calculation_jobs";
 import { DynastyCalculatorSidebar } from "./dynasty_calculator_sidebar.jsx";
 import { trackEvent } from "./analytics";
 import { normalizeCalculatorRunSettingsInput } from "./calculator_submit";

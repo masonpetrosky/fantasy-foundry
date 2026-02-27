@@ -1,3 +1,7 @@
+interface SupabaseModule {
+  createClient: (url: string, key: string, options: Record<string, unknown>) => unknown;
+}
+
 const DEFAULT_PREFS_TABLE = "user_preferences";
 
 const SUPABASE_URL = String(import.meta.env.VITE_SUPABASE_URL || "").trim();
@@ -8,16 +12,23 @@ export const SUPABASE_PREFS_TABLE =
   DEFAULT_PREFS_TABLE;
 export const AUTH_SYNC_ENABLED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
+export interface SupabaseClientLoaderOptions {
+  enabled: boolean;
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  importSupabaseModule?: () => Promise<SupabaseModule>;
+}
+
 export function createSupabaseClientLoader({
   enabled,
   supabaseUrl,
   supabaseAnonKey,
-  importSupabaseModule = () => import("@supabase/supabase-js"),
-}) {
-  let client = null;
-  let pending = null;
+  importSupabaseModule = () => import("@supabase/supabase-js") as unknown as Promise<SupabaseModule>,
+}: SupabaseClientLoaderOptions): () => Promise<unknown> {
+  let client: unknown = null;
+  let pending: Promise<unknown> | null = null;
 
-  return async function loadSupabaseClient() {
+  return async function loadSupabaseClient(): Promise<unknown> {
     if (!enabled) return null;
     if (client) return client;
     if (!pending) {

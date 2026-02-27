@@ -7,7 +7,7 @@ import { initGA4 } from "./ga4";
 
 initSentry();
 initGA4();
-import { AUTH_SYNC_ENABLED } from "./supabase_client.js";
+import { AUTH_SYNC_ENABLED } from "./supabase_client";
 import { AccountPanel } from "./account_panel.jsx";
 import { ActivationDiagnosticsPanel, resolveActivationDiagnosticsPanelEnabled } from "./activation_diagnostics_panel.jsx";
 import { resolveApiBase } from "./api_base";

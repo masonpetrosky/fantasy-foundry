@@ -10,7 +10,7 @@ import {
   resolveProjectionCardCoreColumnsForRow,
   resolveProjectionPriorityStats,
   resolveProjectionTableColumns,
-} from "./projections_view_config.js";
+} from "./projections_view_config";
 
 describe("projectionTable defaults", () => {
   it("includes QA3 in pitcher table catalogs", () => {

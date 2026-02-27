@@ -5,7 +5,9 @@ import {
   coerceBooleanSetting,
 } from "./dynasty_calculator_config";
 
-export const PROJECTION_TABS = ["all", "bat", "pitch"];
+export const PROJECTION_TABS = ["all", "bat", "pitch"] as const;
+export type ProjectionTab = (typeof PROJECTION_TABS)[number];
+
 export const PROJECTION_HITTER_CORE_STATS = ["AB", "R", "HR", "RBI", "SB", "AVG", "OPS"];
 export const PROJECTION_PITCHER_CORE_STATS = ["IP", "W", "K", "SV", "ERA", "WHIP", "QS", "QA3"];
 const ALL_TAB_HITTING_STAT_SET = new Set([
@@ -31,7 +33,14 @@ const ALL_TAB_PITCHING_STAT_SET = new Set([
   "SVH",
 ]);
 
-const POINTS_RULE_COLUMN_MAP = {
+interface PointsRuleColumnMapping {
+  bat?: string;
+  pitch?: string;
+  all_hit?: string;
+  all_pitch?: string;
+}
+
+const POINTS_RULE_COLUMN_MAP: Record<string, PointsRuleColumnMapping> = {
   pts_hit_1b: { bat: "H", all_hit: "H" },
   pts_hit_2b: { bat: "2B", all_hit: "2B" },
   pts_hit_3b: { bat: "3B", all_hit: "3B" },
@@ -52,17 +61,24 @@ const POINTS_RULE_COLUMN_MAP = {
   pts_pit_bb: { pitch: "BB", all_pitch: "PitBB" },
 };
 
-function isSettingsObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value);
+type CalculatorSettings = Record<string, unknown> | null | undefined;
+
+function isSettingsObject(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value);
 }
 
-function resolveScoringMode(settings) {
+function resolveScoringMode(settings: unknown): "roto" | "points" {
   if (!isSettingsObject(settings)) return "roto";
   const mode = String(settings.scoring_mode || "").trim().toLowerCase();
   return mode === "points" ? "points" : "roto";
 }
 
-function resolveRowSide(tab, row) {
+interface ProjectionRow {
+  Type?: string;
+  [key: string]: unknown;
+}
+
+function resolveRowSide(tab: string, row: ProjectionRow | null | undefined): string {
   if (tab === "bat") return "H";
   if (tab === "pitch") return "P";
   const side = String(row?.Type || "").trim().toUpperCase();
@@ -70,7 +86,7 @@ function resolveRowSide(tab, row) {
   return "BOTH";
 }
 
-function forcedUsageStats(tab, row) {
+function forcedUsageStats(tab: string, row: ProjectionRow | null | undefined): string[] {
   if (tab === "bat") return ["AB"];
   if (tab === "pitch") return ["IP"];
   const side = resolveRowSide(tab, row);
@@ -79,7 +95,7 @@ function forcedUsageStats(tab, row) {
   return ["AB", "IP"];
 }
 
-function fallbackCoreStats(tab, row) {
+function fallbackCoreStats(tab: string, row: ProjectionRow | null | undefined): string[] {
   if (tab === "bat") return [...PROJECTION_HITTER_CORE_STATS];
   if (tab === "pitch") return [...PROJECTION_PITCHER_CORE_STATS];
   const side = resolveRowSide(tab, row);
@@ -88,7 +104,7 @@ function fallbackCoreStats(tab, row) {
   return [...PROJECTION_HITTER_CORE_STATS, ...PROJECTION_PITCHER_CORE_STATS];
 }
 
-function resolveSelectedRotoStats(tab, row, settings) {
+function resolveSelectedRotoStats(tab: string, row: ProjectionRow | null | undefined, settings: unknown): string[] {
   if (!isSettingsObject(settings)) return [];
   const selectedHit = ROTO_HITTER_CATEGORY_FIELDS
     .filter(field => coerceBooleanSetting(settings[field.key], field.defaultValue))
@@ -106,7 +122,7 @@ function resolveSelectedRotoStats(tab, row, settings) {
   return [...selectedHit, ...selectedPitch];
 }
 
-function resolvePointsColumnsForRule(ruleKey, tab, row) {
+function resolvePointsColumnsForRule(ruleKey: string, tab: string, row: ProjectionRow | null | undefined): string[] {
   const mapping = POINTS_RULE_COLUMN_MAP[ruleKey];
   if (!mapping) return [];
 
@@ -117,12 +133,12 @@ function resolvePointsColumnsForRule(ruleKey, tab, row) {
   if (side === "H") return mapping.all_hit ? [mapping.all_hit] : [];
   if (side === "P") return mapping.all_pitch ? [mapping.all_pitch] : [];
 
-  return [mapping.all_hit, mapping.all_pitch].filter(Boolean);
+  return [mapping.all_hit, mapping.all_pitch].filter((v): v is string => Boolean(v));
 }
 
-function resolveSelectedPointsStats(tab, row, settings) {
+function resolveSelectedPointsStats(tab: string, row: ProjectionRow | null | undefined, settings: unknown): string[] {
   if (!isSettingsObject(settings)) return [];
-  const selected = [];
+  const selected: string[] = [];
   POINTS_SCORING_FIELDS.forEach(field => {
     const rawValue = Number(settings[field.key]);
     if (!Number.isFinite(rawValue) || Math.abs(rawValue) <= 1e-9) return;
@@ -131,15 +147,15 @@ function resolveSelectedPointsStats(tab, row, settings) {
   return uniqueColumnOrder(selected);
 }
 
-function shouldGroupMixedAllPriorityStats(tab, row) {
+function shouldGroupMixedAllPriorityStats(tab: string, row: ProjectionRow | null | undefined): boolean {
   return tab === "all" && resolveRowSide(tab, row) === "BOTH";
 }
 
-function regroupMixedAllPriorityStats(priorityStats) {
+function regroupMixedAllPriorityStats(priorityStats: string[]): string[] {
   const ordered = uniqueColumnOrder(priorityStats);
-  const groupedHitting = [];
-  const groupedPitching = [];
-  const groupedOther = [];
+  const groupedHitting: string[] = [];
+  const groupedPitching: string[] = [];
+  const groupedOther: string[] = [];
   let includeAB = false;
   let includeIP = false;
 
@@ -172,7 +188,7 @@ function regroupMixedAllPriorityStats(priorityStats) {
   ]);
 }
 
-export function resolveProjectionPriorityStats(tab, row, calculatorSettings) {
+export function resolveProjectionPriorityStats(tab: string, row: ProjectionRow | null | undefined, calculatorSettings: CalculatorSettings): string[] {
   const forced = forcedUsageStats(tab, row);
   const mode = resolveScoringMode(calculatorSettings);
   const fromMetrics = mode === "points"
@@ -186,14 +202,14 @@ export function resolveProjectionPriorityStats(tab, row, calculatorSettings) {
   return prioritized;
 }
 
-function filterToCandidates(priorityStats, candidates) {
+function filterToCandidates(priorityStats: string[], candidates: string[]): string[] {
   const allowed = new Set(candidates);
   return uniqueColumnOrder((priorityStats || []).filter(col => allowed.has(col)));
 }
 
-export function uniqueColumnOrder(columns) {
-  const seen = new Set();
-  const ordered = [];
+export function uniqueColumnOrder(columns: unknown[]): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
   (columns || []).forEach(col => {
     const key = String(col || "").trim();
     if (!key || seen.has(key)) return;
@@ -203,14 +219,23 @@ export function uniqueColumnOrder(columns) {
   return ordered;
 }
 
-export function normalizeHiddenColumnOverridesByTab(raw) {
-  const normalized = Object.fromEntries(PROJECTION_TABS.map(tab => [tab, {}]));
+export interface HiddenColumnOverrides {
+  [col: string]: boolean;
+}
+
+export interface HiddenColumnOverridesByTab {
+  [tab: string]: HiddenColumnOverrides;
+}
+
+export function normalizeHiddenColumnOverridesByTab(raw: unknown): HiddenColumnOverridesByTab {
+  const normalized: HiddenColumnOverridesByTab = Object.fromEntries(PROJECTION_TABS.map(tab => [tab, {}]));
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return normalized;
+  const rawObj = raw as Record<string, unknown>;
   PROJECTION_TABS.forEach(tab => {
-    const source = raw[tab];
+    const source = rawObj[tab];
     if (!source || typeof source !== "object" || Array.isArray(source)) return;
-    const mapped = {};
-    Object.entries(source).forEach(([rawCol, rawHidden]) => {
+    const mapped: HiddenColumnOverrides = {};
+    Object.entries(source as Record<string, unknown>).forEach(([rawCol, rawHidden]) => {
       const col = String(rawCol || "").trim();
       if (!col) return;
       mapped[col] = Boolean(rawHidden);
@@ -220,7 +245,7 @@ export function normalizeHiddenColumnOverridesByTab(raw) {
   return normalized;
 }
 
-export function projectionTableColumnCatalog(tab, seasonCol, dynastyYearCols, calculatorSettings = null) {
+export function projectionTableColumnCatalog(tab: string, seasonCol: string, dynastyYearCols: string[], calculatorSettings: CalculatorSettings = null): string[] {
   const identityCols = ["Player", "Team", "Pos", "Age", "DynastyValue"];
 
   if (tab === "bat") {
@@ -304,7 +329,7 @@ export function projectionTableColumnCatalog(tab, seasonCol, dynastyYearCols, ca
   ]);
 }
 
-export function projectionCardColumnCatalog(tab, seasonCol, dynastyYearCols, calculatorSettings = null) {
+export function projectionCardColumnCatalog(tab: string, seasonCol: string, dynastyYearCols: string[], calculatorSettings: CalculatorSettings = null): string[] {
   if (tab === "bat") {
     const statCandidates = uniqueColumnOrder([
       ...PROJECTION_HITTER_CORE_STATS,
@@ -389,29 +414,29 @@ export function projectionCardColumnCatalog(tab, seasonCol, dynastyYearCols, cal
   ]);
 }
 
-export function projectionTableColumnHiddenByDefault(tab, col) {
+export function projectionTableColumnHiddenByDefault(tab: string, col: string): boolean {
   if (col === "Years") return true;
   if (tab === "all" && col === "Type") return true;
   return false;
 }
 
-export function isProjectionTableColumnHidden(tab, col, hiddenOverrides = {}) {
+export function isProjectionTableColumnHidden(tab: string, col: string, hiddenOverrides: HiddenColumnOverrides = {}): boolean {
   if (Object.prototype.hasOwnProperty.call(hiddenOverrides, col)) {
     return Boolean(hiddenOverrides[col]);
   }
   return projectionTableColumnHiddenByDefault(tab, col);
 }
 
-export function resolveProjectionTableColumns(tab, seasonCol, dynastyYearCols, hiddenOverrides = {}, calculatorSettings = null) {
+export function resolveProjectionTableColumns(tab: string, seasonCol: string, dynastyYearCols: string[], hiddenOverrides: HiddenColumnOverrides = {}, calculatorSettings: CalculatorSettings = null): string[] {
   return projectionTableColumnCatalog(tab, seasonCol, dynastyYearCols, calculatorSettings)
     .filter(col => !isProjectionTableColumnHidden(tab, col, hiddenOverrides));
 }
 
-export function resolveProjectionCardCoreColumnsForRow(tab, row, calculatorSettings = null) {
+export function resolveProjectionCardCoreColumnsForRow(tab: string, row: ProjectionRow | null | undefined, calculatorSettings: CalculatorSettings = null): string[] {
   return resolveProjectionPriorityStats(tab, row, calculatorSettings);
 }
 
-export function projectionCardDefaultVisibleColumns(tab, row, calculatorSettings = null) {
+export function projectionCardDefaultVisibleColumns(tab: string, row: ProjectionRow | null | undefined, calculatorSettings: CalculatorSettings = null): string[] {
   return uniqueColumnOrder([
     ...resolveProjectionCardCoreColumnsForRow(tab, row, calculatorSettings),
     "Rank",
@@ -419,18 +444,18 @@ export function projectionCardDefaultVisibleColumns(tab, row, calculatorSettings
   ]);
 }
 
-export function projectionCardOptionalColumnHiddenByDefault(col, defaultVisibleSet = new Set(["Rank", "DynastyValue"])) {
+export function projectionCardOptionalColumnHiddenByDefault(col: string, defaultVisibleSet: ReadonlySet<string> = new Set(["Rank", "DynastyValue"])): boolean {
   return !defaultVisibleSet.has(col);
 }
 
-export function isProjectionCardOptionalColumnHidden(col, defaultVisibleSet, hiddenOverrides = {}) {
+export function isProjectionCardOptionalColumnHidden(col: string, defaultVisibleSet: ReadonlySet<string>, hiddenOverrides: HiddenColumnOverrides = {}): boolean {
   if (Object.prototype.hasOwnProperty.call(hiddenOverrides, col)) {
     return Boolean(hiddenOverrides[col]);
   }
   return projectionCardOptionalColumnHiddenByDefault(col, defaultVisibleSet);
 }
 
-export function resolveProjectionCardColumns(tab, seasonCol, dynastyYearCols, row, hiddenOverrides = {}, calculatorSettings = null) {
+export function resolveProjectionCardColumns(tab: string, seasonCol: string, dynastyYearCols: string[], row: ProjectionRow | null | undefined, hiddenOverrides: HiddenColumnOverrides = {}, calculatorSettings: CalculatorSettings = null): string[] {
   const catalog = projectionCardColumnCatalog(tab, seasonCol, dynastyYearCols, calculatorSettings);
   const defaultVisibleSet = new Set(projectionCardDefaultVisibleColumns(tab, row, calculatorSettings));
   return catalog.filter(col => !isProjectionCardOptionalColumnHidden(col, defaultVisibleSet, hiddenOverrides));

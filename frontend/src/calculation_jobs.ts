@@ -1,6 +1,6 @@
 import { formatApiError, readResponsePayload, sleepWithAbort } from "./request_helpers";
 
-export async function cancelCalculationJob(apiBase, jobId) {
+export async function cancelCalculationJob(apiBase: unknown, jobId: unknown): Promise<void> {
   const normalizedApiBase = String(apiBase || "").trim();
   const normalizedJobId = String(jobId || "").trim();
   if (!normalizedJobId) return;
@@ -13,10 +13,28 @@ export async function cancelCalculationJob(apiBase, jobId) {
   }
 }
 
-function elapsedSecondsFromIso(isoText) {
+function elapsedSecondsFromIso(isoText: unknown): number | null {
   const parsedMs = Date.parse(String(isoText || ""));
   if (!Number.isFinite(parsedMs)) return null;
   return Math.max(0, Math.round((Date.now() - parsedMs) / 1000));
+}
+
+interface CalculationJobPayload {
+  [key: string]: unknown;
+}
+
+export interface RunCalculationJobInput {
+  apiBase: unknown;
+  payload: CalculationJobPayload | null;
+  controller: AbortController;
+  requestSeq: number;
+  requestSeqRef: { current: number };
+  activeJobIdRef: { current: string };
+  timeoutSeconds: number;
+  onStatus: (message: string) => void;
+  onCompleted: (result: Record<string, unknown>, meta: { jobId: string }) => void;
+  onCancelled: () => void;
+  onError: (message: string) => void;
 }
 
 export async function runCalculationJob({
@@ -31,7 +49,7 @@ export async function runCalculationJob({
   onCompleted,
   onCancelled,
   onError,
-}) {
+}: RunCalculationJobInput): Promise<void> {
   const normalizedApiBase = String(apiBase || "").trim();
   const body = payload && typeof payload === "object" ? payload : null;
   if (!body) {
@@ -51,13 +69,13 @@ export async function runCalculationJob({
     });
     const createParsed = await readResponsePayload(createResp);
     if (!createResp.ok) {
-      throw new Error(formatApiError(createResp.status, createParsed.payload, createParsed.rawText));
+      throw new Error(formatApiError(createResp.status, createParsed.payload as Record<string, unknown>, createParsed.rawText));
     }
     const initialJobPayload = createParsed.payload && typeof createParsed.payload === "object"
-      ? createParsed.payload
-      : {};
+      ? createParsed.payload as Record<string, unknown>
+      : {} as Record<string, unknown>;
 
-    jobId = String(createParsed.payload?.job_id || "").trim();
+    jobId = String((createParsed.payload as Record<string, unknown>)?.job_id || "").trim();
     if (!jobId) {
       throw new Error("Server did not return a calculation job id.");
     }
@@ -87,29 +105,30 @@ export async function runCalculationJob({
       });
       const statusParsed = await readResponsePayload(statusResp);
       if (!statusResp.ok) {
-        throw new Error(formatApiError(statusResp.status, statusParsed.payload, statusParsed.rawText));
+        throw new Error(formatApiError(statusResp.status, statusParsed.payload as Record<string, unknown>, statusParsed.rawText));
       }
 
-      const jobStatus = String(statusParsed.payload?.status || "").toLowerCase();
+      const statusPayload = statusParsed.payload as Record<string, unknown>;
+      const jobStatus = String(statusPayload?.status || "").toLowerCase();
       if (jobStatus === "queued") {
-        const queuePosition = Number(statusParsed.payload?.queue_position);
-        const queuedJobs = Number(statusParsed.payload?.queued_jobs);
+        const queuePosition = Number(statusPayload?.queue_position);
+        const queuedJobs = Number(statusPayload?.queued_jobs);
         const queueLabel = Number.isFinite(queuePosition) && queuePosition > 0
           ? `queue ${queuePosition}${Number.isFinite(queuedJobs) && queuedJobs > 0 ? `/${queuedJobs}` : ""}`
           : "queued";
         const queueElapsed = elapsedSecondsFromIso(
-          statusParsed.payload?.created_at || initialJobPayload.created_at
+          statusPayload?.created_at || initialJobPayload.created_at
         );
         onStatus(
-          `${runningStatusLabel} (${queueLabel}${queueElapsed != null ? ` · ${queueElapsed}s` : ""})`
+          `${runningStatusLabel} (${queueLabel}${queueElapsed != null ? ` \u00b7 ${queueElapsed}s` : ""})`
         );
         await sleepWithAbort(1200, controller.signal);
         continue;
       }
       if (jobStatus === "running") {
         const runningElapsed = elapsedSecondsFromIso(
-          statusParsed.payload?.started_at ||
-          statusParsed.payload?.created_at ||
+          statusPayload?.started_at ||
+          statusPayload?.created_at ||
           initialJobPayload.created_at
         );
         onStatus(
@@ -119,7 +138,7 @@ export async function runCalculationJob({
         continue;
       }
       if (jobStatus === "completed") {
-        const result = statusParsed.payload?.result;
+        const result = statusPayload?.result as Record<string, unknown> | undefined;
         if (!result || !Array.isArray(result.data)) {
           throw new Error("Calculation completed without a usable result payload.");
         }
@@ -138,7 +157,7 @@ export async function runCalculationJob({
         return;
       }
       if (jobStatus === "failed") {
-        const error = statusParsed.payload?.error;
+        const error = statusPayload?.error as Record<string, unknown> | undefined;
         const detail = typeof error?.detail === "string" ? error.detail : "";
         const errorStatus = Number(error?.status_code);
         if (activeJobIdRef.current === jobId) {
@@ -163,7 +182,7 @@ export async function runCalculationJob({
       }
     }
     if (requestSeq !== requestSeqRef.current) return;
-    if (err?.name === "AbortError") return;
-    onError(err?.message || "Calculation failed.");
+    if ((err as Error)?.name === "AbortError") return;
+    onError((err as Error)?.message || "Calculation failed.");
   }
 }

@@ -4,7 +4,7 @@ import {
   WATCHLIST_ACTIONS,
   rankCompareReducer,
   watchlistReducer,
-} from "./rank_state_reducers.js";
+} from "./rank_state_reducers";
 
 describe("watchlistReducer", () => {
   const row = { PlayerEntityKey: "p1", Player: "Test Player", Team: "NYM", Pos: "OF" };

@@ -13,7 +13,7 @@ import {
   projectionTableColumnCatalog,
   projectionTableColumnHiddenByDefault,
   resolveProjectionCardColumns,
-} from "../../../projections_view_config.js";
+} from "../../../projections_view_config";
 
 export function resolveProjectionTableColumnHidden(tab, col, hiddenOverridesByTab = {}) {
   if (Object.prototype.hasOwnProperty.call(hiddenOverridesByTab, col)) {

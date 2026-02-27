@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AUTH_SYNC_ENABLED, SUPABASE_PREFS_TABLE, loadSupabaseClient } from "../supabase_client.js";
+import { AUTH_SYNC_ENABLED, SUPABASE_PREFS_TABLE, loadSupabaseClient } from "../supabase_client";
 import {
   CLOUD_SYNC_DEBOUNCE_MS,
   buildCloudPreferencesPayload,

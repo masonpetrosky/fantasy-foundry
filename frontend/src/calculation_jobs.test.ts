@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./request_helpers.js", async () => {
-  const actual = await vi.importActual("./request_helpers.js");
+vi.mock("./request_helpers", async () => {
+  const actual = await vi.importActual("./request_helpers");
   return {
     ...actual,
     sleepWithAbort: vi.fn(async () => {}),
   };
 });
 
-import { cancelCalculationJob, runCalculationJob } from "./calculation_jobs.js";
+import { cancelCalculationJob, runCalculationJob } from "./calculation_jobs";
 
-function jsonResponse(payload, { ok = true, status = 200 } = {}) {
+function jsonResponse(payload: unknown, { ok = true, status = 200 } = {}): { ok: boolean; status: number; text: () => Promise<string> } {
   return {
     ok,
     status,

@@ -1,6 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore — projections_view_config.js is not yet migrated to TypeScript
-import { normalizeHiddenColumnOverridesByTab } from "./projections_view_config.js";
+import { normalizeHiddenColumnOverridesByTab } from "./projections_view_config";
 
 export interface PlayerWatchEntry {
   key: string;

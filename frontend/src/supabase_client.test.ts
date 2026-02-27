@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSupabaseClientLoader } from "./supabase_client.js";
+import { createSupabaseClientLoader } from "./supabase_client";
 
 describe("createSupabaseClientLoader", () => {
   it("returns null and skips import when auth sync is disabled", async () => {
