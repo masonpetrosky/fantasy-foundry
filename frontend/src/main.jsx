@@ -32,7 +32,10 @@ import { useQuickStart } from "./hooks/useQuickStart.js";
 import { useVersionPolling } from "./hooks/useVersionPolling.js";
 import { useAccountMenu } from "./hooks/useAccountMenu.js";
 import { useAccountSync } from "./hooks/useAccountSync.js";
+import { usePremiumStatus } from "./hooks/usePremiumStatus.js";
 import { useTheme } from "./hooks/useTheme.js";
+import { parseBillingRedirectParam, cleanBillingParam } from "./billing_redirect.js";
+import { useToastContext } from "./Toast.jsx";
 import {
   readLastSuccessfulCalcRun,
   readPlayerWatchlist,
@@ -91,6 +94,8 @@ function App() {
     watchlist,
     setWatchlist,
   });
+  const { subscription, tierLimits } = usePremiumStatus(authUser);
+  const toast = useToastContext();
   const { accountMenuOpen, setAccountMenuOpen, accountMenuRef, accountTriggerRef } = useAccountMenu({ section });
   const bottomSheet = useBottomSheet();
   const { theme, toggleTheme } = useTheme();
@@ -163,6 +168,17 @@ function App() {
   useEffect(() => {
     writePlayerWatchlist(watchlist);
   }, [watchlist]);
+
+  useEffect(() => {
+    const billing = parseBillingRedirectParam(window.location.search);
+    if (!billing || !toast) return;
+    if (billing === "success") {
+      toast.addToast("Subscription activated!", { type: "success" });
+    } else {
+      toast.addToast("Checkout cancelled.", { type: "info" });
+    }
+    cleanBillingParam();
+  }, [toast]);
 
   return (
     <>
@@ -392,13 +408,14 @@ function App() {
                         mainTableOverlayActive={calculatorOverlayActive}
                         onRegisterQuickStartRunner={handleRegisterQuickStartRunner}
                         onOpenMethodologyGlossary={openMethodologyGlossary}
+                        tierLimits={tierLimits}
                       />
                     </Suspense>
                     </FeatureErrorBoundary>
                   </div>
                 )}
               </section>
-              {calculatorOverlayActive && (
+              {calculatorOverlayActive && tierLimits?.allowTradeAnalyzer && (
                 <div className="trade-analyzer-toggle-wrap">
                   <button
                     type="button"
@@ -432,13 +449,14 @@ function App() {
                   calculatorOverlayPlayerCount={calculatorOverlayPlayerCount}
                   calculatorOverlaySummary={calculatorOverlaySummary}
                   onClearCalculatorOverlay={clearCalculatorOverlay}
+                  tierLimits={tierLimits}
                 />
                 </FeatureErrorBoundary>
               </div>
             </div>
           )}
           {section === "pricing" && (
-            <PricingSection authUser={authUser} />
+            <PricingSection authUser={authUser} subscription={subscription} />
           )}
           {section === "methodology" && (
             <Suspense fallback={<p className="methodology-note">Loading methodology...</p>}>
@@ -488,6 +506,7 @@ function App() {
                   mainTableOverlayActive={calculatorOverlayActive}
                   onRegisterQuickStartRunner={handleRegisterQuickStartRunner}
                   onOpenMethodologyGlossary={openMethodologyGlossary}
+                  tierLimits={tierLimits}
                 />
               </Suspense>
             </FeatureErrorBoundary>

@@ -101,6 +101,7 @@ export function DynastyCalculator({
   onSettingsChange,
   onRegisterQuickStartRunner,
   onOpenMethodologyGlossary,
+  tierLimits,
 }) {
   const API = String(apiBase || "").trim();
   const [settings, setSettings] = useState(() => buildDefaultCalculatorSettings(meta));
@@ -143,6 +144,21 @@ export function DynastyCalculator({
     if (!hasSuccessfulRun) return;
     firstSuccessTrackedRef.current = true;
   }, [hasSuccessfulRun]);
+
+  useEffect(() => {
+    const maxSims = tierLimits?.maxSims;
+    if (!maxSims || !Number.isFinite(maxSims)) return;
+    const current = Number(settings.sims);
+    if (Number.isFinite(current) && current > maxSims) {
+      setSettings(prev => ({ ...prev, sims: maxSims }));
+    }
+  }, [tierLimits?.maxSims, settings.sims]);
+
+  useEffect(() => {
+    if (tierLimits?.allowPointsMode === false && settings.scoring_mode === "points") {
+      applyScoringSetup("roto");
+    }
+  }, [tierLimits?.allowPointsMode, settings.scoring_mode]);
 
   useEffect(() => {
     if (typeof onSettingsChange !== "function") return;
@@ -520,6 +536,7 @@ export function DynastyCalculator({
     validationError,
     validationWarning,
     hasSuccessfulRun: Boolean(hasSuccessfulRun) || firstSuccessTrackedRef.current,
+    tierLimits,
   };
 
   const sidebarActions = {

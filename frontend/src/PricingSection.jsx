@@ -20,12 +20,13 @@ const PRO_FEATURES = [
   "Priority support",
 ];
 
-export function PricingSection({ authUser }) {
+export function PricingSection({ authUser, subscription }) {
   const [billing, setBilling] = useState("monthly");
   const [loading, setLoading] = useState(false);
 
   const price = billing === "annual" ? "$29.99/yr" : "$4.99/mo";
   const savings = billing === "annual" ? "Save ~50%" : "";
+  const isSubscribed = subscription?.status === "active";
 
   function handleUpgrade() {
     setLoading(true);
@@ -66,7 +67,7 @@ export function PricingSection({ authUser }) {
             {FREE_FEATURES.map(f => <li key={f}>{f}</li>)}
           </ul>
           <div className="pricing-card-action">
-            <span className="pricing-current">Current plan</span>
+            {!isSubscribed && <span className="pricing-current">Current plan</span>}
           </div>
         </div>
 
@@ -80,14 +81,18 @@ export function PricingSection({ authUser }) {
             {PRO_FEATURES.map(f => <li key={f}>{f}</li>)}
           </ul>
           <div className="pricing-card-action">
-            <button
-              type="button"
-              className="pricing-upgrade-btn"
-              onClick={handleUpgrade}
-              disabled={loading}
-            >
-              {loading ? "Redirecting..." : "Upgrade to Pro"}
-            </button>
+            {isSubscribed ? (
+              <span className="pricing-current">Current plan</span>
+            ) : (
+              <button
+                type="button"
+                className="pricing-upgrade-btn"
+                onClick={handleUpgrade}
+                disabled={loading}
+              >
+                {loading ? "Redirecting..." : "Upgrade to Pro"}
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -41,6 +41,7 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
   colLabels,
   exportingFormat,
   exportCurrentProjections,
+  tierLimits,
 }) {
   const [showPosMenu, setShowPosMenu] = useState(false);
   const [filterExpanded, setFilterExpanded] = useState(false);
@@ -273,17 +274,17 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
           type="button"
           className="inline-btn"
           onClick={() => exportCurrentProjections("csv")}
-          disabled={Boolean(exportingFormat)}
+          disabled={Boolean(exportingFormat) || (tierLimits && !tierLimits.allowExport)}
         >
-          {exportingFormat === "csv" ? "Exporting CSV..." : "Export CSV"}
+          {tierLimits && !tierLimits.allowExport ? "Export CSV (Pro)" : exportingFormat === "csv" ? "Exporting CSV..." : "Export CSV"}
         </button>
         <button
           type="button"
           className="inline-btn"
           onClick={() => exportCurrentProjections("xlsx")}
-          disabled={Boolean(exportingFormat)}
+          disabled={Boolean(exportingFormat) || (tierLimits && !tierLimits.allowExport)}
         >
-          {exportingFormat === "xlsx" ? "Exporting XLSX..." : "Export XLSX"}
+          {tierLimits && !tierLimits.allowExport ? "Export XLSX (Pro)" : exportingFormat === "xlsx" ? "Exporting XLSX..." : "Export XLSX"}
         </button>
       </div>
       </div>{/* end filter-controls-panel */}

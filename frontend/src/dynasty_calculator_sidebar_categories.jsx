@@ -12,7 +12,9 @@ export const RotoCategoriesForm = React.memo(function RotoCategoriesForm({
   selectedRotoHitCategoryCount,
   selectedRotoPitchCategoryCount,
   resetRotoCategoryDefaults,
+  tierLimits,
 }) {
+  const categoriesLocked = tierLimits && !tierLimits.allowCustomCategories;
   return (
     <div className="calc-section">
       <p className="calc-section-title">Roto Categories</p>
@@ -21,6 +23,9 @@ export const RotoCategoriesForm = React.memo(function RotoCategoriesForm({
         {" "}
         <CalcTooltip label="How category impact works">How much a player&#39;s projected stats move a category relative to league context, roster slots, and innings constraints.</CalcTooltip>
       </p>
+      {categoriesLocked && (
+        <p className="calc-note calc-pro-note">Custom categories available with Pro</p>
+      )}
 
       <p className="calc-subheading">Hitting</p>
       <div className="calc-checkbox-grid">
@@ -30,6 +35,7 @@ export const RotoCategoriesForm = React.memo(function RotoCategoriesForm({
               type="checkbox"
               checked={coerceBooleanSetting(settings[field.key], field.defaultValue)}
               onChange={e => update(field.key, e.target.checked)}
+              disabled={categoriesLocked}
             />
             <span>{field.label}</span>
           </label>
@@ -44,12 +50,13 @@ export const RotoCategoriesForm = React.memo(function RotoCategoriesForm({
               type="checkbox"
               checked={coerceBooleanSetting(settings[field.key], field.defaultValue)}
               onChange={e => update(field.key, e.target.checked)}
+              disabled={categoriesLocked}
             />
             <span>{field.label}</span>
           </label>
         ))}
       </div>
-      <button type="button" className="calc-secondary-btn" onClick={resetRotoCategoryDefaults}>
+      <button type="button" className="calc-secondary-btn" onClick={resetRotoCategoryDefaults} disabled={categoriesLocked}>
         Reset 5x5 Categories
       </button>
     </div>

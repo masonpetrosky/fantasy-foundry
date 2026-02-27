@@ -37,6 +37,7 @@ export function ProjectionsExplorer({
   calculatorOverlayPlayerCount,
   calculatorOverlaySummary,
   onClearCalculatorOverlay,
+  tierLimits,
 }) {
   const activeCalculatorJobId = calculatorOverlayActive
     ? String(calculatorOverlayJobId || "").trim()
@@ -408,6 +409,7 @@ export function ProjectionsExplorer({
         colLabels={colLabels}
         exportingFormat={exportingFormat}
         exportCurrentProjections={exportCurrentProjections}
+        tierLimits={tierLimits}
       />
       <ProjectionOverlayBanner
         hasCalculatorOverlay={hasCalculatorOverlay}

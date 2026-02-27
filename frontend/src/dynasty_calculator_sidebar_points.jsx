@@ -10,7 +10,9 @@ export const PointsScoringForm = React.memo(function PointsScoringForm({
   update,
   pointRulesCount,
   resetPointsScoringDefaults,
+  tierLimits,
 }) {
+  const scoringLocked = tierLimits && !tierLimits.allowCustomCategories;
   return (
     <div className="calc-section">
       <p className="calc-section-title">Points Scoring Rules</p>
@@ -19,6 +21,9 @@ export const PointsScoringForm = React.memo(function PointsScoringForm({
         {" "}
         <CalcTooltip label="Dynasty value context">A multi-year estimate of player worth that weighs present production, future seasons, and replacement context instead of only one season.</CalcTooltip>
       </p>
+      {scoringLocked && (
+        <p className="calc-note calc-pro-note">Custom scoring available with Pro</p>
+      )}
       <p className="calc-subheading">Batting</p>
       <div className="form-row">
         {POINTS_BATTING_FIELDS.map(field => (
@@ -29,6 +34,7 @@ export const PointsScoringForm = React.memo(function PointsScoringForm({
               step="0.1"
               value={settings[field.key]}
               onChange={e => update(field.key, e.target.value)}
+              disabled={scoringLocked}
             />
           </div>
         ))}
@@ -44,11 +50,12 @@ export const PointsScoringForm = React.memo(function PointsScoringForm({
               step="0.1"
               value={settings[field.key]}
               onChange={e => update(field.key, e.target.value)}
+              disabled={scoringLocked}
             />
           </div>
         ))}
       </div>
-      <button type="button" className="calc-secondary-btn" onClick={resetPointsScoringDefaults}>
+      <button type="button" className="calc-secondary-btn" onClick={resetPointsScoringDefaults} disabled={scoringLocked}>
         Reset Recommended Points Scoring
       </button>
     </div>

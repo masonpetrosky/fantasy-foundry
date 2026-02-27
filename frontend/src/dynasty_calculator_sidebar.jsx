@@ -33,6 +33,7 @@ export function DynastyCalculatorSidebar({
     validationError,
     validationWarning,
     hasSuccessfulRun,
+    tierLimits,
   } = state;
   const {
     applyQuickStartAndRun,
@@ -146,7 +147,9 @@ export function DynastyCalculatorSidebar({
               disabled={settings.mode === "league"}
             >
               <option value="roto">Roto Focused</option>
-              <option value="points">Points Focused</option>
+              <option value="points" disabled={tierLimits && !tierLimits.allowPointsMode}>
+                {tierLimits && !tierLimits.allowPointsMode ? "Points Focused (Pro)" : "Points Focused"}
+              </option>
             </select>
           </div>
         </div>
@@ -225,14 +228,17 @@ export function DynastyCalculatorSidebar({
 
         <div className="form-row">
           <div className="form-group">
-            <label htmlFor="calc-sims">Simulations</label>
+            <label htmlFor="calc-sims">
+              Simulations
+              {tierLimits && tierLimits.maxSims < 5000 && <span className="field-pro-badge">(Pro unlocks more)</span>}
+            </label>
             <input
               id="calc-sims"
               type="number"
               value={settings.sims}
               onChange={e => update("sims", e.target.value)}
               min="50"
-              max="1000"
+              max={tierLimits?.maxSims || 1000}
               step="50"
               disabled={isPointsMode}
             />
@@ -351,6 +357,7 @@ export function DynastyCalculatorSidebar({
           selectedRotoHitCategoryCount={selectedRotoHitCategoryCount}
           selectedRotoPitchCategoryCount={selectedRotoPitchCategoryCount}
           resetRotoCategoryDefaults={resetRotoCategoryDefaults}
+          tierLimits={tierLimits}
         />
       )}
 
@@ -360,6 +367,7 @@ export function DynastyCalculatorSidebar({
           update={update}
           pointRulesCount={pointRulesCount}
           resetPointsScoringDefaults={resetPointsScoringDefaults}
+          tierLimits={tierLimits}
         />
       )}
 

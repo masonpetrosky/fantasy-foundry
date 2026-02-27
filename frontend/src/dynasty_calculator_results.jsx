@@ -57,6 +57,7 @@ export function DynastyCalculatorResults({ results, state, refs, actions }) {
     watchlist,
     watchlistCount,
     requiredRankCols,
+    tierLimits,
   } = state;
   const {
     clearRankCompareRows,
@@ -123,8 +124,8 @@ export function DynastyCalculatorResults({ results, state, refs, actions }) {
         <button type="button" className="inline-btn" onClick={() => setPinRankKeyColumns(v => !v)}>
           {pinRankKeyColumns ? "Unpin Key Columns" : "Pin Key Columns"}
         </button>
-        <button type="button" className="inline-btn" onClick={exportWatchlistCsv} disabled={watchlistCount === 0}>
-          Export Watchlist CSV
+        <button type="button" className="inline-btn" onClick={exportWatchlistCsv} disabled={watchlistCount === 0 || (tierLimits && !tierLimits.allowExport)}>
+          {tierLimits && !tierLimits.allowExport ? "Export Watchlist CSV (Pro)" : "Export Watchlist CSV"}
         </button>
         <button type="button" className="inline-btn" onClick={clearWatchlist} disabled={watchlistCount === 0}>
           Clear Watchlist
@@ -132,8 +133,12 @@ export function DynastyCalculatorResults({ results, state, refs, actions }) {
         <button type="button" className="inline-btn" onClick={clearRankCompareRows} disabled={rankCompareRows.length === 0}>
           Clear Compare
         </button>
-        <button type="button" className="inline-btn" onClick={() => exportRankings("csv")}>Export CSV</button>
-        <button type="button" className="inline-btn" onClick={() => exportRankings("xlsx")}>Export XLSX</button>
+        <button type="button" className="inline-btn" onClick={() => exportRankings("csv")} disabled={tierLimits && !tierLimits.allowExport}>
+          {tierLimits && !tierLimits.allowExport ? "Export CSV (Pro)" : "Export CSV"}
+        </button>
+        <button type="button" className="inline-btn" onClick={() => exportRankings("xlsx")} disabled={tierLimits && !tierLimits.allowExport}>
+          {tierLimits && !tierLimits.allowExport ? "Export XLSX (Pro)" : "Export XLSX"}
+        </button>
       </div>
       {rankCompareRows.length > 0 && (
         <div className="comparison-panel" role="region" aria-label="Ranked player comparison">
