@@ -1,5 +1,5 @@
 import React from "react";
-import { ColumnChooserControl, ExplainabilityCard } from "./ui_components.jsx";
+import { ColumnChooserControl, ExplainabilityCard } from "./ui_components";
 import {
   MAX_COMPARE_PLAYERS,
   calculationRowExplainKey,

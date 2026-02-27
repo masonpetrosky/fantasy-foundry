@@ -1,18 +1,39 @@
 import React, { useEffect, useRef, useState } from "react";
 import { formatCellValue } from "../../../formatting_utils";
 
-const KEY_STAT_COLS_BAT = ["Year", "Team", "Pos", "PA", "HR", "RBI", "SB", "AVG", "OBP", "OPS", "DynastyValue"];
-const KEY_STAT_COLS_PIT = ["Year", "Team", "Pos", "IP", "W", "K", "SV", "ERA", "WHIP", "DynastyValue"];
+const KEY_STAT_COLS_BAT: readonly string[] = ["Year", "Team", "Pos", "PA", "HR", "RBI", "SB", "AVG", "OBP", "OPS", "DynastyValue"];
+const KEY_STAT_COLS_PIT: readonly string[] = ["Year", "Team", "Pos", "IP", "W", "K", "SV", "ERA", "WHIP", "DynastyValue"];
 const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
-function parseProjectionProfileRows(payload) {
+interface ProfileRow {
+  [key: string]: unknown;
+  Player?: string;
+  Team?: string;
+  Pos?: string;
+  Year?: number | string;
+  Type?: string;
+  DynastyValue?: number | string;
+}
+
+interface ProfilePayload {
+  series?: ProfileRow[];
+  data?: ProfileRow[];
+}
+
+function parseProjectionProfileRows(payload: unknown): ProfileRow[] {
   if (!payload || typeof payload !== "object") return [];
-  if (Array.isArray(payload.series)) return payload.series;
-  if (Array.isArray(payload.data)) return payload.data;
+  const obj = payload as ProfilePayload;
+  if (Array.isArray(obj.series)) return obj.series;
+  if (Array.isArray(obj.data)) return obj.data;
   return [];
 }
 
-function SparkLine({ rows, col }) {
+interface SparkLineProps {
+  rows: ProfileRow[];
+  col: string;
+}
+
+function SparkLine({ rows, col }: SparkLineProps): React.ReactElement | null {
   const values = rows.map(r => Number(r[col] ?? 0)).filter(v => !isNaN(v));
   if (values.length < 2) return null;
   const min = Math.min(...values);
@@ -48,12 +69,30 @@ function SparkLine({ rows, col }) {
   );
 }
 
-export function PlayerProfile({ row, tab, apiBase, calculatorJobId, onClose }) {
-  const [data, setData] = useState(null);
+interface PlayerProfileRow {
+  PlayerEntityKey?: string;
+  PlayerKey?: string;
+  Player?: string;
+  Team?: string;
+  Pos?: string;
+  Type?: string;
+  [key: string]: unknown;
+}
+
+interface PlayerProfileProps {
+  row: PlayerProfileRow;
+  tab: string;
+  apiBase: string;
+  calculatorJobId: string;
+  onClose: () => void;
+}
+
+export function PlayerProfile({ row, tab, apiBase, calculatorJobId, onClose }: PlayerProfileProps): React.ReactElement {
+  const [data, setData] = useState<ProfileRow[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const dialogRef = useRef(null);
-  const previousFocusRef = useRef(null);
+  const [error, setError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<Element | null>(null);
 
   const playerKey = String(row?.PlayerEntityKey || row?.PlayerKey || "").trim();
   const playerName = String(row?.Player || "Player").trim();
@@ -83,13 +122,13 @@ export function PlayerProfile({ row, tab, apiBase, calculatorJobId, onClose }) {
       headers: { "Cache-Control": "no-cache" },
     })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then(json => {
+      .then((json: unknown) => {
         setData(parseProjectionProfileRows(json));
         setLoading(false);
       })
-      .catch(err => {
-        if (err?.name === "AbortError") return;
-        setError(err.message);
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setError(err instanceof Error ? err.message : String(err));
         setLoading(false);
       });
     return () => {
@@ -99,15 +138,15 @@ export function PlayerProfile({ row, tab, apiBase, calculatorJobId, onClose }) {
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement;
-    const handler = e => {
+    const handler = (e: KeyboardEvent): void => {
       if (e.key === "Escape") {
         onClose();
         return;
       }
       if (e.key === "Tab" && dialogRef.current) {
         const focusable = Array.from(
-          dialogRef.current.querySelectorAll(FOCUSABLE_SELECTOR)
-        ).filter(el => !el.disabled);
+          dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+        ).filter(el => !(el as HTMLButtonElement).disabled);
         if (focusable.length === 0) return;
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
@@ -127,7 +166,7 @@ export function PlayerProfile({ row, tab, apiBase, calculatorJobId, onClose }) {
     window.addEventListener("keydown", handler);
     return () => {
       window.removeEventListener("keydown", handler);
-      previousFocusRef.current?.focus();
+      (previousFocusRef.current as HTMLElement | null)?.focus();
     };
   }, [onClose]);
 
@@ -159,7 +198,7 @@ export function PlayerProfile({ row, tab, apiBase, calculatorJobId, onClose }) {
           <div>
             <h2 id="player-profile-heading" className="player-profile-name">{playerName}</h2>
             <p className="player-profile-meta">
-              {row.Team || "—"} · {row.Pos || "—"}
+              {row.Team || "\u2014"} · {row.Pos || "\u2014"}
             </p>
           </div>
           <button
@@ -172,7 +211,7 @@ export function PlayerProfile({ row, tab, apiBase, calculatorJobId, onClose }) {
           </button>
         </div>
 
-        {loading && <p className="player-profile-status">Loading…</p>}
+        {loading && <p className="player-profile-status">Loading\u2026</p>}
         {error && (
           <p className="player-profile-status player-profile-error">
             Error: {error}

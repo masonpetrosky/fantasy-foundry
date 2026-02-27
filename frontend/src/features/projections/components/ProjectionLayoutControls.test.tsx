@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { ProjectionLayoutControls } from "./ProjectionLayoutControls.jsx";
+import { ProjectionLayoutControls } from "./ProjectionLayoutControls";
 
 describe("ProjectionLayoutControls", () => {
   it("shows current layout copy and card column chooser in card mode", () => {

@@ -3,12 +3,28 @@ import { useParams, Link } from "react-router-dom";
 import { resolveApiBase } from "./api_base";
 import { formatCellValue } from "./formatting_utils";
 
-const API = resolveApiBase();
+const API: string = resolveApiBase();
 
-const KEY_STAT_COLS_BAT = ["Year", "Team", "Pos", "PA", "HR", "RBI", "SB", "AVG", "OBP", "OPS", "DynastyValue"];
-const KEY_STAT_COLS_PIT = ["Year", "Team", "Pos", "IP", "W", "K", "SV", "ERA", "WHIP", "DynastyValue"];
+const KEY_STAT_COLS_BAT: readonly string[] = ["Year", "Team", "Pos", "PA", "HR", "RBI", "SB", "AVG", "OBP", "OPS", "DynastyValue"];
+const KEY_STAT_COLS_PIT: readonly string[] = ["Year", "Team", "Pos", "IP", "W", "K", "SV", "ERA", "WHIP", "DynastyValue"];
 
-function SparkLine({ rows, col }) {
+interface PlayerRow {
+  [key: string]: unknown;
+  Player?: string;
+  Team?: string;
+  Pos?: string;
+  Age?: number | string;
+  Year?: number | string;
+  Type?: string;
+  DynastyValue?: number | string;
+}
+
+interface SparkLineProps {
+  rows: PlayerRow[];
+  col: string;
+}
+
+function SparkLine({ rows, col }: SparkLineProps): React.ReactElement | null {
   const values = rows.map(r => Number(r[col] ?? 0)).filter(v => !isNaN(v));
   if (values.length < 2) return null;
   const min = Math.min(...values);
@@ -31,18 +47,19 @@ function SparkLine({ rows, col }) {
   );
 }
 
-function parseRows(payload) {
+function parseRows(payload: unknown): PlayerRow[] {
   if (!payload || typeof payload !== "object") return [];
-  if (Array.isArray(payload.series)) return payload.series;
-  if (Array.isArray(payload.data)) return payload.data;
+  const obj = payload as Record<string, unknown>;
+  if (Array.isArray(obj.series)) return obj.series as PlayerRow[];
+  if (Array.isArray(obj.data)) return obj.data as PlayerRow[];
   return [];
 }
 
-export function PlayerPage() {
-  const { slug } = useParams();
-  const [data, setData] = useState(null);
+export function PlayerPage(): React.ReactElement {
+  const { slug } = useParams<{ slug: string }>();
+  const [data, setData] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -52,13 +69,13 @@ export function PlayerPage() {
     const url = `${API}/api/projections/profile/${encodeURIComponent(slug)}?dataset=all`;
     fetch(url, { signal: controller.signal })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then(json => {
+      .then((json: unknown) => {
         setData(json);
         setLoading(false);
       })
-      .catch(err => {
-        if (err?.name === "AbortError") return;
-        setError(err.message);
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setError(err instanceof Error ? err.message : String(err));
         setLoading(false);
       });
     return () => controller.abort();
@@ -67,7 +84,7 @@ export function PlayerPage() {
   const rows = parseRows(data);
   const playerName = rows.length > 0
     ? (rows[0].Player || slug)
-    : (data?.matched_players?.[0] || slug || "Player");
+    : ((data as Record<string, unknown>)?.matched_players as string[] | undefined)?.[0] || slug || "Player";
   const team = rows[0]?.Team || "";
   const pos = rows[0]?.Pos || "";
   const age = rows[0]?.Age;

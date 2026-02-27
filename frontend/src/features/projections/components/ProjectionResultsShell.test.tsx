@@ -2,9 +2,12 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { ProjectionResultsShell } from "./ProjectionResultsShell.jsx";
+import type { ComponentProps } from "react";
+import { ProjectionResultsShell } from "./ProjectionResultsShell";
 
-function buildProps(overrides = {}) {
+type ShellProps = ComponentProps<typeof ProjectionResultsShell>;
+
+function buildProps(overrides: Partial<ShellProps> = {}): ShellProps {
   return {
     showCards: true,
     displayedPage: [],

@@ -1,6 +1,20 @@
 import React, { useId, useRef, useState } from "react";
 import { MenuButton, useMenuInteractions } from "./accessibility_components";
 
+/* ------------------------------------------------------------------ */
+/*  ColumnChooserControl                                              */
+/* ------------------------------------------------------------------ */
+
+interface ColumnChooserControlProps {
+  columns: string[];
+  hiddenCols: Record<string, boolean>;
+  requiredCols: Set<string>;
+  onToggleColumn: (col: string) => void;
+  onShowAllColumns?: (() => void) | null;
+  buttonLabel?: string;
+  columnLabels?: Record<string, string> | null;
+}
+
 export function ColumnChooserControl({
   columns,
   hiddenCols,
@@ -9,10 +23,10 @@ export function ColumnChooserControl({
   onShowAllColumns,
   buttonLabel = "Columns",
   columnLabels,
-}) {
+}: ColumnChooserControlProps): React.ReactElement {
   const [open, setOpen] = useState(false);
-  const menuRef = useRef(null);
-  const triggerRef = useRef(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
   const triggerId = `${menuId}-trigger`;
   const optionalColumns = columns.filter(col => !requiredCols.has(col));
@@ -74,55 +88,84 @@ export function ColumnChooserControl({
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  ExplainabilityCard                                                */
+/* ------------------------------------------------------------------ */
+
+interface YearEntry {
+  year?: number | string;
+  year_value?: number;
+  discount_factor?: number;
+  discounted_contribution?: number;
+  points?: Record<string, unknown>;
+}
+
+interface Explanation {
+  player?: string;
+  team?: string;
+  pos?: string;
+  mode?: string;
+  raw_dynasty_value?: number;
+  dynasty_value?: number;
+  per_year?: YearEntry[];
+}
+
+interface ExplainabilityCardProps {
+  explanation: Explanation | null | undefined;
+  selectedYear: string;
+  onSelectedYearChange: (year: string) => void;
+  fmt: (val: unknown, decimals?: number) => string;
+}
+
 export function ExplainabilityCard({
   explanation,
   selectedYear,
   onSelectedYearChange,
   fmt,
-}) {
+}: ExplainabilityCardProps): React.ReactElement | null {
   if (!explanation) return null;
-  const years = Array.isArray(explanation?.per_year) ? explanation.per_year : [];
+  const years: YearEntry[] = Array.isArray(explanation?.per_year) ? explanation.per_year : [];
   if (years.length === 0) return null;
   const activeYear = !selectedYear
     ? years[0]
     : years.find(entry => String(entry?.year) === selectedYear) || years[0];
-  const points = activeYear?.points || {};
-  const pointsHitting = points.hitting && typeof points.hitting === "object" ? points.hitting : {};
-  const pointsPitching = points.pitching && typeof points.pitching === "object" ? points.pitching : {};
+  const points: Record<string, unknown> = (activeYear?.points || {}) as Record<string, unknown>;
+  const pointsHitting = points.hitting && typeof points.hitting === "object" ? points.hitting as Record<string, unknown> : {};
+  const pointsPitching = points.pitching && typeof points.pitching === "object" ? points.pitching as Record<string, unknown> : {};
   const hittingRulePoints = pointsHitting.rule_points && typeof pointsHitting.rule_points === "object"
-    ? pointsHitting.rule_points
+    ? pointsHitting.rule_points as Record<string, unknown>
     : {};
   const pitchingRulePoints = pointsPitching.rule_points && typeof pointsPitching.rule_points === "object"
-    ? pointsPitching.rule_points
+    ? pointsPitching.rule_points as Record<string, unknown>
     : {};
   const HITTING_POINT_EVENT_ORDER = ["1B", "2B", "3B", "HR", "R", "RBI", "SB", "BB", "SO"];
   const PITCHING_POINT_EVENT_ORDER = ["IP", "W", "L", "K", "SV", "SVH", "H", "ER", "BB"];
-  const HITTING_POINT_LABELS = {};
-  const PITCHING_POINT_LABELS = { SVH: "SVH", H: "H Allowed", BB: "BB Allowed" };
+  const HITTING_POINT_LABELS: Record<string, string> = {};
+  const PITCHING_POINT_LABELS: Record<string, string> = { SVH: "SVH", H: "H Allowed", BB: "BB Allowed" };
 
-  const formatPointLabel = key => String(key || "")
+  const formatPointLabel = (key: string): string => String(key || "")
     .replace(/_/g, " ")
     .replace(/\b\w/g, char => char.toUpperCase());
 
-  const formatPointValue = value => {
+  const formatPointValue = (value: unknown): string => {
     if (typeof value === "number" && Number.isFinite(value)) return fmt(value, 2);
     if (typeof value === "boolean") return value ? "Yes" : "No";
-    if (value == null || value === "") return "—";
+    if (value == null || value === "") return "\u2014";
     if (typeof value === "object") return JSON.stringify(value);
     return String(value);
   };
 
-  const orderedPointEntries = (valueMap, order) => {
+  const orderedPointEntries = (valueMap: Record<string, unknown> | null | undefined, order: string[]): [string, unknown][] => {
     const orderIndex = new Map(order.map((key, idx) => [key, idx]));
     return Object.entries(valueMap || {}).sort(([left], [right]) => {
-      const leftIdx = orderIndex.has(left) ? orderIndex.get(left) : Number.MAX_SAFE_INTEGER;
-      const rightIdx = orderIndex.has(right) ? orderIndex.get(right) : Number.MAX_SAFE_INTEGER;
+      const leftIdx = orderIndex.has(left) ? orderIndex.get(left)! : Number.MAX_SAFE_INTEGER;
+      const rightIdx = orderIndex.has(right) ? orderIndex.get(right)! : Number.MAX_SAFE_INTEGER;
       if (leftIdx !== rightIdx) return leftIdx - rightIdx;
       return left.localeCompare(right);
     });
   };
 
-  const renderPointList = (title, valueMap, order, labels) => {
+  const renderPointList = (title: string, valueMap: Record<string, unknown>, order: string[], labels: Record<string, string>): React.ReactElement => {
     const entries = orderedPointEntries(valueMap, order);
     if (entries.length === 0) {
       return (
@@ -150,31 +193,31 @@ export function ExplainabilityCard({
     );
   };
 
-  const pointSummaryRows = [
-    ["Hitting Points", points.hitting_points],
-    ["Pitching Points", points.pitching_points],
-    ["Selected Points", points.selected_points],
-    ["Selected Side", points.selected_side],
-    ["Hitting Best Slot", points.hitting_best_slot],
-    ["Pitching Best Slot", points.pitching_best_slot],
-    ["Hitting Value", points.hitting_value],
-    ["Pitching Value", points.pitching_value],
-    ["Hitting Assignment Slot", points.hitting_assignment_slot],
-    ["Pitching Assignment Slot", points.pitching_assignment_slot],
-    ["Hitting Assignment Value", points.hitting_assignment_value],
-    ["Pitching Assignment Value", points.pitching_assignment_value],
-    ["Hitting Assignment Replacement", points.hitting_assignment_replacement],
-    ["Pitching Assignment Replacement", points.pitching_assignment_replacement],
-    ["Keep/Drop Value", points.keep_drop_value],
-    ["Keep/Drop Hold Value", points.keep_drop_hold_value],
-    ["Keep/Drop Keep", points.keep_drop_keep],
+  const pointSummaryRows: [string, unknown][] = [
+    ["Hitting Points", (points as Record<string, unknown>).hitting_points],
+    ["Pitching Points", (points as Record<string, unknown>).pitching_points],
+    ["Selected Points", (points as Record<string, unknown>).selected_points],
+    ["Selected Side", (points as Record<string, unknown>).selected_side],
+    ["Hitting Best Slot", (points as Record<string, unknown>).hitting_best_slot],
+    ["Pitching Best Slot", (points as Record<string, unknown>).pitching_best_slot],
+    ["Hitting Value", (points as Record<string, unknown>).hitting_value],
+    ["Pitching Value", (points as Record<string, unknown>).pitching_value],
+    ["Hitting Assignment Slot", (points as Record<string, unknown>).hitting_assignment_slot],
+    ["Pitching Assignment Slot", (points as Record<string, unknown>).pitching_assignment_slot],
+    ["Hitting Assignment Value", (points as Record<string, unknown>).hitting_assignment_value],
+    ["Pitching Assignment Value", (points as Record<string, unknown>).pitching_assignment_value],
+    ["Hitting Assignment Replacement", (points as Record<string, unknown>).hitting_assignment_replacement],
+    ["Pitching Assignment Replacement", (points as Record<string, unknown>).pitching_assignment_replacement],
+    ["Keep/Drop Value", (points as Record<string, unknown>).keep_drop_value],
+    ["Keep/Drop Hold Value", (points as Record<string, unknown>).keep_drop_hold_value],
+    ["Keep/Drop Keep", (points as Record<string, unknown>).keep_drop_keep],
   ];
 
   return (
     <div className="explain-card">
       <h4>Value Breakdown: {explanation.player || "Player"}</h4>
       <div className="explain-meta">
-        <span>{explanation.team || "—"} · {explanation.pos || "—"}</span>
+        <span>{explanation.team || "\u2014"} · {explanation.pos || "\u2014"}</span>
         <span>Mode: {String(explanation.mode || "").toUpperCase()}</span>
         <span>Raw {fmt(explanation.raw_dynasty_value, 2)}</span>
         <span>Centered {fmt(explanation.dynasty_value, 2)}</span>
@@ -219,8 +262,8 @@ export function ExplainabilityCard({
             <table className="explain-mini-table">
               <tbody>
                 {pointSummaryRows.map(([label, value]) => (
-                  <tr key={label}>
-                    <td>{label}</td>
+                  <tr key={label as string}>
+                    <td>{label as string}</td>
                     <td className="num">{formatPointValue(value)}</td>
                   </tr>
                 ))}

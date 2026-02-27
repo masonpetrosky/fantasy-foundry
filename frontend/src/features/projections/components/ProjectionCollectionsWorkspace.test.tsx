@@ -2,9 +2,12 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { ProjectionCollectionsWorkspace } from "./ProjectionCollectionsWorkspace.jsx";
+import type { ComponentProps } from "react";
+import { ProjectionCollectionsWorkspace } from "./ProjectionCollectionsWorkspace";
 
-function buildProps(overrides = {}) {
+type WorkspaceProps = ComponentProps<typeof ProjectionCollectionsWorkspace>;
+
+function buildProps(overrides: Partial<WorkspaceProps> = {}): WorkspaceProps {
   return {
     showCollectionsWorkspace: true,
     watchlistCount: 0,
@@ -21,7 +24,7 @@ function buildProps(overrides = {}) {
     comparisonColumns: ["Year", "DynastyValue"],
     removeCompareRow: vi.fn(),
     colLabels: {},
-    formatCellValue: value => String(value ?? ""),
+    formatCellValue: (_col: string, value: unknown) => String(value ?? ""),
     ...overrides,
   };
 }

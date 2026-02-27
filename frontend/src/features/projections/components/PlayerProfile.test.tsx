@@ -3,12 +3,12 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { PlayerProfile } from "./PlayerProfile.jsx";
+import { PlayerProfile } from "./PlayerProfile";
 
-function renderToContainer(element) {
+function renderToContainer(element: React.ReactElement): { container: HTMLDivElement; cleanup: () => void } {
   const container = document.createElement("div");
   document.body.appendChild(container);
-  let root;
+  let root: ReturnType<typeof createRoot>;
   act(() => {
     root = createRoot(container);
     root.render(element);
@@ -22,7 +22,7 @@ function renderToContainer(element) {
   };
 }
 
-async function flushEffects() {
+async function flushEffects(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
     await Promise.resolve();
@@ -33,15 +33,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-let previousActEnvironmentFlag;
+let previousActEnvironmentFlag: unknown;
 
 beforeAll(() => {
-  previousActEnvironmentFlag = globalThis.IS_REACT_ACT_ENVIRONMENT;
-  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  previousActEnvironmentFlag = (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT;
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 });
 
 afterAll(() => {
-  globalThis.IS_REACT_ACT_ENVIRONMENT = previousActEnvironmentFlag;
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = previousActEnvironmentFlag;
 });
 
 describe("PlayerProfile", () => {
@@ -55,7 +55,7 @@ describe("PlayerProfile", () => {
         ],
         career_totals: [],
       }),
-    });
+    } as Response);
 
     const { container, cleanup } = renderToContainer(
       <PlayerProfile

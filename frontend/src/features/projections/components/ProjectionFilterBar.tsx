@@ -1,5 +1,5 @@
 import React, { useCallback, useId, useMemo, useRef, useState } from "react";
-import { ColumnChooserControl } from "../../../ui_components.jsx";
+import { ColumnChooserControl } from "../../../ui_components";
 import {
   MenuButton,
   VisuallyHidden,
@@ -8,6 +8,50 @@ import {
 import { parsePosTokens } from "../../../formatting_utils";
 import { DEFAULT_FILTER_SUMMARY_FALLBACK } from "../view_state";
 import { CAREER_TOTALS_FILTER_VALUE } from "../../../hooks/useProjectionsData";
+import type { TierLimits } from "../../../premium";
+import type { ProjectionFilterPresetBundle } from "../../../app_state_storage";
+
+interface ProjectionMeta {
+  bat_positions?: string[];
+  pit_positions?: string[];
+  years: (string | number)[];
+  teams: string[];
+}
+
+interface ProjectionFilterBarProps {
+  tab: string;
+  meta: ProjectionMeta;
+  search: string;
+  resolvedYearFilter: string;
+  teamFilter: string;
+  posFilters: string[];
+  watchlistOnly: boolean;
+  watchlistCount: number;
+  totalRows: number;
+  loading: boolean;
+  searchIsDebouncing: boolean;
+  setSearch: (value: string) => void;
+  setTeamFilter: (value: string) => void;
+  setYearFilter: (value: string) => void;
+  setPosFilters: (updater: string[] | ((prev: string[]) => string[])) => void;
+  setWatchlistOnly: (updater: boolean | ((prev: boolean) => boolean)) => void;
+  activeProjectionPresetKey: string;
+  projectionFilterPresets: ProjectionFilterPresetBundle | null;
+  applyProjectionFilterPreset: (key: string) => void;
+  saveCustomProjectionPreset: () => void;
+  clearAllFilters: () => void;
+  hasActiveFilters: boolean;
+  activeFilterChips: string[];
+  tableColumnCatalog: string[];
+  resolvedProjectionTableHiddenCols: Record<string, boolean>;
+  requiredProjectionTableCols: Set<string>;
+  toggleProjectionTableColumn: (col: string) => void;
+  showAllProjectionTableColumns: (() => void) | null;
+  colLabels: Record<string, string>;
+  exportingFormat: string;
+  exportCurrentProjections: (format: string) => void;
+  tierLimits: TierLimits | null;
+}
 
 export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
   tab,
@@ -42,11 +86,11 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
   exportingFormat,
   exportCurrentProjections,
   tierLimits,
-}) {
+}: ProjectionFilterBarProps): React.ReactElement {
   const [showPosMenu, setShowPosMenu] = useState(false);
   const [filterExpanded, setFilterExpanded] = useState(false);
-  const posMenuRef = useRef(null);
-  const posMenuTriggerRef = useRef(null);
+  const posMenuRef = useRef<HTMLDivElement>(null);
+  const posMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const posMenuId = useId();
   const posMenuTriggerId = `${posMenuId}-trigger`;
 
@@ -57,13 +101,13 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
     triggerRef: posMenuTriggerRef,
   });
 
-  const positionOptions = useMemo(() => {
+  const positionOptions = useMemo((): string[] => {
     const rawPositions = tab === "all"
       ? [...(meta.bat_positions || []), ...(meta.pit_positions || [])]
       : tab === "bat"
         ? (meta.bat_positions || [])
         : (meta.pit_positions || []);
-    const uniq = new Set();
+    const uniq = new Set<string>();
     rawPositions.forEach(pos => {
       parsePosTokens(pos).forEach(token => uniq.add(token));
     });
@@ -88,17 +132,17 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
       ? posFilters.join(", ")
       : `${posFilters.length} Positions`;
 
-  function togglePosFilter(pos) {
-    setPosFilters(curr => (
+  function togglePosFilter(pos: string): void {
+    setPosFilters((curr: string[]) => (
       curr.includes(pos) ? curr.filter(p => p !== pos) : [...curr, pos]
     ));
   }
 
   const filterToggleId = `${posMenuId}-filter-toggle`;
-  const [filterDiscoverable, setFilterDiscoverable] = useState(() => {
+  const [filterDiscoverable, setFilterDiscoverable] = useState((): boolean => {
     try { return !localStorage.getItem("ff:filter-drawer-discovered"); } catch { return false; }
   });
-  const handleFilterToggle = useCallback(() => {
+  const handleFilterToggle = useCallback((): void => {
     setFilterExpanded(v => {
       if (!v && filterDiscoverable) {
         try { localStorage.setItem("ff:filter-drawer-discovered", "1"); } catch { /* noop */ }
@@ -120,7 +164,7 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
           onClick={handleFilterToggle}
         >
           {hasActiveFilters ? `Filters (${activeFilterChips.length} active)` : "Filters"}
-          <span aria-hidden="true">{filterExpanded ? " ▲" : " ▼"}</span>
+          <span aria-hidden="true">{filterExpanded ? " \u25B2" : " \u25BC"}</span>
         </button>
         <div className="active-filter-chip-row active-filter-chip-row-mobile" role="status" aria-live="polite">
           {hasActiveFilters ? activeFilterChips.map(chip => (
@@ -188,7 +232,7 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
         <input
           id="projections-search"
           type="text"
-          placeholder="Search player name…"
+          placeholder="Search player name\u2026"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -214,7 +258,7 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
             label={(
               <span className="multi-select-label">
                 <span>{posFilterLabel}</span>
-                <span className="multi-select-chevron" aria-hidden="true">{showPosMenu ? "▲" : "▼"}</span>
+                <span className="multi-select-chevron" aria-hidden="true">{showPosMenu ? "\u25B2" : "\u25BC"}</span>
               </span>
             )}
           >
@@ -260,12 +304,12 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
         )}
         <span className={`result-count ${loading || searchIsDebouncing ? "loading" : ""}`.trim()} aria-live="polite" aria-atomic="true" aria-busy={loading || searchIsDebouncing}>
           {watchlistOnly ? `${totalRows.toLocaleString()} watchlist rows` : `${totalRows.toLocaleString()} rows`}
-          {searchIsDebouncing ? " · typing..." : loading ? " · refreshing..." : ""}
+          {searchIsDebouncing ? " \u00b7 typing..." : loading ? " \u00b7 refreshing..." : ""}
         </span>
         <button
           type="button"
           className={`inline-btn ${watchlistOnly ? "open" : ""}`.trim()}
-          onClick={() => setWatchlistOnly(value => !value)}
+          onClick={() => setWatchlistOnly((value: boolean) => !value)}
           disabled={watchlistCount === 0}
         >
           {watchlistOnly ? "All Players View" : "Watchlist View"}
@@ -274,7 +318,7 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
           type="button"
           className="inline-btn"
           onClick={() => exportCurrentProjections("csv")}
-          disabled={Boolean(exportingFormat) || (tierLimits && !tierLimits.allowExport)}
+          disabled={Boolean(exportingFormat) || Boolean(tierLimits && !tierLimits.allowExport)}
         >
           {tierLimits && !tierLimits.allowExport ? "Export CSV (Pro)" : exportingFormat === "csv" ? "Exporting CSV..." : "Export CSV"}
         </button>
@@ -282,7 +326,7 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
           type="button"
           className="inline-btn"
           onClick={() => exportCurrentProjections("xlsx")}
-          disabled={Boolean(exportingFormat) || (tierLimits && !tierLimits.allowExport)}
+          disabled={Boolean(exportingFormat) || Boolean(tierLimits && !tierLimits.allowExport)}
         >
           {tierLimits && !tierLimits.allowExport ? "Export XLSX (Pro)" : exportingFormat === "xlsx" ? "Exporting XLSX..." : "Export XLSX"}
         </button>

@@ -2,10 +2,16 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { fmt } from "./formatting_utils";
 import { stablePlayerKeyFromRow } from "./app_state_storage";
 import { trackEvent } from "./analytics";
+import type { ProjectionRow } from "./app_state_storage";
 
 const MAX_TRADE_PLAYERS = 6;
 
-function parseTradeParams() {
+interface TradeParams {
+  a: string[];
+  b: string[];
+}
+
+function parseTradeParams(): TradeParams {
   if (typeof window === "undefined") return { a: [], b: [] };
   const params = new URLSearchParams(window.location.search);
   const a = (params.get("trade_a") || "").split(",").map(s => s.trim()).filter(Boolean);
@@ -13,7 +19,7 @@ function parseTradeParams() {
   return { a, b };
 }
 
-function buildTradeUrl(sideA, sideB) {
+function buildTradeUrl(sideA: ProjectionRow[], sideB: ProjectionRow[]): string {
   const base = `${window.location.origin}${window.location.pathname}`;
   const keysA = sideA.map(p => stablePlayerKeyFromRow(p)).join(",");
   const keysB = sideB.map(p => stablePlayerKeyFromRow(p)).join(",");
@@ -24,7 +30,12 @@ function buildTradeUrl(sideA, sideB) {
   return qs ? `${base}?${qs}` : base;
 }
 
-function FairnessMeter({ differential, totalValue }) {
+interface FairnessMeterProps {
+  differential: number;
+  totalValue: number;
+}
+
+function FairnessMeter({ differential, totalValue }: FairnessMeterProps): React.ReactElement {
   const ratio = totalValue > 0 ? Math.min(Math.abs(differential) / totalValue, 1) : 0;
   const pct = Math.round((1 - ratio) * 100);
   const label = pct >= 90 ? "Very Fair" : pct >= 70 ? "Fair" : pct >= 50 ? "Uneven" : "Lopsided";
@@ -39,7 +50,17 @@ function FairnessMeter({ differential, totalValue }) {
   );
 }
 
-function TradeSide({ label, players, allPlayers, searchTerm, onSearchChange, onAdd, onRemove }) {
+interface TradeSideProps {
+  label: string;
+  players: ProjectionRow[];
+  allPlayers: ProjectionRow[];
+  searchTerm: string;
+  onSearchChange: (value: string) => void;
+  onAdd: (player: ProjectionRow) => void;
+  onRemove: (key: string) => void;
+}
+
+function TradeSide({ label, players, allPlayers, searchTerm, onSearchChange, onAdd, onRemove }: TradeSideProps): React.ReactElement {
   const total = players.reduce((sum, p) => sum + (Number(p.DynastyValue) || 0), 0);
   const atLimit = players.length >= MAX_TRADE_PLAYERS;
   const filteredResults = useMemo(() => {
@@ -97,7 +118,7 @@ function TradeSide({ label, players, allPlayers, searchTerm, onSearchChange, onA
             <div className="trade-player-card" key={key}>
               <div className="trade-player-info">
                 <strong>{p.Player}</strong>
-                <span>{p.Team || "\u2014"} \u00b7 {p.Pos || "\u2014"} \u00b7 Age {fmt(p.Age, 0)}</span>
+                <span>{(p.Team as string) || "\u2014"} \u00b7 {p.Pos || "\u2014"} \u00b7 Age {fmt(p.Age, 0)}</span>
               </div>
               <div className="trade-player-value">
                 <span className={Number(p.DynastyValue) >= 0 ? "value-positive" : "value-negative"}>
@@ -118,14 +139,19 @@ function TradeSide({ label, players, allPlayers, searchTerm, onSearchChange, onA
   );
 }
 
-export function TradeAnalyzer({ calculatorResults, onClose }) {
+interface TradeAnalyzerProps {
+  calculatorResults: ProjectionRow[] | null;
+  onClose?: (() => void) | null;
+}
+
+export function TradeAnalyzer({ calculatorResults, onClose }: TradeAnalyzerProps): React.ReactElement {
   const allPlayers = useMemo(() => {
     if (!calculatorResults || !Array.isArray(calculatorResults)) return [];
     return calculatorResults.filter(r => r.Player && r.DynastyValue != null);
   }, [calculatorResults]);
 
-  const [sideA, setSideA] = useState([]);
-  const [sideB, setSideB] = useState([]);
+  const [sideA, setSideA] = useState<ProjectionRow[]>([]);
+  const [sideB, setSideB] = useState<ProjectionRow[]>([]);
   const [searchA, setSearchA] = useState("");
   const [searchB, setSearchB] = useState("");
 
@@ -135,16 +161,16 @@ export function TradeAnalyzer({ calculatorResults, onClose }) {
     const { a, b } = parseTradeParams();
     if (a.length === 0 && b.length === 0) return;
     const playerByKey = new Map(allPlayers.map(p => [stablePlayerKeyFromRow(p), p]));
-    setSideA(a.map(k => playerByKey.get(k)).filter(Boolean).slice(0, MAX_TRADE_PLAYERS));
-    setSideB(b.map(k => playerByKey.get(k)).filter(Boolean).slice(0, MAX_TRADE_PLAYERS));
+    setSideA(a.map(k => playerByKey.get(k)).filter((p): p is ProjectionRow => p != null).slice(0, MAX_TRADE_PLAYERS));
+    setSideB(b.map(k => playerByKey.get(k)).filter((p): p is ProjectionRow => p != null).slice(0, MAX_TRADE_PLAYERS));
   }, [allPlayers]);
 
-  const addToSide = useCallback((setter, setSearch) => (player) => {
+  const addToSide = useCallback((setter: React.Dispatch<React.SetStateAction<ProjectionRow[]>>, setSearch: React.Dispatch<React.SetStateAction<string>>) => (player: ProjectionRow): void => {
     setter(prev => [...prev, player]);
     setSearch("");
   }, []);
 
-  const removeFromSide = useCallback((setter) => (key) => {
+  const removeFromSide = useCallback((setter: React.Dispatch<React.SetStateAction<ProjectionRow[]>>) => (key: string): void => {
     setter(prev => prev.filter(p => stablePlayerKeyFromRow(p) !== key));
   }, []);
 
@@ -154,7 +180,7 @@ export function TradeAnalyzer({ calculatorResults, onClose }) {
   const totalValue = Math.max(Math.abs(totalA) + Math.abs(totalB), 0.01);
 
   const usedKeys = useMemo(() => {
-    const keys = new Set();
+    const keys = new Set<string>();
     for (const p of sideA) keys.add(stablePlayerKeyFromRow(p));
     for (const p of sideB) keys.add(stablePlayerKeyFromRow(p));
     return keys;
@@ -164,7 +190,7 @@ export function TradeAnalyzer({ calculatorResults, onClose }) {
     return allPlayers.filter(p => !usedKeys.has(stablePlayerKeyFromRow(p)));
   }, [allPlayers, usedKeys]);
 
-  const handleShareTrade = useCallback(() => {
+  const handleShareTrade = useCallback((): void => {
     const url = buildTradeUrl(sideA, sideB);
     if (navigator.clipboard) {
       navigator.clipboard.writeText(url).catch(() => {});

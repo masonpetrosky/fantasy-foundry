@@ -5,6 +5,16 @@ import {
   coerceBooleanSetting,
 } from "./dynasty_calculator_config";
 import { CalcTooltip } from "./dynasty_calculator_tooltip";
+import type { TierLimits } from "./premium";
+
+interface RotoCategoriesFormProps {
+  settings: Record<string, unknown>;
+  update: (key: string, value: unknown) => void;
+  selectedRotoHitCategoryCount: number;
+  selectedRotoPitchCategoryCount: number;
+  resetRotoCategoryDefaults: () => void;
+  tierLimits: TierLimits | null;
+}
 
 export const RotoCategoriesForm = React.memo(function RotoCategoriesForm({
   settings,
@@ -13,7 +23,7 @@ export const RotoCategoriesForm = React.memo(function RotoCategoriesForm({
   selectedRotoPitchCategoryCount,
   resetRotoCategoryDefaults,
   tierLimits,
-}) {
+}: RotoCategoriesFormProps): React.ReactElement {
   const categoriesLocked = tierLimits && !tierLimits.allowCustomCategories;
   return (
     <div className="calc-section">
@@ -35,7 +45,7 @@ export const RotoCategoriesForm = React.memo(function RotoCategoriesForm({
               type="checkbox"
               checked={coerceBooleanSetting(settings[field.key], field.defaultValue)}
               onChange={e => update(field.key, e.target.checked)}
-              disabled={categoriesLocked}
+              disabled={Boolean(categoriesLocked)}
             />
             <span>{field.label}</span>
           </label>
@@ -50,13 +60,13 @@ export const RotoCategoriesForm = React.memo(function RotoCategoriesForm({
               type="checkbox"
               checked={coerceBooleanSetting(settings[field.key], field.defaultValue)}
               onChange={e => update(field.key, e.target.checked)}
-              disabled={categoriesLocked}
+              disabled={Boolean(categoriesLocked)}
             />
             <span>{field.label}</span>
           </label>
         ))}
       </div>
-      <button type="button" className="calc-secondary-btn" onClick={resetRotoCategoryDefaults} disabled={categoriesLocked}>
+      <button type="button" className="calc-secondary-btn" onClick={resetRotoCategoryDefaults} disabled={Boolean(categoriesLocked)}>
         Reset 5x5 Categories
       </button>
     </div>

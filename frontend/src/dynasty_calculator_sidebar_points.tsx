@@ -4,6 +4,15 @@ import {
   POINTS_PITCHING_FIELDS,
 } from "./dynasty_calculator_config";
 import { CalcTooltip } from "./dynasty_calculator_tooltip";
+import type { TierLimits } from "./premium";
+
+interface PointsScoringFormProps {
+  settings: Record<string, unknown>;
+  update: (key: string, value: unknown) => void;
+  pointRulesCount: number;
+  resetPointsScoringDefaults: () => void;
+  tierLimits: TierLimits | null;
+}
 
 export const PointsScoringForm = React.memo(function PointsScoringForm({
   settings,
@@ -11,7 +20,7 @@ export const PointsScoringForm = React.memo(function PointsScoringForm({
   pointRulesCount,
   resetPointsScoringDefaults,
   tierLimits,
-}) {
+}: PointsScoringFormProps): React.ReactElement {
   const scoringLocked = tierLimits && !tierLimits.allowCustomCategories;
   return (
     <div className="calc-section">
@@ -32,9 +41,9 @@ export const PointsScoringForm = React.memo(function PointsScoringForm({
             <input
               type="number"
               step="0.1"
-              value={settings[field.key]}
+              value={settings[field.key] as string | number}
               onChange={e => update(field.key, e.target.value)}
-              disabled={scoringLocked}
+              disabled={Boolean(scoringLocked)}
             />
           </div>
         ))}
@@ -48,14 +57,14 @@ export const PointsScoringForm = React.memo(function PointsScoringForm({
             <input
               type="number"
               step="0.1"
-              value={settings[field.key]}
+              value={settings[field.key] as string | number}
               onChange={e => update(field.key, e.target.value)}
-              disabled={scoringLocked}
+              disabled={Boolean(scoringLocked)}
             />
           </div>
         ))}
       </div>
-      <button type="button" className="calc-secondary-btn" onClick={resetPointsScoringDefaults} disabled={scoringLocked}>
+      <button type="button" className="calc-secondary-btn" onClick={resetPointsScoringDefaults} disabled={Boolean(scoringLocked)}>
         Reset Recommended Points Scoring
       </button>
     </div>

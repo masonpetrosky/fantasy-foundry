@@ -1,5 +1,17 @@
 import React from "react";
-import { ColumnChooserControl } from "../../../ui_components.jsx";
+import { ColumnChooserControl } from "../../../ui_components";
+
+interface ProjectionLayoutControlsProps {
+  isMobileViewport: boolean;
+  mobileLayoutMode: string;
+  setMobileLayoutMode: (mode: string) => void;
+  cardColumnCatalog: string[];
+  resolvedProjectionCardHiddenCols: Record<string, boolean>;
+  requiredProjectionCardCols: Set<string>;
+  toggleProjectionCardColumn: (col: string) => void;
+  showAllProjectionCardColumns: (() => void) | null;
+  colLabels: Record<string, string>;
+}
 
 export const ProjectionLayoutControls = React.memo(function ProjectionLayoutControls({
   isMobileViewport,
@@ -11,7 +23,7 @@ export const ProjectionLayoutControls = React.memo(function ProjectionLayoutCont
   toggleProjectionCardColumn,
   showAllProjectionCardColumns,
   colLabels,
-}) {
+}: ProjectionLayoutControlsProps): React.ReactElement {
   return (
     <div className="projection-layout-controls" role="group" aria-label="Projection layout controls">
       <div className="projection-layout-row">

@@ -1,10 +1,22 @@
 import React, { useMemo } from "react";
 import { stablePlayerKeyFromRow } from "../../../app_state_storage";
+import type { ProjectionRow } from "../../../app_state_storage";
 
-const SPARKLINE_COLORS = ["var(--accent)", "var(--green)", "var(--blue)", "var(--red)"];
+const SPARKLINE_COLORS: readonly string[] = ["var(--accent)", "var(--green)", "var(--blue)", "var(--red)"];
 
-function extractYearValues(row) {
-  const entries = [];
+interface YearValue {
+  year: number;
+  val: number;
+}
+
+interface Series {
+  key: string;
+  name: string;
+  values: YearValue[];
+}
+
+function extractYearValues(row: ProjectionRow): YearValue[] {
+  const entries: YearValue[] = [];
   for (const key of Object.keys(row)) {
     if (key.startsWith("Value_")) {
       const year = parseInt(key.slice(6), 10);
@@ -18,10 +30,14 @@ function extractYearValues(row) {
   return entries;
 }
 
-function ComparisonSparklines({ compareRows }) {
-  const allSeries = useMemo(() => compareRows.map(row => ({
+interface ComparisonSparklinesProps {
+  compareRows: ProjectionRow[];
+}
+
+function ComparisonSparklines({ compareRows }: ComparisonSparklinesProps): React.ReactElement | null {
+  const allSeries = useMemo((): Series[] => compareRows.map(row => ({
     key: stablePlayerKeyFromRow(row),
-    name: row.Player || "Player",
+    name: (row.Player as string) || "Player",
     values: extractYearValues(row),
   })), [compareRows]);
 
@@ -77,6 +93,16 @@ function ComparisonSparklines({ compareRows }) {
   );
 }
 
+interface ProjectionComparisonPanelProps {
+  compareRows: ProjectionRow[];
+  maxComparePlayers: number;
+  comparisonColumns: string[];
+  colLabels: Record<string, string>;
+  formatCellValue: (col: string, val: unknown) => string;
+  removeCompareRow: (key: string) => void;
+  copyCompareShareLink?: (() => void) | null;
+}
+
 export const ProjectionComparisonPanel = React.memo(function ProjectionComparisonPanel({
   compareRows,
   maxComparePlayers,
@@ -85,7 +111,7 @@ export const ProjectionComparisonPanel = React.memo(function ProjectionCompariso
   formatCellValue,
   removeCompareRow,
   copyCompareShareLink,
-}) {
+}: ProjectionComparisonPanelProps): React.ReactElement | null {
   if (compareRows.length === 0) return null;
 
   return (
@@ -106,10 +132,10 @@ export const ProjectionComparisonPanel = React.memo(function ProjectionCompariso
           return (
             <article className="comparison-card" key={compareKey}>
               <div className="comparison-card-head">
-                <h4>{row.Player || "Player"}</h4>
-                <button type="button" className="inline-btn" aria-label={`Remove ${row.Player || "player"} from comparison`} onClick={() => removeCompareRow(compareKey)}>Remove</button>
+                <h4>{(row.Player as string) || "Player"}</h4>
+                <button type="button" className="inline-btn" aria-label={`Remove ${(row.Player as string) || "player"} from comparison`} onClick={() => removeCompareRow(compareKey)}>Remove</button>
               </div>
-              <p>{row.Team || "—"} · {row.Pos || "—"}</p>
+              <p>{(row.Team as string) || "\u2014"} · {row.Pos || "\u2014"}</p>
               <dl>
                 {comparisonColumns.map(col => (
                   <React.Fragment key={`${compareKey}-${col}`}>

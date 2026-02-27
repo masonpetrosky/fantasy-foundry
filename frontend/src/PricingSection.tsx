@@ -2,16 +2,17 @@ import React, { useState } from "react";
 import { redirectToCheckout } from "./premium";
 import { resolveApiBase } from "./api_base";
 import { trackEvent } from "./analytics";
+import type { Subscription } from "./premium";
 
-const API = resolveApiBase();
+const API: string = resolveApiBase();
 
-const FREE_FEATURES = [
+const FREE_FEATURES: readonly string[] = [
   "5x5 Roto rankings",
   "300 simulations",
   "20-year projections",
 ];
 
-const PRO_FEATURES = [
+const PRO_FEATURES: readonly string[] = [
   "Custom categories & points mode",
   "Up to 5,000 simulations",
   "CSV & XLSX export",
@@ -20,15 +21,24 @@ const PRO_FEATURES = [
   "Priority support",
 ];
 
-export function PricingSection({ authUser, subscription }) {
-  const [billing, setBilling] = useState("monthly");
+interface AuthUser {
+  email?: string;
+}
+
+interface PricingSectionProps {
+  authUser: AuthUser | null;
+  subscription: Subscription | null;
+}
+
+export function PricingSection({ authUser, subscription }: PricingSectionProps): React.ReactElement {
+  const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
   const [loading, setLoading] = useState(false);
 
   const price = billing === "annual" ? "$29.99/yr" : "$4.99/mo";
   const savings = billing === "annual" ? "Save ~50%" : "";
   const isSubscribed = subscription?.status === "active";
 
-  function handleUpgrade() {
+  function handleUpgrade(): void {
     setLoading(true);
     trackEvent("ff_pricing_upgrade_click", { billing_period: billing });
     redirectToCheckout(API, {

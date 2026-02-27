@@ -7,6 +7,7 @@ import React, { useEffect } from "react";
 interface VisuallyHiddenProps extends React.HTMLAttributes<HTMLElement> {
   as?: keyof React.JSX.IntrinsicElements;
   className?: string;
+  htmlFor?: string;
 }
 
 export function VisuallyHidden({

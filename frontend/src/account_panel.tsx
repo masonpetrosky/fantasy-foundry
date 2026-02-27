@@ -1,5 +1,20 @@
 import React, { useState } from "react";
 
+interface AuthUser {
+  email?: string;
+}
+
+interface AccountPanelProps {
+  authEnabled: boolean;
+  authReady: boolean;
+  authUser: AuthUser | null;
+  authStatus: string;
+  cloudStatus: string;
+  onSignIn: (email: string, password: string) => Promise<void>;
+  onSignUp: (email: string, password: string) => Promise<void>;
+  onSignOut: () => Promise<void>;
+}
+
 export function AccountPanel({
   authEnabled,
   authReady,
@@ -9,8 +24,8 @@ export function AccountPanel({
   onSignIn,
   onSignUp,
   onSignOut,
-}) {
-  const [mode, setMode] = useState("signin");
+}: AccountPanelProps): React.ReactElement {
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -23,7 +38,7 @@ export function AccountPanel({
       ? "ok"
       : "";
 
-  async function handleSubmit(event) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (!authEnabled || !authReady || submitting) return;
     const normalizedEmail = String(email || "").trim();
@@ -43,7 +58,7 @@ export function AccountPanel({
     }
   }
 
-  async function handleSignOut() {
+  async function handleSignOut(): Promise<void> {
     if (submitting) return;
     setSubmitting(true);
     try {

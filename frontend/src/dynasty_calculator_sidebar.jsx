@@ -1,8 +1,8 @@
 import React from "react";
 import { CalcTooltip } from "./dynasty_calculator_tooltip";
-import { RotoCategoriesForm } from "./dynasty_calculator_sidebar_categories.jsx";
-import { PointsScoringForm } from "./dynasty_calculator_sidebar_points.jsx";
-import { StarterSlotsForm } from "./dynasty_calculator_sidebar_slots.jsx";
+import { RotoCategoriesForm } from "./dynasty_calculator_sidebar_categories";
+import { PointsScoringForm } from "./dynasty_calculator_sidebar_points";
+import { StarterSlotsForm } from "./dynasty_calculator_sidebar_slots";
 
 export function DynastyCalculatorSidebar({
   meta,

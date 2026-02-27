@@ -1,7 +1,9 @@
 import React, { Suspense, lazy } from "react";
+import type { ProjectionRow } from "../../../app_state_storage";
+import type { PlayerWatchEntry } from "../../../app_state_storage";
 
 const LazyProjectionComparisonPanel = lazy(() => (
-  import("./ProjectionComparisonPanel.jsx").then(module => ({
+  import("./ProjectionComparisonPanel").then(module => ({
     default: module.ProjectionComparisonPanel,
   }))
 ));
@@ -10,6 +12,31 @@ const LazyProjectionWatchlistPanel = lazy(() => (
     default: module.ProjectionWatchlistPanel,
   }))
 ));
+
+interface WatchlistRecord {
+  player?: string;
+  [key: string]: unknown;
+}
+
+interface ProjectionCollectionsWorkspaceProps {
+  showCollectionsWorkspace: boolean;
+  watchlistCount: number;
+  watchlistOnly: boolean;
+  watchlist: Record<string, WatchlistRecord>;
+  watchlistEntries: PlayerWatchEntry[];
+  clearWatchlist: () => void;
+  exportWatchlistCsv: () => void;
+  removeWatchlistEntry: (key: string) => void;
+  compareRowsCount: number;
+  maxComparePlayers: number;
+  clearCompareRows: () => void;
+  compareRows: ProjectionRow[];
+  comparisonColumns: string[];
+  removeCompareRow: (key: string) => void;
+  copyCompareShareLink?: (() => void) | null;
+  colLabels: Record<string, string>;
+  formatCellValue: (col: string, val: unknown) => string;
+}
 
 export const ProjectionCollectionsWorkspace = React.memo(function ProjectionCollectionsWorkspace({
   showCollectionsWorkspace,
@@ -29,7 +56,7 @@ export const ProjectionCollectionsWorkspace = React.memo(function ProjectionColl
   copyCompareShareLink,
   colLabels,
   formatCellValue,
-}) {
+}: ProjectionCollectionsWorkspaceProps): React.ReactElement {
   if (!showCollectionsWorkspace) {
     return (
       <div className="collection-toolbar collection-toolbar-hint" role="note">

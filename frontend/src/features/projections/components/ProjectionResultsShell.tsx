@@ -1,6 +1,36 @@
 import React from "react";
 import { SortableHeaderCell } from "../../../accessibility_components";
 
+interface ProjectionResultsShellProps {
+  showCards: boolean;
+  displayedPage: unknown[];
+  showInitialLoadSkeleton: boolean;
+  error: string;
+  retryFetch: () => void;
+  emptyStateHeadline: string;
+  emptyStateGuidance: string;
+  emptyStateActions: React.ReactNode;
+  cardRowsMarkup: React.ReactNode;
+  showMobileSwipeHint: boolean;
+  swipeHintText: string;
+  canScrollLeft?: boolean;
+  canScrollRight?: boolean;
+  showInlineRefreshError: boolean;
+  loading: boolean;
+  cols: string[];
+  colLabels: Record<string, string>;
+  sortCol: string;
+  sortDir: "asc" | "desc";
+  onSort: (col: string) => void;
+  projectionTableScrollRef: React.RefObject<HTMLDivElement | null>;
+  onTableScroll: () => void;
+  tableRowsMarkup: React.ReactNode;
+  totalRows: number;
+  limit: number;
+  offset: number;
+  setOffset: (offset: number) => void;
+}
+
 export const ProjectionResultsShell = React.memo(function ProjectionResultsShell({
   showCards,
   displayedPage,
@@ -29,7 +59,7 @@ export const ProjectionResultsShell = React.memo(function ProjectionResultsShell
   limit,
   offset,
   setOffset,
-}) {
+}: ProjectionResultsShellProps): React.ReactElement {
   const scrollIndicatorClass = `table-scroll-indicators${canScrollLeft ? " can-scroll-left" : ""}${canScrollRight ? " can-scroll-right" : ""}`;
   return (
     <>
