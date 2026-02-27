@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { glossaryTermAnchorId } from "./app_content.js";
+import { glossaryTermAnchorId } from "./app_content";
 
 describe("glossaryTermAnchorId", () => {
   it("slugifies a normal term", () => {

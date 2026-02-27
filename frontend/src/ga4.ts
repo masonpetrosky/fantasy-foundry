@@ -4,7 +4,8 @@
  * Uses import.meta.env so Vite substitutes the measurement ID at build time,
  * avoiding the unreliable %VITE_*% HTML placeholder syntax.
  */
-export function initGA4() {
+
+export function initGA4(): void {
   const id = String(import.meta.env.VITE_GA4_MEASUREMENT_ID || "").trim();
   if (!id) return;
 
@@ -14,7 +15,8 @@ export function initGA4() {
   document.head.appendChild(script);
 
   window.dataLayer = window.dataLayer || [];
-  function gtag() { window.dataLayer.push(arguments); }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function gtag(...args: any[]): void { window.dataLayer!.push(args as any); }
   gtag("js", new Date());
   gtag("config", id);
 }

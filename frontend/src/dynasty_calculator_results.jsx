@@ -12,7 +12,7 @@ import {
   ROTO_RATE_STAT_COLS,
   ROTO_THREE_DECIMAL_RATE_COLS,
 } from "./dynasty_calculator_config";
-import { fmt } from "./formatting_utils.js";
+import { fmt } from "./formatting_utils";
 
 const POSITION_FILTER_OPTIONS = ["C", "1B", "2B", "3B", "SS", "OF", "SP", "RP"];
 

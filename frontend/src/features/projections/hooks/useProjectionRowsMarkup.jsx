@@ -11,7 +11,7 @@ import {
   fmt,
   fmtInt,
   formatCellValue,
-} from "../../../formatting_utils.js";
+} from "../../../formatting_utils";
 
 export function useProjectionRowsMarkup({
   showCards,

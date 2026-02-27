@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cancelCalculationJob, runCalculationJob } from "./calculation_jobs.js";
 import { DynastyCalculatorSidebar } from "./dynasty_calculator_sidebar.jsx";
 import { trackEvent } from "./analytics";
-import { normalizeCalculatorRunSettingsInput } from "./calculator_submit.js";
-import { trackQuickStartClick } from "./quick_start.js";
+import { normalizeCalculatorRunSettingsInput } from "./calculator_submit";
+import { trackQuickStartClick } from "./quick_start";
 import {
   CALC_LINK_QUERY_PARAM,
   decodeCalculatorSettings,

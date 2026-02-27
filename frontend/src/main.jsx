@@ -2,8 +2,8 @@ import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "rea
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./styles/app.css";
-import { initSentry } from "./sentry.js";
-import { initGA4 } from "./ga4.js";
+import { initSentry } from "./sentry";
+import { initGA4 } from "./ga4";
 
 initSentry();
 initGA4();
@@ -11,7 +11,7 @@ import { AUTH_SYNC_ENABLED } from "./supabase_client.js";
 import { AccountPanel } from "./account_panel.jsx";
 import { ActivationDiagnosticsPanel, resolveActivationDiagnosticsPanelEnabled } from "./activation_diagnostics_panel.jsx";
 import { resolveApiBase } from "./api_base";
-import { PRIMARY_NAV_ITEMS } from "./app_content.js";
+import { PRIMARY_NAV_ITEMS } from "./app_content";
 import { ProjectionsExplorer } from "./projections_explorer.jsx";
 import { MobileCalculatorSheet } from "./MobileCalculatorSheet.jsx";
 import { installAnalyticsDebugBridge, setAnalyticsContext, trackEvent } from "./analytics";
@@ -23,7 +23,7 @@ import { TradeAnalyzer } from "./TradeAnalyzer.jsx";
 import { PricingSection } from "./PricingSection.jsx";
 import { NewsletterSignup } from "./NewsletterSignup.jsx";
 import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProjectionLayoutState.js";
-import { resolveProjectionWindow } from "./formatting_utils.js";
+import { resolveProjectionWindow } from "./formatting_utils";
 import { useBottomSheet } from "./hooks/useBottomSheet.js";
 import { useCalculatorOverlay } from "./hooks/useCalculatorOverlay.js";
 import { useCalculatorState } from "./hooks/useCalculatorState.js";
@@ -34,7 +34,7 @@ import { useAccountMenu } from "./hooks/useAccountMenu.js";
 import { useAccountSync } from "./hooks/useAccountSync.js";
 import { usePremiumStatus } from "./hooks/usePremiumStatus.js";
 import { useTheme } from "./hooks/useTheme.js";
-import { parseBillingRedirectParam, cleanBillingParam } from "./billing_redirect.js";
+import { parseBillingRedirectParam, cleanBillingParam } from "./billing_redirect";
 import { useToastContext } from "./Toast.jsx";
 import {
   readLastSuccessfulCalcRun,

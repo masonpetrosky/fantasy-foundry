@@ -5,8 +5,8 @@ import {
   VisuallyHidden,
   useMenuInteractions,
 } from "../../../accessibility_components.jsx";
-import { parsePosTokens } from "../../../formatting_utils.js";
-import { DEFAULT_FILTER_SUMMARY_FALLBACK } from "../view_state.js";
+import { parsePosTokens } from "../../../formatting_utils";
+import { DEFAULT_FILTER_SUMMARY_FALLBACK } from "../view_state";
 import { CAREER_TOTALS_FILTER_VALUE } from "../../../hooks/useProjectionsData.js";
 
 export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({

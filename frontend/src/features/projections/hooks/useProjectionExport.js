@@ -1,8 +1,8 @@
 import { useCallback } from "react";
 import { trackEvent } from "../../../analytics";
-import { parseDownloadFilename } from "../../../download_filename.js";
-import { triggerBlobDownload } from "../../../download_helpers.js";
-import { formatApiError, readResponsePayload } from "../../../request_helpers.js";
+import { parseDownloadFilename } from "../../../download_filename";
+import { triggerBlobDownload } from "../../../download_helpers";
+import { formatApiError, readResponsePayload } from "../../../request_helpers";
 
 export async function executeProjectionExportRequest({
   endpointTab,

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { formatCellValue } from "../../formatting_utils.js";
+import { formatCellValue } from "../../formatting_utils";
 import { useProjectionColumnVisibility } from "./hooks/useProjectionColumnVisibility.js";
 import { useProjectionCollections } from "./hooks/useProjectionCollections.js";
 import { useProjectionLayoutState } from "./hooks/useProjectionLayoutState.js";
@@ -11,7 +11,7 @@ import { useProjectionTelemetry } from "./hooks/useProjectionTelemetry.js";
 import { useProjectionRowsMarkup } from "./hooks/useProjectionRowsMarkup.jsx";
 import { useProjectionWatchlistComposition } from "./hooks/useProjectionWatchlistComposition.js";
 import { CAREER_TOTALS_FILTER_VALUE, DEFAULT_PROJECTIONS_SORT_COL, DEFAULT_PROJECTIONS_SORT_DIR, DEFAULT_PROJECTIONS_TAB, useProjectionsData } from "../../hooks/useProjectionsData.js";
-import { buildActiveFilterChips, resolveProjectionEmptyStateModel, resolveProjectionSwipeHint } from "./view_state.js";
+import { buildActiveFilterChips, resolveProjectionEmptyStateModel, resolveProjectionSwipeHint } from "./view_state";
 import { PlayerProfile } from "./components/PlayerProfile.jsx";
 import { ProjectionCollectionsWorkspace } from "./components/ProjectionCollectionsWorkspace.jsx";
 import { ProjectionEmptyStateActions } from "./components/ProjectionEmptyStateActions.jsx";

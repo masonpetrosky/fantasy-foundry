@@ -6,7 +6,7 @@ import {
   resolveProjectionEmptyStateModel,
   resolveProjectionSwipeHint,
   shortJobId,
-} from "./view_state.js";
+} from "./view_state";
 
 describe("shortJobId", () => {
   it("trims and shortens long ids", () => {
@@ -95,21 +95,21 @@ describe("resolveProjectionSwipeHint", () => {
       canScrollRight: true,
     })).toEqual({
       showSwipeHint: true,
-      swipeHintText: "Swipe left for more columns →",
+      swipeHintText: "Swipe left for more columns \u2192",
     });
     expect(resolveProjectionSwipeHint({
       canScrollLeft: true,
       canScrollRight: true,
     })).toEqual({
       showSwipeHint: true,
-      swipeHintText: "← Swipe both directions for more columns →",
+      swipeHintText: "\u2190 Swipe both directions for more columns \u2192",
     });
     expect(resolveProjectionSwipeHint({
       canScrollLeft: true,
       canScrollRight: false,
     })).toEqual({
       showSwipeHint: true,
-      swipeHintText: "← Swipe right to return",
+      swipeHintText: "\u2190 Swipe right to return",
     });
   });
 });

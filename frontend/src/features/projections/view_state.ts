@@ -1,10 +1,19 @@
 export const DEFAULT_FILTER_SUMMARY_FALLBACK = "None";
 
-export function shortJobId(jobId, maxLength = 8) {
+export function shortJobId(jobId: unknown, maxLength = 8): string {
   const value = String(jobId || "").trim();
   if (!value) return "";
   if (value.length <= maxLength) return value;
   return value.slice(0, maxLength);
+}
+
+export interface ActiveFilterChipsInput {
+  search: unknown;
+  teamFilter: unknown;
+  resolvedYearFilter: unknown;
+  posFilters: unknown;
+  watchlistOnly: unknown;
+  careerTotalsFilterValue: unknown;
 }
 
 export function buildActiveFilterChips({
@@ -14,12 +23,12 @@ export function buildActiveFilterChips({
   posFilters,
   watchlistOnly,
   careerTotalsFilterValue,
-}) {
-  const chips = [];
+}: ActiveFilterChipsInput): string[] {
+  const chips: string[] = [];
   const searchValue = String(search || "").trim();
   const teamValue = String(teamFilter || "").trim();
   const yearValue = String(resolvedYearFilter || "").trim();
-  const positionValues = Array.isArray(posFilters) ? posFilters : [];
+  const positionValues = Array.isArray(posFilters) ? posFilters as string[] : [];
 
   if (searchValue) chips.push(`Player: ${searchValue}`);
   if (teamValue) chips.push(`Team: ${teamValue}`);
@@ -36,10 +45,20 @@ export function buildActiveFilterChips({
   return chips;
 }
 
+export interface SwipeHintInput {
+  canScrollLeft: boolean;
+  canScrollRight: boolean;
+}
+
+export interface SwipeHintResult {
+  showSwipeHint: boolean;
+  swipeHintText: string;
+}
+
 export function resolveProjectionSwipeHint({
   canScrollLeft,
   canScrollRight,
-}) {
+}: SwipeHintInput): SwipeHintResult {
   const hasHorizontalOverflow = Boolean(canScrollLeft) || Boolean(canScrollRight);
   if (!hasHorizontalOverflow) {
     return {
@@ -50,19 +69,34 @@ export function resolveProjectionSwipeHint({
   if (!canScrollLeft && canScrollRight) {
     return {
       showSwipeHint: true,
-      swipeHintText: "Swipe left for more columns →",
+      swipeHintText: "Swipe left for more columns \u2192",
     };
   }
   if (canScrollLeft && canScrollRight) {
     return {
       showSwipeHint: true,
-      swipeHintText: "← Swipe both directions for more columns →",
+      swipeHintText: "\u2190 Swipe both directions for more columns \u2192",
     };
   }
   return {
     showSwipeHint: true,
-    swipeHintText: "← Swipe right to return",
+    swipeHintText: "\u2190 Swipe right to return",
   };
+}
+
+export interface EmptyStateInput {
+  watchlistOnly: unknown;
+  resolvedYearFilter: unknown;
+  hasActiveFilters: unknown;
+  careerTotalsFilterValue: unknown;
+}
+
+export interface EmptyStateModel {
+  headline: string;
+  guidance: string;
+  clearFiltersDisabled: boolean;
+  showTurnOffWatchlistAction: boolean;
+  showSwitchToCareerTotalsAction: boolean;
 }
 
 export function resolveProjectionEmptyStateModel({
@@ -70,7 +104,7 @@ export function resolveProjectionEmptyStateModel({
   resolvedYearFilter,
   hasActiveFilters,
   careerTotalsFilterValue,
-}) {
+}: EmptyStateInput): EmptyStateModel {
   const isWatchlistOnly = Boolean(watchlistOnly);
   const inCareerTotalsView = String(resolvedYearFilter || "").trim()
     === String(careerTotalsFilterValue || "").trim();
@@ -88,14 +122,27 @@ export function resolveProjectionEmptyStateModel({
   };
 }
 
+export interface OverlayStatusInput {
+  overlaySummaryParts: unknown;
+  overlayJobId: unknown;
+  overlayAppliedDataVersion: unknown;
+  resolvedDataVersion: unknown;
+}
+
+export interface OverlayStatusMeta {
+  chips: string[];
+  isStale: boolean;
+  sourceJobId: string;
+}
+
 export function buildOverlayStatusMeta({
   overlaySummaryParts,
   overlayJobId,
   overlayAppliedDataVersion,
   resolvedDataVersion,
-}) {
-  const chips = [];
-  const summaryParts = Array.isArray(overlaySummaryParts) ? overlaySummaryParts : [];
+}: OverlayStatusInput): OverlayStatusMeta {
+  const chips: string[] = [];
+  const summaryParts = Array.isArray(overlaySummaryParts) ? overlaySummaryParts as unknown[] : [];
   const sourceJobId = shortJobId(overlayJobId);
   const sourceDataVersion = String(overlayAppliedDataVersion || "").trim();
   const currentDataVersion = String(resolvedDataVersion || "").trim();

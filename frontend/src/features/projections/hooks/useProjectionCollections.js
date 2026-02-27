@@ -6,7 +6,7 @@ import {
   playerWatchEntryFromRow,
   stablePlayerKeyFromRow,
 } from "../../../app_state_storage";
-import { downloadBlob } from "../../../download_helpers.js";
+import { downloadBlob } from "../../../download_helpers";
 import {
   buildProjectionCompareHydrationRequest,
   mergeCompareRowsWithCap,

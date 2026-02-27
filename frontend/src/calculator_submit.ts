@@ -1,4 +1,7 @@
-export function normalizeCalculatorRunSettingsInput(runSettings, currentSettings) {
+export function normalizeCalculatorRunSettingsInput<T>(
+  runSettings: unknown,
+  currentSettings: T,
+): T {
   if (runSettings == null) return currentSettings;
   if (
     runSettings &&
@@ -7,5 +10,5 @@ export function normalizeCalculatorRunSettingsInput(runSettings, currentSettings
   ) {
     return currentSettings;
   }
-  return runSettings;
+  return runSettings as T;
 }

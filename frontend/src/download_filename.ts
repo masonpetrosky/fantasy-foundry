@@ -1,7 +1,8 @@
+// eslint-disable-next-line no-control-regex
 const CONTROL_CHARS_RE = /[\u0000-\u001f\u007f]/g;
 const FORBIDDEN_FILENAME_CHARS_RE = /[\\/:*?"<>|]/g;
 
-function _sanitizeFilenamePart(value) {
+function _sanitizeFilenamePart(value: unknown): string {
   return String(value || "")
     .replace(CONTROL_CHARS_RE, "")
     .replace(FORBIDDEN_FILENAME_CHARS_RE, "_")
@@ -9,13 +10,13 @@ function _sanitizeFilenamePart(value) {
     .trim();
 }
 
-function _fallbackFilename(fallbackName) {
+function _fallbackFilename(fallbackName: unknown): string {
   const fallback = _sanitizeFilenamePart(fallbackName) || "download";
   if (fallback === "." || fallback === "..") return "download";
   return fallback;
 }
 
-function _decodeExtendedFilenameToken(rawValue) {
+function _decodeExtendedFilenameToken(rawValue: unknown): string {
   let token = String(rawValue || "").trim();
   if (!token) return "";
   if (token.startsWith('"') && token.endsWith('"') && token.length >= 2) {
@@ -33,7 +34,7 @@ function _decodeExtendedFilenameToken(rawValue) {
   }
 }
 
-function _extractFilenameFromDisposition(disposition) {
+function _extractFilenameFromDisposition(disposition: unknown): string {
   const text = String(disposition || "");
   if (!text) return "";
 
@@ -55,7 +56,7 @@ function _extractFilenameFromDisposition(disposition) {
   return String(unquoted || "").trim();
 }
 
-export function parseDownloadFilename(disposition, fallbackName) {
+export function parseDownloadFilename(disposition: unknown, fallbackName: unknown): string {
   const fallback = _fallbackFilename(fallbackName);
   const extracted = _extractFilenameFromDisposition(disposition);
   const sanitized = _sanitizeFilenamePart(extracted);

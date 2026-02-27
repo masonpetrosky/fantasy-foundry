@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { formatApiError, readResponsePayload, sleepWithAbort } from "./request_helpers.js";
+import { formatApiError, readResponsePayload, sleepWithAbort } from "./request_helpers";
 
 describe("formatApiError", () => {
   it("returns detail string when present", () => {

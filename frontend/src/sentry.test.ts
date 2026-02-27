@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { captureException } from "./sentry.js";
+import { captureException } from "./sentry";
 
 describe("sentry", () => {
   it("captureException no-ops when Sentry is not initialized", () => {

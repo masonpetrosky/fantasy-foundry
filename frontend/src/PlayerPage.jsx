@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { resolveApiBase } from "./api_base";
-import { formatCellValue } from "./formatting_utils.js";
+import { formatCellValue } from "./formatting_utils";
 
 const API = resolveApiBase();
 

@@ -1,13 +1,18 @@
 const PREMIUM_ENABLED = typeof import.meta !== "undefined"
   && String(import.meta.env?.VITE_FF_PREMIUM_ENABLED || "0").trim() === "1";
 
-export const PRIMARY_NAV_ITEMS = [
+export interface NavItem {
+  key: string;
+  label: string;
+}
+
+export const PRIMARY_NAV_ITEMS: readonly NavItem[] = [
   { key: "projections", label: "Projections" },
   { key: "methodology", label: "Methodology" },
   ...(PREMIUM_ENABLED ? [{ key: "pricing", label: "Pricing" }] : []),
 ];
 
-export function glossaryTermAnchorId(term) {
+export function glossaryTermAnchorId(term: unknown): string {
   const slug = String(term || "")
     .trim()
     .toLowerCase()
@@ -16,7 +21,12 @@ export function glossaryTermAnchorId(term) {
   return `glossary-term-${slug || "term"}`;
 }
 
-export const GLOSSARY_TERMS = [
+export interface GlossaryTerm {
+  term: string;
+  definition: string;
+}
+
+export const GLOSSARY_TERMS: readonly GlossaryTerm[] = [
   {
     term: "5x5 Roto",
     definition:
@@ -79,7 +89,12 @@ export const GLOSSARY_TERMS = [
   },
 ];
 
-export const METHODOLOGY_FAQS = [
+export interface MethodologyFaq {
+  question: string;
+  answer: string;
+}
+
+export const METHODOLOGY_FAQS: readonly MethodologyFaq[] = [
   {
     question: "Do I need to use the default league setup?",
     answer:

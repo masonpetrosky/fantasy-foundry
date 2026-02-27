@@ -8,8 +8,18 @@ const QUICKSTART_ALIAS_EVENTS_ENABLED = String(
   import.meta.env?.VITE_FF_QUICKSTART_ALIAS_EVENTS_V1 ?? "1"
 ).trim() !== "0";
 
-export function normalizeQuickStartMode(mode) {
+export type QuickStartMode = "roto" | "points";
+
+export function normalizeQuickStartMode(mode: unknown): QuickStartMode {
   return mode === "points" ? "points" : "roto";
+}
+
+interface QuickStartAnalyticsInput {
+  mode: unknown;
+  source: unknown;
+  isFirstRun: boolean;
+  section?: string;
+  dataVersion?: string;
 }
 
 function buildQuickStartAnalyticsProps({
@@ -18,8 +28,8 @@ function buildQuickStartAnalyticsProps({
   isFirstRun,
   section,
   dataVersion,
-}) {
-  const props = {
+}: QuickStartAnalyticsInput): Record<string, string | boolean> {
+  const props: Record<string, string | boolean> = {
     source: String(source || "").trim() || "activation_strip",
     mode: normalizeQuickStartMode(mode),
     is_first_run: Boolean(isFirstRun),
@@ -35,6 +45,15 @@ function buildQuickStartAnalyticsProps({
   return props;
 }
 
+export interface TrackQuickStartInput {
+  mode: unknown;
+  source: unknown;
+  isFirstRun?: boolean;
+  section?: string;
+  dataVersion?: string;
+  emitAliasEvents?: boolean;
+}
+
 export function trackQuickStartClick({
   mode,
   source,
@@ -42,7 +61,7 @@ export function trackQuickStartClick({
   section = "",
   dataVersion = "",
   emitAliasEvents = QUICKSTART_ALIAS_EVENTS_ENABLED,
-}) {
+}: TrackQuickStartInput): Record<string, string | boolean> {
   const props = buildQuickStartAnalyticsProps({
     mode,
     source,
@@ -64,7 +83,7 @@ export function trackQuickStartImpression({
   section = "",
   dataVersion = "",
   emitAliasEvents = QUICKSTART_ALIAS_EVENTS_ENABLED,
-}) {
+}: TrackQuickStartInput): Record<string, string | boolean> {
   const props = buildQuickStartAnalyticsProps({
     mode,
     source,
@@ -79,6 +98,14 @@ export function trackQuickStartImpression({
   return props;
 }
 
+export interface RunQuickStartFlowInput extends TrackQuickStartInput {
+  openCalculatorPanel?: (source: string) => void;
+  setPendingQuickStartMode?: (mode: QuickStartMode) => void;
+  scrollToCalculator?: () => void;
+  focusCalculator?: () => void;
+  scheduleFrame?: (callback: () => void) => void;
+}
+
 export function runQuickStartFlow({
   mode,
   source = "activation_strip",
@@ -91,7 +118,7 @@ export function runQuickStartFlow({
   scrollToCalculator,
   focusCalculator,
   scheduleFrame,
-}) {
+}: RunQuickStartFlowInput): QuickStartMode {
   const normalizedMode = normalizeQuickStartMode(mode);
   const resolvedSource = String(source || "").trim() || "activation_strip";
   trackQuickStartClick({
@@ -111,7 +138,7 @@ export function runQuickStartFlow({
 
   const schedule = typeof scheduleFrame === "function"
     ? scheduleFrame
-    : callback => callback();
+    : (callback: () => void) => callback();
   schedule(() => {
     if (typeof scrollToCalculator === "function") {
       scrollToCalculator();

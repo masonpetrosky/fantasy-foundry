@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 
-export function formatApiError(status, payload, rawText = "") {
+interface ApiErrorPayload {
+  detail?: string | Array<{ msg?: string }>;
+}
+
+export function formatApiError(status: number, payload: ApiErrorPayload | null, rawText = ""): string {
   const detail = payload && payload.detail;
   if (typeof detail === "string" && detail.trim()) {
     return `Server error ${status}: ${detail}`;
@@ -18,7 +22,16 @@ export function formatApiError(status, payload, rawText = "") {
   return `Server error: ${status}`;
 }
 
-export async function readResponsePayload(response) {
+interface ResponseLike {
+  text: () => Promise<string>;
+}
+
+interface ResponsePayloadResult {
+  payload: unknown;
+  rawText: string;
+}
+
+export async function readResponsePayload(response: ResponseLike): Promise<ResponsePayloadResult> {
   const rawText = await response.text();
   if (!rawText) return { payload: null, rawText: "" };
   try {
@@ -28,7 +41,7 @@ export async function readResponsePayload(response) {
   }
 }
 
-export function sleepWithAbort(ms, signal) {
+export function sleepWithAbort(ms: number, signal?: AbortSignal | null): Promise<void> {
   return new Promise((resolve, reject) => {
     if (!signal) {
       window.setTimeout(resolve, ms);
@@ -44,7 +57,7 @@ export function sleepWithAbort(ms, signal) {
       resolve();
     }, ms);
 
-    const onAbort = () => {
+    const onAbort = (): void => {
       window.clearTimeout(timer);
       signal.removeEventListener("abort", onAbort);
       reject(new DOMException("Aborted", "AbortError"));
@@ -53,7 +66,7 @@ export function sleepWithAbort(ms, signal) {
   });
 }
 
-export function useDebouncedValue(value, delayMs) {
+export function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value);
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { formatCellValue } from "../../../formatting_utils.js";
+import { formatCellValue } from "../../../formatting_utils";
 
 const KEY_STAT_COLS_BAT = ["Year", "Team", "Pos", "PA", "HR", "RBI", "SB", "AVG", "OBP", "OPS", "DynastyValue"];
 const KEY_STAT_COLS_PIT = ["Year", "Team", "Pos", "IP", "W", "K", "SV", "ERA", "WHIP", "DynastyValue"];

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { parseBillingRedirectParam, cleanBillingParam } from "./billing_redirect.js";
+import { parseBillingRedirectParam, cleanBillingParam } from "./billing_redirect";
 
 describe("parseBillingRedirectParam", () => {
   it("returns 'success' for ?billing=success", () => {
@@ -36,8 +36,8 @@ describe("parseBillingRedirectParam", () => {
 });
 
 describe("cleanBillingParam", () => {
-  let originalLocation;
-  let replaceStateSpy;
+  let originalLocation: string;
+  let replaceStateSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     originalLocation = window.location.href;
@@ -54,7 +54,7 @@ describe("cleanBillingParam", () => {
     window.history.replaceState({}, "", "/?billing=success");
     cleanBillingParam();
     expect(replaceStateSpy).toHaveBeenCalled();
-    const calledUrl = replaceStateSpy.mock.calls.at(-1)?.[2];
+    const calledUrl = replaceStateSpy.mock.calls[replaceStateSpy.mock.calls.length - 1]?.[2];
     expect(calledUrl).not.toContain("billing=");
   });
 
@@ -68,7 +68,7 @@ describe("cleanBillingParam", () => {
   it("preserves other query params", () => {
     window.history.replaceState({}, "", "/?foo=bar&billing=cancel&baz=1");
     cleanBillingParam();
-    const calledUrl = replaceStateSpy.mock.calls.at(-1)?.[2];
+    const calledUrl = replaceStateSpy.mock.calls[replaceStateSpy.mock.calls.length - 1]?.[2];
     expect(calledUrl).toContain("foo=bar");
     expect(calledUrl).toContain("baz=1");
     expect(calledUrl).not.toContain("billing=");

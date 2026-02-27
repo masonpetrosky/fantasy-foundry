@@ -1,9 +1,9 @@
-export function downloadBlob(filename, content, mimeType) {
+export function downloadBlob(filename: string, content: string, mimeType: string): void {
   const blob = new Blob([content], { type: mimeType });
   triggerBlobDownload(filename, blob);
 }
 
-export function triggerBlobDownload(filename, blob) {
+export function triggerBlobDownload(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;

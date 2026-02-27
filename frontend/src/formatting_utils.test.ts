@@ -10,17 +10,17 @@ import {
   TWO_DECIMAL_COLS,
   WHOLE_NUMBER_COLS,
   INT_COLS,
-} from "./formatting_utils.js";
+} from "./formatting_utils";
 
 describe("fmt", () => {
   it("returns em dash for null", () => {
-    expect(fmt(null)).toBe("—");
+    expect(fmt(null)).toBe("\u2014");
   });
   it("returns em dash for empty string", () => {
-    expect(fmt("")).toBe("—");
+    expect(fmt("")).toBe("\u2014");
   });
   it("returns em dash for NaN", () => {
-    expect(fmt(NaN)).toBe("—");
+    expect(fmt(NaN)).toBe("\u2014");
   });
   it("formats number with default 1 decimal", () => {
     expect(fmt(3.456)).toBe("3.5");
@@ -35,7 +35,7 @@ describe("fmt", () => {
 
 describe("fmtInt", () => {
   it("returns em dash for null", () => {
-    expect(fmtInt(null)).toBe("—");
+    expect(fmtInt(null)).toBe("\u2014");
   });
   it("rounds and formats integer", () => {
     const result = fmtInt(1234);
@@ -66,7 +66,7 @@ describe("formatCellValue", () => {
     expect(result).toContain("30");
   });
   it("returns em dash for null value", () => {
-    expect(formatCellValue("Player", null)).toBe("—");
+    expect(formatCellValue("Player", null)).toBe("\u2014");
   });
   it("returns string values as-is", () => {
     expect(formatCellValue("Player", "Mike Trout")).toBe("Mike Trout");

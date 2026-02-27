@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useDebouncedValue } from "../request_helpers.js";
+import { useDebouncedValue } from "../request_helpers";
 
 export const DEFAULT_PROJECTIONS_TAB = "all";
 export const DEFAULT_PROJECTIONS_SORT_COL = "DynastyValue";

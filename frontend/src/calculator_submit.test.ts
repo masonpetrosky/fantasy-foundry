@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeCalculatorRunSettingsInput } from "./calculator_submit.js";
+import { normalizeCalculatorRunSettingsInput } from "./calculator_submit";
 
 describe("normalizeCalculatorRunSettingsInput", () => {
   it("falls back to current settings when called with a click event object", () => {

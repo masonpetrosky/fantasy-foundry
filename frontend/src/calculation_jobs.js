@@ -1,4 +1,4 @@
-import { formatApiError, readResponsePayload, sleepWithAbort } from "./request_helpers.js";
+import { formatApiError, readResponsePayload, sleepWithAbort } from "./request_helpers";
 
 export async function cancelCalculationJob(apiBase, jobId) {
   const normalizedApiBase = String(apiBase || "").trim();

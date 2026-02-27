@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { fmt } from "./formatting_utils.js";
+import { fmt } from "./formatting_utils";
 import { stablePlayerKeyFromRow } from "./app_state_storage";
 import { trackEvent } from "./analytics";
 

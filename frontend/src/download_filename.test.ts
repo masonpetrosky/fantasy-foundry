@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDownloadFilename } from "./download_filename.js";
+import { parseDownloadFilename } from "./download_filename";
 
 describe("parseDownloadFilename", () => {
   it("uses fallback when header is missing", () => {

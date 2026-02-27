@@ -13,7 +13,7 @@ import {
   runQuickStartFlow,
   trackQuickStartClick,
   trackQuickStartImpression,
-} from "./quick_start.js";
+} from "./quick_start";
 
 describe("quick_start", () => {
   beforeEach(() => {
@@ -31,7 +31,7 @@ describe("quick_start", () => {
     const setPendingQuickStartMode = vi.fn();
     const scrollToCalculator = vi.fn();
     const focusCalculator = vi.fn();
-    const scheduleFrame = vi.fn(callback => callback());
+    const scheduleFrame = vi.fn((callback: () => void) => callback());
 
     const mode = runQuickStartFlow({
       mode: "points",

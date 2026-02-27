@@ -7,7 +7,7 @@ import {
   readFirstRunState,
   writeFirstRunState,
 } from "../app_state_storage";
-import { runQuickStartFlow, trackQuickStartImpression } from "../quick_start.js";
+import { runQuickStartFlow, trackQuickStartImpression } from "../quick_start";
 
 export function useQuickStart({
   meta,

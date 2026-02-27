@@ -1,5 +1,5 @@
 import React from "react";
-import { GLOSSARY_TERMS, METHODOLOGY_FAQS, glossaryTermAnchorId } from "./app_content.js";
+import { GLOSSARY_TERMS, METHODOLOGY_FAQS, glossaryTermAnchorId } from "./app_content";
 
 export function MethodologySection() {
   return (

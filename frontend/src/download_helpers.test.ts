@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { downloadBlob, triggerBlobDownload } from "./download_helpers.js";
+import { downloadBlob, triggerBlobDownload } from "./download_helpers";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -12,8 +12,8 @@ describe("triggerBlobDownload", () => {
     URL.revokeObjectURL = vi.fn();
 
     const anchor = { href: "", download: "", click: vi.fn(), remove: vi.fn() };
-    vi.spyOn(document, "createElement").mockReturnValue(anchor);
-    vi.spyOn(document.body, "appendChild").mockImplementation(() => {});
+    vi.spyOn(document, "createElement").mockReturnValue(anchor as unknown as HTMLElement);
+    vi.spyOn(document.body, "appendChild").mockImplementation(() => null as unknown as HTMLElement);
 
     const blob = new Blob(["test"], { type: "text/plain" });
     triggerBlobDownload("test.txt", blob);
@@ -31,8 +31,8 @@ describe("downloadBlob", () => {
     URL.revokeObjectURL = vi.fn();
 
     const anchor = { href: "", download: "", click: vi.fn(), remove: vi.fn() };
-    vi.spyOn(document, "createElement").mockReturnValue(anchor);
-    vi.spyOn(document.body, "appendChild").mockImplementation(() => {});
+    vi.spyOn(document, "createElement").mockReturnValue(anchor as unknown as HTMLElement);
+    vi.spyOn(document.body, "appendChild").mockImplementation(() => null as unknown as HTMLElement);
 
     downloadBlob("data.csv", "a,b,c", "text/csv");
 
