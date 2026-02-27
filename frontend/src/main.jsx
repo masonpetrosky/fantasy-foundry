@@ -415,7 +415,7 @@ function App() {
                   </div>
                 )}
               </section>
-              {calculatorOverlayActive && tierLimits?.allowTradeAnalyzer && (
+              {tierLimits?.allowTradeAnalyzer && (
                 <div className="trade-analyzer-toggle-wrap">
                   <button
                     type="button"
@@ -426,7 +426,7 @@ function App() {
                   </button>
                 </div>
               )}
-              {tradeAnalyzerOpen && calculatorOverlayActive && (
+              {tradeAnalyzerOpen && tierLimits?.allowTradeAnalyzer && (
                 <TradeAnalyzer
                   calculatorResults={calculatorOverlayByPlayerKey ? Object.values(calculatorOverlayByPlayerKey) : []}
                   onClose={() => setTradeAnalyzerOpen(false)}
