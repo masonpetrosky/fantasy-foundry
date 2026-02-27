@@ -30,7 +30,7 @@ export interface UseQuickStartReturn {
   requestQuickStartRun: (mode: unknown, options?: { source?: string }) => void;
   dismissQuickStartOnboarding: () => void;
   reopenQuickStartOnboarding: () => void;
-  handleRegisterQuickStartRunner: (runner: QuickStartRunner) => void;
+  handleRegisterQuickStartRunner: (runner: QuickStartRunner | null) => void;
 }
 
 export function useQuickStart({
@@ -107,7 +107,7 @@ export function useQuickStart({
     trackEvent("ff_quickstart_reopen", { source: "activation_reminder" });
   }, []);
 
-  const handleRegisterQuickStartRunner = useCallback((runner: QuickStartRunner) => {
+  const handleRegisterQuickStartRunner = useCallback((runner: QuickStartRunner | null) => {
     quickStartRunnerRef.current = runner;
     setQuickStartRunnerVersion(version => version + 1);
   }, []);

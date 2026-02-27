@@ -28,6 +28,7 @@ import {
   resolveRotoSlotDefaults,
 } from "./dynasty_calculator_config";
 import type { CalculatorSettings } from "./dynasty_calculator_config";
+import type { CalculatorPreset } from "./app_state_storage";
 import type { TierLimits } from "./premium";
 
 interface CalculatorMeta {
@@ -145,16 +146,16 @@ interface CalculationSuccessInfo {
 interface DynastyCalculatorProps {
   apiBase: string;
   meta: CalculatorMeta;
-  presets: Record<string, unknown>;
-  setPresets: React.Dispatch<React.SetStateAction<Record<string, unknown>>>;
+  presets: Record<string, CalculatorPreset>;
+  setPresets: React.Dispatch<React.SetStateAction<Record<string, CalculatorPreset>>>;
   hasSuccessfulRun: boolean;
-  onApplyToMainTable?: (result: CalculationResult, settings: CalculatorSettings, runMeta: RunMeta | undefined) => void;
+  onApplyToMainTable?: (result: CalculationResult, settings: CalculatorSettings, runMeta: RunMeta) => void;
   onCalculationSuccess?: (info: CalculationSuccessInfo) => void;
   onClearMainTableOverlay?: () => void;
   mainTableOverlayActive?: boolean;
   onSettingsChange?: (settings: CalculatorSettings) => void;
   onRegisterQuickStartRunner?: (runner: ((mode: string) => void) | null) => void;
-  onOpenMethodologyGlossary?: () => void;
+  onOpenMethodologyGlossary?: (anchorId?: string) => void;
   tierLimits?: TierLimits | null;
 }
 
@@ -496,7 +497,7 @@ export function DynastyCalculator({
           });
         }
         if (typeof onApplyToMainTable === "function") {
-          onApplyToMainTable(result, normalizedSettings, runMeta);
+          onApplyToMainTable(result, normalizedSettings, runMeta ?? {});
         }
         if (firstSuccessfulRun) {
           firstSuccessTrackedRef.current = true;

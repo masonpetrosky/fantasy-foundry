@@ -5,7 +5,7 @@ interface MobileCalculatorSheetProps {
   onClose: () => void;
   sheetRef: React.Ref<HTMLDivElement>;
   dragHandleProps: React.HTMLAttributes<HTMLDivElement>;
-  sheetStyle: React.CSSProperties;
+  sheetStyle?: React.CSSProperties;
   children: React.ReactNode;
 }
 

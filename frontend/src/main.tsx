@@ -24,16 +24,16 @@ import { PricingSection } from "./PricingSection";
 import { NewsletterSignup } from "./NewsletterSignup";
 import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProjectionLayoutState";
 import { resolveProjectionWindow } from "./formatting_utils";
-import { useBottomSheet } from "./hooks/useBottomSheet.js";
-import { useCalculatorOverlay } from "./hooks/useCalculatorOverlay.js";
+import { useBottomSheet } from "./hooks/useBottomSheet";
+import { useCalculatorOverlay } from "./hooks/useCalculatorOverlay";
 import { useCalculatorState } from "./hooks/useCalculatorState";
-import { useMetadata } from "./hooks/useMetadata.js";
+import { useMetadata } from "./hooks/useMetadata";
 import { useQuickStart } from "./hooks/useQuickStart";
-import { useVersionPolling } from "./hooks/useVersionPolling.js";
+import { useVersionPolling } from "./hooks/useVersionPolling";
 import { useAccountMenu } from "./hooks/useAccountMenu";
 import { useAccountSync } from "./hooks/useAccountSync";
-import { usePremiumStatus } from "./hooks/usePremiumStatus.js";
-import { useTheme } from "./hooks/useTheme.js";
+import { usePremiumStatus } from "./hooks/usePremiumStatus";
+import { useTheme } from "./hooks/useTheme";
 import { parseBillingRedirectParam, cleanBillingParam } from "./billing_redirect";
 import { useToastContext } from "./Toast";
 import {
@@ -56,7 +56,7 @@ const LazyDynastyCalculator = lazy(() => (
   import("./dynasty_calculator").then(module => ({ default: module.DynastyCalculator }))
 ));
 
-function App() {
+function App(): React.ReactElement {
   const [section, setSection] = useState("projections"); // projections | methodology
   const { meta, metaError, metaLoading, retryMetaLoad } = useMetadata(API);
   const { buildLabel, dataVersion } = useVersionPolling(API);
@@ -103,7 +103,7 @@ function App() {
   const [isMobileViewport, setIsMobileViewport] = useState(() => window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches);
   useEffect(() => {
     const mql = window.matchMedia(MOBILE_BREAKPOINT_QUERY);
-    const handler = (e) => setIsMobileViewport(e.matches);
+    const handler = (e: MediaQueryListEvent): void => setIsMobileViewport(e.matches);
     mql.addEventListener("change", handler);
     return () => mql.removeEventListener("change", handler);
   }, []);
@@ -224,7 +224,7 @@ function App() {
             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             title={theme === "dark" ? "Light mode" : "Dark mode"}
           >
-            {theme === "dark" ? "☀" : "☾"}
+            {theme === "dark" ? "\u2600" : "\u263E"}
           </button>
           <div className="account-menu" ref={accountMenuRef}>
             <button
@@ -272,11 +272,11 @@ function App() {
             <>
               <div className="hero-stats fade-up fade-up-2">
                 <div className="hero-stat">
-                  <div className="number">{meta.total_hitters}</div>
+                  <div className="number">{String(meta.total_hitters)}</div>
                   <div className="label">Hitters</div>
                 </div>
                 <div className="hero-stat">
-                  <div className="number">{meta.total_pitchers}</div>
+                  <div className="number">{String(meta.total_pitchers)}</div>
                   <div className="label">Pitchers</div>
                 </div>
                 <div className="hero-stat">
@@ -387,7 +387,7 @@ function App() {
                 ref={calculatorSectionRef}
               >
                 <div className="embedded-calculator-head">
-                  <h2 id="embedded-calculator-heading" ref={calculatorHeadingRef} tabIndex={-1}>
+                  <h2 id="embedded-calculator-heading" ref={calculatorHeadingRef as React.RefObject<HTMLHeadingElement | null>} tabIndex={-1}>
                     Dynasty Calculator
                   </h2>
                   <button
@@ -511,7 +511,7 @@ function App() {
             Run Dynasty Rankings
           </button>
         )}
-        {isMobileViewport && (
+        {isMobileViewport && meta && (
           <MobileCalculatorSheet
             isOpen={bottomSheet.isOpen}
             onClose={bottomSheet.close}
@@ -561,7 +561,7 @@ function App() {
 // ---------------------------------------------------------------------------
 // Mount
 // ---------------------------------------------------------------------------
-createRoot(document.getElementById("root")).render(
+createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
     <BrowserRouter>
       <ToastProvider>

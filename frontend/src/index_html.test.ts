@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import process from "node:process";
 import { describe, expect, it } from "vitest";
 
-function readIndexHtml() {
+function readIndexHtml(): string {
   return readFileSync(resolve(process.cwd(), "index.html"), "utf-8");
 }
 

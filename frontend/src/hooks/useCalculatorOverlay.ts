@@ -9,6 +9,7 @@ interface OverlaySummary {
   scoringMode: "roto" | "points";
   startYear: number;
   horizon: number;
+  [key: string]: unknown;
 }
 
 function buildCalculatorOverlayMap(result: unknown): Record<string, OverlayRow> {

@@ -31,8 +31,8 @@ function renderToContainer(element: React.ReactElement): { container: HTMLDivEle
 let previousActEnvironmentFlag: unknown;
 
 beforeAll(() => {
-  previousActEnvironmentFlag = globalThis.IS_REACT_ACT_ENVIRONMENT;
-  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  previousActEnvironmentFlag = (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT;
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 });
 
 afterAll(() => {

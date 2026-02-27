@@ -10,6 +10,7 @@ import {
   writeLastSuccessfulCalcRun,
 } from "../app_state_storage";
 import type { CalculatorPreset, SuccessfulCalcRun } from "../app_state_storage";
+import type { CalculatorSettings } from "../dynasty_calculator_config";
 
 const ACTIVATION_SPRINT_ENABLED = String(import.meta.env.VITE_FF_ACTIVATION_SPRINT_V1 || "1").trim() !== "0";
 
@@ -22,8 +23,8 @@ export interface UseCalculatorStateInput {
 export interface UseCalculatorStateReturn {
   calculatorPanelOpen: boolean;
   setCalculatorPanelOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  calculatorSettings: Record<string, unknown> | null;
-  setCalculatorSettings: React.Dispatch<React.SetStateAction<Record<string, unknown> | null>>;
+  calculatorSettings: CalculatorSettings | null;
+  setCalculatorSettings: React.Dispatch<React.SetStateAction<CalculatorSettings | null>>;
   lastSuccessfulCalcRun: SuccessfulCalcRun | null;
   presets: Record<string, CalculatorPreset>;
   setPresets: React.Dispatch<React.SetStateAction<Record<string, CalculatorPreset>>>;
@@ -35,7 +36,7 @@ export interface UseCalculatorStateReturn {
   focusFirstCalculatorInput: () => void;
   openCalculatorPanel: (source?: string) => void;
   handleCalculationSuccess: (summary: unknown) => void;
-  openMethodologyGlossary: (anchorId: string) => void;
+  openMethodologyGlossary: (anchorId?: string) => void;
 }
 
 /**
@@ -61,7 +62,7 @@ export function useCalculatorState({
   const [presets, setPresets] = useState<Record<string, CalculatorPreset>>(
     () => readCalculatorPresets(),
   );
-  const [calculatorSettings, setCalculatorSettings] = useState<Record<string, unknown> | null>(null);
+  const [calculatorSettings, setCalculatorSettings] = useState<CalculatorSettings | null>(null);
 
   const calculatorSectionRef = useRef<HTMLElement | null>(null);
   const calculatorHeadingRef = useRef<HTMLElement | null>(null);
@@ -106,7 +107,7 @@ export function useCalculatorState({
     writeLastSuccessfulCalcRun(nextSummary);
   }, []);
 
-  const openMethodologyGlossary = useCallback((anchorId: string) => {
+  const openMethodologyGlossary = useCallback((anchorId?: string) => {
     const nextAnchor = String(anchorId || "").trim();
     if (!nextAnchor) return;
     setSection("methodology");
