@@ -415,24 +415,24 @@ function App() {
                   </div>
                 )}
               </section>
-              {tierLimits?.allowTradeAnalyzer && (
-                <div className="trade-analyzer-toggle-wrap">
-                  <button
-                    type="button"
-                    className={`inline-btn ${tradeAnalyzerOpen ? "open" : ""}`.trim()}
-                    onClick={() => setTradeAnalyzerOpen(v => !v)}
-                  >
-                    {tradeAnalyzerOpen ? "Hide Trade Analyzer" : "Open Trade Analyzer"}
-                  </button>
-                </div>
-              )}
-              {tradeAnalyzerOpen && tierLimits?.allowTradeAnalyzer && (
-                <TradeAnalyzer
-                  calculatorResults={calculatorOverlayByPlayerKey ? Object.values(calculatorOverlayByPlayerKey) : []}
-                  onClose={() => setTradeAnalyzerOpen(false)}
-                />
-              )}
               <div className="projections-content">
+                {tierLimits?.allowTradeAnalyzer && (
+                  <div className="trade-analyzer-toggle-wrap">
+                    <button
+                      type="button"
+                      className={`inline-btn ${tradeAnalyzerOpen ? "open" : ""}`.trim()}
+                      onClick={() => setTradeAnalyzerOpen(v => !v)}
+                    >
+                      {tradeAnalyzerOpen ? "Hide Trade Analyzer" : "Open Trade Analyzer"}
+                    </button>
+                  </div>
+                )}
+                {tradeAnalyzerOpen && tierLimits?.allowTradeAnalyzer && (
+                  <TradeAnalyzer
+                    calculatorResults={calculatorOverlayByPlayerKey ? Object.values(calculatorOverlayByPlayerKey) : []}
+                    onClose={() => setTradeAnalyzerOpen(false)}
+                  />
+                )}
                 <FeatureErrorBoundary featureName="Projections Explorer">
                 <ProjectionsExplorer
                   apiBase={API}
