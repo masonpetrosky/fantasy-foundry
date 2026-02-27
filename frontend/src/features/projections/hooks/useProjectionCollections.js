@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { trackEvent } from "../../../analytics.js";
+import { trackEvent } from "../../../analytics";
 import {
   MAX_COMPARE_PLAYERS,
   buildWatchlistCsv,
   playerWatchEntryFromRow,
   stablePlayerKeyFromRow,
-} from "../../../app_state_storage.js";
+} from "../../../app_state_storage";
 import { downloadBlob } from "../../../download_helpers.js";
 import {
   buildProjectionCompareHydrationRequest,

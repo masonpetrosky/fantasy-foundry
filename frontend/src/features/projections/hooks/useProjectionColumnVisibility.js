@@ -4,7 +4,7 @@ import {
   PROJECTION_TABLE_HIDDEN_COLS_STORAGE_KEY,
   readHiddenColumnOverridesByTab,
   writeHiddenColumnOverridesByTab,
-} from "../../../app_state_storage.js";
+} from "../../../app_state_storage";
 import {
   normalizeHiddenColumnOverridesByTab,
   projectionCardColumnCatalog,

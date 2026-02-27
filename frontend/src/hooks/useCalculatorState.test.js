@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // Mock app_state_storage before importing the hook
-vi.mock("../app_state_storage.js", () => ({
+vi.mock("../app_state_storage", () => ({
   CALC_LINK_QUERY_PARAM: "calc",
   readCalculatorPanelOpenPreference: vi.fn(() => null),
   readCalculatorPresets: vi.fn(() => []),
@@ -11,7 +11,7 @@ vi.mock("../app_state_storage.js", () => ({
   writeLastSuccessfulCalcRun: vi.fn(),
 }));
 
-vi.mock("../analytics.js", () => ({
+vi.mock("../analytics", () => ({
   trackEvent: vi.fn(),
 }));
 

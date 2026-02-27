@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { trackEvent } from "../../../analytics.js";
+import { trackEvent } from "../../../analytics";
 
 export function buildProjectionEmptyStateMarker({
   tab,

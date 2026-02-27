@@ -8,7 +8,7 @@ import {
   resolveRotoCategoryDefaults,
   resolveRotoSelectedStatColumns,
   resolveRotoSlotDefaults,
-} from "./dynasty_calculator_config.js";
+} from "./dynasty_calculator_config";
 
 describe("coerceBooleanSetting", () => {
   it("returns boolean values unchanged", () => {
@@ -161,8 +161,8 @@ describe("resolvePointsScoringDefaults", () => {
   });
 });
 
-function buildValidRotoSettings(overrides = {}) {
-  const base = {
+function buildValidRotoSettings(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const base: Record<string, unknown> = {
     scoring_mode: "roto",
     teams: 12,
     sims: 300,
@@ -199,8 +199,8 @@ describe("buildCalculatorPayload", () => {
     const result = buildCalculatorPayload(settings, [2026, 2027], {});
     expect(result.error).toBeUndefined();
     expect(result.payload).toBeDefined();
-    expect(result.payload.scoring_mode).toBe("roto");
-    expect(result.payload.teams).toBe(12);
+    expect(result.payload!.scoring_mode).toBe("roto");
+    expect(result.payload!.teams).toBe(12);
   });
 
   it("returns error for invalid scoring mode", () => {
@@ -307,14 +307,14 @@ describe("buildCalculatorPayload mode field", () => {
     const settings = buildValidRotoSettings({ mode: "common" });
     const result = buildCalculatorPayload(settings, [2026], {});
     expect(result.error).toBeUndefined();
-    expect(result.payload.mode).toBe("common");
+    expect(result.payload!.mode).toBe("common");
   });
 
   it("accepts league mode with roto scoring", () => {
     const settings = buildValidRotoSettings({ mode: "league" });
     const result = buildCalculatorPayload(settings, [2026], {});
     expect(result.error).toBeUndefined();
-    expect(result.payload.mode).toBe("league");
+    expect(result.payload!.mode).toBe("league");
   });
 
   it("rejects league mode with points scoring", () => {
@@ -334,6 +334,6 @@ describe("buildCalculatorPayload mode field", () => {
     delete settings.mode;
     const result = buildCalculatorPayload(settings, [2026], {});
     expect(result.error).toBeUndefined();
-    expect(result.payload.mode).toBe("common");
+    expect(result.payload!.mode).toBe("common");
   });
 });

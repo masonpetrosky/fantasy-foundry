@@ -1,7 +1,7 @@
 import {
   MAX_COMPARE_PLAYERS,
   stablePlayerKeyFromRow,
-} from "../../../app_state_storage.js";
+} from "../../../app_state_storage";
 
 const CAREER_TOTALS_FILTER_VALUE = "__career_totals__";
 

@@ -1,4 +1,4 @@
-import { MAX_COMPARE_PLAYERS, playerWatchEntryFromRow, stablePlayerKeyFromRow } from "./app_state_storage.js";
+import { MAX_COMPARE_PLAYERS, playerWatchEntryFromRow, stablePlayerKeyFromRow } from "./app_state_storage";
 
 export const WATCHLIST_ACTIONS = {
   CLEAR: "clear",

@@ -1,4 +1,4 @@
-import { trackEvent } from "./analytics.js";
+import { trackEvent } from "./analytics";
 
 export const QUICKSTART_CLICK_EVENT = "ff_quickstart_cta_click";
 export const QUICKSTART_CLICK_ALIAS_EVENT = "quickstart_click";

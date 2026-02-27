@@ -1,8 +1,83 @@
+export interface SlotField {
+  key: string;
+  label: string;
+  defaultValue: number;
+}
+
+export interface PointsScoringField {
+  key: string;
+  label: string;
+  group: "bat" | "pit";
+  defaultValue: number;
+}
+
+export interface RotoCategoryField {
+  key: string;
+  label: string;
+  statCol: string;
+  defaultValue: boolean;
+}
+
+export interface PointsResultSummaryField {
+  key: string;
+  label: string;
+  type: "number" | "slot";
+}
+
+export interface CalculatorSettings {
+  [key: string]: unknown;
+  mode: string;
+  scoring_mode: string;
+  teams: number;
+  sims: number;
+  horizon: number;
+  discount: number;
+  bench: number;
+  minors: number;
+  ir: number;
+  ip_min: number;
+  ip_max: string | number | null;
+  two_way: string;
+  sgp_denominator_mode: string;
+  sgp_winsor_low_pct: number;
+  sgp_winsor_high_pct: number;
+  sgp_epsilon_counting: number;
+  sgp_epsilon_ratio: number;
+  enable_playing_time_reliability: boolean;
+  enable_age_risk_adjustment: boolean;
+  enable_replacement_blend: boolean;
+  replacement_blend_alpha: number;
+  start_year: number;
+  recent_projections: number;
+}
+
+export interface PayloadResult {
+  payload?: Record<string, unknown>;
+  error?: string;
+  warning?: string;
+}
+
+interface CalculatorGuardrails {
+  default_hitter_slots?: Record<string, number>;
+  default_pitcher_slots?: Record<string, number>;
+  default_points_hitter_slots?: Record<string, number>;
+  default_points_pitcher_slots?: Record<string, number>;
+  default_points_scoring?: Record<string, number>;
+  default_ir_slots?: number;
+  default_minors_slots?: number;
+  playable_by_year?: Record<string, { hitters?: number; pitchers?: number }>;
+}
+
+interface CalculatorMeta {
+  calculator_guardrails?: CalculatorGuardrails;
+  years?: number[];
+}
+
 // Shared dynasty calculator constants and payload/default builders.
 export const CALC_SEARCH_DEBOUNCE_MS = 140;
 export const SLOT_INPUT_MIN = 0;
 export const SLOT_INPUT_MAX = 15;
-export const HITTER_SLOT_FIELDS = [
+export const HITTER_SLOT_FIELDS: SlotField[] = [
   { key: "hit_c", label: "C", defaultValue: 1 },
   { key: "hit_1b", label: "1B", defaultValue: 1 },
   { key: "hit_2b", label: "2B", defaultValue: 1 },
@@ -13,12 +88,12 @@ export const HITTER_SLOT_FIELDS = [
   { key: "hit_of", label: "OF", defaultValue: 5 },
   { key: "hit_ut", label: "UT", defaultValue: 1 },
 ];
-export const PITCHER_SLOT_FIELDS = [
+export const PITCHER_SLOT_FIELDS: SlotField[] = [
   { key: "pit_p", label: "P", defaultValue: 9 },
   { key: "pit_sp", label: "SP", defaultValue: 0 },
   { key: "pit_rp", label: "RP", defaultValue: 0 },
 ];
-const POINTS_SETUP_SLOT_DEFAULTS = {
+const POINTS_SETUP_SLOT_DEFAULTS: Record<string, number> = {
   hit_c: 1,
   hit_1b: 1,
   hit_2b: 1,
@@ -32,7 +107,7 @@ const POINTS_SETUP_SLOT_DEFAULTS = {
   pit_sp: 5,
   pit_rp: 2,
 };
-export const POINTS_SCORING_FIELDS = [
+export const POINTS_SCORING_FIELDS: PointsScoringField[] = [
   { key: "pts_hit_1b", label: "1B", group: "bat", defaultValue: 1 },
   { key: "pts_hit_2b", label: "2B", group: "bat", defaultValue: 2 },
   { key: "pts_hit_3b", label: "3B", group: "bat", defaultValue: 3 },
@@ -52,9 +127,9 @@ export const POINTS_SCORING_FIELDS = [
   { key: "pts_pit_er", label: "ER", group: "pit", defaultValue: -2 },
   { key: "pts_pit_bb", label: "BB Allowed", group: "pit", defaultValue: -1 },
 ];
-export const POINTS_BATTING_FIELDS = POINTS_SCORING_FIELDS.filter(field => field.group === "bat");
-export const POINTS_PITCHING_FIELDS = POINTS_SCORING_FIELDS.filter(field => field.group === "pit");
-export const POINTS_RESULT_SUMMARY_FIELDS = [
+export const POINTS_BATTING_FIELDS: PointsScoringField[] = POINTS_SCORING_FIELDS.filter(field => field.group === "bat");
+export const POINTS_PITCHING_FIELDS: PointsScoringField[] = POINTS_SCORING_FIELDS.filter(field => field.group === "pit");
+export const POINTS_RESULT_SUMMARY_FIELDS: PointsResultSummaryField[] = [
   { key: "HittingPoints", label: "Hitting Points", type: "number" },
   { key: "PitchingPoints", label: "Pitching Points", type: "number" },
   { key: "SelectedPoints", label: "Selected Points", type: "number" },
@@ -68,17 +143,17 @@ export const POINTS_RESULT_SUMMARY_FIELDS = [
   { key: "PitchingAssignmentValue", label: "Pitching Assignment Value", type: "number" },
   { key: "KeepDropValue", label: "Keep/Drop Value", type: "number" },
 ];
-export const POINTS_RESULT_SUMMARY_COLS = POINTS_RESULT_SUMMARY_FIELDS.map(field => field.key);
-export const POINTS_RESULT_NUMERIC_COLS = new Set(
+export const POINTS_RESULT_SUMMARY_COLS: string[] = POINTS_RESULT_SUMMARY_FIELDS.map(field => field.key);
+export const POINTS_RESULT_NUMERIC_COLS: Set<string> = new Set(
   POINTS_RESULT_SUMMARY_FIELDS.filter(field => field.type === "number").map(field => field.key)
 );
-export const POINTS_RESULT_SLOT_COLS = new Set(
+export const POINTS_RESULT_SLOT_COLS: Set<string> = new Set(
   POINTS_RESULT_SUMMARY_FIELDS.filter(field => field.type === "slot").map(field => field.key)
 );
-export const POINTS_RESULT_COLUMN_LABELS = Object.fromEntries(
+export const POINTS_RESULT_COLUMN_LABELS: Record<string, string> = Object.fromEntries(
   POINTS_RESULT_SUMMARY_FIELDS.map(field => [field.key, field.label])
 );
-export const ROTO_HITTER_CATEGORY_FIELDS = [
+export const ROTO_HITTER_CATEGORY_FIELDS: RotoCategoryField[] = [
   { key: "roto_hit_r", label: "R", statCol: "R", defaultValue: true },
   { key: "roto_hit_rbi", label: "RBI", statCol: "RBI", defaultValue: true },
   { key: "roto_hit_hr", label: "HR", statCol: "HR", defaultValue: true },
@@ -92,7 +167,7 @@ export const ROTO_HITTER_CATEGORY_FIELDS = [
   { key: "roto_hit_2b", label: "2B", statCol: "2B", defaultValue: false },
   { key: "roto_hit_tb", label: "TB", statCol: "TB", defaultValue: false },
 ];
-export const ROTO_PITCHER_CATEGORY_FIELDS = [
+export const ROTO_PITCHER_CATEGORY_FIELDS: RotoCategoryField[] = [
   { key: "roto_pit_w", label: "W", statCol: "W", defaultValue: true },
   { key: "roto_pit_k", label: "K", statCol: "K", defaultValue: true },
   { key: "roto_pit_sv", label: "SV", statCol: "SV", defaultValue: true },
@@ -102,12 +177,12 @@ export const ROTO_PITCHER_CATEGORY_FIELDS = [
   { key: "roto_pit_qa3", label: "QA3", statCol: "QA3", defaultValue: false },
   { key: "roto_pit_svh", label: "SVH", statCol: "SVH", defaultValue: false },
 ];
-const ROTO_CATEGORY_FIELDS = [...ROTO_HITTER_CATEGORY_FIELDS, ...ROTO_PITCHER_CATEGORY_FIELDS];
-export const ROTO_RATE_STAT_COLS = new Set(["AVG", "OBP", "SLG", "OPS", "ERA", "WHIP"]);
-export const ROTO_THREE_DECIMAL_RATE_COLS = new Set(["AVG", "OBP", "SLG", "OPS"]);
-export const ROTO_COUNTING_STAT_COLS = new Set(["R", "RBI", "HR", "SB", "H", "BB", "2B", "TB", "W", "K", "SV", "QS", "QA3", "SVH"]);
+const ROTO_CATEGORY_FIELDS: RotoCategoryField[] = [...ROTO_HITTER_CATEGORY_FIELDS, ...ROTO_PITCHER_CATEGORY_FIELDS];
+export const ROTO_RATE_STAT_COLS: Set<string> = new Set(["AVG", "OBP", "SLG", "OPS", "ERA", "WHIP"]);
+export const ROTO_THREE_DECIMAL_RATE_COLS: Set<string> = new Set(["AVG", "OBP", "SLG", "OPS"]);
+export const ROTO_COUNTING_STAT_COLS: Set<string> = new Set(["R", "RBI", "HR", "SB", "H", "BB", "2B", "TB", "W", "K", "SV", "QS", "QA3", "SVH"]);
 
-export function coerceBooleanSetting(value, fallback = false) {
+export function coerceBooleanSetting(value: unknown, fallback: boolean = false): boolean {
   if (typeof value === "boolean") return value;
   if (typeof value === "number" && Number.isFinite(value)) return value !== 0;
   const text = String(value ?? "").trim().toLowerCase();
@@ -116,20 +191,20 @@ export function coerceBooleanSetting(value, fallback = false) {
   return fallback;
 }
 
-export function resolveRotoCategoryDefaults() {
+export function resolveRotoCategoryDefaults(): Record<string, boolean> {
   return Object.fromEntries(
     ROTO_CATEGORY_FIELDS.map(field => [field.key, field.defaultValue])
   );
 }
 
-export function resolveRotoSelectedStatColumns(settings) {
+export function resolveRotoSelectedStatColumns(settings: Record<string, unknown> | null | undefined): string[] {
   const source = settings && typeof settings === "object" ? settings : {};
   return ROTO_CATEGORY_FIELDS
     .filter(field => coerceBooleanSetting(source[field.key], field.defaultValue))
     .map(field => field.statCol);
 }
 
-export function resolveRotoSlotDefaults(meta) {
+export function resolveRotoSlotDefaults(meta: CalculatorMeta | null | undefined): Record<string, number> {
   const guardrails = meta?.calculator_guardrails || {};
   const defaultHitSlots = guardrails?.default_hitter_slots || {};
   const defaultPitchSlots = guardrails?.default_pitcher_slots || {};
@@ -148,7 +223,7 @@ export function resolveRotoSlotDefaults(meta) {
   return { ...resolvedHitSlots, ...resolvedPitchSlots };
 }
 
-export function resolvePointsSlotDefaults(meta) {
+export function resolvePointsSlotDefaults(meta: CalculatorMeta | null | undefined): Record<string, number> {
   const guardrails = meta?.calculator_guardrails || {};
   const pointsHitDefaults = guardrails?.default_points_hitter_slots || {};
   const pointsPitchDefaults = guardrails?.default_points_pitcher_slots || {};
@@ -184,7 +259,7 @@ export function resolvePointsSlotDefaults(meta) {
   return { ...resolvedHitSlots, ...resolvedPitchSlots };
 }
 
-export function resolvePointsScoringDefaults(meta) {
+export function resolvePointsScoringDefaults(meta: CalculatorMeta | null | undefined): Record<string, number> {
   const guardrails = meta?.calculator_guardrails || {};
   const provided = guardrails?.default_points_scoring || {};
   return Object.fromEntries(
@@ -195,7 +270,7 @@ export function resolvePointsScoringDefaults(meta) {
   );
 }
 
-export function buildDefaultCalculatorSettings(meta) {
+export function buildDefaultCalculatorSettings(meta: CalculatorMeta | null | undefined): CalculatorSettings {
   const guardrails = meta?.calculator_guardrails || {};
   const defaultIr = Number(guardrails?.default_ir_slots);
   const defaultMinors = Number(guardrails?.default_minors_slots);
@@ -228,7 +303,7 @@ export function buildDefaultCalculatorSettings(meta) {
     ...resolvePointsScoringDefaults(meta),
   };
 }
-export function buildCalculatorPayload(settings, availableYears, meta) {
+export function buildCalculatorPayload(settings: Record<string, unknown>, availableYears: number[] | null | undefined, meta: CalculatorMeta | null | undefined): PayloadResult {
   const mode = String(settings.mode ?? "").trim().toLowerCase() || "common";
   if (mode !== "common" && mode !== "league") {
     return { error: "Valuation Mode must be either 'common' or 'league'." };
@@ -243,7 +318,7 @@ export function buildCalculatorPayload(settings, availableYears, meta) {
     return { error: "League mode only supports roto scoring." };
   }
 
-  const parsedSlots = {};
+  const parsedSlots: Record<string, number> = {};
   for (const slot of [...HITTER_SLOT_FIELDS, ...PITCHER_SLOT_FIELDS]) {
     const value = Number(settings[slot.key]);
     if (!Number.isInteger(value) || value < SLOT_INPUT_MIN || value > SLOT_INPUT_MAX) {
@@ -303,7 +378,7 @@ export function buildCalculatorPayload(settings, availableYears, meta) {
   }
 
   const ipMaxText = String(settings.ip_max ?? "").trim();
-  let ipMax = null;
+  let ipMax: number | null = null;
   if (ipMaxText && ipMaxText.toLowerCase() !== "none") {
     const parsedIpMax = Number(ipMaxText);
     if (!Number.isFinite(parsedIpMax) || parsedIpMax < 0) {
@@ -364,7 +439,7 @@ export function buildCalculatorPayload(settings, availableYears, meta) {
     return { error: "Replacement blend alpha must be a number between 0 and 1." };
   }
 
-  const parsedRotoCategories = {};
+  const parsedRotoCategories: Record<string, boolean> = {};
   for (const field of ROTO_CATEGORY_FIELDS) {
     parsedRotoCategories[field.key] = coerceBooleanSetting(settings[field.key], field.defaultValue);
   }
@@ -379,7 +454,7 @@ export function buildCalculatorPayload(settings, availableYears, meta) {
     }
   }
 
-  const parsedPointsScoring = {};
+  const parsedPointsScoring: Record<string, number> = {};
   for (const field of POINTS_SCORING_FIELDS) {
     const value = Number(settings[field.key]);
     if (!Number.isFinite(value) || value < -50 || value > 50) {
@@ -394,7 +469,7 @@ export function buildCalculatorPayload(settings, availableYears, meta) {
     }
   }
 
-  const payload = {
+  const payload: Record<string, unknown> = {
     ...settings,
     mode,
     teams,
@@ -427,13 +502,13 @@ export function buildCalculatorPayload(settings, availableYears, meta) {
   const guardrails = meta?.calculator_guardrails || {};
   const playableByYear = guardrails?.playable_by_year;
   if (playableByYear && typeof playableByYear === "object") {
-    const pool = playableByYear[String(startYear)] || playableByYear[startYear];
+    const pool = playableByYear[String(startYear)];
     if (pool && typeof pool === "object") {
       const availableHitters = Number(pool.hitters);
       const availablePitchers = Number(pool.pitchers);
       const requiredHitters = teams * hittersPerTeam;
       const requiredPitchers = teams * pitchersPerTeam;
-      const warnings = [];
+      const warnings: string[] = [];
 
       if (Number.isFinite(availableHitters) && requiredHitters > availableHitters) {
         warnings.push(

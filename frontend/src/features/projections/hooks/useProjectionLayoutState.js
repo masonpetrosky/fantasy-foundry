@@ -3,7 +3,7 @@ import {
   PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY,
   safeReadStorage,
   safeWriteStorage,
-} from "../../../app_state_storage.js";
+} from "../../../app_state_storage";
 
 export const MOBILE_BREAKPOINT_QUERY = "(max-width: 768px)";
 

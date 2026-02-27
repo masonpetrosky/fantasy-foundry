@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildOverlayStatusMeta } from "../view_state.js";
-import { stablePlayerKeyFromRow } from "../../../app_state_storage.js";
+import { stablePlayerKeyFromRow } from "../../../app_state_storage";
 
 export function useProjectionOverlay({
   calculatorOverlayByPlayerKey,

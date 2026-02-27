@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resolveApiBase } from "./api_base.js";
+import { resolveApiBase } from "./api_base";
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function stubLocation(overrides = {}) {
+function stubLocation(overrides: Partial<Location> = {}) {
   vi.stubGlobal("window", {
     ...window,
     location: { ...window.location, ...overrides },

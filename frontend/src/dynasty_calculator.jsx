@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cancelCalculationJob, runCalculationJob } from "./calculation_jobs.js";
 import { DynastyCalculatorSidebar } from "./dynasty_calculator_sidebar.jsx";
-import { trackEvent } from "./analytics.js";
+import { trackEvent } from "./analytics";
 import { normalizeCalculatorRunSettingsInput } from "./calculator_submit.js";
 import { trackQuickStartClick } from "./quick_start.js";
 import {
@@ -12,7 +12,7 @@ import {
   readSessionFirstRunLandingTimestamp,
   readSessionFirstRunSuccessRecorded,
   writeSessionFirstRunSuccessRecorded,
-} from "./app_state_storage.js";
+} from "./app_state_storage";
 import {
   HITTER_SLOT_FIELDS,
   POINTS_SCORING_FIELDS,
@@ -26,7 +26,7 @@ import {
   resolvePointsSlotDefaults,
   resolveRotoCategoryDefaults,
   resolveRotoSlotDefaults,
-} from "./dynasty_calculator_config.js";
+} from "./dynasty_calculator_config";
 
 export function buildQuickStartSettings({
   mode,

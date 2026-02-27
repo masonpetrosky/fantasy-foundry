@@ -5,14 +5,14 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: "jsdom",
-    include: ["src/**/*.test.{js,jsx}"],
+    include: ["src/**/*.test.{js,jsx,ts,tsx}"],
     exclude: ["dist/**", "node_modules/**"],
     setupFiles: ["src/test/setup.js"],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      include: ["src/**/*.{js,jsx}"],
-      exclude: ["src/**/*.test.{js,jsx}"],
+      include: ["src/**/*.{js,jsx,ts,tsx}"],
+      exclude: ["src/**/*.test.{js,jsx,ts,tsx}"],
       thresholds: {
         lines: 30,
         branches: 65,

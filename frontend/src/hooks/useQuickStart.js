@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { trackEvent } from "../analytics.js";
+import { trackEvent } from "../analytics";
 import {
   FIRST_RUN_STATE_COMPLETED,
   FIRST_RUN_STATE_DISMISSED_PRE_SUCCESS,
   FIRST_RUN_STATE_NEW,
   readFirstRunState,
   writeFirstRunState,
-} from "../app_state_storage.js";
+} from "../app_state_storage";
 import { runQuickStartFlow, trackQuickStartImpression } from "../quick_start.js";
 
 export function useQuickStart({

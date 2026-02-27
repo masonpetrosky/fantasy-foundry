@@ -4,7 +4,7 @@ import {
   downloadAnalyticsEventCsv,
   readAnalyticsEventBuffer,
   summarizeActivationFunnel,
-} from "./analytics.js";
+} from "./analytics";
 
 const ACTIVATION_DIAGNOSTICS_QUERY_PARAM = "activation_debug";
 const DEFAULT_READOUT_CURRENT_PATH = "tmp/activation_current.csv";

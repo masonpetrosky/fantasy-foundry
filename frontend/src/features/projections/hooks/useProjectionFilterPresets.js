@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   readProjectionFilterPresets,
   writeProjectionFilterPresets,
-} from "../../../app_state_storage.js";
+} from "../../../app_state_storage";
 import {
   CAREER_TOTALS_FILTER_VALUE,
   DEFAULT_PROJECTIONS_SORT_COL,
   DEFAULT_PROJECTIONS_SORT_DIR,
   DEFAULT_PROJECTIONS_TAB,
 } from "../../../hooks/useProjectionsData.js";
-import { trackEvent } from "../../../analytics.js";
+import { trackEvent } from "../../../analytics";
 
 export function defaultProjectionFilterPreset(tab = DEFAULT_PROJECTIONS_TAB, watchlistOnly = false) {
   return {

@@ -4,14 +4,14 @@ import {
   MAX_COMPARE_PLAYERS,
   calculationRowExplainKey,
   stablePlayerKeyFromRow,
-} from "./app_state_storage.js";
+} from "./app_state_storage";
 import {
   POINTS_RESULT_NUMERIC_COLS,
   POINTS_RESULT_SLOT_COLS,
   ROTO_COUNTING_STAT_COLS,
   ROTO_RATE_STAT_COLS,
   ROTO_THREE_DECIMAL_RATE_COLS,
-} from "./dynasty_calculator_config.js";
+} from "./dynasty_calculator_config";
 import { fmt } from "./formatting_utils.js";
 
 const POSITION_FILTER_OPTIONS = ["C", "1B", "2B", "3B", "SS", "OF", "SP", "RP"];

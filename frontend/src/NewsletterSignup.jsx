@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { trackEvent } from "./analytics.js";
+import { trackEvent } from "./analytics";
 
 export function NewsletterSignup({ apiBase }) {
   const [email, setEmail] = useState("");

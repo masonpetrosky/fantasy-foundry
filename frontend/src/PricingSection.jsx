@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { redirectToCheckout } from "./premium.js";
-import { resolveApiBase } from "./api_base.js";
-import { trackEvent } from "./analytics.js";
+import { redirectToCheckout } from "./premium";
+import { resolveApiBase } from "./api_base";
+import { trackEvent } from "./analytics";
 
 const API = resolveApiBase();
 

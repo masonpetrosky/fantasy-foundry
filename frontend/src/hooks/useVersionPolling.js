@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BUILD_QUERY_PARAM, BUILD_STORAGE_KEY, safeReadStorage, safeWriteStorage } from "../app_state_storage.js";
+import { BUILD_QUERY_PARAM, BUILD_STORAGE_KEY, safeReadStorage, safeWriteStorage } from "../app_state_storage";
 
 const INDEX_BUILD_ID = (() => {
   const metaEl = document.querySelector('meta[name="ff-build-id"]');

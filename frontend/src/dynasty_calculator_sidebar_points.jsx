@@ -2,7 +2,7 @@ import React from "react";
 import {
   POINTS_BATTING_FIELDS,
   POINTS_PITCHING_FIELDS,
-} from "./dynasty_calculator_config.js";
+} from "./dynasty_calculator_config";
 import { CalcTooltip } from "./dynasty_calculator_tooltip.jsx";
 
 export const PointsScoringForm = React.memo(function PointsScoringForm({

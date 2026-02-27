@@ -1,4 +1,63 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — projections_view_config.js is not yet migrated to TypeScript
 import { normalizeHiddenColumnOverridesByTab } from "./projections_view_config.js";
+
+export interface PlayerWatchEntry {
+  key: string;
+  player: string;
+  team: string;
+  pos: string;
+}
+
+export interface ProjectionFilterPreset {
+  tab: string;
+  search: string;
+  teamFilter: string;
+  yearFilter: string;
+  posFilters: string[];
+  watchlistOnly: boolean;
+  sortCol: string;
+  sortDir: string;
+}
+
+export interface ProjectionFilterPresetBundle {
+  custom: ProjectionFilterPreset | null;
+}
+
+export interface CalculatorPreset {
+  [key: string]: unknown;
+}
+
+export interface CloudPreferences {
+  calculatorPresets: Record<string, CalculatorPreset>;
+  playerWatchlist: Record<string, PlayerWatchEntry>;
+}
+
+export interface CloudPreferencesPayload {
+  version: number;
+  calculator_presets: Record<string, CalculatorPreset>;
+  player_watchlist: Record<string, PlayerWatchEntry>;
+}
+
+export interface SuccessfulCalcRun {
+  scoringMode: string;
+  teams: number;
+  horizon: number;
+  startYear: number | null;
+  playerCount: number;
+  completedAt: string;
+}
+
+export interface ProjectionRow {
+  PlayerEntityKey?: string;
+  PlayerKey?: string;
+  Player?: string;
+  Team?: string;
+  Year?: string | number;
+  Type?: string;
+  Pos?: string;
+  [key: string]: unknown;
+}
 
 export const BUILD_STORAGE_KEY = "ff:lastBuildId";
 export const BUILD_QUERY_PARAM = "build";
@@ -22,7 +81,7 @@ export const CLOUD_SYNC_DEBOUNCE_MS = 900;
 export const CLOUD_PREFERENCES_VERSION = 1;
 export const MAX_COMPARE_PLAYERS = 4;
 
-export function safeReadStorage(key) {
+export function safeReadStorage(key: string): string | null {
   try {
     return window.localStorage.getItem(key);
   } catch {
@@ -30,7 +89,7 @@ export function safeReadStorage(key) {
   }
 }
 
-export function safeWriteStorage(key, value) {
+export function safeWriteStorage(key: string, value: string): void {
   try {
     window.localStorage.setItem(key, value);
   } catch {
@@ -38,7 +97,7 @@ export function safeWriteStorage(key, value) {
   }
 }
 
-export function safeReadSessionStorage(key) {
+export function safeReadSessionStorage(key: string): string | null {
   try {
     if (!window.sessionStorage) return null;
     return window.sessionStorage.getItem(key);
@@ -47,7 +106,7 @@ export function safeReadSessionStorage(key) {
   }
 }
 
-export function safeWriteSessionStorage(key, value) {
+export function safeWriteSessionStorage(key: string, value: string): void {
   try {
     if (!window.sessionStorage) return;
     window.sessionStorage.setItem(key, value);
@@ -56,7 +115,7 @@ export function safeWriteSessionStorage(key, value) {
   }
 }
 
-function readBooleanStorage(key) {
+function readBooleanStorage(key: string): boolean | null {
   const raw = String(safeReadStorage(key) || "").trim().toLowerCase();
   if (!raw) return null;
   if (raw === "1" || raw === "true") return true;
@@ -64,15 +123,15 @@ function readBooleanStorage(key) {
   return null;
 }
 
-function writeBooleanStorage(key, value) {
+function writeBooleanStorage(key: string, value: boolean): void {
   safeWriteStorage(key, value ? "1" : "0");
 }
 
-function writeSessionBooleanStorage(key, value) {
+function writeSessionBooleanStorage(key: string, value: boolean): void {
   safeWriteSessionStorage(key, value ? "1" : "0");
 }
 
-function readSessionBooleanStorage(key) {
+function readSessionBooleanStorage(key: string): boolean | null {
   const raw = String(safeReadSessionStorage(key) || "").trim().toLowerCase();
   if (!raw) return null;
   if (raw === "1" || raw === "true") return true;
@@ -80,7 +139,7 @@ function readSessionBooleanStorage(key) {
   return null;
 }
 
-function normalizeFirstRunState(value) {
+function normalizeFirstRunState(value: unknown): string {
   const raw = String(value || "").trim().toLowerCase();
   if (raw === FIRST_RUN_STATE_NEW) return FIRST_RUN_STATE_NEW;
   if (raw === FIRST_RUN_STATE_DISMISSED_PRE_SUCCESS) return FIRST_RUN_STATE_DISMISSED_PRE_SUCCESS;
@@ -88,14 +147,14 @@ function normalizeFirstRunState(value) {
   return "";
 }
 
-export function readFirstRunState() {
+export function readFirstRunState(): string {
   const storedState = normalizeFirstRunState(safeReadStorage(FIRST_RUN_STATE_STORAGE_KEY));
   if (storedState) return storedState;
   const migratedDismissed = readBooleanStorage(ONBOARDING_DISMISSED_STORAGE_KEY) === true;
   return migratedDismissed ? FIRST_RUN_STATE_DISMISSED_PRE_SUCCESS : FIRST_RUN_STATE_NEW;
 }
 
-export function writeFirstRunState(nextState) {
+export function writeFirstRunState(nextState: string): string {
   const normalizedState = normalizeFirstRunState(nextState) || FIRST_RUN_STATE_NEW;
   safeWriteStorage(FIRST_RUN_STATE_STORAGE_KEY, normalizedState);
   writeBooleanStorage(
@@ -105,7 +164,7 @@ export function writeFirstRunState(nextState) {
   return normalizedState;
 }
 
-export function readSessionFirstRunLandingTimestamp() {
+export function readSessionFirstRunLandingTimestamp(): number | null {
   const raw = String(safeReadSessionStorage(FIRST_RUN_SESSION_LANDING_TS_STORAGE_KEY) || "").trim();
   if (!raw) return null;
   const value = Number(raw);
@@ -113,35 +172,35 @@ export function readSessionFirstRunLandingTimestamp() {
   return Math.round(value);
 }
 
-export function writeSessionFirstRunLandingTimestamp(timestampMs) {
+export function writeSessionFirstRunLandingTimestamp(timestampMs: number): void {
   const value = Number(timestampMs);
   if (!Number.isFinite(value) || value <= 0) return;
   safeWriteSessionStorage(FIRST_RUN_SESSION_LANDING_TS_STORAGE_KEY, String(Math.round(value)));
 }
 
-export function readSessionFirstRunSuccessRecorded() {
+export function readSessionFirstRunSuccessRecorded(): boolean {
   return readSessionBooleanStorage(FIRST_RUN_SESSION_SUCCESS_STORAGE_KEY) === true;
 }
 
-export function writeSessionFirstRunSuccessRecorded(recorded) {
+export function writeSessionFirstRunSuccessRecorded(recorded: boolean): void {
   writeSessionBooleanStorage(FIRST_RUN_SESSION_SUCCESS_STORAGE_KEY, Boolean(recorded));
 }
 
-export function readCalculatorPanelOpenPreference() {
+export function readCalculatorPanelOpenPreference(): boolean | null {
   return readBooleanStorage(CALC_PANEL_OPEN_STORAGE_KEY);
 }
 
-export function writeCalculatorPanelOpenPreference(isOpen) {
+export function writeCalculatorPanelOpenPreference(isOpen: boolean): void {
   writeBooleanStorage(CALC_PANEL_OPEN_STORAGE_KEY, Boolean(isOpen));
 }
 
-export function readOnboardingDismissed() {
+export function readOnboardingDismissed(): boolean {
   const explicit = readBooleanStorage(ONBOARDING_DISMISSED_STORAGE_KEY);
   if (explicit != null) return explicit === true;
   return readFirstRunState() === FIRST_RUN_STATE_DISMISSED_PRE_SUCCESS;
 }
 
-export function writeOnboardingDismissed(dismissed) {
+export function writeOnboardingDismissed(dismissed: boolean): void {
   const isDismissed = Boolean(dismissed);
   writeBooleanStorage(ONBOARDING_DISMISSED_STORAGE_KEY, isDismissed);
   const currentFirstRunState = readFirstRunState();
@@ -154,21 +213,22 @@ export function writeOnboardingDismissed(dismissed) {
   }
 }
 
-function coercePositiveInt(value) {
+function coercePositiveInt(value: unknown): number | null {
   const n = Number(value);
   if (!Number.isFinite(n)) return null;
   const rounded = Math.round(n);
   return rounded > 0 ? rounded : null;
 }
 
-function normalizeCalcSuccessfulRun(raw) {
+function normalizeCalcSuccessfulRun(raw: unknown): SuccessfulCalcRun | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const scoringMode = String(raw.scoringMode || "").trim().toLowerCase() === "points" ? "points" : "roto";
-  const teams = coercePositiveInt(raw.teams);
-  const horizon = coercePositiveInt(raw.horizon);
-  const startYear = coercePositiveInt(raw.startYear);
-  const playerCount = Math.max(0, Number.isFinite(Number(raw.playerCount)) ? Math.round(Number(raw.playerCount)) : 0);
-  const completedAtRaw = String(raw.completedAt || "").trim();
+  const r = raw as Record<string, unknown>;
+  const scoringMode = String(r.scoringMode || "").trim().toLowerCase() === "points" ? "points" : "roto";
+  const teams = coercePositiveInt(r.teams);
+  const horizon = coercePositiveInt(r.horizon);
+  const startYear = coercePositiveInt(r.startYear);
+  const playerCount = Math.max(0, Number.isFinite(Number(r.playerCount)) ? Math.round(Number(r.playerCount)) : 0);
+  const completedAtRaw = String(r.completedAt || "").trim();
   const completedAtDate = completedAtRaw ? new Date(completedAtRaw) : null;
   const completedAt = completedAtDate && !Number.isNaN(completedAtDate.getTime())
     ? completedAtDate.toISOString()
@@ -186,7 +246,7 @@ function normalizeCalcSuccessfulRun(raw) {
   };
 }
 
-export function readLastSuccessfulCalcRun() {
+export function readLastSuccessfulCalcRun(): SuccessfulCalcRun | null {
   const raw = safeReadStorage(CALC_LAST_SUCCESSFUL_RUN_STORAGE_KEY);
   if (!raw) return null;
   try {
@@ -196,13 +256,13 @@ export function readLastSuccessfulCalcRun() {
   }
 }
 
-export function writeLastSuccessfulCalcRun(summary) {
+export function writeLastSuccessfulCalcRun(summary: unknown): void {
   const normalized = normalizeCalcSuccessfulRun(summary);
   if (!normalized) return;
   safeWriteStorage(CALC_LAST_SUCCESSFUL_RUN_STORAGE_KEY, JSON.stringify(normalized));
 }
 
-export function clearLastSuccessfulCalcRun() {
+export function clearLastSuccessfulCalcRun(): void {
   try {
     window.localStorage.removeItem(CALC_LAST_SUCCESSFUL_RUN_STORAGE_KEY);
   } catch {
@@ -210,17 +270,17 @@ export function clearLastSuccessfulCalcRun() {
   }
 }
 
-export function normalizePlayerKey(value) {
+export function normalizePlayerKey(value: unknown): string {
   const text = String(value || "").trim().toLowerCase();
   const normalized = text.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return normalized || "unknown-player";
 }
 
-export function calculationRowExplainKey(row) {
+export function calculationRowExplainKey(row: ProjectionRow | null | undefined): string {
   return String(row?.PlayerEntityKey || row?.PlayerKey || normalizePlayerKey(row?.Player)).trim();
 }
 
-export function projectionRowKey(row, fallbackIndex = 0) {
+export function projectionRowKey(row: ProjectionRow | null | undefined, fallbackIndex: number = 0): string {
   const entity = String(row?.PlayerEntityKey || row?.PlayerKey || "").trim();
   const player = String(row?.Player || "").trim();
   const team = String(row?.Team || "").trim();
@@ -230,19 +290,19 @@ export function projectionRowKey(row, fallbackIndex = 0) {
   return stableKey ? `${stableKey}|${fallbackIndex}` : `row-${fallbackIndex}`;
 }
 
-function normalizeCalculatorPresets(presets) {
+function normalizeCalculatorPresets(presets: unknown): Record<string, CalculatorPreset> {
   if (!presets || typeof presets !== "object" || Array.isArray(presets)) return {};
-  const sanitized = {};
-  Object.entries(presets).forEach(([rawName, rawPreset]) => {
+  const sanitized: Record<string, CalculatorPreset> = {};
+  Object.entries(presets as Record<string, unknown>).forEach(([rawName, rawPreset]) => {
     const name = String(rawName || "").trim();
     if (!name) return;
     if (!rawPreset || typeof rawPreset !== "object" || Array.isArray(rawPreset)) return;
-    sanitized[name] = { ...rawPreset };
+    sanitized[name] = { ...(rawPreset as CalculatorPreset) };
   });
   return sanitized;
 }
 
-export function readCalculatorPresets() {
+export function readCalculatorPresets(): Record<string, CalculatorPreset> {
   const raw = safeReadStorage(CALC_PRESETS_STORAGE_KEY);
   if (!raw) return {};
   try {
@@ -253,24 +313,24 @@ export function readCalculatorPresets() {
   }
 }
 
-export function writeCalculatorPresets(presets) {
+export function writeCalculatorPresets(presets: unknown): void {
   safeWriteStorage(CALC_PRESETS_STORAGE_KEY, JSON.stringify(normalizeCalculatorPresets(presets)));
 }
 
-function stableSerialize(value) {
+function stableSerialize(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map(entry => stableSerialize(entry)).join(",")}]`;
   }
   if (value && typeof value === "object") {
-    const entries = Object.keys(value)
+    const entries = Object.keys(value as Record<string, unknown>)
       .sort((a, b) => a.localeCompare(b))
-      .map(key => `${JSON.stringify(key)}:${stableSerialize(value[key])}`);
+      .map(key => `${JSON.stringify(key)}:${stableSerialize((value as Record<string, unknown>)[key])}`);
     return `{${entries.join(",")}}`;
   }
   return JSON.stringify(value);
 }
 
-export function calculatorPresetsEqual(left, right) {
+export function calculatorPresetsEqual(left: unknown, right: unknown): boolean {
   const normalizedLeft = normalizeCalculatorPresets(left);
   const normalizedRight = normalizeCalculatorPresets(right);
   const leftKeys = Object.keys(normalizedLeft).sort((a, b) => a.localeCompare(b));
@@ -285,7 +345,10 @@ export function calculatorPresetsEqual(left, right) {
   return true;
 }
 
-export function mergeCalculatorPresetsPreferLocal(localPresets, cloudPresets) {
+export function mergeCalculatorPresetsPreferLocal(
+  localPresets: unknown,
+  cloudPresets: unknown,
+): Record<string, CalculatorPreset> {
   const normalizedLocal = normalizeCalculatorPresets(localPresets);
   const normalizedCloud = normalizeCalculatorPresets(cloudPresets);
   return {
@@ -294,7 +357,7 @@ export function mergeCalculatorPresetsPreferLocal(localPresets, cloudPresets) {
   };
 }
 
-export function stablePlayerKeyFromRow(row) {
+export function stablePlayerKeyFromRow(row: ProjectionRow | null | undefined): string {
   const explicitKey = String(row?.PlayerEntityKey || row?.PlayerKey || "").trim();
   if (explicitKey) return explicitKey;
   const playerKey = normalizePlayerKey(row?.Player);
@@ -302,7 +365,7 @@ export function stablePlayerKeyFromRow(row) {
   return teamKey ? `${playerKey}__${teamKey}` : playerKey;
 }
 
-export function playerWatchEntryFromRow(row) {
+export function playerWatchEntryFromRow(row: ProjectionRow | null | undefined): PlayerWatchEntry {
   return {
     key: stablePlayerKeyFromRow(row),
     player: String(row?.Player || "Unknown Player").trim() || "Unknown Player",
@@ -311,24 +374,25 @@ export function playerWatchEntryFromRow(row) {
   };
 }
 
-function normalizePlayerWatchlistEntries(rawEntries) {
+function normalizePlayerWatchlistEntries(rawEntries: unknown): Record<string, PlayerWatchEntry> {
   if (!rawEntries || typeof rawEntries !== "object" || Array.isArray(rawEntries)) return {};
-  const entries = {};
-  Object.entries(rawEntries).forEach(([rawKey, value]) => {
+  const entries: Record<string, PlayerWatchEntry> = {};
+  Object.entries(rawEntries as Record<string, unknown>).forEach(([rawKey, value]) => {
     const key = String(rawKey || "").trim();
     if (!key) return;
     if (!value || typeof value !== "object") return;
+    const v = value as Record<string, unknown>;
     entries[key] = {
       key,
-      player: String(value.player || "").trim() || "Unknown Player",
-      team: String(value.team || "").trim(),
-      pos: String(value.pos || "").trim(),
+      player: String(v.player || "").trim() || "Unknown Player",
+      team: String(v.team || "").trim(),
+      pos: String(v.pos || "").trim(),
     };
   });
   return entries;
 }
 
-export function readPlayerWatchlist() {
+export function readPlayerWatchlist(): Record<string, PlayerWatchEntry> {
   const raw = safeReadStorage(PLAYER_WATCHLIST_STORAGE_KEY);
   if (!raw) return {};
   try {
@@ -339,44 +403,45 @@ export function readPlayerWatchlist() {
   }
 }
 
-export function writePlayerWatchlist(watchlist) {
+export function writePlayerWatchlist(watchlist: unknown): void {
   safeWriteStorage(PLAYER_WATCHLIST_STORAGE_KEY, JSON.stringify(normalizePlayerWatchlistEntries(watchlist)));
 }
 
-function normalizeProjectionFilterPreset(rawPreset) {
+function normalizeProjectionFilterPreset(rawPreset: unknown): ProjectionFilterPreset | null {
   if (!rawPreset || typeof rawPreset !== "object" || Array.isArray(rawPreset)) return null;
-  const rawTab = String(rawPreset.tab || "").trim().toLowerCase();
+  const rp = rawPreset as Record<string, unknown>;
+  const rawTab = String(rp.tab || "").trim().toLowerCase();
   const tab = rawTab === "bat" || rawTab === "pitch" ? rawTab : "all";
-  const rawSortDir = String(rawPreset.sortDir || "").trim().toLowerCase();
+  const rawSortDir = String(rp.sortDir || "").trim().toLowerCase();
   const sortDir = rawSortDir === "asc" ? "asc" : "desc";
-  const posFilters = Array.isArray(rawPreset.posFilters)
-    ? rawPreset.posFilters
+  const posFilters = Array.isArray(rp.posFilters)
+    ? (rp.posFilters as unknown[])
       .map(value => String(value || "").trim())
       .filter(Boolean)
     : [];
 
   return {
     tab,
-    search: String(rawPreset.search || "").trim(),
-    teamFilter: String(rawPreset.teamFilter || "").trim(),
-    yearFilter: String(rawPreset.yearFilter || "").trim(),
+    search: String(rp.search || "").trim(),
+    teamFilter: String(rp.teamFilter || "").trim(),
+    yearFilter: String(rp.yearFilter || "").trim(),
     posFilters: Array.from(new Set(posFilters)),
-    watchlistOnly: Boolean(rawPreset.watchlistOnly),
-    sortCol: String(rawPreset.sortCol || "").trim(),
+    watchlistOnly: Boolean(rp.watchlistOnly),
+    sortCol: String(rp.sortCol || "").trim(),
     sortDir,
   };
 }
 
-function normalizeProjectionFilterPresetBundle(rawBundle) {
+function normalizeProjectionFilterPresetBundle(rawBundle: unknown): ProjectionFilterPresetBundle {
   if (!rawBundle || typeof rawBundle !== "object" || Array.isArray(rawBundle)) {
     return { custom: null };
   }
   return {
-    custom: normalizeProjectionFilterPreset(rawBundle.custom),
+    custom: normalizeProjectionFilterPreset((rawBundle as Record<string, unknown>).custom),
   };
 }
 
-export function readProjectionFilterPresets() {
+export function readProjectionFilterPresets(): ProjectionFilterPresetBundle {
   const raw = safeReadStorage(PROJECTION_FILTER_PRESETS_STORAGE_KEY);
   if (!raw) return { custom: null };
   try {
@@ -386,12 +451,12 @@ export function readProjectionFilterPresets() {
   }
 }
 
-export function writeProjectionFilterPresets(rawBundle) {
+export function writeProjectionFilterPresets(rawBundle: unknown): void {
   const normalized = normalizeProjectionFilterPresetBundle(rawBundle);
   safeWriteStorage(PROJECTION_FILTER_PRESETS_STORAGE_KEY, JSON.stringify(normalized));
 }
 
-export function readHiddenColumnOverridesByTab(storageKey) {
+export function readHiddenColumnOverridesByTab(storageKey: string): Record<string, Record<string, boolean>> {
   const raw = safeReadStorage(storageKey);
   if (!raw) return normalizeHiddenColumnOverridesByTab(null);
   try {
@@ -401,27 +466,28 @@ export function readHiddenColumnOverridesByTab(storageKey) {
   }
 }
 
-export function writeHiddenColumnOverridesByTab(storageKey, overridesByTab) {
+export function writeHiddenColumnOverridesByTab(storageKey: string, overridesByTab: unknown): void {
   safeWriteStorage(
     storageKey,
     JSON.stringify(normalizeHiddenColumnOverridesByTab(overridesByTab))
   );
 }
 
-export function normalizeCloudPreferences(rawPreferences) {
+export function normalizeCloudPreferences(rawPreferences: unknown): CloudPreferences {
   if (!rawPreferences || typeof rawPreferences !== "object" || Array.isArray(rawPreferences)) {
     return {
       calculatorPresets: {},
       playerWatchlist: {},
     };
   }
+  const rp = rawPreferences as Record<string, unknown>;
   return {
-    calculatorPresets: normalizeCalculatorPresets(rawPreferences.calculator_presets),
-    playerWatchlist: normalizePlayerWatchlistEntries(rawPreferences.player_watchlist),
+    calculatorPresets: normalizeCalculatorPresets(rp.calculator_presets),
+    playerWatchlist: normalizePlayerWatchlistEntries(rp.player_watchlist),
   };
 }
 
-export function buildCloudPreferencesPayload({ calculatorPresets, playerWatchlist }) {
+export function buildCloudPreferencesPayload({ calculatorPresets, playerWatchlist }: CloudPreferences): CloudPreferencesPayload {
   return {
     version: CLOUD_PREFERENCES_VERSION,
     calculator_presets: normalizeCalculatorPresets(calculatorPresets),
@@ -429,12 +495,12 @@ export function buildCloudPreferencesPayload({ calculatorPresets, playerWatchlis
   };
 }
 
-export function formatAuthError(error, fallbackMessage) {
+export function formatAuthError(error: { message?: string } | null | undefined, fallbackMessage: string): string {
   const message = String(error?.message || "").trim();
   return message || fallbackMessage;
 }
 
-function csvEscape(value) {
+function csvEscape(value: unknown): string {
   const text = String(value ?? "");
   if (text.includes('"') || text.includes(",") || text.includes("\n")) {
     return `"${text.replace(/"/g, '""')}"`;
@@ -442,9 +508,9 @@ function csvEscape(value) {
   return text;
 }
 
-export function buildWatchlistCsv(watchlist) {
+export function buildWatchlistCsv(watchlist: Record<string, PlayerWatchEntry> | null | undefined): string {
   const rows = Object.values(watchlist || {})
-    .filter(entry => entry && typeof entry === "object")
+    .filter((entry): entry is PlayerWatchEntry => entry != null && typeof entry === "object")
     .sort((a, b) => String(a.player || "").localeCompare(String(b.player || "")));
   const header = ["Player", "Team", "Pos", "PlayerKey"];
   const lines = [header.join(",")];
@@ -459,7 +525,10 @@ export function buildWatchlistCsv(watchlist) {
   return lines.join("\n");
 }
 
-export function mergeKnownCalculatorSettings(baseSettings, incomingSettings) {
+export function mergeKnownCalculatorSettings(
+  baseSettings: Record<string, unknown>,
+  incomingSettings: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
   const merged = { ...baseSettings };
   if (!incomingSettings || typeof incomingSettings !== "object") return merged;
   Object.keys(baseSettings).forEach(key => {
@@ -470,7 +539,7 @@ export function mergeKnownCalculatorSettings(baseSettings, incomingSettings) {
   return merged;
 }
 
-export function encodeCalculatorSettings(settings) {
+export function encodeCalculatorSettings(settings: Record<string, unknown>): string {
   try {
     return window.btoa(encodeURIComponent(JSON.stringify(settings)));
   } catch {
@@ -478,7 +547,7 @@ export function encodeCalculatorSettings(settings) {
   }
 }
 
-export function decodeCalculatorSettings(encoded) {
+export function decodeCalculatorSettings(encoded: string | null | undefined): Record<string, unknown> | null {
   if (!encoded) return null;
   try {
     const raw = window.atob(encoded);

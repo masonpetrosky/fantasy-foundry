@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { trackEvent } from "../analytics.js";
+import { trackEvent } from "../analytics";
 
 export function useMetadata(apiBase) {
   const [meta, setMeta] = useState(null);

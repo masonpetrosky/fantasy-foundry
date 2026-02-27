@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { resolveTierLimits } from "../premium.js";
-import { resolveApiBase } from "../api_base.js";
+import { resolveTierLimits } from "../premium";
+import { resolveApiBase } from "../api_base";
 
 const API = resolveApiBase();
 

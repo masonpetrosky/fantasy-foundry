@@ -10,7 +10,7 @@ import {
   setAnalyticsContext,
   summarizeActivationFunnel,
   trackEvent,
-} from "./analytics.js";
+} from "./analytics";
 
 describe("analytics", () => {
   const originalWindow = globalThis.window;
@@ -20,30 +20,30 @@ describe("analytics", () => {
   afterEach(() => {
     resetAnalyticsContext();
     if (typeof originalWindow === "undefined") {
-      delete globalThis.window;
+      delete (globalThis as Record<string, unknown>).window;
     } else {
       globalThis.window = originalWindow;
     }
     if (typeof originalDocument === "undefined") {
-      delete globalThis.document;
+      delete (globalThis as Record<string, unknown>).document;
     } else {
       globalThis.document = originalDocument;
     }
     if (typeof originalUrl === "undefined") {
-      delete globalThis.URL;
+      delete (globalThis as Record<string, unknown>).URL;
     } else {
       globalThis.URL = originalUrl;
     }
   });
 
-  function createMemoryStorage(initial = {}) {
-    const store = { ...initial };
+  function createMemoryStorage(initial: Record<string, string> = {}) {
+    const store: Record<string, string> = { ...initial };
     return {
-      getItem: key => (Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null),
-      setItem: (key, value) => {
+      getItem: (key: string) => (Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null),
+      setItem: (key: string, value: string) => {
         store[key] = String(value);
       },
-      removeItem: key => {
+      removeItem: (key: string) => {
         delete store[key];
       },
       __store: store,
@@ -76,16 +76,18 @@ describe("analytics", () => {
 
   it("publishes events to dataLayer and CustomEvent listeners in browser contexts", () => {
     const localStorage = createMemoryStorage();
-    const dataLayer = [];
+    const dataLayer: Record<string, unknown>[] = [];
     const dispatchEvent = vi.fn();
     class MockCustomEvent {
-      constructor(name, options) {
+      name: string;
+      detail: unknown;
+      constructor(name: string, options?: { detail?: unknown }) {
         this.name = name;
         this.detail = options?.detail;
       }
     }
 
-    globalThis.window = {
+    (globalThis as Record<string, unknown>).window = {
       localStorage,
       dataLayer,
       dispatchEvent,
@@ -113,8 +115,8 @@ describe("analytics", () => {
     });
     expect(dataLayer[0].session_id).toMatch(/^ffs-/);
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
-    expect(dispatchEvent.mock.calls[0][0].name).toBe("ff:analytics");
-    expect(dispatchEvent.mock.calls[0][0].detail.event).toBe("export_click");
+    expect((dispatchEvent.mock.calls[0][0] as MockCustomEvent).name).toBe("ff:analytics");
+    expect((dispatchEvent.mock.calls[0][0] as MockCustomEvent).detail).toHaveProperty("event", "export_click");
     expect(readAnalyticsEventBuffer()).toHaveLength(1);
     clearAnalyticsEventBuffer();
     expect(readAnalyticsEventBuffer()).toHaveLength(0);
@@ -122,12 +124,14 @@ describe("analytics", () => {
 
   it("summarizes quick-start funnel metrics from buffered events", () => {
     const localStorage = createMemoryStorage();
-    globalThis.window = {
+    (globalThis as Record<string, unknown>).window = {
       localStorage,
       dataLayer: [],
       dispatchEvent: vi.fn(),
       CustomEvent: class MockCustomEvent {
-        constructor(name, options) {
+        name: string;
+        detail: unknown;
+        constructor(name: string, options?: { detail?: unknown }) {
           this.name = name;
           this.detail = options?.detail;
         }
@@ -169,17 +173,19 @@ describe("analytics", () => {
     globalThis.URL = {
       createObjectURL,
       revokeObjectURL,
-    };
-    globalThis.document = {
+    } as unknown as typeof URL;
+    (globalThis as Record<string, unknown>).document = {
       body: { appendChild, removeChild },
       createElement: vi.fn(() => ({ click })),
     };
-    globalThis.window = {
+    (globalThis as Record<string, unknown>).window = {
       localStorage,
       dataLayer: [],
       dispatchEvent: vi.fn(),
       CustomEvent: class MockCustomEvent {
-        constructor(name, options) {
+        name: string;
+        detail: unknown;
+        constructor(name: string, options?: { detail?: unknown }) {
           this.name = name;
           this.detail = options?.detail;
         }
@@ -187,21 +193,22 @@ describe("analytics", () => {
     };
 
     expect(installAnalyticsDebugBridge()).toBe(true);
-    expect(typeof globalThis.window.ffAnalytics?.summary).toBe("function");
-    expect(typeof globalThis.window.ffAnalytics?.exportCsv).toBe("function");
+    const w = globalThis.window as Window & { ffAnalytics?: Record<string, (...args: unknown[]) => unknown> };
+    expect(typeof w.ffAnalytics?.summary).toBe("function");
+    expect(typeof w.ffAnalytics?.exportCsv).toBe("function");
     trackEvent("ff_quickstart_impression", { source: "activation_strip" });
-    const events = globalThis.window.ffAnalytics.events();
+    const events = w.ffAnalytics!.events();
     expect(events).toHaveLength(1);
     expect(downloadAnalyticsEventCsv("out.csv")).toBe(true);
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(click).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledTimes(1);
 
-    const csv = analyticsEventsToCsv(events);
+    const csv = analyticsEventsToCsv(events as never);
     expect(csv).toContain("timestamp_ms,timestamp,event,session_id,source");
     expect(csv).toContain("ff_quickstart_impression");
 
-    globalThis.window.ffAnalytics.clear();
-    expect(globalThis.window.ffAnalytics.events()).toHaveLength(0);
+    w.ffAnalytics!.clear();
+    expect(w.ffAnalytics!.events()).toHaveLength(0);
   });
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { trackEvent } from "../analytics.js";
+import { trackEvent } from "../analytics";
 import {
   CALC_LINK_QUERY_PARAM,
   readCalculatorPanelOpenPreference,
@@ -8,7 +8,7 @@ import {
   writeCalculatorPanelOpenPreference,
   writeCalculatorPresets,
   writeLastSuccessfulCalcRun,
-} from "../app_state_storage.js";
+} from "../app_state_storage";
 
 const ACTIVATION_SPRINT_ENABLED = String(import.meta.env.VITE_FF_ACTIVATION_SPRINT_V1 || "1").trim() !== "0";
 

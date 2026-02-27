@@ -4,7 +4,7 @@ import {
   PREMIUM_TIER_LIMITS,
   resolveTierLimits,
   canUseFeature,
-} from "./premium.js";
+} from "./premium";
 
 describe("premium", () => {
   describe("FREE_TIER_LIMITS", () => {

@@ -3,7 +3,7 @@ import {
   ROTO_HITTER_CATEGORY_FIELDS,
   ROTO_PITCHER_CATEGORY_FIELDS,
   coerceBooleanSetting,
-} from "./dynasty_calculator_config.js";
+} from "./dynasty_calculator_config";
 import { CalcTooltip } from "./dynasty_calculator_tooltip.jsx";
 
 export const RotoCategoriesForm = React.memo(function RotoCategoriesForm({

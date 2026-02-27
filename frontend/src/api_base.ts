@@ -1,8 +1,15 @@
-function normalizeApiBase(value) {
+declare global {
+  interface Window {
+    API_BASE_URL?: string;
+    __API_BASE_URL__?: string;
+  }
+}
+
+function normalizeApiBase(value: string | null | undefined): string {
   return String(value || "").trim().replace(/\/+$/, "");
 }
 
-export function resolveApiBase() {
+export function resolveApiBase(): string {
   const fromQuery = normalizeApiBase(new URLSearchParams(window.location.search).get("api"));
   if (fromQuery) return fromQuery;
 

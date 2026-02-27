@@ -10,11 +10,11 @@ initGA4();
 import { AUTH_SYNC_ENABLED } from "./supabase_client.js";
 import { AccountPanel } from "./account_panel.jsx";
 import { ActivationDiagnosticsPanel, resolveActivationDiagnosticsPanelEnabled } from "./activation_diagnostics_panel.jsx";
-import { resolveApiBase } from "./api_base.js";
+import { resolveApiBase } from "./api_base";
 import { PRIMARY_NAV_ITEMS } from "./app_content.js";
 import { ProjectionsExplorer } from "./projections_explorer.jsx";
 import { MobileCalculatorSheet } from "./MobileCalculatorSheet.jsx";
-import { installAnalyticsDebugBridge, setAnalyticsContext, trackEvent } from "./analytics.js";
+import { installAnalyticsDebugBridge, setAnalyticsContext, trackEvent } from "./analytics";
 import { ErrorBoundary } from "./error_boundary.jsx";
 import { FeatureErrorBoundary } from "./feature_error_boundary.jsx";
 import { ToastProvider } from "./Toast.jsx";
@@ -42,7 +42,7 @@ import {
   readSessionFirstRunLandingTimestamp,
   writeSessionFirstRunLandingTimestamp,
   writePlayerWatchlist,
-} from "./app_state_storage.js";
+} from "./app_state_storage";
 
 const API = resolveApiBase();
 const ACTIVATION_SPRINT_ENABLED = String(import.meta.env.VITE_FF_ACTIVATION_SPRINT_V1 || "1").trim() !== "0";

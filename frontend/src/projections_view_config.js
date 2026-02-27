@@ -3,7 +3,7 @@ import {
   ROTO_HITTER_CATEGORY_FIELDS,
   ROTO_PITCHER_CATEGORY_FIELDS,
   coerceBooleanSetting,
-} from "./dynasty_calculator_config.js";
+} from "./dynasty_calculator_config";
 
 export const PROJECTION_TABS = ["all", "bat", "pitch"];
 export const PROJECTION_HITTER_CORE_STATS = ["AB", "R", "HR", "RBI", "SB", "AVG", "OPS"];

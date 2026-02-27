@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { stablePlayerKeyFromRow } from "../app_state_storage.js";
+import { stablePlayerKeyFromRow } from "../app_state_storage";
 
 function buildCalculatorOverlayMap(result) {
   const rows = Array.isArray(result?.data) ? result.data : [];

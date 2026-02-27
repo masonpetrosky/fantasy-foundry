@@ -7,7 +7,7 @@ import {
   formatAuthError,
   mergeCalculatorPresetsPreferLocal,
   normalizeCloudPreferences,
-} from "../app_state_storage.js";
+} from "../app_state_storage";
 
 export function useAccountSync({ presets, setPresets, watchlist, setWatchlist }) {
   const [authReady, setAuthReady] = useState(!AUTH_SYNC_ENABLED);

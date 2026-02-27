@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { stablePlayerKeyFromRow } from "../../../app_state_storage.js";
+import { stablePlayerKeyFromRow } from "../../../app_state_storage";
 
 const SPARKLINE_COLORS = ["var(--accent)", "var(--green)", "var(--blue)", "var(--red)"];
 

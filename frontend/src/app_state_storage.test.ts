@@ -38,27 +38,27 @@ import {
   writeProjectionFilterPresets,
   writeSessionFirstRunLandingTimestamp,
   writeSessionFirstRunSuccessRecorded,
-} from "./app_state_storage.js";
+} from "./app_state_storage";
 
-function withStorage(initialValues = {}) {
-  const store = { ...initialValues };
-  const sessionStore = {};
+function withStorage(initialValues: Record<string, string> = {}) {
+  const store: Record<string, string> = { ...initialValues };
+  const sessionStore: Record<string, string> = {};
   vi.stubGlobal("window", {
     localStorage: {
-      getItem: vi.fn(key => (Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null)),
-      setItem: vi.fn((key, value) => {
+      getItem: vi.fn((key: string) => (Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null)),
+      setItem: vi.fn((key: string, value: string) => {
         store[key] = String(value);
       }),
-      removeItem: vi.fn(key => {
+      removeItem: vi.fn((key: string) => {
         delete store[key];
       }),
     },
     sessionStorage: {
-      getItem: vi.fn(key => (Object.prototype.hasOwnProperty.call(sessionStore, key) ? sessionStore[key] : null)),
-      setItem: vi.fn((key, value) => {
+      getItem: vi.fn((key: string) => (Object.prototype.hasOwnProperty.call(sessionStore, key) ? sessionStore[key] : null)),
+      setItem: vi.fn((key: string, value: string) => {
         sessionStore[key] = String(value);
       }),
-      removeItem: vi.fn(key => {
+      removeItem: vi.fn((key: string) => {
         delete sessionStore[key];
       }),
     },
@@ -493,8 +493,8 @@ describe("mergeKnownCalculatorSettings", () => {
 describe("encodeCalculatorSettings / decodeCalculatorSettings", () => {
   it("round-trips settings through encode/decode", () => {
     vi.stubGlobal("window", {
-      btoa: s => globalThis.btoa(s),
-      atob: s => globalThis.atob(s),
+      btoa: (s: string) => globalThis.btoa(s),
+      atob: (s: string) => globalThis.atob(s),
     });
 
     const settings = { teams: 12, horizon: 20, scoring_mode: "roto" };

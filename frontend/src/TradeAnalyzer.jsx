@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { fmt } from "./formatting_utils.js";
-import { stablePlayerKeyFromRow } from "./app_state_storage.js";
-import { trackEvent } from "./analytics.js";
+import { stablePlayerKeyFromRow } from "./app_state_storage";
+import { trackEvent } from "./analytics";
 
 const MAX_TRADE_PLAYERS = 6;
 

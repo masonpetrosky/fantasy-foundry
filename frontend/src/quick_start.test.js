@@ -4,7 +4,7 @@ const { trackEventMock } = vi.hoisted(() => ({
   trackEventMock: vi.fn(),
 }));
 
-vi.mock("./analytics.js", () => ({
+vi.mock("./analytics", () => ({
   trackEvent: trackEventMock,
 }));
 

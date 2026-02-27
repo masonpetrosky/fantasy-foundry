@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import {
   projectionRowKey,
   stablePlayerKeyFromRow,
-} from "../../../app_state_storage.js";
+} from "../../../app_state_storage";
 import {
   INT_COLS,
   THREE_DECIMAL_COLS,

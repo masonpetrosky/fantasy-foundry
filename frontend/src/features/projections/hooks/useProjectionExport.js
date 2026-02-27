@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { trackEvent } from "../../../analytics.js";
+import { trackEvent } from "../../../analytics";
 import { parseDownloadFilename } from "../../../download_filename.js";
 import { triggerBlobDownload } from "../../../download_helpers.js";
 import { formatApiError, readResponsePayload } from "../../../request_helpers.js";

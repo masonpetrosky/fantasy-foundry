@@ -4,7 +4,7 @@ import {
   PITCHER_SLOT_FIELDS,
   SLOT_INPUT_MIN,
   SLOT_INPUT_MAX,
-} from "./dynasty_calculator_config.js";
+} from "./dynasty_calculator_config";
 
 const ALL_SLOT_FIELDS = [...HITTER_SLOT_FIELDS, ...PITCHER_SLOT_FIELDS];
 const SLOT_PAIRS = [];
