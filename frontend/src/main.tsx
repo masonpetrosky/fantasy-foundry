@@ -28,6 +28,7 @@ import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProject
 import { resolveProjectionWindow } from "./formatting_utils";
 import { useBottomSheet } from "./hooks/useBottomSheet";
 import { useCalculatorOverlay } from "./hooks/useCalculatorOverlay";
+import { useDefaultDynastyPlayers } from "./hooks/useDefaultDynastyPlayers";
 import { useCalculatorState } from "./hooks/useCalculatorState";
 import { useMetadata } from "./hooks/useMetadata";
 import { useQuickStart } from "./hooks/useQuickStart";
@@ -87,9 +88,15 @@ function App(): React.ReactElement {
     calculatorOverlayDataVersion,
     calculatorOverlaySummary,
     calculatorOverlayPlayerCount,
+    calculatorResultRows,
     applyCalculatorOverlay,
     clearCalculatorOverlay,
   } = useCalculatorOverlay(dataVersion);
+  const defaultDynastyPlayers = useDefaultDynastyPlayers(API);
+  const effectiveDynastyPlayers = useMemo(
+    () => (calculatorResultRows.length > 0 ? calculatorResultRows : defaultDynastyPlayers),
+    [calculatorResultRows, defaultDynastyPlayers],
+  );
   const { authReady, authUser, authStatus, cloudStatus, signIn, signUp, signOut } = useAccountSync({
     presets,
     setPresets,
@@ -467,14 +474,14 @@ function App(): React.ReactElement {
                 )}
                 {tradeAnalyzerOpen && tierLimits?.allowTradeAnalyzer && (
                   <TradeAnalyzer
-                    calculatorResults={calculatorOverlayByPlayerKey ? Object.values(calculatorOverlayByPlayerKey) : []}
+                    calculatorResults={effectiveDynastyPlayers}
                     onClose={() => setTradeAnalyzerOpen(false)}
                     onOpenCalculator={() => { openCalculatorPanel("trade_analyzer"); scrollToCalculator(); }}
                   />
                 )}
                 {keeperCalculatorOpen && tierLimits?.allowTradeAnalyzer && (
                   <KeeperCalculator
-                    calculatorResults={calculatorOverlayByPlayerKey ? Object.values(calculatorOverlayByPlayerKey) : []}
+                    calculatorResults={effectiveDynastyPlayers}
                     onClose={() => setKeeperCalculatorOpen(false)}
                     onOpenCalculator={() => { openCalculatorPanel("keeper_calculator"); scrollToCalculator(); }}
                   />

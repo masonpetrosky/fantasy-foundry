@@ -208,7 +208,7 @@ export function TradeAnalyzer({ calculatorResults, onClose, onOpenCalculator }: 
           {onClose && <button type="button" className="inline-btn" onClick={onClose}>Close</button>}
         </div>
         <p className="trade-empty">
-          Run the dynasty calculator first to generate player values for trade analysis.
+          Loading player dynasty values...
           {onOpenCalculator && (
             <>{" "}<button type="button" className="inline-btn" onClick={onOpenCalculator}>Open Calculator</button></>
           )}

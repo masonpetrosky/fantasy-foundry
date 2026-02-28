@@ -46,6 +46,7 @@ export function useCalculatorOverlay(dataVersion: string): {
   calculatorOverlayDataVersion: string;
   calculatorOverlaySummary: OverlaySummary | null;
   calculatorOverlayPlayerCount: number;
+  calculatorResultRows: Record<string, unknown>[];
   applyCalculatorOverlay: (result: unknown, settings: Record<string, unknown>, runMeta: { jobId?: string }) => void;
   clearCalculatorOverlay: () => void;
 } {
@@ -54,10 +55,17 @@ export function useCalculatorOverlay(dataVersion: string): {
   const [calculatorOverlayJobId, setCalculatorOverlayJobId] = useState("");
   const [calculatorOverlayDataVersion, setCalculatorOverlayDataVersion] = useState("");
   const [calculatorOverlaySummary, setCalculatorOverlaySummary] = useState<OverlaySummary | null>(null);
+  const [calculatorResultRows, setCalculatorResultRows] = useState<Record<string, unknown>[]>([]);
 
   const calculatorOverlayPlayerCount = Object.keys(calculatorOverlayByPlayerKey).length;
 
   const applyCalculatorOverlay = useCallback((result: unknown, settings: Record<string, unknown>, runMeta: { jobId?: string }) => {
+    const resultObj = result as Record<string, unknown> | undefined;
+    const fullRows = Array.isArray(resultObj?.data)
+      ? (resultObj.data as Record<string, unknown>[])
+      : [];
+    setCalculatorResultRows(fullRows);
+
     const nextOverlay = buildCalculatorOverlayMap(result);
     const hasOverlay = Object.keys(nextOverlay).length > 0;
     const nextJobId = hasOverlay ? String(runMeta?.jobId || "").trim() : "";
@@ -79,6 +87,7 @@ export function useCalculatorOverlay(dataVersion: string): {
     setCalculatorOverlayJobId("");
     setCalculatorOverlayDataVersion("");
     setCalculatorOverlaySummary(null);
+    setCalculatorResultRows([]);
   }, []);
 
   return {
@@ -88,6 +97,7 @@ export function useCalculatorOverlay(dataVersion: string): {
     calculatorOverlayDataVersion,
     calculatorOverlaySummary,
     calculatorOverlayPlayerCount,
+    calculatorResultRows,
     applyCalculatorOverlay,
     clearCalculatorOverlay,
   };

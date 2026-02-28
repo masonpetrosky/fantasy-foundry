@@ -152,8 +152,7 @@ export function KeeperCalculator({
 
       {!hasResults && (
         <p className="keeper-note">
-          Run the dynasty calculator first to populate dynasty values, then add
-          your keepers here.
+          Loading player dynasty values...
           {onOpenCalculator && (
             <>{" "}<button type="button" className="inline-btn" onClick={onOpenCalculator}>Open Calculator</button></>
           )}
