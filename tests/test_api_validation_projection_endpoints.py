@@ -425,7 +425,6 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
                 "Year": 2026,
                 "Pos": "DH",
                 "Age": 31,
-                "ProjectionsUsed": 3,
                 "OldestProjectionDate": "2026-01-05",
                 "G": 150,
                 "AB": 560,
@@ -449,7 +448,6 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
                 "Year": 2026,
                 "Pos": "SP",
                 "Age": 31,
-                "ProjectionsUsed": 2,
                 "OldestProjectionDate": "2025-12-20",
                 "GS": 24,
                 "IP": 130.0,
@@ -485,7 +483,6 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         row = payload["data"][0]
         self.assertEqual(row["Type"], "H/P")
         self.assertEqual(row["Pos"], "DH/SP")
-        self.assertEqual(row["ProjectionsUsed"], 3)
         self.assertEqual(row["OldestProjectionDate"], "2025-12-20")
         self.assertEqual(row["H"], 162)
         self.assertEqual(row["HR"], 45)
@@ -1236,7 +1233,6 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
                 "Year": 2026,
                 "Pos": "OF",
                 "Age": 24,
-                "ProjectionsUsed": 3,
                 "OldestProjectionDate": "2026-01-10",
                 "AB": 500.0,
                 "H": 150.0,
@@ -1257,7 +1253,6 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
                 "Year": 2027,
                 "Pos": "OF",
                 "Age": 25,
-                "ProjectionsUsed": 2,
                 "OldestProjectionDate": "2025-12-20",
                 "AB": 550.0,
                 "H": 160.0,
@@ -1296,7 +1291,6 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(row["AB"], 1050.0)
         self.assertEqual(row["H"], 310.0)
         self.assertEqual(row["HR"], 52.0)
-        self.assertEqual(row["ProjectionsUsed"], 3)
         self.assertEqual(row["OldestProjectionDate"], "2025-12-20")
         self.assertAlmostEqual(row["AVG"], 310.0 / 1050.0, places=6)
 
@@ -1313,7 +1307,6 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
                 "Year": 2026,
                 "Pos": "DH",
                 "Age": 28,
-                "ProjectionsUsed": 2,
                 "OldestProjectionDate": "2026-01-05",
                 "AB": 520.0,
                 "H": 150.0,
@@ -1334,7 +1327,6 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
                 "Year": 2027,
                 "Pos": "DH",
                 "Age": 29,
-                "ProjectionsUsed": 2,
                 "OldestProjectionDate": "2025-12-30",
                 "AB": 510.0,
                 "H": 148.0,
@@ -1357,7 +1349,6 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
                 "Year": 2026,
                 "Pos": "SP",
                 "Age": 28,
-                "ProjectionsUsed": 1,
                 "OldestProjectionDate": "2026-01-20",
                 "GS": 24.0,
                 "IP": 140.0,
@@ -1377,7 +1368,6 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
                 "Year": 2027,
                 "Pos": "SP",
                 "Age": 29,
-                "ProjectionsUsed": 2,
                 "OldestProjectionDate": "2026-02-01",
                 "GS": 26.0,
                 "IP": 150.0,
@@ -1422,7 +1412,6 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(row["PitHR"], 34.0)
         self.assertEqual(row["PitBB"], 87.0)
         self.assertEqual(row["K"], 350.0)
-        self.assertEqual(row["ProjectionsUsed"], 2)
         self.assertEqual(row["OldestProjectionDate"], "2025-12-30")
 
 

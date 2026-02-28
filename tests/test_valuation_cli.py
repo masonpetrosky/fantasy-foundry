@@ -11,7 +11,6 @@ def _common_out_frame() -> pd.DataFrame:
         [
             {
                 "Player": "Prospect One",
-                "ProjectionsUsed": 1,
                 "OldestProjectionDate": "2026-01-01",
                 "Team": "ATL",
                 "Pos": "OF",
@@ -31,7 +30,6 @@ def _league_out_frame() -> pd.DataFrame:
         [
             {
                 "Player": "Prospect Two",
-                "ProjectionsUsed": 1,
                 "OldestProjectionDate": "2026-01-01",
                 "MLBTeam": "SEA",
                 "Pos": "SP",

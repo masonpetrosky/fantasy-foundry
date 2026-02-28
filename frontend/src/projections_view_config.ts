@@ -266,7 +266,6 @@ export function projectionTableColumnCatalog(tab: string, seasonCol: string, dyn
       ...priorityStats,
       ...(dynastyYearCols || []),
       ...remainingStats,
-      "ProjectionsUsed",
       "OldestProjectionDate",
       seasonCol,
     ]);
@@ -291,7 +290,6 @@ export function projectionTableColumnCatalog(tab: string, seasonCol: string, dyn
       ...priorityStats,
       ...(dynastyYearCols || []),
       ...remainingStats,
-      "ProjectionsUsed",
       "OldestProjectionDate",
       seasonCol,
     ]);
@@ -322,7 +320,6 @@ export function projectionTableColumnCatalog(tab: string, seasonCol: string, dyn
     ...priorityStats,
     ...(dynastyYearCols || []),
     ...remainingStats,
-    "ProjectionsUsed",
     "OldestProjectionDate",
     seasonCol,
     "Type",
@@ -350,7 +347,6 @@ export function projectionCardColumnCatalog(tab: string, seasonCol: string, dyna
       "DynastyValue",
       ...(dynastyYearCols || []),
       seasonCol,
-      "ProjectionsUsed",
       "OldestProjectionDate",
     ]);
   }
@@ -376,7 +372,6 @@ export function projectionCardColumnCatalog(tab: string, seasonCol: string, dyna
       "DynastyValue",
       ...(dynastyYearCols || []),
       seasonCol,
-      "ProjectionsUsed",
       "OldestProjectionDate",
     ]);
   }
@@ -409,7 +404,6 @@ export function projectionCardColumnCatalog(tab: string, seasonCol: string, dyna
     ...(dynastyYearCols || []),
     seasonCol,
     "Type",
-    "ProjectionsUsed",
     "OldestProjectionDate",
   ]);
 }

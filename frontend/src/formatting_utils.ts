@@ -15,7 +15,7 @@ export const WHOLE_NUMBER_COLS: ReadonlySet<string> = new Set([
   "G", "H", "2B", "3B", "BB", "SO", "GS", "L", "PitBB", "SV",
   "PitH", "PitHR", "ER",
 ]);
-export const INT_COLS: ReadonlySet<string> = new Set(["Rank", "Year", "Years", "Age", "ProjectionsUsed"]);
+export const INT_COLS: ReadonlySet<string> = new Set(["Rank", "Year", "Years", "Age"]);
 
 export function formatCellValue(col: string, val: unknown): string {
   if (col === "DynastyValue" || col.startsWith("Value_")) return fmt(val, 2);

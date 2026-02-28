@@ -66,7 +66,6 @@ def default_projection_export_columns(
                 "3B",
                 "BB",
                 "SO",
-                "ProjectionsUsed",
                 "OldestProjectionDate",
                 season_col,
             ]
@@ -85,7 +84,6 @@ def default_projection_export_columns(
                 "HR",
                 "ER",
                 "SVH",
-                "ProjectionsUsed",
                 "OldestProjectionDate",
                 season_col,
             ]
@@ -111,7 +109,6 @@ def default_projection_export_columns(
                 "PitHR",
                 "ER",
                 "SVH",
-                "ProjectionsUsed",
                 "OldestProjectionDate",
                 season_col,
                 "Type",

@@ -60,19 +60,6 @@ def merge_position_value(
     return pit_text or None
 
 
-def max_projection_count(*values: object) -> int | None:
-    counts: list[int] = []
-    for value in values:
-        try:
-            parsed = float(value)
-        except (TypeError, ValueError):
-            continue
-        if pd.isna(parsed):
-            continue
-        counts.append(int(round(parsed)))
-    return max(counts) if counts else None
-
-
 def oldest_projection_date(*values: object) -> str | None:
     oldest_ts: pd.Timestamp | None = None
     oldest_text: str | None = None

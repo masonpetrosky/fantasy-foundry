@@ -283,7 +283,6 @@ export function ProjectionsExplorer({
   const colLabels = useMemo(() => {
     const labels: Record<string, string> = {
       Type: "Side",
-      ProjectionsUsed: "Proj Count",
       OldestProjectionDate: "Oldest Proj Date",
       Rank: "Rank",
       DynastyValue: "Dynasty Value",

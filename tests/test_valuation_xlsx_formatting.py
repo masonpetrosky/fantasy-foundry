@@ -134,7 +134,6 @@ def test_xlsx_format_player_values_smoke() -> None:
                 "MLBTeam": "SEA",
                 "Pos": "OF",
                 "Age": 26,
-                "ProjectionsUsed": 3,
                 "OldestProjectionDate": date(2026, 2, 24),
                 "DynastyValue": 7.12,
                 "RawDynastyValue": 8.55,
@@ -147,7 +146,6 @@ def test_xlsx_format_player_values_smoke() -> None:
                 "MLBTeam": "SEA",
                 "Pos": "OF",
                 "Age": 27,
-                "ProjectionsUsed": 3,
                 "OldestProjectionDate": date(2026, 2, 24),
                 "DynastyValue": 6.01,
                 "RawDynastyValue": 7.22,
@@ -163,7 +161,7 @@ def test_xlsx_format_player_values_smoke() -> None:
     assert sheet.freeze_panes == "B2"
     assert "PlayerValuesTbl" in sheet.tables
     assert sheet["H2"].number_format == "0.00"
-    assert sheet["K2"].number_format == "0.00"
+    assert sheet["J2"].number_format == "0.00"
     assert len(sheet.conditional_formatting) == 1
 
 
@@ -178,7 +176,6 @@ def test_xlsx_format_detail_sheet_smoke() -> None:
                 "Pos": "OF",
                 "Age": 26,
                 "BestSlot": "OF",
-                "ProjectionsUsed": 3,
                 "OldestProjectionDate": date(2026, 2, 24),
                 "YearValue": 3.21,
                 "DynastyValue": 7.12,
@@ -193,7 +190,6 @@ def test_xlsx_format_detail_sheet_smoke() -> None:
                 "Pos": "OF",
                 "Age": 27,
                 "BestSlot": "OF",
-                "ProjectionsUsed": 3,
                 "OldestProjectionDate": date(2026, 2, 24),
                 "YearValue": 2.88,
                 "DynastyValue": 6.01,

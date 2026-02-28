@@ -41,9 +41,6 @@ from backend.core.projection_utils import (
     coerce_record_year as core_coerce_record_year,
 )
 from backend.core.projection_utils import (
-    max_projection_count as core_max_projection_count,
-)
-from backend.core.projection_utils import (
     merge_position_value as core_merge_position_value,
 )
 from backend.core.projection_utils import (
@@ -194,10 +191,6 @@ def merge_position_value(hit_pos: object, pit_pos: object) -> str | None:
         split_re=POSITION_TOKEN_SPLIT_RE,
         display_order=POSITION_DISPLAY_ORDER,
     )
-
-
-def max_projection_count(*values: object) -> int | None:
-    return core_max_projection_count(*values)
 
 
 def oldest_projection_date(*values: object) -> str | None:

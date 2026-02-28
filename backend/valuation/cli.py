@@ -123,7 +123,6 @@ def main() -> None:
         df = out[
             [
                 "Player",
-                "ProjectionsUsed",
                 "OldestProjectionDate",
                 "Team",
                 "Pos",
@@ -159,7 +158,6 @@ def main() -> None:
         df = out[
             [
                 "Player",
-                "ProjectionsUsed",
                 "OldestProjectionDate",
                 "MLBTeam",
                 "Pos",

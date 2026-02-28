@@ -25,9 +25,7 @@ class DynastyIdentityTests(unittest.TestCase):
         self.assertEqual(len(out), 2)
         by_team = {str(row["Team"]): row for _, row in out.iterrows()}
         self.assertSetEqual(set(by_team), {"NYY", "LAD"})
-        self.assertEqual(int(by_team["NYY"]["ProjectionsUsed"]), 2)
         self.assertAlmostEqual(float(by_team["NYY"]["AB"]), 410.0, places=6)
-        self.assertEqual(int(by_team["LAD"]["ProjectionsUsed"]), 1)
         self.assertAlmostEqual(float(by_team["LAD"]["AB"]), 500.0, places=6)
 
     def test_add_player_identity_keys_disambiguates_same_name_by_team(self) -> None:

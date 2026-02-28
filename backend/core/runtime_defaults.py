@@ -4,7 +4,6 @@ from __future__ import annotations
 
 EXPORT_HEADER_LABEL_OVERRIDES = {
     "Type": "Side",
-    "ProjectionsUsed": "Proj Count",
     "OldestProjectionDate": "Oldest Proj Date",
     "DynastyValue": "Dynasty Value",
     "RawDynastyValue": "Raw Dynasty Value",
@@ -87,7 +86,7 @@ EXPORT_WHOLE_NUMBER_COLS = {
     "TB",
 }
 
-EXPORT_INTEGER_COLS = {"Rank", "Year", "Age", "ProjectionsUsed"}
+EXPORT_INTEGER_COLS = {"Rank", "Year", "Age"}
 EXPORT_DATE_COLS = {"OldestProjectionDate"}
 
 COMMON_HITTER_SLOT_DEFAULTS = {

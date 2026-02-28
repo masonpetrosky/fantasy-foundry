@@ -89,7 +89,6 @@ def test_aggregate_projection_career_rows_hitter_rolls_up_years_and_stats() -> N
             "HBP": 1,
             "SF": 2,
             "SO": 22,
-            "ProjectionsUsed": 2,
             "OldestProjectionDate": "2025-12-01",
             "PlayerKey": "john-doe",
             "PlayerEntityKey": "john-doe",
@@ -112,7 +111,6 @@ def test_aggregate_projection_career_rows_hitter_rolls_up_years_and_stats() -> N
             "HBP": 2,
             "SF": 3,
             "SO": 24,
-            "ProjectionsUsed": 3,
             "OldestProjectionDate": "2025-11-15",
             "PlayerKey": "john-doe",
             "PlayerEntityKey": "john-doe",
@@ -138,7 +136,6 @@ def test_aggregate_projection_career_rows_hitter_rolls_up_years_and_stats() -> N
     assert row["YearStart"] == 2026
     assert row["YearEnd"] == 2027
     assert row["Years"] == "2026-2027"
-    assert row["ProjectionsUsed"] == 3
     assert row["OldestProjectionDate"] == "2025-11-15"
     assert row["AB"] == 220.0
     assert row["H"] == 66.0
@@ -163,7 +160,6 @@ def test_aggregate_all_projection_career_rows_merges_hit_and_pitch_side_data() -
             "SO": 10,
             "AVG": 0.3,
             "OPS": 0.8,
-            "ProjectionsUsed": 2,
             "OldestProjectionDate": "2025-12-20",
             "PlayerKey": "two-way",
             "PlayerEntityKey": "two-way",
@@ -188,7 +184,6 @@ def test_aggregate_all_projection_career_rows_merges_hit_and_pitch_side_data() -
             "HR": 3,
             "BB": 8,
             "ER": 11,
-            "ProjectionsUsed": 1,
             "OldestProjectionDate": "2025-12-25",
             "PlayerKey": "two-way",
             "PlayerEntityKey": "two-way",
@@ -247,7 +242,6 @@ def test_merge_all_projection_rows_keeps_hitter_and_pitcher_fields_separate() ->
             "SO": 25,
             "AVG": 0.333,
             "OPS": 0.91,
-            "ProjectionsUsed": 2,
             "OldestProjectionDate": "2025-12-05",
             "PlayerKey": "hybrid",
             "PlayerEntityKey": "hybrid",
@@ -272,7 +266,6 @@ def test_merge_all_projection_rows_keeps_hitter_and_pitcher_fields_separate() ->
             "HR": 1,
             "BB": 6,
             "ER": 7,
-            "ProjectionsUsed": 1,
             "OldestProjectionDate": "2025-12-10",
             "PlayerKey": "hybrid",
             "PlayerEntityKey": "hybrid",

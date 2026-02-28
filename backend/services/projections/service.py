@@ -204,7 +204,6 @@ class ProjectionService:
                 "YearStart",
                 "YearEnd",
                 "Age",
-                "ProjectionsUsed",
                 "OldestProjectionDate",
                 "DynastyValue",
                 "DynastyMatchStatus",

@@ -14,7 +14,7 @@ def test_wrapper_derived_rate_constants_alias_extracted_module() -> None:
 def test_wrapper_average_recent_projections_delegates(monkeypatch) -> None:
     calls: dict[str, object] = {}
     frame = pd.DataFrame([{"Player": "A", "Year": 2026, "AB": 100}])
-    expected = pd.DataFrame([{"Player": "A", "Year": 2026, "AB": 100, "ProjectionsUsed": 1}])
+    expected = pd.DataFrame([{"Player": "A", "Year": 2026, "AB": 100}])
 
     def fake_average(
         df: pd.DataFrame,
@@ -39,7 +39,7 @@ def test_wrapper_projection_meta_for_start_year_delegates(monkeypatch) -> None:
     calls: dict[str, object] = {}
     bat = pd.DataFrame([{"Player": "A"}])
     pit = pd.DataFrame([{"Player": "A"}])
-    expected = pd.DataFrame([{"Player": "A", "ProjectionsUsed": 2}])
+    expected = pd.DataFrame([{"Player": "A", "OldestProjectionDate": None}])
 
     def fake_projection_meta(bat_df: pd.DataFrame, pit_df: pd.DataFrame, start_year: int) -> pd.DataFrame:
         calls["args"] = (bat_df, pit_df, start_year)

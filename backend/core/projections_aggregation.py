@@ -19,19 +19,6 @@ def coerce_numeric(value: object) -> float | None:
     return parsed
 
 
-def max_projection_count(*values: object) -> int | None:
-    counts: list[int] = []
-    for value in values:
-        try:
-            parsed = float(value)
-        except (TypeError, ValueError):
-            continue
-        if pd.isna(parsed):
-            continue
-        counts.append(int(round(parsed)))
-    return max(counts) if counts else None
-
-
 def oldest_projection_date(*values: object) -> str | None:
     oldest_ts: pd.Timestamp | None = None
     oldest_text: str | None = None
@@ -125,7 +112,6 @@ def aggregate_projection_career_rows(
         "Type",
         "Year",
         "Age",
-        "ProjectionsUsed",
         "OldestProjectionDate",
         "DynastyValue",
         "DynastyMatchStatus",
@@ -182,9 +168,6 @@ def aggregate_projection_career_rows(
         aggregated["YearEnd"] = year_end
         aggregated["Years"] = format_year_span(year_start, year_end)
 
-        projection_count = max_projection_count(*(row.get("ProjectionsUsed") for row in player_rows))
-        if projection_count is not None:
-            aggregated["ProjectionsUsed"] = projection_count
         aggregated["OldestProjectionDate"] = oldest_projection_date(
             *(row.get("OldestProjectionDate") for row in player_rows)
         )
@@ -362,12 +345,6 @@ def aggregate_all_projection_career_rows(
         merged["YearEnd"] = year_end
         merged["Years"] = format_year_span(year_start, year_end)
 
-        projection_total = max_projection_count(
-            (hit or {}).get("ProjectionsUsed"),
-            (pit or {}).get("ProjectionsUsed"),
-        )
-        if projection_total is not None:
-            merged["ProjectionsUsed"] = projection_total
         merged["OldestProjectionDate"] = oldest_projection_date(
             (hit or {}).get("OldestProjectionDate"),
             (pit or {}).get("OldestProjectionDate"),
@@ -427,9 +404,6 @@ def merge_all_projection_rows(
         if merged["Age"] is None:
             merged["Age"] = (pit or {}).get("Age")
 
-        max_used = max_projection_count((hit or {}).get("ProjectionsUsed"), (pit or {}).get("ProjectionsUsed"))
-        if max_used is not None:
-            merged["ProjectionsUsed"] = max_used
         merged["OldestProjectionDate"] = oldest_projection_date(
             (hit or {}).get("OldestProjectionDate"),
             (pit or {}).get("OldestProjectionDate"),

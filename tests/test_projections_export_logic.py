@@ -39,7 +39,6 @@ def test_default_projection_export_columns_prefers_core_identity_and_dynasty_col
             "OPS": 0.82,
             "Value_2026": 0.5,
             "Value_2027": 0.6,
-            "ProjectionsUsed": 2,
             "OldestProjectionDate": "2025-12-01",
             "Years": "2026-2027",
         }

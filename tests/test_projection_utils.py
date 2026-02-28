@@ -33,11 +33,6 @@ def test_row_team_value_prefers_team_then_mlbteam():
     assert projection_utils.row_team_value({"MLBTeam": "NYY"}) == "NYY"
 
 
-def test_max_projection_count_ignores_invalid_values():
-    assert projection_utils.max_projection_count("2", 3.2, None, "bad", float("nan")) == 3
-    assert projection_utils.max_projection_count(None, "bad") is None
-
-
 def test_oldest_projection_date_returns_oldest_valid_date_then_text_fallback():
     assert projection_utils.oldest_projection_date("2026-03-01", "2025-12-31", "not-a-date") == "2025-12-31"
     assert projection_utils.oldest_projection_date("", "unknown") == "unknown"

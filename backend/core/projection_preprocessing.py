@@ -194,7 +194,6 @@ def average_recent_projection_rows(
     df = df.sort_values(["_sort_key", "_projection_order"], ascending=False)
     max_dates = df.groupby(group_cols, sort=False)["_sort_key"].transform("max")
     recent = df[df["_sort_key"] == max_dates].copy()
-    recent["ProjectionsUsed"] = 1
     recent["OldestProjectionDate"] = recent["_projection_date"]
 
     meta_cols = [
@@ -207,13 +206,11 @@ def average_recent_projection_rows(
             "_projection_order",
             "_projection_date",
             "_sort_key",
-            "ProjectionsUsed",
             "OldestProjectionDate",
         }
     ]
 
     agg = {col: "mean" for col in stat_cols}
-    agg["ProjectionsUsed"] = "sum"
     agg["OldestProjectionDate"] = "min"
     for col in meta_cols:
         agg[col] = "first"
@@ -226,7 +223,7 @@ def average_recent_projection_rows(
     if internal_group_cols:
         out = out.drop(columns=internal_group_cols, errors="ignore")
 
-    front = ["Player", "Year", "ProjectionsUsed", "OldestProjectionDate"]
+    front = ["Player", "Year", "OldestProjectionDate"]
     out = out[[col for col in front if col in out.columns] + [col for col in out.columns if col not in front]]
 
     if is_hitter:

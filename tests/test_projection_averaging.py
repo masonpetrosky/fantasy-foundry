@@ -46,9 +46,7 @@ class AverageRecentProjectionRowsTests(unittest.TestCase):
         self.assertEqual(len(out), 2)
         by_team = {row["Team"]: row for row in out}
         self.assertSetEqual(set(by_team), {"NYY", "LAD"})
-        self.assertEqual(by_team["NYY"]["ProjectionsUsed"], 2)
         self.assertAlmostEqual(by_team["NYY"]["AB"], 410.0)
-        self.assertEqual(by_team["LAD"]["ProjectionsUsed"], 1)
         self.assertAlmostEqual(by_team["LAD"]["AB"], 500.0)
 
     def test_same_team_rows_still_average_together(self) -> None:
@@ -63,7 +61,6 @@ class AverageRecentProjectionRowsTests(unittest.TestCase):
         self.assertEqual(len(out), 1)
         row = out[0]
         self.assertEqual(row["Team"], "NYY")
-        self.assertEqual(row["ProjectionsUsed"], 1)
         self.assertAlmostEqual(row["AB"], 430.0)
         self.assertNotIn("_entity_team", row)
 

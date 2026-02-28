@@ -168,7 +168,6 @@ def _xlsx_format_player_values(ws, df: pd.DataFrame, table_name: str = "PlayerVa
     _xlsx_set_column_widths(ws, df, overrides=overrides)
 
     formats = {
-        "ProjectionsUsed": "0",
         "Age": "0",
         "OldestProjectionDate": "yyyy-mm-dd",
         "DynastyValue": "0.00",
@@ -211,7 +210,6 @@ def _xlsx_format_detail_sheet(
     formats: Dict[str, str] = {
         "Year": "0",
         "Age": "0",
-        "ProjectionsUsed": "0",
         "OldestProjectionDate": "yyyy-mm-dd",
         "YearValue": "0.00",
         "DynastyValue": "0.00",

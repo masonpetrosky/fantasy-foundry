@@ -23,7 +23,6 @@ class DynastyValuePenaltyRemovalTests(unittest.TestCase):
                     "Age": 22,
                     "DynastyValue": 12.5,
                     "RawDynastyValue": 14.0,
-                    "ProjectionsUsed": 1,
                     "minor_eligible": True,
                     "Value_2026": 8.0,
                 }
@@ -92,7 +91,6 @@ class DynastyValuePenaltyRemovalTests(unittest.TestCase):
                 "SB": 0,
                 "BB": 0,
                 "SO": 0,
-                "ProjectionsUsed": 1,
                 "PlayerKey": "hitter-a",
                 "PlayerEntityKey": "hitter-a",
             },
@@ -112,7 +110,6 @@ class DynastyValuePenaltyRemovalTests(unittest.TestCase):
                 "SB": 0,
                 "BB": 0,
                 "SO": 0,
-                "ProjectionsUsed": 1,
                 "PlayerKey": "hitter-b",
                 "PlayerEntityKey": "hitter-b",
             },

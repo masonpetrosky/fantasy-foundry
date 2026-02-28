@@ -26,8 +26,7 @@ def average_recent_projections(
     If multiple projections exist for the same (Player, Year), keep only rows
     from the most recent projection date and average them.
 
-    Adds two columns to the averaged output:
-      - ProjectionsUsed: number of rows actually averaged
+    Adds one column to the averaged output:
       - OldestProjectionDate: the projection date of the rows averaged.
         If no projection date column exists, this will be NaT.
     """
@@ -73,7 +72,6 @@ def average_recent_projections(
     recent = df[df["_sort_key"] == max_dates].copy()
 
     # Per-row markers so we can aggregate to group-level metadata
-    recent["ProjectionsUsed"] = 1
     recent["OldestProjectionDate"] = recent["_projection_date"]
 
     stat_cols_present = [c for c in stat_cols if c in recent.columns]
@@ -88,13 +86,11 @@ def average_recent_projections(
             "_projection_order",
             "_projection_date",
             "_sort_key",
-            "ProjectionsUsed",
             "OldestProjectionDate",
         }
     ]
 
     agg: Dict[str, str] = {c: "mean" for c in stat_cols_present}
-    agg["ProjectionsUsed"] = "sum"
     agg["OldestProjectionDate"] = "min"
     for c in meta_cols:
         agg[c] = "first"
@@ -107,7 +103,7 @@ def average_recent_projections(
     out = out.drop(columns=["_entity_team"], errors="ignore")
 
     # Nice column order: group keys, then the new metadata columns, then everything else
-    front = list(group_cols) + ["ProjectionsUsed", "OldestProjectionDate"]
+    front = list(group_cols) + ["OldestProjectionDate"]
     rest = [c for c in out.columns if c not in front]
     return out[front + rest]
 
@@ -119,12 +115,11 @@ def projection_meta_for_start_year(
 ) -> pd.DataFrame:
     """
     Produce one row per Player with:
-      - ProjectionsUsed: max of Bat vs Pitch (handles hitter-only / pitcher-only / two-way)
       - OldestProjectionDate: min (oldest) of Bat vs Pitch dates
 
     Uses the already-averaged frames produced by average_recent_projections().
     """
-    cols = ["Player", "ProjectionsUsed", "OldestProjectionDate"]
+    cols = ["Player", "OldestProjectionDate"]
 
     def _subset_projection_meta(df: pd.DataFrame) -> pd.DataFrame:
         """Return a safe start-year projection metadata slice.
@@ -146,17 +141,13 @@ def projection_meta_for_start_year(
 
     m = b.merge(p, on="Player", how="outer", suffixes=("_bat", "_pit"))
 
-    # How many projections were used (from the most recent date)
-    m["ProjectionsUsed"] = m[["ProjectionsUsed_bat", "ProjectionsUsed_pit"]].max(axis=1, skipna=True)
-    m["ProjectionsUsed"] = m["ProjectionsUsed"].round().astype("Int64")
-
     # Oldest date among whichever side exists (and the min if both exist)
     m["OldestProjectionDate"] = m[["OldestProjectionDate_bat", "OldestProjectionDate_pit"]].min(axis=1, skipna=True)
 
     # Store as date-only (no time) for cleaner Excel display
     m["OldestProjectionDate"] = pd.to_datetime(m["OldestProjectionDate"], errors="coerce").dt.date
 
-    return m[["Player", "ProjectionsUsed", "OldestProjectionDate"]]
+    return m[["Player", "OldestProjectionDate"]]
 
 
 def numeric_stat_cols_for_recent_avg(
