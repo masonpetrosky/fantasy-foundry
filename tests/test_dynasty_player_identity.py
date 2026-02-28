@@ -14,13 +14,13 @@ class DynastyIdentityTests(unittest.TestCase):
     def test_average_recent_projections_disambiguates_same_name_by_team(self) -> None:
         df = pd.DataFrame(
             [
-                {"Player": "Same Name", "Year": 2026, "Team": "NYY", "Date": "2026-02-01", "AB": 400.0, "H": 100.0},
+                {"Player": "Same Name", "Year": 2026, "Team": "NYY", "Date": "2026-02-08", "AB": 400.0, "H": 100.0},
                 {"Player": "Same Name", "Year": 2026, "Team": "NYY", "Date": "2026-02-08", "AB": 420.0, "H": 110.0},
                 {"Player": "Same Name", "Year": 2026, "Team": "LAD", "Date": "2026-02-10", "AB": 500.0, "H": 140.0},
             ]
         )
 
-        out = average_recent_projections(df, stat_cols=["AB", "H"], max_entries=3)
+        out = average_recent_projections(df, stat_cols=["AB", "H"])
 
         self.assertEqual(len(out), 2)
         by_team = {str(row["Team"]): row for _, row in out.iterrows()}

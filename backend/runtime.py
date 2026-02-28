@@ -509,8 +509,8 @@ META = load_json("meta.json")
 BAT_DATA_RAW = load_json("bat.json")
 PIT_DATA_RAW = load_json("pitch.json")
 BAT_DATA_RAW, PIT_DATA_RAW = _with_player_identity_keys(BAT_DATA_RAW, PIT_DATA_RAW)
-BAT_DATA = _average_recent_projection_rows(BAT_DATA_RAW, max_entries=3, is_hitter=True)
-PIT_DATA = _average_recent_projection_rows(PIT_DATA_RAW, max_entries=3, is_hitter=False)
+BAT_DATA = _average_recent_projection_rows(BAT_DATA_RAW, is_hitter=True)
+PIT_DATA = _average_recent_projection_rows(PIT_DATA_RAW, is_hitter=False)
 PROJECTION_FRESHNESS = _projection_freshness_payload(BAT_DATA, PIT_DATA)
 DATA_REFRESH_PATHS = (
     DATA_DIR / "meta.json",

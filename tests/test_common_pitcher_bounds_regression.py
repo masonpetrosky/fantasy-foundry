@@ -154,7 +154,6 @@ class CommonPitcherBoundsRegressionTests(unittest.TestCase):
             ip_max=1500.0,
             two_way="sum",
             start_year=2026,
-            recent_projections=3,
             **settings,
         )
         rows = out.set_index("PlayerEntityKey")
@@ -211,7 +210,6 @@ class CommonPitcherBoundsRegressionTests(unittest.TestCase):
             ip_max=1500.0,
             two_way="sum",
             start_year=2026,
-            recent_projections=3,
             **settings,
         )
         rows = out.set_index("PlayerEntityKey")

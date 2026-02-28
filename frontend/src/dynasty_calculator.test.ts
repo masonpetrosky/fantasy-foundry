@@ -15,7 +15,6 @@ const baseSettings = {
   ip_max: 1400 as string | number,
   two_way: "max",
   start_year: 2027,
-  recent_projections: 5,
   sgp_denominator_mode: "classic",
   sgp_winsor_low_pct: 0.1,
   sgp_winsor_high_pct: 0.9,
@@ -63,7 +62,6 @@ describe("buildQuickStartSettings", () => {
     expect(settings.enable_age_risk_adjustment).toBe(false);
     expect(settings.enable_replacement_blend).toBe(false);
     expect(settings.replacement_blend_alpha).toBe(0.7);
-    expect(settings.recent_projections).toBe(3);
     expect(settings.sims).toBe(300);
     expect(settings.start_year).toBe(2027);
     expect(settings["hit_of"]).toBe(3);

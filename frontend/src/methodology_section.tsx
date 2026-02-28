@@ -14,7 +14,7 @@ export function MethodologySection(): React.ReactElement {
         <ol>
           <li>
             Import Bat/Pitch projections, normalize columns, and collapse duplicate player-year rows by
-            averaging the most recent <code>recent_projections</code> entries.
+            averaging entries from the most recent projection date.
           </li>
           <li>
             Build valuation years from <code>start_year</code> and <code>horizon</code>, then compute

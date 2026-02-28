@@ -57,24 +57,16 @@ def selected_roto_categories(
 def start_year_roto_stats_by_entity(
     *,
     start_year: int,
-    recent_projections: int,
     bat_data: list[dict],
     pit_data: list[dict],
-    bat_data_raw: list[dict],
-    pit_data_raw: list[dict],
-    average_recent_projection_rows_fn: Callable[..., list[dict]],
     coerce_record_year_fn: Callable[[object], int | None],
     projection_identity_key_fn: Callable[[dict | pd.Series], str],
     coerce_numeric_fn: Callable[[object], float | None],
     roto_hitter_fields: tuple[tuple[str, str, bool], ...],
     roto_pitcher_fields: tuple[tuple[str, str, bool], ...],
 ) -> dict[str, dict[str, float]]:
-    if recent_projections == 3:
-        bat_rows = bat_data
-        pit_rows = pit_data
-    else:
-        bat_rows = average_recent_projection_rows_fn(bat_data_raw, max_entries=recent_projections, is_hitter=True)
-        pit_rows = average_recent_projection_rows_fn(pit_data_raw, max_entries=recent_projections, is_hitter=False)
+    bat_rows = bat_data
+    pit_rows = pit_data
 
     stats_by_entity: dict[str, dict[str, float]] = {}
 
@@ -251,7 +243,6 @@ def default_calculation_cache_params(
         "ip_max": None,
         "two_way": "sum",
         "start_year": start_year,
-        "recent_projections": 3,
         "sgp_denominator_mode": "classic",
         "sgp_winsor_low_pct": 0.10,
         "sgp_winsor_high_pct": 0.90,

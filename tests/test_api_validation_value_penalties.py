@@ -67,7 +67,6 @@ class DynastyValuePenaltyRemovalTests(unittest.TestCase):
                 ip_max=None,
                 two_way="sum",
                 start_year=2026,
-                recent_projections=1,
             )
 
         row = out.iloc[0]
@@ -145,7 +144,6 @@ class DynastyValuePenaltyRemovalTests(unittest.TestCase):
                 ir=0,
                 two_way="sum",
                 start_year=2026,
-                recent_projections=3,
                 pts_hit_1b=1.0,
                 pts_hit_2b=0.0,
                 pts_hit_3b=0.0,
@@ -253,7 +251,6 @@ class DynastyValuePenaltyRemovalTests(unittest.TestCase):
             "pit_rp": 0,
             "two_way": "sum",
             "start_year": 2026,
-            "recent_projections": 3,
             "pts_hit_1b": 1.0,
             "pts_hit_2b": 0.0,
             "pts_hit_3b": 0.0,

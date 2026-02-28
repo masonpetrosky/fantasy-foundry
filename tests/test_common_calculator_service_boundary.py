@@ -14,12 +14,11 @@ def test_common_calculator_delegates_to_valuation_service(monkeypatch):
             calls["settings_kwargs"] = kwargs
             return {"kind": "fake-settings"}
 
-        def calculate_common_dynasty_values(self, excel_path, league_settings, *, start_year, recent_projections):
+        def calculate_common_dynasty_values(self, excel_path, league_settings, *, start_year):
             calls["calculate_args"] = {
                 "excel_path": excel_path,
                 "league_settings": league_settings,
                 "start_year": start_year,
-                "recent_projections": recent_projections,
             }
             return pd.DataFrame([{"Player": "Test Player", "DynastyValue": 12.3}])
 
@@ -51,7 +50,6 @@ def test_common_calculator_delegates_to_valuation_service(monkeypatch):
         ip_max=None,
         two_way="sum",
         start_year=2026,
-        recent_projections=3,
         roto_category_settings={
             "roto_hit_hr": True,
             "roto_hit_sb": False,
@@ -79,4 +77,3 @@ def test_common_calculator_delegates_to_valuation_service(monkeypatch):
     assert isinstance(calculate_args, dict)
     assert calculate_args["league_settings"] == {"kind": "fake-settings"}
     assert calculate_args["start_year"] == 2026
-    assert calculate_args["recent_projections"] == 3

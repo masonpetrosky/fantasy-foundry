@@ -36,12 +36,12 @@ def _hitter_projection(
 class AverageRecentProjectionRowsTests(unittest.TestCase):
     def test_disambiguates_same_name_and_year_by_team(self) -> None:
         records = [
-            _hitter_projection(team="NYY", date="2026-02-01", ab=400.0, h=100.0),
+            _hitter_projection(team="NYY", date="2026-02-08", ab=400.0, h=100.0),
             _hitter_projection(team="NYY", date="2026-02-08", ab=420.0, h=110.0),
             _hitter_projection(team="LAD", date="2026-02-10", ab=500.0, h=140.0),
         ]
 
-        out = app_module._average_recent_projection_rows(records, max_entries=3, is_hitter=True)
+        out = app_module._average_recent_projection_rows(records, is_hitter=True)
 
         self.assertEqual(len(out), 2)
         by_team = {row["Team"]: row for row in out}
@@ -58,13 +58,13 @@ class AverageRecentProjectionRowsTests(unittest.TestCase):
             _hitter_projection(team="NYY", date="2026-02-12", ab=430.0, h=115.0),
         ]
 
-        out = app_module._average_recent_projection_rows(records, max_entries=2, is_hitter=True)
+        out = app_module._average_recent_projection_rows(records, is_hitter=True)
 
         self.assertEqual(len(out), 1)
         row = out[0]
         self.assertEqual(row["Team"], "NYY")
-        self.assertEqual(row["ProjectionsUsed"], 2)
-        self.assertAlmostEqual(row["AB"], 420.0)
+        self.assertEqual(row["ProjectionsUsed"], 1)
+        self.assertAlmostEqual(row["AB"], 430.0)
         self.assertNotIn("_entity_team", row)
 
 

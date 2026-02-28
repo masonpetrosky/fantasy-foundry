@@ -21,20 +21,16 @@ def average_recent_projections(
     df: pd.DataFrame,
     stat_cols: List[str],
     group_cols: Optional[List[str]] = None,
-    max_entries: int = 3,
 ) -> pd.DataFrame:
     """
-    If multiple projections exist for the same (Player, Year), average the most recent
-    `max_entries` rows (by projection date column if present, otherwise file order).
+    If multiple projections exist for the same (Player, Year), keep only rows
+    from the most recent projection date and average them.
 
     Adds two columns to the averaged output:
-      - ProjectionsUsed: number of rows actually averaged (<= max_entries)
-      - OldestProjectionDate: the oldest projection date among the rows averaged
-        (i.e., the "third-oldest" among the selected rows when max_entries=3).
+      - ProjectionsUsed: number of rows actually averaged
+      - OldestProjectionDate: the projection date of the rows averaged.
         If no projection date column exists, this will be NaT.
     """
-    if max_entries < 1:
-        raise ValueError("max_entries must be >= 1")
 
     df = df.copy()
     group_cols = group_cols or ["Player", "Year"]
@@ -71,12 +67,10 @@ def average_recent_projections(
         df["_projection_date"] = pd.NaT
         df["_sort_key"] = df["_projection_order"]
 
-    # Keep up to `max_entries` most-recent rows per (Player, Year)
-    recent = (
-        df.sort_values(["_sort_key", "_projection_order"], ascending=False)
-        .groupby(effective_group_cols, as_index=False, sort=False)
-        .head(max_entries)
-    )
+    # Keep only rows from the most recent projection date per group
+    df = df.sort_values(["_sort_key", "_projection_order"], ascending=False)
+    max_dates = df.groupby(effective_group_cols, sort=False)["_sort_key"].transform("max")
+    recent = df[df["_sort_key"] == max_dates].copy()
 
     # Per-row markers so we can aggregate to group-level metadata
     recent["ProjectionsUsed"] = 1
@@ -152,7 +146,7 @@ def projection_meta_for_start_year(
 
     m = b.merge(p, on="Player", how="outer", suffixes=("_bat", "_pit"))
 
-    # How many projections were used (cap is enforced upstream by max_entries)
+    # How many projections were used (from the most recent date)
     m["ProjectionsUsed"] = m[["ProjectionsUsed_bat", "ProjectionsUsed_pit"]].max(axis=1, skipna=True)
     m["ProjectionsUsed"] = m["ProjectionsUsed"].round().astype("Int64")
 

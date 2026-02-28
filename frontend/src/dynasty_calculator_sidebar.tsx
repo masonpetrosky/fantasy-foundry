@@ -299,21 +299,6 @@ export function DynastyCalculatorSidebar({
               disabled={isPointsMode}
             />
           </div>
-          <div className="form-group">
-            <label htmlFor="calc-recent-projections">
-              Recent Proj.
-              <span
-                className="field-help"
-                tabIndex={0}
-                role="note"
-                aria-label="Recent projections help"
-                title="Number of newest projection sets averaged per player-year (1-10). Higher values smooth volatility."
-              >
-                ?
-              </span>
-            </label>
-            <input id="calc-recent-projections" type="number" value={settings.recent_projections} onChange={e => update("recent_projections", e.target.value)} min="1" max="10" />
-          </div>
         </div>
         {isPointsMode && <p className="calc-note">Points mode ignores the simulations setting and scores directly from projected totals.</p>}
 

@@ -92,7 +92,6 @@ export function buildQuickStartSettings({
     enable_replacement_blend: false,
     replacement_blend_alpha: 0.7,
     start_year: startYear,
-    recent_projections: 3,
     sims: 300,
   };
 

@@ -115,12 +115,10 @@ def with_player_identity_keys(
 def average_recent_projection_rows(
     records: list[dict],
     *,
-    max_entries: int = 3,
     is_hitter: bool,
 ) -> list[dict]:
     return core_average_recent_projection_rows(
         records,
-        max_entries=max_entries,
         is_hitter=is_hitter,
         team_col_candidates=TEAM_COL_CANDIDATES,
         projection_date_cols=PROJECTION_DATE_COLS,

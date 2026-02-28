@@ -66,7 +66,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Recompute replacement baselines for each valuation year (legacy behavior).",
     )
     common.add_argument("--out-prefix", default="common_player_values", help="Output prefix for CSV/XLSX.")
-    common.add_argument("--recent-projections", type=positive_int_arg, default=3, help="Number of most recent projections to average per player/year.")
 
     league = sub.add_parser("league", help="Run the custom league valuation from the original my-league script.")
     league.add_argument(
@@ -85,7 +84,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Recompute replacement baselines for each valuation year (legacy behavior).",
     )
     league.add_argument("--out-prefix", default="player_values", help="Output prefix for CSV/XLSX.")
-    league.add_argument("--recent-projections", type=positive_int_arg, default=3, help="Number of most recent projections to average per player/year.")
 
     return p
 
@@ -119,7 +117,6 @@ def main() -> None:
             verbose=True,
             return_details=True,
             seed=args.seed,
-            recent_projections=args.recent_projections,
         )
 
         year_cols = [c for c in out.columns if c.startswith("Value_")]
@@ -156,7 +153,6 @@ def main() -> None:
             verbose=True,
             return_details=True,
             seed=args.seed,
-            recent_projections=args.recent_projections,
         )
 
         year_cols = [c for c in out.columns if c.startswith("Value_")]

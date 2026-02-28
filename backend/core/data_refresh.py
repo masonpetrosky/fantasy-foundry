@@ -184,8 +184,8 @@ def reload_projection_data(
     bat_data_raw = load_json("bat.json")
     pit_data_raw = load_json("pitch.json")
     bat_data_raw, pit_data_raw = with_player_identity_keys(bat_data_raw, pit_data_raw)
-    bat_data = average_recent_projection_rows(bat_data_raw, max_entries=3, is_hitter=True)
-    pit_data = average_recent_projection_rows(pit_data_raw, max_entries=3, is_hitter=False)
+    bat_data = average_recent_projection_rows(bat_data_raw, is_hitter=True)
+    pit_data = average_recent_projection_rows(pit_data_raw, is_hitter=False)
     projection_freshness = projection_freshness_payload(bat_data, pit_data)
     return meta, bat_data_raw, pit_data_raw, bat_data, pit_data, projection_freshness
 

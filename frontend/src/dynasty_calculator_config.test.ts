@@ -186,7 +186,6 @@ function buildValidRotoSettings(overrides: Record<string, unknown> = {}): Record
     enable_replacement_blend: false,
     replacement_blend_alpha: 0.7,
     start_year: 2026,
-    recent_projections: 3,
     ...resolveRotoCategoryDefaults(),
     ...resolvePointsScoringDefaults({}),
   };

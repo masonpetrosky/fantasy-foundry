@@ -49,21 +49,19 @@ def test_build_parser_parses_common_defaults() -> None:
     args = cli._build_parser().parse_args(["common"])
     assert args.mode == "common"
     assert args.teams == 12
-    assert args.recent_projections == 3
     assert args.dynamic_replacement_baselines is False
 
 
 def test_main_common_writes_outputs_even_if_formatting_fails(monkeypatch, tmp_path: Path) -> None:
     calls: dict[str, object] = {}
 
-    def fake_common(excel_path, lg, *, start_year, verbose, return_details, seed, recent_projections):
+    def fake_common(excel_path, lg, *, start_year, verbose, return_details, seed):
         calls["excel_path"] = excel_path
         calls["lg"] = lg
         calls["start_year"] = start_year
         calls["verbose"] = verbose
         calls["return_details"] = return_details
         calls["seed"] = seed
-        calls["recent_projections"] = recent_projections
         detail = pd.DataFrame([{"Player": "Prospect One", "Year": 2026}])
         return _common_out_frame(), detail, detail.copy()
 
@@ -85,8 +83,6 @@ def test_main_common_writes_outputs_even_if_formatting_fails(monkeypatch, tmp_pa
             str(tmp_path / "common_values"),
             "--start-year",
             "2026",
-            "--recent-projections",
-            "2",
         ],
     )
 
@@ -95,7 +91,6 @@ def test_main_common_writes_outputs_even_if_formatting_fails(monkeypatch, tmp_pa
     assert calls["excel_path"] == "fake.xlsx"
     assert calls["start_year"] == 2026
     assert calls["return_details"] is True
-    assert calls["recent_projections"] == 2
     assert (tmp_path / "common_values.csv").exists()
     assert (tmp_path / "common_values.xlsx").exists()
 
@@ -103,14 +98,13 @@ def test_main_common_writes_outputs_even_if_formatting_fails(monkeypatch, tmp_pa
 def test_main_league_dispatches_and_writes_outputs(monkeypatch, tmp_path: Path) -> None:
     calls: dict[str, object] = {}
 
-    def fake_league(excel_path, lg, *, start_year, verbose, return_details, seed, recent_projections):
+    def fake_league(excel_path, lg, *, start_year, verbose, return_details, seed):
         calls["excel_path"] = excel_path
         calls["lg"] = lg
         calls["start_year"] = start_year
         calls["verbose"] = verbose
         calls["return_details"] = return_details
         calls["seed"] = seed
-        calls["recent_projections"] = recent_projections
         detail = pd.DataFrame([{"Player": "Prospect Two", "Year": 2026}])
         return _league_out_frame(), detail, detail.copy()
 
@@ -129,8 +123,6 @@ def test_main_league_dispatches_and_writes_outputs(monkeypatch, tmp_path: Path) 
             str(tmp_path / "league_values"),
             "--seed",
             "9",
-            "--recent-projections",
-            "4",
         ],
     )
 
@@ -140,6 +132,5 @@ def test_main_league_dispatches_and_writes_outputs(monkeypatch, tmp_path: Path) 
     assert calls["start_year"] is None
     assert calls["return_details"] is True
     assert calls["seed"] == 9
-    assert calls["recent_projections"] == 4
     assert (tmp_path / "league_values.csv").exists()
     assert (tmp_path / "league_values.xlsx").exists()

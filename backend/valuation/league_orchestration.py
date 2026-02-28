@@ -169,7 +169,6 @@ def calculate_league_dynasty_values(
     verbose: bool = True,
     return_details: bool = False,
     seed: int = 0,
-    recent_projections: int = 3,
 ):
     """League-mode dynasty values (your custom categories/rules).
 
@@ -207,8 +206,8 @@ def calculate_league_dynasty_values(
         exclude_cols={"Age"} | DERIVED_PIT_RATE_COLS,
     )
 
-    bat_df = average_recent_projections(bat_raw, bat_stat_cols, max_entries=recent_projections)
-    pit_df = average_recent_projections(pit_raw, pit_stat_cols, max_entries=recent_projections)
+    bat_df = average_recent_projections(bat_raw, bat_stat_cols)
+    pit_df = average_recent_projections(pit_raw, pit_stat_cols)
 
     bat_df = recompute_league_rates_hit(bat_df)
     pit_df = recompute_league_rates_pit(pit_df)

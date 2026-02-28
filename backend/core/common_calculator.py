@@ -37,7 +37,6 @@ def calculate_common_dynasty_frame(
     ip_max: float | None,
     two_way: str,
     start_year: int,
-    recent_projections: int,
     roto_category_settings: dict[str, bool],
     roto_hitter_fields: tuple[tuple[str, str, bool], ...],
     roto_pitcher_fields: tuple[tuple[str, str, bool], ...],
@@ -109,5 +108,4 @@ def calculate_common_dynasty_frame(
         excel_path,
         league_settings,
         start_year=start_year,
-        recent_projections=recent_projections,
     )

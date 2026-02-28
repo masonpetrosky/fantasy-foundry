@@ -35,7 +35,6 @@ def calculate_league_dynasty_frame(
     ip_max: float | None,
     two_way: str,
     start_year: int,
-    recent_projections: int,
     sgp_denominator_mode: str = "classic",
     sgp_winsor_low_pct: float = 0.10,
     sgp_winsor_high_pct: float = 0.90,
@@ -96,7 +95,6 @@ def calculate_league_dynasty_frame(
         verbose=False,
         return_details=False,
         seed=0,
-        recent_projections=recent_projections,
     )
 
     # Rename MLBTeam → Team for consistency with common mode output schema.

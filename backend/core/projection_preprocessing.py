@@ -136,14 +136,13 @@ def with_player_identity_keys(
 def average_recent_projection_rows(
     records: list[dict],
     *,
-    max_entries: int = 3,
     is_hitter: bool,
     team_col_candidates: tuple[str, ...],
     projection_date_cols: list[str],
     derived_hit_rate_cols: set[str],
     derived_pit_rate_cols: set[str],
 ) -> list[dict]:
-    """Collapse duplicate projection rows by averaging recent entries.
+    """Collapse duplicate projection rows by keeping only the most recent date.
 
     Rows are grouped by (Player, Year) and disambiguated by team only when a
     given name/year has multiple non-empty teams. This avoids merging distinct
@@ -151,8 +150,6 @@ def average_recent_projection_rows(
     """
     if not records:
         return records
-    if max_entries < 1:
-        raise ValueError("max_entries must be >= 1")
 
     df = pd.DataFrame.from_records(records)
     group_cols_base = ["Player", "Year"]
@@ -194,11 +191,9 @@ def average_recent_projection_rows(
         and pd.api.types.is_numeric_dtype(df[col])
     ]
 
-    recent = (
-        df.sort_values(["_sort_key", "_projection_order"], ascending=False)
-        .groupby(group_cols, as_index=False, sort=False)
-        .head(max_entries)
-    )
+    df = df.sort_values(["_sort_key", "_projection_order"], ascending=False)
+    max_dates = df.groupby(group_cols, sort=False)["_sort_key"].transform("max")
+    recent = df[df["_sort_key"] == max_dates].copy()
     recent["ProjectionsUsed"] = 1
     recent["OldestProjectionDate"] = recent["_projection_date"]
 

@@ -20,9 +20,8 @@ def test_wrapper_average_recent_projections_delegates(monkeypatch) -> None:
         df: pd.DataFrame,
         stat_cols: list[str],
         group_cols: list[str] | None = None,
-        max_entries: int = 3,
     ) -> pd.DataFrame:
-        calls["args"] = (df, stat_cols, group_cols, max_entries)
+        calls["args"] = (df, stat_cols, group_cols)
         return expected
 
     monkeypatch.setattr(projection_averaging, "average_recent_projections", fake_average)
@@ -30,10 +29,9 @@ def test_wrapper_average_recent_projections_delegates(monkeypatch) -> None:
         frame,
         stat_cols=["AB"],
         group_cols=["Player", "Year"],
-        max_entries=5,
     )
 
-    assert calls["args"] == (frame, ["AB"], ["Player", "Year"], 5)
+    assert calls["args"] == (frame, ["AB"], ["Player", "Year"])
     assert out is expected
 
 

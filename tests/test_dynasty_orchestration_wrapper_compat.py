@@ -5,7 +5,7 @@ from backend.valuation import cli, common_orchestration, league_orchestration
 def test_common_wrapper_delegates_to_extracted_module(monkeypatch) -> None:
     calls: dict[str, object] = {}
 
-    def fake_common(excel_path, lg, *, start_year, years, verbose, return_details, seed, recent_projections):
+    def fake_common(excel_path, lg, *, start_year, years, verbose, return_details, seed):
         calls["excel_path"] = excel_path
         calls["lg"] = lg
         calls["start_year"] = start_year
@@ -13,7 +13,6 @@ def test_common_wrapper_delegates_to_extracted_module(monkeypatch) -> None:
         calls["verbose"] = verbose
         calls["return_details"] = return_details
         calls["seed"] = seed
-        calls["recent_projections"] = recent_projections
         return "common-ok"
 
     monkeypatch.setattr(common_orchestration, "calculate_common_dynasty_values", fake_common)
@@ -25,7 +24,6 @@ def test_common_wrapper_delegates_to_extracted_module(monkeypatch) -> None:
         verbose=False,
         return_details=True,
         seed=11,
-        recent_projections=5,
     )
 
     assert out == "common-ok"
@@ -35,13 +33,12 @@ def test_common_wrapper_delegates_to_extracted_module(monkeypatch) -> None:
     assert calls["verbose"] is False
     assert calls["return_details"] is True
     assert calls["seed"] == 11
-    assert calls["recent_projections"] == 5
 
 
 def test_league_wrapper_delegates_to_extracted_module(monkeypatch) -> None:
     calls: dict[str, object] = {}
 
-    def fake_league(excel_path, lg, *, start_year, years, verbose, return_details, seed, recent_projections):
+    def fake_league(excel_path, lg, *, start_year, years, verbose, return_details, seed):
         calls["excel_path"] = excel_path
         calls["lg"] = lg
         calls["start_year"] = start_year
@@ -49,7 +46,6 @@ def test_league_wrapper_delegates_to_extracted_module(monkeypatch) -> None:
         calls["verbose"] = verbose
         calls["return_details"] = return_details
         calls["seed"] = seed
-        calls["recent_projections"] = recent_projections
         return "league-ok"
 
     monkeypatch.setattr(league_orchestration, "calculate_league_dynasty_values", fake_league)
@@ -61,7 +57,6 @@ def test_league_wrapper_delegates_to_extracted_module(monkeypatch) -> None:
         verbose=False,
         return_details=True,
         seed=3,
-        recent_projections=2,
     )
 
     assert out == "league-ok"
@@ -71,7 +66,6 @@ def test_league_wrapper_delegates_to_extracted_module(monkeypatch) -> None:
     assert calls["verbose"] is False
     assert calls["return_details"] is True
     assert calls["seed"] == 3
-    assert calls["recent_projections"] == 2
 
 
 def test_main_wrapper_delegates_to_cli_module(monkeypatch) -> None:

@@ -561,7 +561,6 @@ def calculate_points_dynasty_frame(
     ir: int,
     two_way: str,
     start_year: int,
-    recent_projections: int,
     pts_hit_1b: float,
     pts_hit_2b: float,
     pts_hit_3b: float,
@@ -602,12 +601,8 @@ def calculate_points_dynasty_frame(
         "pts_pit_bb": float(pts_pit_bb),
     }
 
-    if recent_projections == 3:
-        bat_rows = ctx.bat_data
-        pit_rows = ctx.pit_data
-    else:
-        bat_rows = ctx.average_recent_projection_rows(ctx.bat_data_raw, max_entries=recent_projections, is_hitter=True)
-        pit_rows = ctx.average_recent_projection_rows(ctx.pit_data_raw, max_entries=recent_projections, is_hitter=False)
+    bat_rows = ctx.bat_data
+    pit_rows = ctx.pit_data
 
     valid_years = ctx.coerce_meta_years(ctx.meta)
     valuation_year_set = ctx.valuation_years(start_year, horizon, valid_years)

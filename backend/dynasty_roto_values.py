@@ -232,13 +232,11 @@ def average_recent_projections(
     df: pd.DataFrame,
     stat_cols: List[str],
     group_cols: Optional[List[str]] = None,
-    max_entries: int = 3,
 ) -> pd.DataFrame:
     return _projection_averaging.average_recent_projections(
         df,
         stat_cols,
         group_cols=group_cols,
-        max_entries=max_entries,
     )
 
 
@@ -926,7 +924,6 @@ def calculate_common_dynasty_values(
     verbose: bool = True,
     return_details: bool = False,
     seed: int = 0,
-    recent_projections: int = 3,
 ):
     """Compatibility wrapper delegating to extracted common orchestration."""
     try:  # pragma: no branch
@@ -941,7 +938,6 @@ def calculate_common_dynasty_values(
         verbose=verbose,
         return_details=return_details,
         seed=seed,
-        recent_projections=recent_projections,
     )
 def league_hitter_components(df: pd.DataFrame) -> pd.DataFrame: return _league_math.league_hitter_components(df)
 def league_ensure_pitch_cols(df: pd.DataFrame) -> pd.DataFrame: return _league_math.league_ensure_pitch_cols(df)
@@ -990,7 +986,6 @@ def calculate_league_dynasty_values(
     verbose: bool = True,
     return_details: bool = False,
     seed: int = 0,
-    recent_projections: int = 3,
 ):
     """Compatibility wrapper delegating to extracted league orchestration."""
     try:  # pragma: no branch
@@ -1005,7 +1000,6 @@ def calculate_league_dynasty_values(
         verbose=verbose,
         return_details=return_details,
         seed=seed,
-        recent_projections=recent_projections,
     )
 def main() -> None:
     try:  # pragma: no branch

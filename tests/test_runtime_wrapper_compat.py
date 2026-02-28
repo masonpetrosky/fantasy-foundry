@@ -80,7 +80,6 @@ def test_runtime_common_frame_cached_delegates(monkeypatch) -> None:
         ip_max=None,
         two_way="sum",
         start_year=2026,
-        recent_projections=2,
         roto_hit_r=True,
     )
     assert out is sentinel
@@ -122,7 +121,6 @@ def test_runtime_points_frame_cached_delegates(monkeypatch) -> None:
         ir=0,
         two_way="sum",
         start_year=2026,
-        recent_projections=1,
         pts_hit_1b=1.0,
         pts_hit_2b=2.0,
         pts_hit_3b=3.0,

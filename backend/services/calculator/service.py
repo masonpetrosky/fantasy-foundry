@@ -54,7 +54,6 @@ class CalculateRequest(BaseModel):
     ip_min: float = Field(default=0.0, ge=0.0)
     ip_max: Optional[float] = Field(default=None, ge=0.0)
     start_year: int = Field(default=2026, ge=1900)
-    recent_projections: int = Field(default=3, ge=1, le=10)
     roto_hit_r: bool = True
     roto_hit_rbi: bool = True
     roto_hit_hr: bool = True
@@ -323,7 +322,6 @@ class CalculatorService:
                         ir=req.ir,
                         two_way=req.two_way,
                         start_year=req.start_year,
-                        recent_projections=req.recent_projections,
                         pts_hit_1b=req.pts_hit_1b,
                         pts_hit_2b=req.pts_hit_2b,
                         pts_hit_3b=req.pts_hit_3b,
@@ -368,7 +366,6 @@ class CalculatorService:
                         ip_max=req.ip_max,
                         two_way=req.two_way,
                         start_year=req.start_year,
-                        recent_projections=req.recent_projections,
                         sgp_denominator_mode=req.sgp_denominator_mode,
                         sgp_winsor_low_pct=req.sgp_winsor_low_pct,
                         sgp_winsor_high_pct=req.sgp_winsor_high_pct,
@@ -404,7 +401,6 @@ class CalculatorService:
                         ip_max=req.ip_max,
                         two_way=req.two_way,
                         start_year=req.start_year,
-                        recent_projections=req.recent_projections,
                         sgp_denominator_mode=req.sgp_denominator_mode,
                         sgp_winsor_low_pct=req.sgp_winsor_low_pct,
                         sgp_winsor_high_pct=req.sgp_winsor_high_pct,
@@ -463,7 +459,6 @@ class CalculatorService:
                 if selected_roto_stat_cols:
                     stats_by_entity = self._ctx.start_year_roto_stats_by_entity(
                         start_year=req.start_year,
-                        recent_projections=req.recent_projections,
                     )
                     identity_keys = out.apply(self._ctx.projection_identity_key, axis=1)
                     for stat_col in selected_roto_stat_cols:

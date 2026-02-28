@@ -172,12 +172,11 @@ def calculate_common_dynasty_values(
     verbose: bool = True,
     return_details: bool = False,
     seed: int = 0,
-    recent_projections: int = 3,
 ):
     """Compute common-mode dynasty values.
 
     If return_details=True, also returns (bat_detail, pit_detail) tables that:
-      - collapse duplicate (Player, Year) rows by averaging the most-recent N projections
+      - collapse duplicate (Player, Year) rows by averaging projections from the most recent date
       - keep the original input columns in roughly the same order
       - attach YearValue/BestSlot (per side) and DynastyValue to each Player/Year row
     """
@@ -207,8 +206,8 @@ def calculate_common_dynasty_values(
         exclude_cols={"Age"} | DERIVED_PIT_RATE_COLS,
     )
 
-    bat = average_recent_projections(bat_raw, bat_stat_cols, max_entries=recent_projections)
-    pit = average_recent_projections(pit_raw, pit_stat_cols, max_entries=recent_projections)
+    bat = average_recent_projections(bat_raw, bat_stat_cols)
+    pit = average_recent_projections(pit_raw, pit_stat_cols)
 
     # Recompute rates after averaging components
     bat = recompute_common_rates_hit(bat)
@@ -266,7 +265,7 @@ def calculate_common_dynasty_values(
     if not years:
         raise ValueError("No valuation years available after applying start year / horizon to projection file years.")
 
-    # Projection metadata: how many projections were averaged (<= recent_projections) and the oldest date used
+    # Projection metadata: how many projections were averaged and the oldest date used
     proj_meta = projection_meta_for_start_year(bat, pit, start_year)
 
     years_set = {int(y) for y in years}

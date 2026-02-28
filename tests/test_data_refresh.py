@@ -240,8 +240,8 @@ def test_reload_projection_data_loads_all_inputs_and_builds_averages() -> None:
             [dict(pit_rows[0], PlayerKey="pitcher-key")],
         )
 
-    def average_recent_projection_rows(rows: list[dict], *, max_entries: int, is_hitter: bool):
-        average_calls.append((is_hitter, max_entries))
+    def average_recent_projection_rows(rows: list[dict], *, is_hitter: bool):
+        average_calls.append((is_hitter,))
         return rows
 
     def projection_freshness_payload(bat_rows: list[dict], pit_rows: list[dict]):
@@ -257,7 +257,7 @@ def test_reload_projection_data_loads_all_inputs_and_builds_averages() -> None:
     meta, bat_raw, pit_raw, bat_avg, pit_avg, freshness = result
     assert meta == {"years": [2026]}
     assert loaded_names == ["meta.json", "bat.json", "pitch.json"]
-    assert average_calls == [(True, 3), (False, 3)]
+    assert average_calls == [(True,), (False,)]
     assert bat_raw[0]["PlayerKey"] == "hitter-key"
     assert pit_raw[0]["PlayerKey"] == "pitcher-key"
     assert bat_avg == bat_raw

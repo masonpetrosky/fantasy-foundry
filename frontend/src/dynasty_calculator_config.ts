@@ -48,7 +48,6 @@ export interface CalculatorSettings {
   enable_replacement_blend: boolean;
   replacement_blend_alpha: number;
   start_year: number;
-  recent_projections: number;
 }
 
 export interface PayloadResult {
@@ -298,7 +297,6 @@ export function buildDefaultCalculatorSettings(meta: CalculatorMeta | null | und
     enable_replacement_blend: false,
     replacement_blend_alpha: 0.7,
     start_year: Number(meta?.years?.[0] ?? 2026),
-    recent_projections: 3,
     ...resolveRotoCategoryDefaults(),
     ...resolvePointsScoringDefaults(meta),
   };
@@ -399,11 +397,6 @@ export function buildCalculatorPayload(settings: Record<string, unknown>, availa
     return { error: "Start Year must match an available projection year." };
   }
 
-  const recentProjections = Number(settings.recent_projections);
-  if (!Number.isInteger(recentProjections) || recentProjections < 1 || recentProjections > 10) {
-    return { error: "Recent Proj. must be an integer between 1 and 10." };
-  }
-
   const twoWay = String(settings.two_way ?? "").trim().toLowerCase();
   if (twoWay !== "sum" && twoWay !== "max") {
     return { error: "Two-Way mode must be either 'sum' or 'max'." };
@@ -494,7 +487,6 @@ export function buildCalculatorPayload(settings: Record<string, unknown>, availa
     enable_replacement_blend: enableReplacementBlend,
     replacement_blend_alpha: replacementBlendAlpha,
     start_year: startYear,
-    recent_projections: recentProjections,
     ...parsedRotoCategories,
     ...parsedPointsScoring,
   };

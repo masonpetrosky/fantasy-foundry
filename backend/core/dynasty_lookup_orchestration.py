@@ -66,7 +66,6 @@ def default_dynasty_lookup(
             ip_max=params["ip_max"],
             two_way=str(params["two_way"]),
             start_year=int(params["start_year"]),
-            recent_projections=int(params["recent_projections"]),
             sgp_denominator_mode=str(params.get("sgp_denominator_mode", "classic")),
             sgp_winsor_low_pct=float(params.get("sgp_winsor_low_pct", 0.10)),
             sgp_winsor_high_pct=float(params.get("sgp_winsor_high_pct", 0.90)),

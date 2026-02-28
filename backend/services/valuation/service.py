@@ -31,7 +31,6 @@ class ValuationService:
         league_settings: Any,
         *,
         start_year: int,
-        recent_projections: int,
     ) -> pd.DataFrame:
         _, calculator_fn = self._legacy_symbols()
         return calculator_fn(
@@ -41,5 +40,4 @@ class ValuationService:
             verbose=False,
             return_details=False,
             seed=0,
-            recent_projections=recent_projections,
         )
