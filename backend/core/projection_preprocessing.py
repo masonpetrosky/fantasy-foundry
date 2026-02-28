@@ -142,7 +142,7 @@ def average_recent_projection_rows(
     derived_hit_rate_cols: set[str],
     derived_pit_rate_cols: set[str],
 ) -> list[dict]:
-    """Collapse duplicate projection rows by keeping only the most recent date.
+    """Collapse duplicate projection rows by averaging the last 3 projections.
 
     Rows are grouped by (Player, Year) and disambiguated by team only when a
     given name/year has multiple non-empty teams. This avoids merging distinct
@@ -192,8 +192,24 @@ def average_recent_projection_rows(
     ]
 
     df = df.sort_values(["_sort_key", "_projection_order"], ascending=False)
-    max_dates = df.groupby(group_cols, sort=False)["_sort_key"].transform("max")
-    recent = df[df["_sort_key"] == max_dates].copy()
+
+    # Dense-rank dates within each group (newest = 1.0)
+    date_rank = df.groupby(group_cols, sort=False)["_sort_key"].rank(
+        method="dense", ascending=False
+    )
+
+    # For each group, find the minimum date rank R where
+    # count(rows with rank <= R) >= 3, then keep all rows with rank <= R
+    def _min_rank_for_n(ranks, n=3):
+        for r in sorted(ranks.unique()):
+            if (ranks <= r).sum() >= n:
+                return r
+        return ranks.max()
+
+    cutoff = date_rank.groupby(
+        [df[c] for c in group_cols], sort=False
+    ).transform(_min_rank_for_n)
+    recent = df[date_rank <= cutoff].copy()
     recent["OldestProjectionDate"] = recent["_projection_date"]
 
     meta_cols = [
