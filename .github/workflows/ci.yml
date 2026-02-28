@@ -21,8 +21,132 @@ on:
         type: boolean
 
 jobs:
-  frontend-dist:
+  # ──────────────────────────────────────────────────────────────
+  # Job 1: Detect which paths changed (always runs, ~15s)
+  # ──────────────────────────────────────────────────────────────
+  detect-changes:
     if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      docker: ${{ steps.filter.outputs.docker }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enforce Generated Artifact Tracking Guard
+        run: ./scripts/check_generated_artifacts_untracked.sh
+
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'tests/**'
+              - 'requirements*.txt'
+              - 'pyproject.toml'
+              - 'preprocess.py'
+              - 'scripts/**'
+              - 'data/**'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'frontend/**'
+              - 'scripts/check_frontend_*'
+              - 'scripts/check_activation_browser_csv_contract.py'
+              - 'scripts/check_npm_audit_direct.mjs'
+              - 'scripts/activation_readout.py'
+              - '.github/workflows/ci.yml'
+            docker:
+              - 'Dockerfile'
+              - 'backend/**'
+              - 'frontend/**'
+              - 'requirements*.txt'
+              - 'data/**'
+              - '.dockerignore'
+            e2e:
+              - 'frontend/**'
+              - 'backend/**'
+              - 'tests/test_e2e_*'
+              - 'requirements*.txt'
+
+  # ──────────────────────────────────────────────────────────────
+  # Job 2: All backend quality gates in one job
+  # Replaces: lint (backend), typecheck, unit-tests, dependency-audit (pip), data-artifacts
+  # ──────────────────────────────────────────────────────────────
+  backend-quality:
+    needs: detect-changes
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && needs.detect-changes.outputs.backend == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install All Backend Dependencies + Tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt ruff mypy pip-audit pytest pytest-cov
+
+      # --- Fast lint gates first (fail early) ---
+
+      - name: Enforce Ruff Per-File Ignore Allowlist
+        run: python scripts/check_ruff_per_file_ignores.py
+
+      - name: Run Backend Lint
+        run: ruff check backend tests preprocess.py scripts
+
+      - name: Enforce Source File Size Guardrails
+        run: python scripts/check_max_file_lines.py
+
+      - name: Run Backend Type Checks
+        run: mypy backend/api/middleware.py backend/core/settings.py backend/core/networking.py backend/core/rate_limit.py backend/core/result_cache.py backend/core/jobs.py backend/core/data_refresh.py backend/valuation/models.py backend/services/calculator/service.py
+
+      # --- Dependency audit ---
+
+      - name: Audit Direct Python Dependencies
+        run: python scripts/check_pip_audit_direct.py
+
+      # --- Tests ---
+
+      - name: Run Unit + Integration Test Suite
+        run: pytest -q -m "not full_regression"
+
+      # --- Data artifact freshness ---
+
+      - name: Verify preprocessed data artifacts are up to date
+        run: |
+          python preprocess.py --quality-report tmp/projection_quality_report.json
+          python scripts/check_projection_quality_report.py --report tmp/projection_quality_report.json
+          if ! git diff --quiet -- data/meta.json data/bat.json data/pitch.json data/dynasty_lookup.json; then
+            echo "Preprocessed data artifacts differ from committed files."
+            echo "Run 'python preprocess.py' and commit updated files under data/."
+            git --no-pager diff --name-status -- data/meta.json data/bat.json data/pitch.json data/dynasty_lookup.json
+            exit 1
+          fi
+
+  # ──────────────────────────────────────────────────────────────
+  # Job 3: All frontend quality gates in one job
+  # Replaces: frontend-dist, lint (frontend), dependency-audit (npm)
+  # ──────────────────────────────────────────────────────────────
+  frontend-quality:
+    needs: detect-changes
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && needs.detect-changes.outputs.frontend == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -37,13 +161,26 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Setup Python (for CSV contract check)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install Frontend Dependencies
         working-directory: frontend
         run: npm ci
 
+      # --- Fast gates first ---
+
       - name: Run Frontend Unit Tests
         working-directory: frontend
         run: npm run test:coverage
+
+      - name: Run Frontend Lint
+        working-directory: frontend
+        run: npm run lint
+
+      # --- Build + dist verification ---
 
       - name: Build Frontend
         working-directory: frontend
@@ -61,190 +198,23 @@ jobs:
             exit 1
           fi
 
-  lint:
-    if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Enforce Generated Artifact Tracking Guard
-        run: ./scripts/check_generated_artifacts_untracked.sh
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install Ruff
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff
-
-      - name: Enforce Ruff Per-File Ignore Allowlist
-        run: python scripts/check_ruff_per_file_ignores.py
-
-      - name: Run Backend Lint
-        run: ruff check backend tests preprocess.py scripts
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "npm"
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install Frontend Dependencies
-        working-directory: frontend
-        run: npm ci
+      # --- Contract + audit ---
 
       - name: Verify Browser Analytics CSV Contract
         run: python scripts/check_activation_browser_csv_contract.py
-
-      - name: Run Frontend Lint
-        working-directory: frontend
-        run: npm run lint
-
-  dependency-audit:
-    if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install Backend Dependencies + Audit Tooling
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt pip-audit
-
-      - name: Audit Direct Python Dependencies
-        run: python scripts/check_pip_audit_direct.py
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: "npm"
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install Frontend Dependencies
-        working-directory: frontend
-        run: npm ci
 
       - name: Audit Direct Frontend Dependencies (High/Critical)
         working-directory: frontend
         run: node ../scripts/check_npm_audit_direct.mjs
 
-  typecheck:
-    if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install Typecheck Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt mypy
-
-      - name: Run Backend Type Checks
-        run: mypy backend/api/middleware.py backend/core/settings.py backend/core/networking.py backend/core/rate_limit.py backend/core/result_cache.py backend/core/jobs.py backend/core/data_refresh.py backend/valuation/models.py backend/services/calculator/service.py
-
-  unit-tests:
-    if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Enforce Source File Size Guardrails
-        run: python scripts/check_max_file_lines.py
-
-      - name: Install Backend Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest pytest-cov
-
-      - name: Run Unit + Integration Test Suite
-        run: pytest -q -m "not full_regression"
-
-  full-regression-tests:
-    if: github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_full_regression)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install Backend Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest pytest-cov
-
-      - name: Run High-Cost Full Regression Tests
-        run: pytest -q -m "full_regression" --no-cov
-
-  data-artifacts:
-    if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install Preprocess Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Verify preprocessed data artifacts are up to date
-        run: |
-          python preprocess.py --quality-report tmp/projection_quality_report.json
-          python scripts/check_projection_quality_report.py --report tmp/projection_quality_report.json
-          if ! git diff --quiet -- data/meta.json data/bat.json data/pitch.json data/dynasty_lookup.json; then
-            echo "Preprocessed data artifacts differ from committed files."
-            echo "Run 'python preprocess.py' and commit updated files under data/."
-            git --no-pager diff --name-status -- data/meta.json data/bat.json data/pitch.json data/dynasty_lookup.json
-            exit 1
-          fi
-
+  # ──────────────────────────────────────────────────────────────
+  # Job 4: Docker build — PR only, path-filtered
+  # ──────────────────────────────────────────────────────────────
   docker-build:
-    if: github.event_name != 'schedule'
+    needs: detect-changes
+    if: |
+      (github.event_name == 'pull_request' && needs.detect-changes.outputs.docker == 'true') ||
+      (github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -255,8 +225,14 @@ jobs:
       - name: Build Docker image
         run: docker build -t fantasy-foundry:ci .
 
+  # ──────────────────────────────────────────────────────────────
+  # Job 5: E2E smoke — PR only, path-filtered, Playwright cached
+  # ──────────────────────────────────────────────────────────────
   e2e-smoke:
-    if: github.event_name != 'schedule' && (github.event_name != 'workflow_dispatch' || inputs.run_e2e)
+    needs: detect-changes
+    if: |
+      (github.event_name == 'pull_request' && needs.detect-changes.outputs.e2e == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.run_e2e)
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -283,18 +259,60 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
 
       - name: Install Backend + E2E Test Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt pytest
 
+      - name: Cache Playwright Browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('requirements-dev.txt') }}
+
       - name: Install Playwright Chromium + OS Dependencies
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: python -m playwright install --with-deps chromium
+
+      - name: Install Playwright OS Dependencies (cached browsers)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: python -m playwright install-deps chromium
 
       - name: Run Browser Smoke Test
         run: FF_RUN_E2E=1 pytest -q --no-cov tests/test_e2e_projections_pagination.py
 
+  # ──────────────────────────────────────────────────────────────
+  # Job 6: Full regression — push to main / schedule / manual
+  # ──────────────────────────────────────────────────────────────
+  full-regression-tests:
+    if: github.event_name == 'schedule' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_full_regression)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Backend Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest pytest-cov
+
+      - name: Run High-Cost Full Regression Tests
+        run: pytest -q -m "full_regression" --no-cov
+
+  # ──────────────────────────────────────────────────────────────
+  # Job 7: Full E2E suite — manual dispatch only
+  # ──────────────────────────────────────────────────────────────
   e2e-tests:
     if: github.event_name == 'workflow_dispatch' && inputs.run_e2e
     runs-on: ubuntu-latest
@@ -323,14 +341,27 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
 
       - name: Install Backend + E2E Test Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt pytest
 
+      - name: Cache Playwright Browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('requirements-dev.txt') }}
+
       - name: Install Playwright Chromium + OS Dependencies
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: python -m playwright install --with-deps chromium
+
+      - name: Install Playwright OS Dependencies (cached browsers)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: python -m playwright install-deps chromium
 
       - name: Run Browser E2E Tests
         run: FF_RUN_E2E=1 pytest -q --no-cov tests/test_e2e_projections_pagination.py tests/test_e2e_calculator_smoke.py
