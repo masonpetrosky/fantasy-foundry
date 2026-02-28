@@ -45,11 +45,13 @@ function saveKeeperRoster(entries: KeeperEntry[]): void {
 interface KeeperCalculatorProps {
   calculatorResults: ProjectionRow[];
   onClose: () => void;
+  onOpenCalculator?: () => void;
 }
 
 export function KeeperCalculator({
   calculatorResults,
   onClose,
+  onOpenCalculator,
 }: KeeperCalculatorProps): React.ReactElement {
   const [entries, setEntries] = useState<KeeperEntry[]>(loadKeeperRoster);
   const [searchQuery, setSearchQuery] = useState("");
@@ -152,6 +154,9 @@ export function KeeperCalculator({
         <p className="keeper-note">
           Run the dynasty calculator first to populate dynasty values, then add
           your keepers here.
+          {onOpenCalculator && (
+            <>{" "}<button type="button" className="inline-btn" onClick={onOpenCalculator}>Open Calculator</button></>
+          )}
         </p>
       )}
 

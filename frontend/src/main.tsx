@@ -469,12 +469,14 @@ function App(): React.ReactElement {
                   <TradeAnalyzer
                     calculatorResults={calculatorOverlayByPlayerKey ? Object.values(calculatorOverlayByPlayerKey) : []}
                     onClose={() => setTradeAnalyzerOpen(false)}
+                    onOpenCalculator={() => { openCalculatorPanel("trade_analyzer"); scrollToCalculator(); }}
                   />
                 )}
                 {keeperCalculatorOpen && tierLimits?.allowTradeAnalyzer && (
                   <KeeperCalculator
                     calculatorResults={calculatorOverlayByPlayerKey ? Object.values(calculatorOverlayByPlayerKey) : []}
                     onClose={() => setKeeperCalculatorOpen(false)}
+                    onOpenCalculator={() => { openCalculatorPanel("keeper_calculator"); scrollToCalculator(); }}
                   />
                 )}
                 <FeatureErrorBoundary featureName="Projections Explorer">

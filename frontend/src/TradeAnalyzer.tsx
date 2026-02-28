@@ -142,9 +142,10 @@ function TradeSide({ label, players, allPlayers, searchTerm, onSearchChange, onA
 interface TradeAnalyzerProps {
   calculatorResults: ProjectionRow[] | null;
   onClose?: (() => void) | null;
+  onOpenCalculator?: () => void;
 }
 
-export function TradeAnalyzer({ calculatorResults, onClose }: TradeAnalyzerProps): React.ReactElement {
+export function TradeAnalyzer({ calculatorResults, onClose, onOpenCalculator }: TradeAnalyzerProps): React.ReactElement {
   const allPlayers = useMemo(() => {
     if (!calculatorResults || !Array.isArray(calculatorResults)) return [];
     return calculatorResults.filter(r => r.Player && r.DynastyValue != null);
@@ -206,7 +207,12 @@ export function TradeAnalyzer({ calculatorResults, onClose }: TradeAnalyzerProps
           <h2>Trade Analyzer</h2>
           {onClose && <button type="button" className="inline-btn" onClick={onClose}>Close</button>}
         </div>
-        <p className="trade-empty">Run the dynasty calculator first to generate player values for trade analysis.</p>
+        <p className="trade-empty">
+          Run the dynasty calculator first to generate player values for trade analysis.
+          {onOpenCalculator && (
+            <>{" "}<button type="button" className="inline-btn" onClick={onOpenCalculator}>Open Calculator</button></>
+          )}
+        </p>
       </div>
     );
   }
