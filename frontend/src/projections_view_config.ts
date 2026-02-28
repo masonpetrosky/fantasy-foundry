@@ -246,7 +246,7 @@ export function normalizeHiddenColumnOverridesByTab(raw: unknown): HiddenColumnO
 }
 
 export function projectionTableColumnCatalog(tab: string, seasonCol: string, dynastyYearCols: string[], calculatorSettings: CalculatorSettings = null): string[] {
-  const identityCols = ["Player", "Team", "Pos", "Age", "DynastyValue"];
+  const identityCols = ["Player", "Team", "Pos", "Age", "DynastyValue", "AuctionDollars", "ProjectionDelta"];
 
   if (tab === "bat") {
     const statCandidates = uniqueColumnOrder([
@@ -411,6 +411,8 @@ export function projectionCardColumnCatalog(tab: string, seasonCol: string, dyna
 export function projectionTableColumnHiddenByDefault(tab: string, col: string): boolean {
   if (col === "Years") return true;
   if (tab === "all" && col === "Type") return true;
+  if (col === "ProjectionDelta") return true;
+  if (col === "AuctionDollars") return true;
   return false;
 }
 

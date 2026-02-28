@@ -24,6 +24,7 @@ const baseSettings = {
   enable_age_risk_adjustment: false,
   enable_replacement_blend: false,
   replacement_blend_alpha: 0.7,
+  auction_budget: null,
 };
 
 describe("buildQuickStartSettings", () => {

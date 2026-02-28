@@ -331,6 +331,30 @@ export function DynastyCalculatorSidebar({
       </div>
 
       <div className="calc-section">
+        <p className="calc-section-title">Auction Values</p>
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="calc-auction-budget">
+              Auction Budget ($)
+              <CalcTooltip label="Auction Budget">
+                Set a per-team auction budget to convert dynasty values into dollar amounts.
+                Leave blank to hide auction dollars.
+              </CalcTooltip>
+            </label>
+            <input
+              id="calc-auction-budget"
+              type="number"
+              value={settings.auction_budget ?? ""}
+              onChange={e => update("auction_budget", e.target.value || null)}
+              placeholder="e.g. 260"
+              min="1"
+              max="9999"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="calc-section">
         <p className="calc-section-title">Presets And Sharing</p>
         <div className="form-row">
           <div className="form-group">

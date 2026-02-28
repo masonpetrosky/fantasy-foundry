@@ -12,6 +12,7 @@ import { useProjectionRowsMarkup } from "./hooks/useProjectionRowsMarkup";
 import { useProjectionWatchlistComposition } from "./hooks/useProjectionWatchlistComposition";
 import { CAREER_TOTALS_FILTER_VALUE, DEFAULT_PROJECTIONS_SORT_COL, DEFAULT_PROJECTIONS_SORT_DIR, DEFAULT_PROJECTIONS_TAB, useProjectionsData } from "../../hooks/useProjectionsData";
 import { buildActiveFilterChips, resolveProjectionEmptyStateModel, resolveProjectionSwipeHint } from "./view_state";
+import { useProjectionDeltas } from "../../hooks/useProjectionDeltas";
 import { PlayerProfile } from "./components/PlayerProfile";
 import { ProjectionCollectionsWorkspace } from "./components/ProjectionCollectionsWorkspace";
 import { ProjectionEmptyStateActions } from "./components/ProjectionEmptyStateActions";
@@ -145,10 +146,18 @@ export function ProjectionsExplorer({
   }), [posFilters, resolvedYearFilter, search, teamFilter, watchlistOnly]);
   const hasActiveFilters = activeFilterChips.length > 0;
 
-  const data = useMemo(
-    () => applyCalculatorOverlayToRows(baseData),
-    [applyCalculatorOverlayToRows, baseData]
-  );
+  const { deltaMap } = useProjectionDeltas(apiBase);
+
+  const data = useMemo(() => {
+    const overlaid = applyCalculatorOverlayToRows(baseData);
+    if (!deltaMap || Object.keys(deltaMap).length === 0) return overlaid;
+    return overlaid.map((row) => {
+      const key = String(row.PlayerEntityKey || row.PlayerKey || "");
+      const delta = deltaMap[key];
+      if (!delta) return row;
+      return { ...row, ProjectionDelta: delta.composite_delta };
+    });
+  }, [applyCalculatorOverlayToRows, baseData, deltaMap]);
 
   const filterActions = useMemo(() => ({
     setTab, setSearch, setTeamFilter, setYearFilter, setPosFilters,
@@ -286,6 +295,8 @@ export function ProjectionsExplorer({
       OldestProjectionDate: "Oldest Proj Date",
       Rank: "Rank",
       DynastyValue: "Dynasty Value",
+      AuctionDollars: "Auction $",
+      ProjectionDelta: "\u0394 Proj",
       Years: "Years",
       PitH: "P H",
       PitHR: "P HR",

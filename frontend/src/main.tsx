@@ -19,7 +19,9 @@ import { ErrorBoundary } from "./error_boundary";
 import { FeatureErrorBoundary } from "./feature_error_boundary";
 import { ToastProvider } from "./Toast";
 import { PlayerPage } from "./PlayerPage";
+import { MoversPage } from "./MoversPage";
 import { TradeAnalyzer } from "./TradeAnalyzer";
+import { KeeperCalculator } from "./KeeperCalculator";
 import { PricingSection } from "./PricingSection";
 import { NewsletterSignup } from "./NewsletterSignup";
 import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProjectionLayoutState";
@@ -100,6 +102,7 @@ function App(): React.ReactElement {
   const bottomSheet = useBottomSheet();
   const { theme, toggleTheme } = useTheme();
   const [tradeAnalyzerOpen, setTradeAnalyzerOpen] = useState(false);
+  const [keeperCalculatorOpen, setKeeperCalculatorOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(() => window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches);
   useEffect(() => {
     const mql = window.matchMedia(MOBILE_BREAKPOINT_QUERY);
@@ -453,12 +456,25 @@ function App(): React.ReactElement {
                     >
                       {tradeAnalyzerOpen ? "Hide Trade Analyzer" : "Open Trade Analyzer"}
                     </button>
+                    <button
+                      type="button"
+                      className={`inline-btn ${keeperCalculatorOpen ? "open" : ""}`.trim()}
+                      onClick={() => setKeeperCalculatorOpen(v => !v)}
+                    >
+                      {keeperCalculatorOpen ? "Hide Keeper Calculator" : "Open Keeper Calculator"}
+                    </button>
                   </div>
                 )}
                 {tradeAnalyzerOpen && tierLimits?.allowTradeAnalyzer && (
                   <TradeAnalyzer
                     calculatorResults={calculatorOverlayByPlayerKey ? Object.values(calculatorOverlayByPlayerKey) : []}
                     onClose={() => setTradeAnalyzerOpen(false)}
+                  />
+                )}
+                {keeperCalculatorOpen && tierLimits?.allowTradeAnalyzer && (
+                  <KeeperCalculator
+                    calculatorResults={calculatorOverlayByPlayerKey ? Object.values(calculatorOverlayByPlayerKey) : []}
+                    onClose={() => setKeeperCalculatorOpen(false)}
                   />
                 )}
                 <FeatureErrorBoundary featureName="Projections Explorer">
@@ -567,6 +583,7 @@ createRoot(document.getElementById("root")!).render(
       <ToastProvider>
         <Routes>
           <Route path="/player/:slug" element={<PlayerPage />} />
+          <Route path="/movers" element={<MoversPage />} />
           <Route path="*" element={<App />} />
         </Routes>
       </ToastProvider>

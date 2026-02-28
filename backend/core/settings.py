@@ -82,6 +82,7 @@ class AppSettings:
     calculator_job_max_entries: int
     calculator_job_workers: int
     enable_startup_calc_prewarm: bool
+    prewarm_config_count: int
     calculator_request_timeout_seconds: int
     calculator_sync_rate_limit_per_minute: int
     calculator_sync_auth_rate_limit_per_minute: int
@@ -130,6 +131,7 @@ def load_settings_from_env() -> AppSettings:
         calculator_job_max_entries=_get_int("FF_CALC_JOB_MAX_ENTRIES", default=256, minimum=10),
         calculator_job_workers=_get_int("FF_CALC_JOB_WORKERS", default=2, minimum=1),
         enable_startup_calc_prewarm=_get_bool("FF_PREWARM_DEFAULT_CALC", default=True),
+        prewarm_config_count=_get_int("FF_PREWARM_CONFIG_COUNT", default=5, minimum=1),
         calculator_request_timeout_seconds=_get_int("FF_CALC_REQUEST_TIMEOUT_SECONDS", default=600, minimum=60),
         calculator_sync_rate_limit_per_minute=calculator_sync_rate_limit_per_minute,
         calculator_sync_auth_rate_limit_per_minute=_get_int(

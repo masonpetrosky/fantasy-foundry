@@ -320,7 +320,77 @@ def calculate_points_dynasty_frame_cached(
     )
 
 
+def _prewarm_roto_config(*, state: RuntimeStateHelpersState, params: dict) -> None:
+    """Prewarm a single roto calculator configuration."""
+    ip_max = params["ip_max"]
+    state._calculate_common_dynasty_frame_cached(
+        teams=int(params["teams"]),
+        sims=int(params["sims"]),
+        horizon=int(params["horizon"]),
+        discount=float(params["discount"]),
+        hit_c=int(params["hit_c"]),
+        hit_1b=int(params["hit_1b"]),
+        hit_2b=int(params["hit_2b"]),
+        hit_3b=int(params["hit_3b"]),
+        hit_ss=int(params["hit_ss"]),
+        hit_ci=int(params["hit_ci"]),
+        hit_mi=int(params["hit_mi"]),
+        hit_of=int(params["hit_of"]),
+        hit_ut=int(params["hit_ut"]),
+        pit_p=int(params["pit_p"]),
+        pit_sp=int(params["pit_sp"]),
+        pit_rp=int(params["pit_rp"]),
+        bench=int(params["bench"]),
+        minors=int(params["minors"]),
+        ir=int(params["ir"]),
+        ip_min=float(params["ip_min"]),
+        ip_max=float(ip_max) if ip_max is not None else None,
+        two_way=str(params["two_way"]),
+        start_year=int(params["start_year"]),
+        sgp_denominator_mode=str(params.get("sgp_denominator_mode", "classic")),
+        sgp_winsor_low_pct=float(params.get("sgp_winsor_low_pct", 0.10)),
+        sgp_winsor_high_pct=float(params.get("sgp_winsor_high_pct", 0.90)),
+        sgp_epsilon_counting=float(params.get("sgp_epsilon_counting", 0.15)),
+        sgp_epsilon_ratio=float(params.get("sgp_epsilon_ratio", 0.0015)),
+        enable_playing_time_reliability=bool(params.get("enable_playing_time_reliability", False)),
+        enable_age_risk_adjustment=bool(params.get("enable_age_risk_adjustment", False)),
+        enable_replacement_blend=bool(params.get("enable_replacement_blend", False)),
+        replacement_blend_alpha=float(params.get("replacement_blend_alpha", 0.70)),
+        **state._roto_category_settings_from_dict(params),
+    )
+
+
+def _prewarm_points_config(*, state: RuntimeStateHelpersState, params: dict) -> None:
+    """Prewarm a single points calculator configuration."""
+    pts = state.DEFAULT_POINTS_SCORING
+    state._calculate_points_dynasty_frame_cached(
+        teams=int(params["teams"]),
+        horizon=int(params["horizon"]),
+        discount=float(params["discount"]),
+        hit_c=int(params["hit_c"]),
+        hit_1b=int(params["hit_1b"]),
+        hit_2b=int(params["hit_2b"]),
+        hit_3b=int(params["hit_3b"]),
+        hit_ss=int(params["hit_ss"]),
+        hit_ci=int(params["hit_ci"]),
+        hit_mi=int(params["hit_mi"]),
+        hit_of=int(params["hit_of"]),
+        hit_ut=int(params["hit_ut"]),
+        pit_p=int(params["pit_p"]),
+        pit_sp=int(params["pit_sp"]),
+        pit_rp=int(params["pit_rp"]),
+        bench=int(params["bench"]),
+        minors=int(params["minors"]),
+        ir=int(params["ir"]),
+        two_way=str(params["two_way"]),
+        start_year=int(params["start_year"]),
+        **pts,
+    )
+
+
 def prewarm_default_calculation_caches(*, state: RuntimeStateHelpersState) -> None:
+    from backend.core.calculator_helpers import PREWARM_CONFIGS
+
     with state.CALCULATOR_PREWARM_LOCK:
         state.CALCULATOR_PREWARM_STATE.update(
             {
@@ -329,49 +399,40 @@ def prewarm_default_calculation_caches(*, state: RuntimeStateHelpersState) -> No
                 "completed_at": None,
                 "duration_ms": None,
                 "error": None,
+                "configs_total": 0,
+                "configs_completed": 0,
             }
         )
 
     started = state.time.perf_counter()
     try:
         state._refresh_data_if_needed()
-        params = state._default_calculation_cache_params()
-        ip_max = params["ip_max"]
-        state._calculate_common_dynasty_frame_cached(
-            teams=int(params["teams"]),
-            sims=int(params["sims"]),
-            horizon=int(params["horizon"]),
-            discount=float(params["discount"]),
-            hit_c=int(params["hit_c"]),
-            hit_1b=int(params["hit_1b"]),
-            hit_2b=int(params["hit_2b"]),
-            hit_3b=int(params["hit_3b"]),
-            hit_ss=int(params["hit_ss"]),
-            hit_ci=int(params["hit_ci"]),
-            hit_mi=int(params["hit_mi"]),
-            hit_of=int(params["hit_of"]),
-            hit_ut=int(params["hit_ut"]),
-            pit_p=int(params["pit_p"]),
-            pit_sp=int(params["pit_sp"]),
-            pit_rp=int(params["pit_rp"]),
-            bench=int(params["bench"]),
-            minors=int(params["minors"]),
-            ir=int(params["ir"]),
-            ip_min=float(params["ip_min"]),
-            ip_max=float(ip_max) if ip_max is not None else None,
-            two_way=str(params["two_way"]),
-            start_year=int(params["start_year"]),
-            sgp_denominator_mode=str(params.get("sgp_denominator_mode", "classic")),
-            sgp_winsor_low_pct=float(params.get("sgp_winsor_low_pct", 0.10)),
-            sgp_winsor_high_pct=float(params.get("sgp_winsor_high_pct", 0.90)),
-            sgp_epsilon_counting=float(params.get("sgp_epsilon_counting", 0.15)),
-            sgp_epsilon_ratio=float(params.get("sgp_epsilon_ratio", 0.0015)),
-            enable_playing_time_reliability=bool(params.get("enable_playing_time_reliability", False)),
-            enable_age_risk_adjustment=bool(params.get("enable_age_risk_adjustment", False)),
-            enable_replacement_blend=bool(params.get("enable_replacement_blend", False)),
-            replacement_blend_alpha=float(params.get("replacement_blend_alpha", 0.70)),
-            **state._roto_category_settings_from_dict(params),
-        )
+        base_params = state._default_calculation_cache_params()
+
+        max_configs = min(state.PREWARM_CONFIG_COUNT, len(PREWARM_CONFIGS))
+        configs_to_run = PREWARM_CONFIGS[:max_configs]
+
+        with state.CALCULATOR_PREWARM_LOCK:
+            state.CALCULATOR_PREWARM_STATE["configs_total"] = len(configs_to_run)
+
+        for i, config in enumerate(configs_to_run):
+            label = config.get("label", f"config-{i}")
+            mode = config.get("mode", "roto")
+            params = {**base_params}
+            for k, v in config.items():
+                if k not in ("label", "mode"):
+                    params[k] = v
+
+            state.CALC_LOGGER.info("prewarm [%d/%d] %s", i + 1, len(configs_to_run), label)
+            if mode == "points":
+                _prewarm_points_config(state=state, params=params)
+            else:
+                _prewarm_roto_config(state=state, params=params)
+
+            with state.CALCULATOR_PREWARM_LOCK:
+                state.CALCULATOR_PREWARM_STATE["configs_completed"] = i + 1
+
+        # Also prewarm the default dynasty lookup
         state._get_default_dynasty_lookup()
 
         duration_ms = round((state.time.perf_counter() - started) * 1000.0, 1)
@@ -384,7 +445,7 @@ def prewarm_default_calculation_caches(*, state: RuntimeStateHelpersState) -> No
                     "error": None,
                 }
             )
-        state.CALC_LOGGER.info("calculator prewarm completed duration_ms=%s", duration_ms)
+        state.CALC_LOGGER.info("calculator prewarm completed duration_ms=%s configs=%d", duration_ms, len(configs_to_run))
     except Exception as exc:
         duration_ms = round((state.time.perf_counter() - started) * 1000.0, 1)
         with state.CALCULATOR_PREWARM_LOCK:

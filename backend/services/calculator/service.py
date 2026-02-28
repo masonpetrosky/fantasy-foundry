@@ -54,6 +54,7 @@ class CalculateRequest(BaseModel):
     ip_min: float = Field(default=0.0, ge=0.0)
     ip_max: Optional[float] = Field(default=None, ge=0.0)
     start_year: int = Field(default=2026, ge=1900)
+    auction_budget: Optional[int] = Field(default=None, ge=1, le=9999)
     roto_hit_r: bool = True
     roto_hit_rbi: bool = True
     roto_hit_hr: bool = True
@@ -475,7 +476,22 @@ class CalculatorService:
                 ]
             explanations = self._ctx.build_calculation_explanations(out, settings=settings)
 
+            # Auction dollar conversion
+            if req.auction_budget is not None and "DynastyValue" in out.columns:
+                total_budget = req.auction_budget * req.teams
+                positive_values = out["DynastyValue"].clip(lower=0)
+                total_positive = positive_values.sum()
+                if total_positive > 0:
+                    out["AuctionDollars"] = (positive_values / total_positive * total_budget).round(0).astype(int)
+                    # $1 floor for players with positive dynasty value
+                    out.loc[(out["DynastyValue"] > 0) & (out["AuctionDollars"] < 1), "AuctionDollars"] = 1
+                else:
+                    out["AuctionDollars"] = 0
+                # Zero out auction dollars for negative dynasty values
+                out.loc[out["DynastyValue"] <= 0, "AuctionDollars"] = 0
+
             year_cols = [c for c in out.columns if c.startswith("Value_")]
+            auction_cols = ["AuctionDollars"] if "AuctionDollars" in out.columns else []
             cols = [
                 "Player",
                 self._ctx.player_key_col,
@@ -488,7 +504,7 @@ class CalculatorService:
                 "DynastyValue",
                 "RawDynastyValue",
                 "minor_eligible",
-            ] + year_cols
+            ] + auction_cols + year_cols
 
             available_cols = [c for c in cols if c in out.columns]
             df = out[available_cols].copy()

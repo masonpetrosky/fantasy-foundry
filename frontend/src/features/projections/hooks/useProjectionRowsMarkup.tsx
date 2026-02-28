@@ -62,6 +62,17 @@ export function useProjectionRowsMarkup({
     if (col === "Player") return <td key={col} className="player-name">{val as React.ReactNode}</td>;
     if (col === "Pos") return <td key={col} className="pos">{val as React.ReactNode}</td>;
     if (col === "Team") return <td key={col} className="team">{val as React.ReactNode}</td>;
+    if (col === "AuctionDollars") {
+      if (val == null || val === "") return <td key={col} className="num">{"\u2014"}</td>;
+      return <td key={col} className="num">${fmtInt(val, true)}</td>;
+    }
+    if (col === "ProjectionDelta") {
+      if (val == null || val === "" || val === 0) return <td key={col} className="num">{"\u2014"}</td>;
+      const n = Number(val);
+      const arrow = n > 0 ? "\u2191" : "\u2193";
+      const cls = n > 0 ? "value-positive" : "value-negative";
+      return <td key={col} className={`num ${cls}`}>{arrow} {Math.abs(n).toFixed(2)}</td>;
+    }
     if (col === "DynastyValue" || col.startsWith("Value_")) {
       if ((val == null || val === "") && col === "DynastyValue" && row.DynastyMatchStatus === "no_unique_match") {
         return <td key={col} className="num" style={{ color: "var(--text-muted)" }}>No unique match</td>;

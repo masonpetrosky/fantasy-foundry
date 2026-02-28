@@ -50,6 +50,8 @@ ENV FF_CALC_MAX_ACTIVE_JOBS_TOTAL=24
 ENV FF_TRUST_X_FORWARDED_FOR=1
 ENV FF_TRUSTED_PROXY_CIDRS=cloudflare
 
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

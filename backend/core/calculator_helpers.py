@@ -319,3 +319,22 @@ def calculator_guardrails_payload(
         "max_active_jobs_per_ip": calculator_max_active_jobs_per_ip,
         "max_active_jobs_total": calculator_max_active_jobs_total,
     }
+
+
+# ---------------------------------------------------------------------------
+# Prewarm configurations — popular league setups to cache at startup
+# ---------------------------------------------------------------------------
+# Each entry overrides the default params produced by default_calculation_cache_params.
+# "mode" is "roto" or "points".  Only non-default fields need to be specified.
+PREWARM_CONFIGS: list[dict[str, Any]] = [
+    # 1) 12-team 5x5 roto (the default — already computed by the base prewarm)
+    {"label": "12T-5x5-roto"},
+    # 2) 10-team 5x5 roto
+    {"label": "10T-5x5-roto", "teams": 10},
+    # 3) 14-team 5x5 roto
+    {"label": "14T-5x5-roto", "teams": 14},
+    # 4) 12-team points
+    {"label": "12T-points", "mode": "points"},
+    # 5) 12-team 6x6 roto (OBP + QS)
+    {"label": "12T-6x6-roto", "roto_hit_obp": True, "roto_pit_qs": True},
+]

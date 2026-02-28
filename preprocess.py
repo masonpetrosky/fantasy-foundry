@@ -477,9 +477,19 @@ def main():
     bat = round_float_columns(bat, rate_cols=HIT_RATE_COLS)
     pit = round_float_columns(pit, rate_cols=PIT_RATE_COLS)
 
+    # Snapshot previous data before overwriting
+    bat_path = DATA_DIR / "bat.json"
+    pit_path = DATA_DIR / "pitch.json"
+    bat_prev_path = DATA_DIR / "bat_prev.json"
+    pit_prev_path = DATA_DIR / "pit_prev.json"
+    if bat_path.exists():
+        bat_prev_path.write_bytes(bat_path.read_bytes())
+    if pit_path.exists():
+        pit_prev_path.write_bytes(pit_path.read_bytes())
+
     # Write data JSON files
-    bat.to_json(DATA_DIR / "bat.json", orient="records")
-    pit.to_json(DATA_DIR / "pitch.json", orient="records")
+    bat.to_json(bat_path, orient="records")
+    pit.to_json(pit_path, orient="records")
 
     # Write metadata for frontend filters
     meta = build_meta(bat, pit)

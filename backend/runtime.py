@@ -41,6 +41,8 @@ from backend.api.routes import (
     build_calculate_router,
     build_frontend_assets_router,
     build_newsletter_router,
+    build_og_cards_router,
+    build_player_summary_index,
     build_projections_router,
     build_status_router,
 )
@@ -456,6 +458,7 @@ CALCULATOR_JOB_TTL_SECONDS = SETTINGS.calculator_job_ttl_seconds
 CALCULATOR_JOB_MAX_ENTRIES = SETTINGS.calculator_job_max_entries
 CALCULATOR_JOB_WORKERS = SETTINGS.calculator_job_workers
 ENABLE_STARTUP_CALC_PREWARM = SETTINGS.enable_startup_calc_prewarm
+PREWARM_CONFIG_COUNT = SETTINGS.prewarm_config_count
 CALCULATOR_REQUEST_TIMEOUT_SECONDS = SETTINGS.calculator_request_timeout_seconds
 CALCULATOR_SYNC_RATE_LIMIT_PER_MINUTE = SETTINGS.calculator_sync_rate_limit_per_minute
 CALCULATOR_SYNC_AUTH_RATE_LIMIT_PER_MINUTE = SETTINGS.calculator_sync_auth_rate_limit_per_minute
@@ -512,6 +515,30 @@ BAT_DATA_RAW, PIT_DATA_RAW = _with_player_identity_keys(BAT_DATA_RAW, PIT_DATA_R
 BAT_DATA = _average_recent_projection_rows(BAT_DATA_RAW, is_hitter=True)
 PIT_DATA = _average_recent_projection_rows(PIT_DATA_RAW, is_hitter=False)
 PROJECTION_FRESHNESS = _projection_freshness_payload(BAT_DATA, PIT_DATA)
+PLAYER_SUMMARY_INDEX = build_player_summary_index(BAT_DATA, PIT_DATA)
+
+# Projection deltas (week-over-week change tracking)
+from backend.services.projections.delta import (
+    compute_projection_deltas as _compute_projection_deltas,
+)
+from backend.services.projections.delta import (
+    empty_delta_response as _empty_delta_response,
+)
+from backend.services.projections.delta import (
+    load_previous_data as _load_previous_data,
+)
+
+_prev_data = _load_previous_data(DATA_DIR)
+if _prev_data is not None:
+    _prev_bat_raw, _prev_pit_raw = _prev_data
+    _prev_bat_raw, _prev_pit_raw = _with_player_identity_keys(_prev_bat_raw, _prev_pit_raw)
+    _prev_bat = _average_recent_projection_rows(_prev_bat_raw, is_hitter=True)
+    _prev_pit = _average_recent_projection_rows(_prev_pit_raw, is_hitter=False)
+    PROJECTION_DELTAS = _compute_projection_deltas(BAT_DATA, PIT_DATA, _prev_bat, _prev_pit)
+    del _prev_bat_raw, _prev_pit_raw, _prev_bat, _prev_pit
+else:
+    PROJECTION_DELTAS = _empty_delta_response()
+del _prev_data
 DATA_REFRESH_PATHS = (
     DATA_DIR / "meta.json",
     DATA_DIR / "bat.json",
@@ -703,12 +730,17 @@ app.include_router(
         ops_handler=get_ops,
     )
 )
+def _get_projection_deltas() -> dict:
+    return PROJECTION_DELTAS
+
+
 app.include_router(
     build_projections_router(
         projection_response_handler=projection_response,
         projection_export_handler=export_projections,
         projection_profile_handler=RUNTIME_ENDPOINT_HANDLERS.projection_profile,
         projection_compare_handler=RUNTIME_ENDPOINT_HANDLERS.projection_compare,
+        projection_deltas_handler=_get_projection_deltas,
     )
 )
 app.include_router(
@@ -853,6 +885,12 @@ def _get_unique_player_entity_keys() -> list[str]:
             keys.append(key)
     return keys
 
+app.include_router(
+    build_og_cards_router(
+        player_summary_index=PLAYER_SUMMARY_INDEX,
+    )
+)
+
 if FRONTEND_DIR.exists():
     app.include_router(
         build_frontend_assets_router(
@@ -861,5 +899,6 @@ if FRONTEND_DIR.exists():
             app_build_id=APP_BUILD_ID,
             index_build_token=INDEX_BUILD_TOKEN,
             player_keys_getter=_get_unique_player_entity_keys,
+            player_summary_index=PLAYER_SUMMARY_INDEX,
         )
     )

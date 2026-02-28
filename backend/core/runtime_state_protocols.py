@@ -161,6 +161,8 @@ class RuntimeStateHelpersState(Protocol):
     PLAYER_ENTITY_KEY_COL: str
     CALCULATOR_PREWARM_LOCK: Any
     CALCULATOR_PREWARM_STATE: dict[str, Any]
+    PREWARM_CONFIG_COUNT: int
+    DEFAULT_POINTS_SCORING: dict[str, float]
     CALCULATOR_JOB_LOCK: Any
     CALCULATOR_JOBS: dict[str, dict[str, Any]]
     CALCULATOR_JOB_EXECUTOR: Any

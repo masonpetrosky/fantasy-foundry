@@ -28,12 +28,14 @@ describe("projectionTable defaults", () => {
       pts_pit_bb: -1,
     };
     const cols = projectionTableColumnCatalog("all", "Year", ["Value_2026", "Value_2027"], settings);
-    expect(cols.slice(0, 12)).toEqual([
+    expect(cols.slice(0, 14)).toEqual([
       "Player",
       "Team",
       "Pos",
       "Age",
       "DynastyValue",
+      "AuctionDollars",
+      "ProjectionDelta",
       "AB",
       "HR",
       "IP",

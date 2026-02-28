@@ -17,6 +17,7 @@ ProjectionResponseHandler = Callable[..., dict[str, Any]]
 ProjectionExportHandler = Callable[..., Any]
 ProjectionProfileHandler = Callable[..., dict[str, Any]]
 ProjectionCompareHandler = Callable[..., dict[str, Any]]
+ProjectionDeltasHandler = Callable[[], dict[str, Any]]
 
 
 class ProjectionListQueryParams(BaseModel):
@@ -65,6 +66,7 @@ def build_projections_router(
     projection_export_handler: ProjectionExportHandler,
     projection_profile_handler: ProjectionProfileHandler,
     projection_compare_handler: ProjectionCompareHandler,
+    projection_deltas_handler: ProjectionDeltasHandler | None = None,
 ) -> APIRouter:
     """Create projections query/export routes with injected handlers."""
     router = APIRouter(tags=["projections"])
@@ -241,5 +243,11 @@ def build_projections_router(
             columns=query.columns,
             request=request,
         )
+
+    if projection_deltas_handler is not None:
+
+        @router.get("/api/projections/deltas")
+        def get_projection_deltas():
+            return projection_deltas_handler()
 
     return router

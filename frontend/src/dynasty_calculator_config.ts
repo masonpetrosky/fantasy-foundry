@@ -48,6 +48,7 @@ export interface CalculatorSettings {
   enable_replacement_blend: boolean;
   replacement_blend_alpha: number;
   start_year: number;
+  auction_budget: number | null;
 }
 
 export interface PayloadResult {
@@ -297,6 +298,7 @@ export function buildDefaultCalculatorSettings(meta: CalculatorMeta | null | und
     enable_replacement_blend: false,
     replacement_blend_alpha: 0.7,
     start_year: Number(meta?.years?.[0] ?? 2026),
+    auction_budget: null,
     ...resolveRotoCategoryDefaults(),
     ...resolvePointsScoringDefaults(meta),
   };
@@ -447,6 +449,16 @@ export function buildCalculatorPayload(settings: Record<string, unknown>, availa
     }
   }
 
+  let auctionBudget: number | null = null;
+  const auctionBudgetText = String(settings.auction_budget ?? "").trim();
+  if (auctionBudgetText && auctionBudgetText !== "0") {
+    const parsedAuctionBudget = Number(auctionBudgetText);
+    if (!Number.isFinite(parsedAuctionBudget) || parsedAuctionBudget < 1 || parsedAuctionBudget > 9999) {
+      return { error: "Auction budget must be a number between 1 and 9999." };
+    }
+    auctionBudget = Math.round(parsedAuctionBudget);
+  }
+
   const parsedPointsScoring: Record<string, number> = {};
   for (const field of POINTS_SCORING_FIELDS) {
     const value = Number(settings[field.key]);
@@ -487,6 +499,7 @@ export function buildCalculatorPayload(settings: Record<string, unknown>, availa
     enable_replacement_blend: enableReplacementBlend,
     replacement_blend_alpha: replacementBlendAlpha,
     start_year: startYear,
+    auction_budget: auctionBudget,
     ...parsedRotoCategories,
     ...parsedPointsScoring,
   };
