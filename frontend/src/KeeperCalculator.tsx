@@ -183,7 +183,7 @@ export function KeeperCalculator({
                 <input
                   type="text"
                   className="keeper-search-input"
-                  placeholder="Search player name..."
+                  placeholder="Search players..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   autoFocus

@@ -228,11 +228,11 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
       </div>
 
       <div className="filter-bar">
-        <VisuallyHidden as="label" htmlFor="projections-search">Search player name</VisuallyHidden>
+        <VisuallyHidden as="label" htmlFor="projections-search">Search players</VisuallyHidden>
         <input
           id="projections-search"
           type="text"
-          placeholder="Search player name\u2026"
+          placeholder="Search players\u2026"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
