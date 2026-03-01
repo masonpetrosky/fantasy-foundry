@@ -1,5 +1,5 @@
 from backend import dynasty_roto_values
-from backend.valuation import cli, common_orchestration, league_orchestration
+from backend.valuation import cli, common_orchestration
 
 
 def test_common_wrapper_delegates_to_extracted_module(monkeypatch) -> None:
@@ -33,39 +33,6 @@ def test_common_wrapper_delegates_to_extracted_module(monkeypatch) -> None:
     assert calls["verbose"] is False
     assert calls["return_details"] is True
     assert calls["seed"] == 11
-
-
-def test_league_wrapper_delegates_to_extracted_module(monkeypatch) -> None:
-    calls: dict[str, object] = {}
-
-    def fake_league(excel_path, lg, *, start_year, years, verbose, return_details, seed):
-        calls["excel_path"] = excel_path
-        calls["lg"] = lg
-        calls["start_year"] = start_year
-        calls["years"] = years
-        calls["verbose"] = verbose
-        calls["return_details"] = return_details
-        calls["seed"] = seed
-        return "league-ok"
-
-    monkeypatch.setattr(league_orchestration, "calculate_league_dynasty_values", fake_league)
-    out = dynasty_roto_values.calculate_league_dynasty_values(
-        "league.xlsx",
-        {"kind": "lg"},
-        start_year=2027,
-        years=[2027],
-        verbose=False,
-        return_details=True,
-        seed=3,
-    )
-
-    assert out == "league-ok"
-    assert calls["excel_path"] == "league.xlsx"
-    assert calls["start_year"] == 2027
-    assert calls["years"] == [2027]
-    assert calls["verbose"] is False
-    assert calls["return_details"] is True
-    assert calls["seed"] == 3
 
 
 def test_main_wrapper_delegates_to_cli_module(monkeypatch) -> None:

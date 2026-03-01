@@ -302,30 +302,18 @@ describe("buildDefaultCalculatorSettings", () => {
 });
 
 describe("buildCalculatorPayload mode field", () => {
-  it("includes mode in the payload", () => {
+  it("always uses common mode", () => {
     const settings = buildValidRotoSettings({ mode: "common" });
     const result = buildCalculatorPayload(settings, [2026], {});
     expect(result.error).toBeUndefined();
     expect(result.payload!.mode).toBe("common");
   });
 
-  it("accepts league mode with roto scoring", () => {
+  it("forces common mode even if league is specified", () => {
     const settings = buildValidRotoSettings({ mode: "league" });
     const result = buildCalculatorPayload(settings, [2026], {});
     expect(result.error).toBeUndefined();
-    expect(result.payload!.mode).toBe("league");
-  });
-
-  it("rejects league mode with points scoring", () => {
-    const settings = buildValidRotoSettings({ mode: "league", scoring_mode: "points" });
-    const result = buildCalculatorPayload(settings, [2026], {});
-    expect(result.error).toMatch(/league mode only supports roto/i);
-  });
-
-  it("rejects invalid mode values", () => {
-    const settings = buildValidRotoSettings({ mode: "invalid" });
-    const result = buildCalculatorPayload(settings, [2026], {});
-    expect(result.error).toMatch(/valuation mode/i);
+    expect(result.payload!.mode).toBe("common");
   });
 
   it("defaults mode to common when not specified", () => {

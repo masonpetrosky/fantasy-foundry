@@ -237,7 +237,6 @@ def _build_harness(
         result_cache_set=result_cache_set,
         calculate_common_dynasty_frame_cached=cached_common,
         calculate_points_dynasty_frame_cached=cached_points,
-        calculate_league_dynasty_frame_cached=_CacheCallable(cache_frame),
         roto_category_settings_from_dict=lambda _settings: {},
         is_user_fixable_calculation_error=lambda message: "not enough players" in message.lower(),
         player_identity_by_name=lambda: {},

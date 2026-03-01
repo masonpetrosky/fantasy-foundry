@@ -200,7 +200,6 @@ export function DynastyCalculatorSidebar({
               id="calc-setup"
               value={settings.scoring_mode}
               onChange={e => applyScoringSetup(e.target.value)}
-              disabled={settings.mode === "league"}
             >
               <option value="roto">Roto Focused</option>
               <option value="points" disabled={tierLimits != null && !tierLimits.allowPointsMode}>
@@ -210,40 +209,8 @@ export function DynastyCalculatorSidebar({
           </div>
         </div>
 
-        <div className="form-row">
-          <div className="form-group">
-            <label htmlFor="calc-mode">
-              Valuation Mode
-              <span
-                className="field-help"
-                tabIndex={0}
-                role="note"
-                aria-label="Valuation mode help"
-                title="Common: values players against a simulated average-starter pool. League: two-pass replacement-level valuation producing more realistic dynasty values."
-              >
-                ?
-              </span>
-            </label>
-            <select
-              id="calc-mode"
-              value={settings.mode || "common"}
-              onChange={e => {
-                const newMode = e.target.value;
-                update("mode", newMode);
-                if (newMode === "league" && settings.scoring_mode !== "roto") {
-                  applyScoringSetup("roto");
-                }
-              }}
-            >
-              <option value="common">Common</option>
-              <option value="league">League</option>
-            </select>
-          </div>
-        </div>
         <p className="calc-note">
-          {settings.mode === "league"
-            ? "League mode uses two-pass replacement-level valuation (roto only). Setup is locked to roto."
-            : "Switching setup applies the recommended slot defaults for that format."}
+          Switching setup applies the recommended slot defaults for that format.
         </p>
 
         <div className="form-row">

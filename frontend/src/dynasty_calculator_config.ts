@@ -304,18 +304,12 @@ export function buildDefaultCalculatorSettings(meta: CalculatorMeta | null | und
   };
 }
 export function buildCalculatorPayload(settings: Record<string, unknown>, availableYears: number[] | null | undefined, meta: CalculatorMeta | null | undefined): PayloadResult {
-  const mode = String(settings.mode ?? "").trim().toLowerCase() || "common";
-  if (mode !== "common" && mode !== "league") {
-    return { error: "Valuation Mode must be either 'common' or 'league'." };
-  }
+  // League mode removed — always use common.
+  const mode = "common";
 
   const scoringMode = String(settings.scoring_mode ?? "").trim().toLowerCase() || "roto";
   if (scoringMode !== "roto" && scoringMode !== "points") {
     return { error: "Scoring Mode must be either 'roto' or 'points'." };
-  }
-
-  if (mode === "league" && scoringMode !== "roto") {
-    return { error: "League mode only supports roto scoring." };
   }
 
   const parsedSlots: Record<string, number> = {};

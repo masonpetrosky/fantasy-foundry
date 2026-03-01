@@ -1,4 +1,4 @@
-"""Position parsing and slot-eligibility helpers for common/league modes."""
+"""Position parsing and slot-eligibility helpers."""
 
 from __future__ import annotations
 
@@ -92,70 +92,9 @@ def eligible_pit_slots(pos_set: Set[str]) -> Set[str]:
     return slots
 
 
-def league_parse_hit_positions(pos_str: str) -> Set[str]:
-    if pd.isna(pos_str):
-        return set()
-    return {p.strip() for p in str(pos_str).split("/") if p.strip()}
-
-
-def league_eligible_hit_slots(pos_set: Set[str]) -> Set[str]:
-    slots: Set[str] = set()
-    if not pos_set:
-        return slots
-
-    # UT always if any hitter projection row exists
-    slots.add("UT")
-
-    if "C" in pos_set:
-        slots.add("C")
-    if "1B" in pos_set:
-        slots.update({"1B", "CI"})
-    if "3B" in pos_set:
-        slots.update({"3B", "CI"})
-    if "2B" in pos_set:
-        slots.update({"2B", "MI"})
-    if "SS" in pos_set:
-        slots.update({"SS", "MI"})
-    if "OF" in pos_set:
-        slots.add("OF")
-
-    # "DH" -> only UT (already included)
-    return slots
-
-
-def league_parse_pit_positions(pos_str: str) -> Set[str]:
-    if pd.isna(pos_str):
-        return set()
-    parts = [p.strip() for p in str(pos_str).split("/") if p.strip()]
-    out: Set[str] = set()
-    for token in parts:
-        if token == "UT":
-            continue
-        if token in {"UT/SP", "UT-SP"}:
-            out.add("SP")
-        else:
-            out.add(token)
-    return out
-
-
-def league_eligible_pit_slots(pos_set: Set[str]) -> Set[str]:
-    slots: Set[str] = set()
-    if "SP" in pos_set:
-        slots.update({"SP", "P"})
-    if "RP" in pos_set:
-        slots.update({"RP", "P"})
-    if not slots and pos_set:
-        slots.add("P")
-    return slots
-
-
 __all__ = [
     "parse_hit_positions",
     "eligible_hit_slots",
     "parse_pit_positions",
     "eligible_pit_slots",
-    "league_parse_hit_positions",
-    "league_eligible_hit_slots",
-    "league_parse_pit_positions",
-    "league_eligible_pit_slots",
 ]

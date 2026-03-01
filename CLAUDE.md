@@ -57,7 +57,7 @@ cd frontend && npm run dev
 | `services/projections/` | Projection query pipeline + runtime boundaries |
 | `services/valuation/` | Service boundary around valuation entry points |
 | `dynasty_roto_values.py` | Legacy re-export facade for valuation + CLI |
-| `valuation/` | Core math: models, positions, assignment, common/league math |
+| `valuation/` | Core math: models, positions, assignment, common math |
 
 **To add a new route:** create a handler function in `backend/core/`, register the route in the appropriate `backend/api/routes/*.py` router, and wire the router in `backend/runtime.py` via `build_*_router()`.
 
@@ -93,9 +93,8 @@ cd frontend && npm run dev
 
 ## Large / Sensitive Files — Avoid Bloating
 
-- `backend/dynasty_roto_values.py` — 900+ line legacy facade; add new logic to `backend/valuation/` submodules instead
+- `backend/dynasty_roto_values.py` — legacy re-export facade; add new logic to `backend/valuation/` submodules instead
 - `backend/valuation/common_math.py` — 1100+ lines; surgical edits only
-- `backend/valuation/league_math.py` — 1000+ lines
 - `frontend/src/features/projections/container.jsx` — orchestration only; new logic belongs in hooks or components
 - `data/` — large JSON projection files; do not modify by hand
 

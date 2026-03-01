@@ -7,10 +7,6 @@ import pandas as pd
 from backend.valuation.positions import (
     eligible_hit_slots,
     eligible_pit_slots,
-    league_eligible_hit_slots,
-    league_eligible_pit_slots,
-    league_parse_hit_positions,
-    league_parse_pit_positions,
     parse_hit_positions,
     parse_pit_positions,
 )
@@ -171,91 +167,3 @@ class TestEligiblePitSlots:
         assert result == {"SP", "RP", "P"}
 
 
-# ---------------------------------------------------------------------------
-# league_parse_hit_positions
-# ---------------------------------------------------------------------------
-
-class TestLeagueParseHitPositions:
-    def test_simple(self):
-        assert league_parse_hit_positions("1B") == {"1B"}
-
-    def test_slash_separated(self):
-        assert league_parse_hit_positions("1B/3B") == {"1B", "3B"}
-
-    def test_no_alias_expansion(self):
-        # League mode does NOT alias LF to OF
-        assert league_parse_hit_positions("LF") == {"LF"}
-
-    def test_nan(self):
-        assert league_parse_hit_positions(float("nan")) == set()
-
-    def test_empty(self):
-        assert league_parse_hit_positions("") == set()
-
-
-# ---------------------------------------------------------------------------
-# league_eligible_hit_slots
-# ---------------------------------------------------------------------------
-
-class TestLeagueEligibleHitSlots:
-    def test_empty(self):
-        assert league_eligible_hit_slots(set()) == set()
-
-    def test_first_base(self):
-        result = league_eligible_hit_slots({"1B"})
-        assert result == {"1B", "CI", "UT"}
-
-    def test_outfield(self):
-        result = league_eligible_hit_slots({"OF"})
-        assert result == {"OF", "UT"}
-
-    def test_dh_only_ut(self):
-        result = league_eligible_hit_slots({"DH"})
-        assert result == {"UT"}  # DH maps only to UT
-
-    def test_second_base_gets_mi(self):
-        result = league_eligible_hit_slots({"2B"})
-        assert result == {"2B", "MI", "UT"}
-
-
-# ---------------------------------------------------------------------------
-# league_parse_pit_positions
-# ---------------------------------------------------------------------------
-
-class TestLeagueParsePitPositions:
-    def test_sp(self):
-        assert league_parse_pit_positions("SP") == {"SP"}
-
-    def test_rp(self):
-        assert league_parse_pit_positions("RP") == {"RP"}
-
-    def test_ut_stripped(self):
-        assert league_parse_pit_positions("UT") == set()
-
-    def test_ut_sp_alias(self):
-        assert league_parse_pit_positions("UT/SP") == {"SP"}
-
-    def test_nan(self):
-        assert league_parse_pit_positions(float("nan")) == set()
-
-
-# ---------------------------------------------------------------------------
-# league_eligible_pit_slots
-# ---------------------------------------------------------------------------
-
-class TestLeagueEligiblePitSlots:
-    def test_empty(self):
-        assert league_eligible_pit_slots(set()) == set()
-
-    def test_sp_gets_sp_and_p(self):
-        assert league_eligible_pit_slots({"SP"}) == {"SP", "P"}
-
-    def test_rp_gets_rp_and_p(self):
-        assert league_eligible_pit_slots({"RP"}) == {"RP", "P"}
-
-    def test_unknown_position_gets_p_fallback(self):
-        result = league_eligible_pit_slots({"CL"})
-        assert result == {"P"}
-
-    def test_empty_pos_set_no_fallback(self):
-        assert league_eligible_pit_slots(set()) == set()

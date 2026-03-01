@@ -534,6 +534,8 @@ export function mergeKnownCalculatorSettings(
       merged[key] = incomingSettings[key];
     }
   });
+  // League mode removed — force common for legacy presets/URLs.
+  merged.mode = "common";
   return merged;
 }
 

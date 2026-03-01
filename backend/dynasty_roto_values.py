@@ -9,7 +9,6 @@ import pandas as pd
 
 try:
     from backend.valuation import common_math as _common_math
-    from backend.valuation import league_math as _league_math
     from backend.valuation import minor_eligibility as _minor_elig
     from backend.valuation import projection_averaging as _projection_averaging
     from backend.valuation import projection_identity as _projection_identity
@@ -33,18 +32,6 @@ try:
         expand_slot_counts as expand_slot_counts,
     )
     from backend.valuation.assignment import (
-        league_assign_players_to_slots as league_assign_players_to_slots,
-    )
-    from backend.valuation.assignment import (
-        league_build_slot_list as league_build_slot_list,
-    )
-    from backend.valuation.assignment import (
-        league_build_team_slot_template as league_build_team_slot_template,
-    )
-    from backend.valuation.assignment import (
-        league_expand_slot_counts as league_expand_slot_counts,
-    )
-    from backend.valuation.assignment import (
         validate_assigned_slots as validate_assigned_slots,
     )
     from backend.valuation.models import (
@@ -52,9 +39,6 @@ try:
     )
     from backend.valuation.models import (
         HIT_COMPONENT_COLS as HIT_COMPONENT_COLS,
-    )
-    from backend.valuation.models import (
-        LEAGUE_HIT_STAT_COLS as LEAGUE_HIT_STAT_COLS,
     )
     from backend.valuation.models import (
         PIT_CATS as PIT_CATS,
@@ -65,26 +49,11 @@ try:
     from backend.valuation.models import (
         CommonDynastyRotoSettings as CommonDynastyRotoSettings,
     )
-    from backend.valuation.models import (
-        LeagueSettings as LeagueSettings,
-    )
     from backend.valuation.positions import (
         eligible_hit_slots as eligible_hit_slots,
     )
     from backend.valuation.positions import (
         eligible_pit_slots as eligible_pit_slots,
-    )
-    from backend.valuation.positions import (
-        league_eligible_hit_slots as league_eligible_hit_slots,
-    )
-    from backend.valuation.positions import (
-        league_eligible_pit_slots as league_eligible_pit_slots,
-    )
-    from backend.valuation.positions import (
-        league_parse_hit_positions as league_parse_hit_positions,
-    )
-    from backend.valuation.positions import (
-        league_parse_pit_positions as league_parse_pit_positions,
     )
     from backend.valuation.positions import (
         parse_hit_positions as parse_hit_positions,
@@ -95,7 +64,6 @@ try:
 except ImportError:
     # Support direct execution/import when /backend is added to sys.path.
     from valuation import common_math as _common_math  # type: ignore[no-redef]
-    from valuation import league_math as _league_math  # type: ignore[no-redef]
     from valuation import minor_eligibility as _minor_elig  # type: ignore[no-redef]
     from valuation import projection_averaging as _projection_averaging  # type: ignore[no-redef]
     from valuation import projection_identity as _projection_identity  # type: ignore[no-redef]
@@ -119,18 +87,6 @@ except ImportError:
         expand_slot_counts as expand_slot_counts,
     )
     from valuation.assignment import (
-        league_assign_players_to_slots as league_assign_players_to_slots,
-    )
-    from valuation.assignment import (
-        league_build_slot_list as league_build_slot_list,
-    )
-    from valuation.assignment import (
-        league_build_team_slot_template as league_build_team_slot_template,
-    )
-    from valuation.assignment import (
-        league_expand_slot_counts as league_expand_slot_counts,
-    )
-    from valuation.assignment import (
         validate_assigned_slots as validate_assigned_slots,
     )
     from valuation.models import (  # type: ignore[no-redef]
@@ -138,9 +94,6 @@ except ImportError:
     )
     from valuation.models import (
         HIT_COMPONENT_COLS as HIT_COMPONENT_COLS,
-    )
-    from valuation.models import (
-        LEAGUE_HIT_STAT_COLS as LEAGUE_HIT_STAT_COLS,
     )
     from valuation.models import (
         PIT_CATS as PIT_CATS,
@@ -151,26 +104,11 @@ except ImportError:
     from valuation.models import (
         CommonDynastyRotoSettings as CommonDynastyRotoSettings,
     )
-    from valuation.models import (
-        LeagueSettings as LeagueSettings,
-    )
     from valuation.positions import (  # type: ignore[no-redef]
         eligible_hit_slots as eligible_hit_slots,
     )
     from valuation.positions import (
         eligible_pit_slots as eligible_pit_slots,
-    )
-    from valuation.positions import (
-        league_eligible_hit_slots as league_eligible_hit_slots,
-    )
-    from valuation.positions import (
-        league_eligible_pit_slots as league_eligible_pit_slots,
-    )
-    from valuation.positions import (
-        league_parse_hit_positions as league_parse_hit_positions,
-    )
-    from valuation.positions import (
-        league_parse_pit_positions as league_parse_pit_positions,
     )
     from valuation.positions import (
         parse_hit_positions as parse_hit_positions,
@@ -339,39 +277,6 @@ def recompute_common_rates_pit(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def recompute_league_rates_hit(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    if {"H", "2B", "3B", "HR"}.issubset(df.columns):
-        df["TB"] = df["H"] + df["2B"] + 2 * df["3B"] + 3 * df["HR"]
-    if {"H", "BB", "HBP", "AB", "SF"}.issubset(df.columns):
-        df["OBP_num"] = df["H"] + df["BB"] + df["HBP"]
-        df["OBP_den"] = df["AB"] + df["BB"] + df["HBP"] + df["SF"]
-    if "H" in df.columns and "AB" in df.columns:
-        h = df["H"].to_numpy(dtype=float)
-        ab = df["AB"].to_numpy(dtype=float)
-        df["AVG"] = np.divide(h, ab, out=np.zeros_like(h), where=ab > 0)
-    if {"OBP_num", "OBP_den", "TB", "AB"}.issubset(df.columns):
-        obp_den = df["OBP_den"].to_numpy(dtype=float)
-        ab = df["AB"].to_numpy(dtype=float)
-        obp = np.divide(df["OBP_num"].to_numpy(dtype=float), obp_den, out=np.zeros_like(obp_den), where=obp_den > 0)
-        slg = np.divide(df["TB"].to_numpy(dtype=float), ab, out=np.zeros_like(ab), where=ab > 0)
-        df["OPS"] = obp + slg
-    return df
-
-
-def recompute_league_rates_pit(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    if "ER" in df.columns and "IP" in df.columns:
-        er = df["ER"].to_numpy(dtype=float)
-        ip = df["IP"].to_numpy(dtype=float)
-        df["ERA"] = np.divide(9.0 * er, ip, out=np.full_like(ip, np.nan), where=ip > 0)
-    if "H" in df.columns and "BB" in df.columns and "IP" in df.columns:
-        h = df["H"].to_numpy(dtype=float)
-        bb = df["BB"].to_numpy(dtype=float)
-        ip = df["IP"].to_numpy(dtype=float)
-        df["WHIP"] = np.divide(h + bb, ip, out=np.full_like(ip, np.nan), where=ip > 0)
-    return df
-
 # ----------------------------
 # Column aliases and requirements
 # ----------------------------
@@ -382,14 +287,6 @@ COMMON_COLUMN_ALIASES = {
     "player_name": "Player",
     "name": "Player",
 }
-
-LEAGUE_COLUMN_ALIASES = {
-    "team": "MLBTeam",
-    "mlb_team": "MLBTeam",
-    "player_name": "Player",
-    "name": "Player",
-}
-
 
 def require_cols(df: pd.DataFrame, cols: List[str], sheet_name: str) -> None:
     missing = [c for c in cols if c not in df.columns]
@@ -939,22 +836,6 @@ def calculate_common_dynasty_values(
         return_details=return_details,
         seed=seed,
     )
-def league_hitter_components(df: pd.DataFrame) -> pd.DataFrame: return _league_math.league_hitter_components(df)
-def league_ensure_pitch_cols(df: pd.DataFrame) -> pd.DataFrame: return _league_math.league_ensure_pitch_cols(df)
-def league_zscore(s: pd.Series) -> pd.Series: return _league_math.league_zscore(s)
-def league_initial_hitter_weight(df: pd.DataFrame) -> pd.Series: return _league_math.league_initial_hitter_weight(df)
-def league_initial_pitcher_weight(df: pd.DataFrame) -> pd.Series: return _league_math.league_initial_pitcher_weight(df)
-def league_team_avg_ops(hit_tot: pd.Series) -> Tuple[float, float]: return _league_math.league_team_avg_ops(hit_tot)
-def league_replacement_pitcher_rates(all_pit_df: pd.DataFrame, assigned_pit_df: pd.DataFrame, n_rep: int = 100) -> Dict[str, float]: return _league_math.league_replacement_pitcher_rates(all_pit_df, assigned_pit_df, n_rep=n_rep)
-def league_apply_ip_cap(t: Dict[str, float], ip_cap: float, rep_rates: Optional[Dict[str, float]]) -> Dict[str, float]: return _league_math.league_apply_ip_cap(t, ip_cap=ip_cap, rep_rates=rep_rates)
-def league_simulate_sgp_hit(assigned_hit_df: pd.DataFrame, lg: LeagueSettings, rng: np.random.Generator) -> Dict[str, float]: return _league_math.league_simulate_sgp_hit(assigned_hit_df, lg, rng)
-def league_simulate_sgp_pit(assigned_pit_df: pd.DataFrame, lg: LeagueSettings, rep_rates: Dict[str, float], rng: np.random.Generator) -> Dict[str, float]: return _league_math.league_simulate_sgp_pit(assigned_pit_df, lg, rep_rates, rng)
-def league_sum_slots(baseline_df: pd.DataFrame, slot_list: List[str]) -> pd.Series: return _league_math.league_sum_slots(baseline_df, slot_list)
-def league_compute_year_context(year: int, bat_df: pd.DataFrame, pit_df: pd.DataFrame, lg: LeagueSettings, rng_seed: int) -> dict: return _league_math.league_compute_year_context(year, bat_df, pit_df, lg, rng_seed)
-def league_compute_year_player_values(ctx: dict, lg: LeagueSettings) -> Tuple[pd.DataFrame, pd.DataFrame]: return _league_math.league_compute_year_player_values(ctx, lg)
-def league_compute_replacement_baselines(ctx: dict, lg: LeagueSettings, rostered_players: Set[str], n_repl: Optional[int] = None) -> Tuple[pd.DataFrame, pd.DataFrame]: return _league_math.league_compute_replacement_baselines(ctx, lg, rostered_players=rostered_players, n_repl=n_repl)
-def league_compute_year_player_values_vs_replacement(ctx: dict, lg: LeagueSettings, repl_hit: pd.DataFrame, repl_pit: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]: return _league_math.league_compute_year_player_values_vs_replacement(ctx, lg, repl_hit=repl_hit, repl_pit=repl_pit)
-def league_combine_hitter_pitcher_year(hit_vals: pd.DataFrame, pit_vals: pd.DataFrame, two_way: str) -> pd.DataFrame: return _league_math.league_combine_hitter_pitcher_year(hit_vals, pit_vals, two_way)
 def _xlsx_apply_header_style(ws) -> None: return _xlsx_fmt._xlsx_apply_header_style(ws)
 def _xlsx_set_freeze_filters_and_view(ws, freeze_panes: str, add_autofilter: bool = False) -> None: return _xlsx_fmt._xlsx_set_freeze_filters_and_view(ws, freeze_panes=freeze_panes, add_autofilter=add_autofilter)
 def _xlsx_add_table(ws, table_name: str, style_name: str = "TableStyleMedium9") -> None: return _xlsx_fmt._xlsx_add_table(ws, table_name=table_name, style_name=style_name)
@@ -964,43 +845,6 @@ def _xlsx_add_value_color_scale(ws, df: pd.DataFrame, col_name: str) -> None: re
 def _xlsx_format_player_values(ws, df: pd.DataFrame, table_name: str = "PlayerValuesTbl") -> None: return _xlsx_fmt._xlsx_format_player_values(ws, df, table_name=table_name)
 def _xlsx_format_detail_sheet(ws, df: pd.DataFrame, *, table_name: str, is_pitch: bool) -> None: return _xlsx_fmt._xlsx_format_detail_sheet(ws, df, table_name=table_name, is_pitch=is_pitch)
 
-def league_infer_minor_eligible_start(bat_df: pd.DataFrame, pit_df: pd.DataFrame, lg: LeagueSettings, start_year: int) -> pd.DataFrame:
-    inferred = _infer_minor_eligibility_by_year(
-        bat_df,
-        pit_df,
-        years=[start_year],
-        hitter_usage_max=lg.minor_hitters_career_ab_max,
-        pitcher_usage_max=lg.minor_pitchers_career_ip_max,
-        hitter_age_max=lg.infer_minor_age_max_hit,
-        pitcher_age_max=lg.infer_minor_age_max_pit,
-    )
-    out = inferred[inferred["Year"] == int(start_year)][["Player", "minor_eligible"]].copy()
-    if out.empty:
-        return pd.DataFrame(columns=["Player", "minor_eligible"])
-    return out.groupby("Player", as_index=False)["minor_eligible"].max()
-def calculate_league_dynasty_values(
-    excel_path: str,
-    lg: LeagueSettings,
-    start_year: Optional[int] = None,
-    years: Optional[List[int]] = None,
-    verbose: bool = True,
-    return_details: bool = False,
-    seed: int = 0,
-):
-    """Compatibility wrapper delegating to extracted league orchestration."""
-    try:  # pragma: no branch
-        from backend.valuation import league_orchestration as _orchestration
-    except ImportError:  # pragma: no cover - direct script execution fallback
-        from valuation import league_orchestration as _orchestration
-    return _orchestration.calculate_league_dynasty_values(
-        excel_path,
-        lg,
-        start_year=start_year,
-        years=years,
-        verbose=verbose,
-        return_details=return_details,
-        seed=seed,
-    )
 def main() -> None:
     try:  # pragma: no branch
         from backend.valuation import cli as _cli

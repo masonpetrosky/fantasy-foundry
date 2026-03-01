@@ -118,9 +118,10 @@ class CalculatorValidationTests(unittest.TestCase):
         response = self.client.post("/api/calculate", json={"mode": "invalid"})
         self.assertEqual(response.status_code, 422)
 
-    def test_league_mode_rejects_points_scoring(self) -> None:
+    def test_league_mode_with_points_scoring_uses_points_calculator(self) -> None:
+        # League mode value is accepted but ignored — scoring_mode drives routing.
         response = self.client.post("/api/calculate", json={"mode": "league", "scoring_mode": "points"})
-        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.status_code, 200)
 
     def test_rejects_invalid_ip_bounds(self) -> None:
         response = self.client.post("/api/calculate", json={"ip_min": 1200, "ip_max": 1000})

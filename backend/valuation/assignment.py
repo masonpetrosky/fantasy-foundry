@@ -1,4 +1,4 @@
-"""Assignment helpers for common and league valuation modes."""
+"""Assignment helpers for valuation slot assignment."""
 
 from __future__ import annotations
 
@@ -11,9 +11,6 @@ import pandas as pd
 
 from .positions import (
     eligible_hit_slots,
-    league_eligible_hit_slots,
-    league_parse_hit_positions,
-    league_parse_pit_positions,
     parse_hit_positions,
     parse_pit_positions,
 )
@@ -306,78 +303,6 @@ def assign_players_to_slots_with_vacancy_fill(
     )
 
 
-def league_expand_slot_counts(slot_counts_per_team: Dict[str, int], n_teams: int) -> Dict[str, int]:
-    return {slot: cnt * n_teams for slot, cnt in slot_counts_per_team.items()}
-
-
-def league_build_slot_list(slot_counts: Dict[str, int]) -> List[str]:
-    slots: List[str] = []
-    for slot, count in slot_counts.items():
-        slots.extend([slot] * count)
-    return slots
-
-
-def league_build_team_slot_template(slot_counts_per_team: Dict[str, int]) -> List[str]:
-    slots: List[str] = []
-    for slot, count in slot_counts_per_team.items():
-        slots.extend([slot] * count)
-    return slots
-
-
-def league_assign_players_to_slots(
-    df: pd.DataFrame,
-    slot_counts: Dict[str, int],
-    eligible_func: Callable[[Set[str]], Set[str]],
-    weight_col: str = "weight",
-) -> pd.DataFrame:
-    """
-    Maximum-weight assignment (Hungarian algorithm) to fill all league slots
-    with distinct players.
-    """
-    if linear_sum_assignment is None:
-        raise ImportError("scipy is required for league mode (linear_sum_assignment not available).")
-
-    df = df.copy().reset_index(drop=True)
-    df["_assign_idx"] = np.arange(len(df))
-
-    slots = league_build_slot_list(slot_counts)
-    n_slots = len(slots)
-    n_players = len(df)
-
-    if n_players < n_slots:
-        raise ValueError(f"Not enough players ({n_players}) to fill required slots ({n_slots}).")
-
-    elig_sets: List[Set[str]] = []
-    parse_func = (
-        league_parse_hit_positions if eligible_func == league_eligible_hit_slots else league_parse_pit_positions
-    )
-    for pos_str in df["Pos"]:
-        pos_set = parse_func(pos_str)
-        elig_sets.append(eligible_func(pos_set))
-
-    for slot, req in slot_counts.items():
-        elig_count = sum(1 for eligible in elig_sets if slot in eligible)
-        if elig_count < req:
-            raise ValueError(
-                f"Cannot fill slot '{slot}': need {req} eligible players but only found {elig_count}."
-            )
-
-    weights = df[weight_col].to_numpy(dtype=float)
-    BIG = 1e6
-
-    cost = np.full((n_slots, n_players), BIG, dtype=float)
-    for slot_idx, slot in enumerate(slots):
-        for player_idx in range(n_players):
-            if slot in elig_sets[player_idx]:
-                cost[slot_idx, player_idx] = -weights[player_idx]
-
-    row_ind, col_ind = linear_sum_assignment(cost)
-    assigned = df.loc[col_ind].copy()
-    assigned["AssignedSlot"] = [slots[i] for i in row_ind]
-    validate_assigned_slots(assigned, slot_counts, elig_sets, mode_label="League mode")
-    return assigned.drop(columns=["_assign_idx"])
-
-
 __all__ = [
     "HAVE_SCIPY",
     "expand_slot_counts",
@@ -386,8 +311,4 @@ __all__ = [
     "validate_assigned_slots",
     "assign_players_to_slots",
     "assign_players_to_slots_with_vacancy_fill",
-    "league_expand_slot_counts",
-    "league_build_slot_list",
-    "league_build_team_slot_template",
-    "league_assign_players_to_slots",
 ]

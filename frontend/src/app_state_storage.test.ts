@@ -488,6 +488,14 @@ describe("mergeKnownCalculatorSettings", () => {
     const merged = mergeKnownCalculatorSettings(base, null);
     expect(merged.teams).toBe(12);
   });
+
+  it("forces mode to common for legacy league presets", () => {
+    const base = { mode: "common", teams: 12 };
+    const incoming = { mode: "league", teams: 14 };
+    const merged = mergeKnownCalculatorSettings(base, incoming);
+    expect(merged.mode).toBe("common");
+    expect(merged.teams).toBe(14);
+  });
 });
 
 describe("encodeCalculatorSettings / decodeCalculatorSettings", () => {
