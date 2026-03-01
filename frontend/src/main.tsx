@@ -34,6 +34,7 @@ import { useMetadata } from "./hooks/useMetadata";
 import { useQuickStart } from "./hooks/useQuickStart";
 import { useVersionPolling } from "./hooks/useVersionPolling";
 import { useAccountMenu } from "./hooks/useAccountMenu";
+import { useMobileNavMenu } from "./hooks/useMobileNavMenu";
 import { useAccountSync } from "./hooks/useAccountSync";
 import { usePremiumStatus } from "./hooks/usePremiumStatus";
 import { useTheme } from "./hooks/useTheme";
@@ -106,6 +107,7 @@ function App(): React.ReactElement {
   const { subscription, tierLimits } = usePremiumStatus(authUser);
   const toast = useToastContext();
   const { accountMenuOpen, setAccountMenuOpen, accountMenuRef, accountTriggerRef } = useAccountMenu({ section });
+  const { mobileNavOpen, setMobileNavOpen, mobileNavMenuRef, mobileNavTriggerRef } = useMobileNavMenu({ section });
   const bottomSheet = useBottomSheet();
   const { theme, toggleTheme } = useTheme();
   const [tradeAnalyzerOpen, setTradeAnalyzerOpen] = useState(false);
@@ -227,6 +229,34 @@ function App(): React.ReactElement {
               ))}
             </div>
           </nav>
+          <div className="mobile-nav-menu" ref={mobileNavMenuRef}>
+            <button
+              type="button"
+              ref={mobileNavTriggerRef}
+              className={`inline-btn mobile-nav-toggle${mobileNavOpen ? " open" : ""}`}
+              onClick={() => setMobileNavOpen(prev => !prev)}
+              aria-expanded={mobileNavOpen}
+              aria-controls="mobile-nav-dropdown"
+              aria-label="Navigation menu"
+            >
+              <span aria-hidden="true">{mobileNavOpen ? "\u2715" : "\u2630"}</span>
+            </button>
+            {mobileNavOpen && (
+              <nav id="mobile-nav-dropdown" className="mobile-nav-dropdown" aria-label="Primary">
+                {PRIMARY_NAV_ITEMS.map(item => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className={`mobile-nav-item${section === item.key ? " active" : ""}`}
+                    onClick={() => setSection(item.key)}
+                    aria-pressed={section === item.key}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </nav>
+            )}
+          </div>
           <button
             type="button"
             className="inline-btn theme-toggle"
@@ -271,9 +301,11 @@ function App(): React.ReactElement {
           <h1>The Only <em>20-Year</em><br />Dynasty Baseball Projections</h1>
           <p>Comprehensive player projections from 2026 through 2045. Browse the data, configure your league settings, and generate personalized dynasty rankings.</p>
           <div className="hero-actions fade-up fade-up-2">
-            <button className="hero-cta hero-cta-primary" onClick={scrollToCalculator}>
-              Get Started Free
-            </button>
+            {subscription?.status !== "active" && (
+              <button className="hero-cta hero-cta-primary" onClick={scrollToCalculator}>
+                Get Started Free
+              </button>
+            )}
             <button className="hero-cta hero-cta-secondary" onClick={() => setSection("methodology")}>
               See Methodology
             </button>
@@ -296,8 +328,6 @@ function App(): React.ReactElement {
               </div>
               <div className="hero-proof fade-up fade-up-2">
                 <span>Updated for the 2026 season</span>
-                <span className="hero-proof-sep" aria-hidden="true" />
-                <span>Used by dynasty leagues worldwide</span>
               </div>
             </>
           )}

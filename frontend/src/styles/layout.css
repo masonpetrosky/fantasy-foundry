@@ -1,4 +1,6 @@
 /* ====== HEADER / NAV ====== */
+.mobile-nav-menu { display: none; }
+
 header {
   position: sticky;
   top: 0;

@@ -63,21 +63,60 @@
     display: none;
   }
 
-  .primary-nav {
-    flex: 0 1 auto;
-    min-width: 0;
-    margin-left: 0;
+  .primary-nav { display: none; }
+
+  .mobile-nav-menu {
+    display: block;
+    position: relative;
+    flex-shrink: 0;
+    order: -1;
   }
 
-  .primary-nav-scroll {
-    width: auto;
-    justify-content: flex-start;
-  }
-
-  .primary-nav-btn {
-    font-size: 0.75rem;
+  .mobile-nav-toggle {
+    font-size: 1.25rem;
     padding: 6px 10px;
-    min-height: 36px;
+    min-height: 44px;
+    min-width: 44px;
+    line-height: 1;
+  }
+
+  .mobile-nav-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 130;
+    min-width: 200px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .mobile-nav-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 12px 14px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--ff-sans);
+    font-size: var(--fs-md);
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .mobile-nav-item:hover,
+  .mobile-nav-item.active {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
   }
 
   .account-menu {
@@ -614,12 +653,6 @@
 
   .brand-title {
     font-size: 0.86rem;
-  }
-
-  .primary-nav-btn {
-    font-size: 0.7rem;
-    padding: 5px 8px;
-    min-height: 36px;
   }
 
   .account-menu-btn {
