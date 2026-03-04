@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import "./styles/typography-table.css";
 import "./styles/app.css";
 import { initSentry } from "./sentry";
 import { initGA4 } from "./ga4";
