@@ -4,7 +4,7 @@
 header {
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: var(--z-header);
   background: color-mix(in srgb, var(--bg-primary) 85%, transparent);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border-subtle);
@@ -16,7 +16,7 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-lg);
   padding: 0 32px;
   min-height: 64px;
 }
@@ -120,13 +120,13 @@ header {
 .account-menu-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .account-menu-pill {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   border: 1px solid rgba(212, 168, 83, 0.35);
   padding: 1px 7px;
   font-size: 0.66rem;
@@ -141,7 +141,7 @@ header {
   top: calc(100% + 10px);
   right: 0;
   width: min(440px, calc(100vw - 28px));
-  z-index: 130;
+  z-index: var(--z-drawer);
 }
 
 .account-popover .account-card {
@@ -203,7 +203,7 @@ header {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   color: var(--text-primary);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 9px 10px;
   font-family: inherit;
   font-size: var(--fs-md);
@@ -216,7 +216,7 @@ header {
 .account-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   flex-wrap: wrap;
 }
 
@@ -327,7 +327,7 @@ header {
 .hero-stats {
   display: flex;
   justify-content: center;
-  gap: 48px;
+  gap: var(--space-3xl);
   flex-wrap: wrap;
 }
 
@@ -392,7 +392,7 @@ header {
 
 .activation-benefits li {
   border: 1px solid rgba(212, 168, 83, 0.24);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: rgba(212, 168, 83, 0.09);
   color: var(--text-secondary);
   font-size: var(--fs-xs);
@@ -413,12 +413,12 @@ header {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .activation-strip-btn {
   min-height: 40px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--bg-secondary);
   color: var(--text-primary);
@@ -465,7 +465,7 @@ header {
   border: 1px solid var(--border);
   background: var(--bg-secondary);
   color: var(--text-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   min-height: 36px;
   padding: 8px 10px;
   font-size: var(--fs-sm);
@@ -481,7 +481,7 @@ header {
 
 .activation-diagnostics-panel {
   margin: 0 0 12px;
-  padding: 12px;
+  padding: var(--space-md);
   border-radius: 10px;
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: linear-gradient(145deg, rgba(30, 41, 59, 0.36), rgba(15, 23, 42, 0.24));
@@ -517,7 +517,7 @@ header {
 
 .activation-diagnostics-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   flex-wrap: wrap;
 }
 
@@ -536,14 +536,14 @@ header {
   margin-top: 10px;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .activation-diagnostics-card {
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: rgba(15, 23, 42, 0.55);
-  padding: 8px;
+  padding: var(--space-sm);
 }
 
 .activation-diagnostics-card h3 {
@@ -556,7 +556,7 @@ header {
   margin: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 4px 8px;
+  gap: var(--space-xs) var(--space-sm);
 }
 
 .activation-diagnostics-card dt {
@@ -592,16 +592,16 @@ header {
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .activation-diagnostics-recent li {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 8px;
+  gap: var(--space-sm);
   align-items: center;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 6px 8px;
   background: rgba(15, 23, 42, 0.38);
   font-size: var(--fs-xs);
@@ -619,9 +619,9 @@ header {
 .activation-diagnostics-json {
   margin: 10px 0 0;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: rgba(15, 23, 42, 0.65);
-  padding: 8px;
+  padding: var(--space-sm);
   color: var(--text-secondary);
   font-size: var(--fs-xs);
   max-height: 240px;
@@ -644,7 +644,7 @@ header {
   max-height: 92vh;
   overflow: auto;
   border: 1px solid rgba(148, 163, 184, 0.42);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 14px;
   background: linear-gradient(160deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.9));
   box-shadow: 0 22px 58px rgba(2, 6, 23, 0.55);
@@ -654,7 +654,7 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .activation-command-center-header h3 {
@@ -673,19 +673,19 @@ header {
   margin-top: 10px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .activation-command-grid {
   margin-top: 10px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .activation-command-grid label {
   display: grid;
-  gap: 4px;
+  gap: var(--space-xs);
   color: var(--text-muted);
   font-size: var(--fs-xs);
 }
@@ -693,7 +693,7 @@ header {
 .activation-command-grid input {
   min-height: 34px;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 6px 8px;
   background: rgba(15, 23, 42, 0.8);
   color: var(--text-secondary);
@@ -722,8 +722,8 @@ header {
   margin-top: 8px;
   display: block;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 8px;
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
   background: rgba(15, 23, 42, 0.84);
   color: var(--text-secondary);
   font-family: var(--ff-mono);
@@ -740,7 +740,7 @@ header {
 .error-boundary-panel {
   margin: 40px auto;
   max-width: 540px;
-  padding: 24px;
+  padding: var(--space-xl);
   border-radius: 10px;
   border: 1px solid rgba(248, 113, 113, 0.4);
   background: rgba(248, 113, 113, 0.08);
@@ -764,7 +764,7 @@ header {
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .meta-error-panel {
@@ -790,7 +790,7 @@ header {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 /* ====== PLAYER PAGE ====== */
@@ -875,7 +875,7 @@ header {
 .pricing-toggle {
   display: flex;
   justify-content: center;
-  gap: 4px;
+  gap: var(--space-xs);
   margin-bottom: 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -907,14 +907,14 @@ header {
 .pricing-cards {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: var(--space-lg);
 }
 
 .pricing-card {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg-card);
-  padding: 24px;
+  padding: var(--space-xl);
 }
 
 .pricing-card-pro {
@@ -974,7 +974,7 @@ header {
 .pricing-upgrade-btn {
   width: 100%;
   min-height: 42px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(212, 168, 83, 0.55);
   background: linear-gradient(145deg, rgba(212, 168, 83, 0.25), rgba(212, 168, 83, 0.15));
   color: var(--text-primary);
@@ -1001,7 +1001,7 @@ header {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-lg);
   margin-top: 20px;
   color: var(--text-muted);
   font-size: var(--fs-sm);
@@ -1062,7 +1062,7 @@ header {
 @media (max-width: 600px) {
   .how-it-works-steps {
     grid-template-columns: 1fr;
-    gap: 24px;
+    gap: var(--space-xl);
   }
 }
 
@@ -1074,7 +1074,7 @@ header {
 
 .newsletter-form {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   margin-top: 12px;
   justify-content: center;
 }
@@ -1084,7 +1084,7 @@ header {
   max-width: 280px;
   min-height: 38px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
   color: var(--text-primary);
   padding: 6px 12px;
@@ -1098,7 +1098,7 @@ header {
 
 .newsletter-form button {
   min-height: 38px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(212, 168, 83, 0.55);
   background: linear-gradient(145deg, rgba(212, 168, 83, 0.25), rgba(212, 168, 83, 0.15));
   color: var(--text-primary);

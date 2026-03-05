@@ -2,7 +2,7 @@
 .calc-layout {
   display: grid;
   grid-template-columns: 340px 1fr;
-  gap: 24px;
+  gap: var(--space-xl);
   align-items: start;
 }
 
@@ -14,7 +14,7 @@
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 24px;
+  padding: var(--space-xl);
   position: sticky;
   top: 80px;
   max-height: calc(100vh - 100px);
@@ -43,13 +43,13 @@
 .calc-summary-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: var(--space-sm);
   margin-bottom: 16px;
 }
 
 .calc-summary-chip {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
   padding: 8px 10px;
 }
@@ -118,7 +118,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-md);
   flex-wrap: wrap;
 }
 
@@ -138,7 +138,7 @@
   min-height: 38px;
   min-width: 170px;
   padding: 8px 12px 8px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--accent-dim);
   background: rgba(212, 168, 83, 0.1);
   color: var(--text-primary);
@@ -223,7 +223,7 @@
 }
 
 .overlay-status-chip {
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   border: 1px solid var(--border-subtle);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
@@ -281,7 +281,7 @@
   width: 18px;
   height: 18px;
   margin-left: 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   border: 1px solid var(--border);
   color: var(--text-muted);
   font-size: var(--fs-xs);
@@ -322,22 +322,22 @@
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .calc-checkbox-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-  gap: 8px;
+  gap: var(--space-sm);
   margin-bottom: 12px;
 }
 
 .calc-checkbox-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-size: var(--fs-sm);
@@ -371,11 +371,11 @@
   width: 100%;
   margin-top: 8px;
   min-height: 44px;
-  padding: 12px;
+  padding: var(--space-md);
   background: linear-gradient(135deg, var(--accent), var(--accent-dim));
   color: var(--bg-primary);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-family: var(--ff-sans);
   font-size: 0.9rem;
   font-weight: 700;
@@ -445,13 +445,13 @@
   min-width: 220px;
   max-width: 320px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--bg-card);
   color: var(--text-secondary);
   font-size: var(--fs-xs);
   line-height: var(--lh-base);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-md);
   white-space: normal;
 }
 
@@ -502,7 +502,7 @@
   height: 400px;
   color: var(--text-muted);
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
   background: var(--bg-card);
   border-radius: 10px;
   border: 1px solid var(--border);
@@ -532,9 +532,9 @@
 
 .explain-card {
   margin-top: 14px;
-  padding: 16px;
+  padding: var(--space-lg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-card);
 }
 
@@ -580,7 +580,7 @@
 .explain-points-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: var(--space-md);
   margin-top: 10px;
 }
 
@@ -637,7 +637,7 @@
 /* ====== TRADE ANALYZER ====== */
 .trade-analyzer {
   margin: 16px 0;
-  padding: 16px;
+  padding: var(--space-lg);
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg-card);
@@ -655,13 +655,13 @@
 .trade-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: var(--space-lg);
 }
 
 .trade-side {
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
   background: var(--bg-secondary);
 }
 
@@ -690,7 +690,7 @@
 
 .trade-analyzer-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   align-items: center;
 }
 
@@ -747,7 +747,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px;
+  padding: var(--space-sm);
   border-radius: 6px;
   background: var(--bg-tertiary);
   margin-bottom: 6px;
@@ -759,7 +759,7 @@
 .trade-player-value {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   font-family: var(--ff-mono);
   font-size: var(--fs-sm);
 }
@@ -792,7 +792,7 @@
 
 .trade-fairness-bar {
   height: 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--bg-tertiary);
   overflow: hidden;
   margin-bottom: 4px;
@@ -800,7 +800,7 @@
 
 .trade-fairness-fill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   transition: width 0.3s ease;
 }
 
@@ -817,7 +817,7 @@
 .trade-analyzer-toggle-wrap {
   margin: 0 0 12px;
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   flex-wrap: wrap;
 }
 
@@ -828,7 +828,7 @@
 /* ====== KEEPER CALCULATOR ====== */
 .keeper-calculator {
   margin: 16px 0;
-  padding: 16px;
+  padding: var(--space-lg);
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg-card);
@@ -852,7 +852,7 @@
 
 .keeper-add-row {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   align-items: flex-start;
   margin-bottom: 14px;
   flex-wrap: wrap;
@@ -904,7 +904,7 @@
   cursor: pointer;
   font-size: var(--fs-sm);
   text-align: left;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .keeper-search-result-btn:hover {
@@ -965,7 +965,7 @@
   width: 64px;
   padding: 3px 6px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-size: var(--fs-sm);

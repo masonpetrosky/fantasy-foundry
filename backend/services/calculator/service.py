@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -11,12 +12,15 @@ import pandas as pd
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, Field, model_validator
 
+from backend.core.calculator_orchestration import finalize_job_locked
 from backend.domain.constants import (
     CALCULATOR_RESULT_POINTS_EXPORT_ORDER,
     CALCULATOR_RESULT_STAT_EXPORT_ORDER,
     ROTO_HITTER_CATEGORY_FIELDS,
     ROTO_PITCHER_CATEGORY_FIELDS,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CalculateRequest(BaseModel):
@@ -530,54 +534,22 @@ class CalculatorService:
         try:
             req = CalculateRequest(**req_payload)
             result = self._run_calculate_request(req, source="job")
-            with self._ctx.calculator_job_lock:
-                job = self._ctx.calculator_jobs.get(job_id)
-                if job is None:
-                    return
-                if str(job.get("status") or "").lower() == self._ctx.calc_job_cancelled_status or bool(job.get("cancel_requested")):
-                    self._ctx.mark_job_cancelled_locked(job)
-                    self._ctx.cache_calculation_job_snapshot(job)
-                    return
-                now = self._ctx.iso_now()
-                job["status"] = "completed"
-                job["result"] = result
-                job["completed_at"] = now
-                job["updated_at"] = now
-                job["error"] = None
-                self._ctx.cache_calculation_job_snapshot(job)
+            finalize_job_locked(self._ctx, job_id, status="completed", error=None, result=result)
         except HTTPException as exc:
-            with self._ctx.calculator_job_lock:
-                job = self._ctx.calculator_jobs.get(job_id)
-                if job is None:
-                    return
-                if str(job.get("status") or "").lower() == self._ctx.calc_job_cancelled_status or bool(job.get("cancel_requested")):
-                    self._ctx.mark_job_cancelled_locked(job)
-                    self._ctx.cache_calculation_job_snapshot(job)
-                    return
-                now = self._ctx.iso_now()
-                job["status"] = "failed"
-                job["error"] = {"status_code": exc.status_code, "detail": exc.detail}
-                job["completed_at"] = now
-                job["updated_at"] = now
-                job["result"] = None
-                self._ctx.cache_calculation_job_snapshot(job)
+            finalize_job_locked(
+                self._ctx, job_id,
+                status="failed",
+                error={"status_code": exc.status_code, "detail": exc.detail},
+                result=None,
+            )
         except Exception:
             self._ctx.calc_logger.exception("calculator job crashed job_id=%s", job_id)
-            with self._ctx.calculator_job_lock:
-                job = self._ctx.calculator_jobs.get(job_id)
-                if job is None:
-                    return
-                if str(job.get("status") or "").lower() == self._ctx.calc_job_cancelled_status or bool(job.get("cancel_requested")):
-                    self._ctx.mark_job_cancelled_locked(job)
-                    self._ctx.cache_calculation_job_snapshot(job)
-                    return
-                now = self._ctx.iso_now()
-                job["status"] = "failed"
-                job["error"] = {"status_code": 500, "detail": "Internal calculator error."}
-                job["completed_at"] = now
-                job["updated_at"] = now
-                job["result"] = None
-                self._ctx.cache_calculation_job_snapshot(job)
+            finalize_job_locked(
+                self._ctx, job_id,
+                status="failed",
+                error={"status_code": 500, "detail": "Internal calculator error."},
+                result=None,
+            )
         finally:
             with self._ctx.calculator_job_lock:
                 self._ctx.cleanup_calculation_jobs()
@@ -754,7 +726,9 @@ class CalculatorService:
                 try:
                     cancel_future()
                 except Exception:
-                    pass
+                    # Future.cancel() may raise if the executor is shutting down;
+                    # the job is already marked for cancellation so this is safe to ignore.
+                    logger.debug("cancel_future() raised for job_id=%s", job_id, exc_info=True)
             self._ctx.mark_job_cancelled_locked(job)
             self._ctx.cache_calculation_job_snapshot(job)
             return self._ctx.calculation_job_public_payload(job)

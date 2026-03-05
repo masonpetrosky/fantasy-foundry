@@ -85,22 +85,45 @@ export function useMenuInteractions({ open, setOpen, menuRef, triggerRef }: UseM
       setOpen(false);
     };
 
-    const onEscape = (event: KeyboardEvent): void => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      setOpen(false);
-      if (triggerRef?.current && typeof (triggerRef.current as HTMLElement).focus === "function") {
-        (triggerRef.current as HTMLElement).focus();
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        if (triggerRef?.current && typeof (triggerRef.current as HTMLElement).focus === "function") {
+          (triggerRef.current as HTMLElement).focus();
+        }
+        return;
+      }
+
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        const menu = menuRef?.current;
+        if (!menu) return;
+        const items = Array.from(
+          menu.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [role="menuitem"]:not([disabled]), input:not([disabled]), a:not([disabled])',
+          ),
+        );
+        if (items.length === 0) return;
+        event.preventDefault();
+        const current = document.activeElement as HTMLElement;
+        const idx = items.indexOf(current);
+        let next: number;
+        if (event.key === "ArrowDown") {
+          next = idx < 0 ? 0 : (idx + 1) % items.length;
+        } else {
+          next = idx < 0 ? items.length - 1 : (idx - 1 + items.length) % items.length;
+        }
+        items[next].focus();
       }
     };
 
     document.addEventListener("mousedown", onOutsideInteraction);
     document.addEventListener("touchstart", onOutsideInteraction);
-    document.addEventListener("keydown", onEscape);
+    document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("mousedown", onOutsideInteraction);
       document.removeEventListener("touchstart", onOutsideInteraction);
-      document.removeEventListener("keydown", onEscape);
+      document.removeEventListener("keydown", onKeyDown);
     };
   }, [menuRef, open, setOpen, triggerRef]);
 }

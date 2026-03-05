@@ -143,6 +143,18 @@ def rate_limit_exceeded(action: str) -> HTTPException:
     )
 
 
+def _store_rate_limit_state(
+    request: Request,
+    limit: int,
+    used: int,
+    reset_epoch: int,
+) -> None:
+    """Attach rate-limit metadata to the request so middleware can emit headers."""
+    request.state.rate_limit_limit = int(limit)
+    request.state.rate_limit_remaining = max(0, int(limit) - int(used))
+    request.state.rate_limit_reset = int(reset_epoch)
+
+
 def enforce_rate_limit(
     request: Request,
     *,
@@ -210,6 +222,7 @@ def enforce_rate_limit(
                         "timestamp_epoch_s": float(now),
                     }
                 )
+            _store_rate_limit_state(request, limit_per_minute, int(count), minute_window * 60 + 60)
             return
         except HTTPException:
             raise
@@ -248,6 +261,7 @@ def enforce_rate_limit(
                 )
             raise rate_limit_exceeded(action)
         bucket.append(now)
+        _store_rate_limit_state(request, limit_per_minute, len(bucket), int(now) + 60)
         if on_decision is not None:
             on_decision(
                 {

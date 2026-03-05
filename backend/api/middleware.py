@@ -148,6 +148,20 @@ def register_middlewares(app: FastAPI, *, config: MiddlewareConfig) -> None:
         )
 
     @app.middleware("http")
+    async def inject_rate_limit_headers(request: Request, call_next: CallNext):
+        response = await call_next(request)
+        limit = getattr(request.state, "rate_limit_limit", None)
+        if limit is not None:
+            response.headers["X-RateLimit-Limit"] = str(limit)
+            response.headers["X-RateLimit-Remaining"] = str(
+                getattr(request.state, "rate_limit_remaining", 0),
+            )
+            response.headers["X-RateLimit-Reset"] = str(
+                getattr(request.state, "rate_limit_reset", 0),
+            )
+        return response
+
+    @app.middleware("http")
     async def log_api_request(request: Request, call_next: CallNext):
         if not request.url.path.startswith("/api/"):
             return await call_next(request)

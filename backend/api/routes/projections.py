@@ -20,7 +20,7 @@ ProjectionCompareHandler = Callable[..., dict[str, Any]]
 ProjectionDeltasHandler = Callable[[], dict[str, Any]]
 
 
-class ProjectionListQueryParams(BaseModel):
+class BaseProjectionQueryParams(BaseModel):
     player: str | None = Field(default=None, max_length=200)
     team: str | None = Field(default=None, max_length=10)
     player_keys: str | None = Field(default=None, max_length=5000)
@@ -33,23 +33,14 @@ class ProjectionListQueryParams(BaseModel):
     calculator_job_id: str | None = Field(default=None, max_length=100)
     sort_col: str | None = Field(default=None, max_length=50)
     sort_dir: Literal["asc", "desc"] = "desc"
+
+
+class ProjectionListQueryParams(BaseProjectionQueryParams):
     limit: int = Field(default=200, ge=1, le=5000)
     offset: int = Field(default=0, ge=0)
 
 
-class ProjectionExportQueryParams(BaseModel):
-    player: str | None = Field(default=None, max_length=200)
-    team: str | None = Field(default=None, max_length=10)
-    player_keys: str | None = Field(default=None, max_length=5000)
-    year: int | None = None
-    years: str | None = Field(default=None, max_length=200)
-    pos: str | None = Field(default=None, max_length=50)
-    dynasty_years: str | None = Field(default=None, max_length=200)
-    career_totals: bool = False
-    include_dynasty: bool = True
-    calculator_job_id: str | None = Field(default=None, max_length=100)
-    sort_col: str | None = Field(default=None, max_length=50)
-    sort_dir: Literal["asc", "desc"] = "desc"
+class ProjectionExportQueryParams(BaseProjectionQueryParams):
     columns: str | None = Field(default=None, max_length=2000)
 
 

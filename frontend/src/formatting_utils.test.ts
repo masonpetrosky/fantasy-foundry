@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   fmt,
   fmtInt,
+  fmtSigned,
   formatCellValue,
   parsePosTokens,
   formatIsoDateLabel,
@@ -48,12 +49,30 @@ describe("fmtInt", () => {
   });
 });
 
-describe("formatCellValue", () => {
-  it("formats DynastyValue with 2 decimals", () => {
-    expect(formatCellValue("DynastyValue", 5.678)).toBe("5.68");
+describe("fmtSigned", () => {
+  it("prefixes positive values with +", () => {
+    expect(fmtSigned(5.678)).toBe("+5.68");
   });
-  it("formats Value_ columns with 2 decimals", () => {
-    expect(formatCellValue("Value_2026", 3.1)).toBe("3.10");
+  it("prefixes negative values with minus sign", () => {
+    expect(fmtSigned(-3.1)).toBe("\u22123.10");
+  });
+  it("shows zero without prefix", () => {
+    expect(fmtSigned(0)).toBe("0.00");
+  });
+  it("returns em dash for null", () => {
+    expect(fmtSigned(null)).toBe("\u2014");
+  });
+});
+
+describe("formatCellValue", () => {
+  it("formats DynastyValue with signed prefix", () => {
+    expect(formatCellValue("DynastyValue", 5.678)).toBe("+5.68");
+  });
+  it("formats negative DynastyValue with minus sign", () => {
+    expect(formatCellValue("DynastyValue", -2.5)).toBe("\u22122.50");
+  });
+  it("formats Value_ columns with signed prefix", () => {
+    expect(formatCellValue("Value_2026", 3.1)).toBe("+3.10");
   });
   it("formats AVG with 3 decimals", () => {
     expect(formatCellValue("AVG", 0.289)).toBe("0.289");

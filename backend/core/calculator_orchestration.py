@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
 from uuid import uuid4
 
 from fastapi import HTTPException, Request
+
+logger = logging.getLogger(__name__)
 
 CalculateRequestModel = type
 RunCalculateRequest = Callable[[Any], dict]
@@ -51,6 +54,40 @@ class CalculatorOrchestrationContext:
     set_job_cancel_requested: Callable[[str], None]
     clear_job_cancel_requested: Callable[[str], None]
     job_cancel_requested: Callable[[str], bool]
+
+
+def finalize_job_locked(
+    ctx: Any,
+    job_id: str,
+    *,
+    status: str,
+    error: dict | None,
+    result: dict | None,
+) -> None:
+    """Update job status under lock, respecting cancellation.
+
+    Acquires ``ctx.calculator_job_lock`` and either marks the job as
+    cancelled (if a cancellation was requested) or applies the given
+    *status*, *error*, and *result*.  Always caches the snapshot.
+    """
+    job_cancel_fn = getattr(ctx, "job_cancel_requested", None)
+    with ctx.calculator_job_lock:
+        job = ctx.calculator_jobs.get(job_id)
+        if job is None:
+            return
+        cancelled = bool(job.get("cancel_requested")) or (callable(job_cancel_fn) and job_cancel_fn(job_id))
+        if str(job.get("status") or "").lower() == ctx.calc_job_cancelled_status or cancelled:
+            job["cancel_requested"] = True
+            ctx.mark_job_cancelled_locked(job)
+            ctx.cache_calculation_job_snapshot(job)
+            return
+        now = ctx.iso_now()
+        job["status"] = status
+        job["error"] = error
+        job["result"] = result
+        job["completed_at"] = now
+        job["updated_at"] = now
+        ctx.cache_calculation_job_snapshot(job)
 
 
 def _request_is_calculate_api_key_authenticated(request: Request | Any | None) -> bool:
@@ -107,60 +144,22 @@ def run_calculation_job(
     try:
         req = ctx.calculate_request_model(**req_payload)
         result = run_calculate_request(req, source="job")
-        with ctx.calculator_job_lock:
-            job = ctx.calculator_jobs.get(job_id)
-            if job is None:
-                return
-            cancelled = bool(job.get("cancel_requested")) or ctx.job_cancel_requested(job_id)
-            if str(job.get("status") or "").lower() == ctx.calc_job_cancelled_status or cancelled:
-                job["cancel_requested"] = True
-                ctx.mark_job_cancelled_locked(job)
-                ctx.cache_calculation_job_snapshot(job)
-                return
-            now = ctx.iso_now()
-            job["status"] = "completed"
-            job["result"] = result
-            job["completed_at"] = now
-            job["updated_at"] = now
-            job["error"] = None
-            ctx.cache_calculation_job_snapshot(job)
+        finalize_job_locked(ctx, job_id, status="completed", error=None, result=result)
     except HTTPException as exc:
-        with ctx.calculator_job_lock:
-            job = ctx.calculator_jobs.get(job_id)
-            if job is None:
-                return
-            cancelled = bool(job.get("cancel_requested")) or ctx.job_cancel_requested(job_id)
-            if str(job.get("status") or "").lower() == ctx.calc_job_cancelled_status or cancelled:
-                job["cancel_requested"] = True
-                ctx.mark_job_cancelled_locked(job)
-                ctx.cache_calculation_job_snapshot(job)
-                return
-            now = ctx.iso_now()
-            job["status"] = "failed"
-            job["error"] = {"status_code": exc.status_code, "detail": exc.detail}
-            job["completed_at"] = now
-            job["updated_at"] = now
-            job["result"] = None
-            ctx.cache_calculation_job_snapshot(job)
+        finalize_job_locked(
+            ctx, job_id,
+            status="failed",
+            error={"status_code": exc.status_code, "detail": exc.detail},
+            result=None,
+        )
     except Exception:
         ctx.calc_logger.exception("calculator job crashed job_id=%s", job_id)
-        with ctx.calculator_job_lock:
-            job = ctx.calculator_jobs.get(job_id)
-            if job is None:
-                return
-            cancelled = bool(job.get("cancel_requested")) or ctx.job_cancel_requested(job_id)
-            if str(job.get("status") or "").lower() == ctx.calc_job_cancelled_status or cancelled:
-                job["cancel_requested"] = True
-                ctx.mark_job_cancelled_locked(job)
-                ctx.cache_calculation_job_snapshot(job)
-                return
-            now = ctx.iso_now()
-            job["status"] = "failed"
-            job["error"] = {"status_code": 500, "detail": "Internal calculator error."}
-            job["completed_at"] = now
-            job["updated_at"] = now
-            job["result"] = None
-            ctx.cache_calculation_job_snapshot(job)
+        finalize_job_locked(
+            ctx, job_id,
+            status="failed",
+            error={"status_code": 500, "detail": "Internal calculator error."},
+            result=None,
+        )
     finally:
         with ctx.calculator_job_lock:
             ctx.cleanup_calculation_jobs(None)
@@ -382,7 +381,9 @@ def cancel_calculate_dynasty_job(
             try:
                 cancel_future()
             except Exception:
-                pass
+                # Future.cancel() may raise if the executor is shutting down;
+                # the job is already marked for cancellation so this is safe to ignore.
+                logger.debug("cancel_future() raised for job_id=%s", job_id, exc_info=True)
         ctx.mark_job_cancelled_locked(job)
         ctx.cache_calculation_job_snapshot(job)
         ctx.untrack_active_job(job_id, str(job.get("client_ip") or "").strip() or None)

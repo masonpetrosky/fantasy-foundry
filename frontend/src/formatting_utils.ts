@@ -17,8 +17,15 @@ export const WHOLE_NUMBER_COLS: ReadonlySet<string> = new Set([
 ]);
 export const INT_COLS: ReadonlySet<string> = new Set(["Rank", "Year", "Years", "Age"]);
 
+export function fmtSigned(val: unknown, decimals = 2): string {
+  if (val == null || val === "" || isNaN(val as number)) return "\u2014";
+  const n = Number(val);
+  const prefix = n > 0 ? "+" : n < 0 ? "\u2212" : "";
+  return `${prefix}${Math.abs(n).toFixed(decimals)}`;
+}
+
 export function formatCellValue(col: string, val: unknown): string {
-  if (col === "DynastyValue" || col.startsWith("Value_")) return fmt(val, 2);
+  if (col === "DynastyValue" || col.startsWith("Value_")) return fmtSigned(val, 2);
   if (TWO_DECIMAL_COLS.has(col)) return fmt(val, 2);
   if (THREE_DECIMAL_COLS.has(col)) return fmt(val, 3);
   if (WHOLE_NUMBER_COLS.has(col)) return fmtInt(val as number, true);

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Callable
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 def pick_first_existing_col(df: pd.DataFrame, candidates: list[str] | tuple[str, ...]) -> str | None:
@@ -48,7 +51,8 @@ def coerce_iso_date_text(value: object) -> str | None:
         return None
     try:
         return parsed.strftime("%Y-%m-%d")
-    except Exception:
+    except (ValueError, AttributeError):
+        logger.debug("strftime failed for parsed date %r", parsed, exc_info=True)
         return None
 
 

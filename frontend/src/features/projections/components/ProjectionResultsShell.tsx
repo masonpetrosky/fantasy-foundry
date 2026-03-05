@@ -106,7 +106,7 @@ export const ProjectionResultsShell = React.memo(function ProjectionResultsShell
           {!showCards && (
             <div className={scrollIndicatorClass}>
             <div className="table-scroll" ref={projectionTableScrollRef} onScroll={onTableScroll}>
-              <table className="projections-table">
+              <table className="projections-table" aria-busy={showInitialLoadSkeleton || loading}>
                 <thead>
                   <tr>
                     <th scope="col" className="index-col" style={{ width: 40 }}>#</th>

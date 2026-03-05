@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import re
-import traceback
 from typing import Any, Callable
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 DynastyLookup = tuple[dict[str, dict], dict[str, dict], set[str], list[str]]
 YEAR_RANGE_TOKEN_RE = re.compile(r"^(\d{4})\s*-\s*(\d{4})$")
@@ -173,7 +175,7 @@ def default_dynasty_lookup(
 
         return lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, year_cols
     except Exception:
-        traceback.print_exc()
+        logger.exception("Failed to build default dynasty lookup")
         return {}, {}, set(), []
 
 

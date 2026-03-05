@@ -4,6 +4,54 @@
 @import "./methodology.css";
 @import "./responsive.css";
 
+:root {
+  /* Spacing scale */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+
+  /* Border-radius scale */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 999px;
+
+  /* Shadow scale */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.35);
+  --shadow-lg: 0 12px 28px rgba(0,0,0,0.35);
+
+  /*
+   * Z-index layering system
+   *
+   *   5–9   Table sticky cells (player name, rank columns, index)
+   *  10–15  Table sticky header row & header player column
+   *  20–25  Tooltips, scroll gradient indicators, header rank columns
+   *    30   Dropdown menus (multi-select)
+   *    40   Sticky layout controls (mobile)
+   *   100   Site header
+   *   120   Mobile floating CTA
+   *   130   Popovers (account menu, mobile nav dropdown)
+   * 150–160 Modal overlays (mobile calculator bottom sheet)
+   *   200   Player profile modal backdrop
+   *   220   Activation command center
+   *  1000   Skip-to-content link
+   *  9999   Toast notifications (topmost)
+   */
+  --z-table-sticky: 10;
+  --z-dropdown: 30;
+  --z-header: 100;
+  --z-drawer: 130;
+  --z-modal: 150;
+  --z-overlay: 200;
+  --z-skip: 1000;
+  --z-toast: 9999;
+}
+
 :root,
 [data-theme="dark"] {
   --bg-primary: #0c1117;
@@ -47,6 +95,10 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* ====== BUTTON SIZING TIERS ====== */
+.btn-sm { padding: var(--space-sm) var(--space-md); }
+.btn-md { padding: var(--space-md) var(--space-lg); }
+
 html { scroll-behavior: smooth; }
 
 body {
@@ -59,10 +111,10 @@ body {
 .skip-link {
   position: absolute;
   top: -44px;
-  left: 16px;
-  z-index: 1000;
+  left: var(--space-lg);
+  z-index: var(--z-skip);
   padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--accent);
   color: #1b1f24;
   font-size: var(--fs-sm);
@@ -110,12 +162,12 @@ select:focus-visible,
 /* ====== TOAST NOTIFICATIONS ====== */
 .toast-container {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 9999;
+  bottom: var(--space-xl);
+  right: var(--space-xl);
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
   pointer-events: none;
   max-width: 380px;
 }
@@ -125,12 +177,12 @@ select:focus-visible,
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-size: var(--fs-sm, 0.85rem);
   color: var(--text-primary);
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  box-shadow: var(--shadow-md);
   pointer-events: auto;
   animation: toastIn 0.25s ease-out both;
 }
@@ -148,7 +200,7 @@ select:focus-visible,
   cursor: pointer;
   font-size: 1.1rem;
   line-height: 1;
-  padding: 2px 4px;
+  padding: 2px var(--space-xs);
 }
 .toast-dismiss:hover { color: var(--text-primary); }
 

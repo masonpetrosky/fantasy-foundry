@@ -79,7 +79,9 @@ export function useProjectionRowsMarkup({
       }
       const n = Number(val);
       const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
-      return <td key={col} className={`num ${cls}`}>{fmt(val, 2)}</td>;
+      const prefix = n > 0 ? "+" : n < 0 ? "\u2212" : "";
+      const display = val == null || val === "" || isNaN(n) ? "\u2014" : `${prefix}${Math.abs(n).toFixed(2)}`;
+      return <td key={col} className={`num ${cls}`}>{display}</td>;
     }
     if (twoDecimalCols.has(col)) return <td key={col} className="num">{fmt(val, 2)}</td>;
     if (threeDecimalCols.has(col)) return <td key={col} className="num">{fmt(val, 3)}</td>;
