@@ -5,7 +5,7 @@
   margin-bottom: 32px;
   background: var(--bg-secondary);
   padding: 4px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   width: fit-content;
   align-items: stretch;
 }
@@ -122,7 +122,7 @@
 
 .inline-btn {
   padding: var(--space-sm) var(--space-md);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.02);
   color: var(--text-secondary);
@@ -145,7 +145,7 @@
 }
 
 .inline-btn:focus-visible {
-  outline: 2px solid rgba(212, 168, 83, 0.55);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -174,7 +174,7 @@
   border: 1px solid var(--border);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 6px 8px;
   margin-bottom: 8px;
   font-size: var(--fs-xs);
@@ -196,7 +196,7 @@
   align-items: center;
   gap: var(--space-sm);
   padding: 6px 4px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 0.85rem;
   cursor: pointer;
@@ -291,7 +291,7 @@
 .watchlist-panel {
   margin: 0 0 12px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--bg-card);
   padding: var(--space-md);
 }
@@ -336,7 +336,7 @@
   display: inline-block;
   width: 10px;
   height: 3px;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .comparison-grid {
@@ -419,7 +419,7 @@
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 2px 7px;
   cursor: pointer;
 }
@@ -483,7 +483,7 @@
   gap: var(--space-xs);
   background: var(--bg-primary);
   border: 1px solid var(--border-subtle);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   padding: 3px;
 }
 
@@ -494,7 +494,7 @@
   font-size: var(--fs-sm);
   font-weight: 600;
   padding: 6px 10px;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   min-height: 34px;
   touch-action: manipulation;
   cursor: pointer;
@@ -517,7 +517,7 @@
 /* ====== DATA TABLE ====== */
 .table-wrapper {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   background: var(--bg-card);
 }
@@ -755,7 +755,7 @@ td.value-negative { color: var(--red); }
 
 .projection-card-empty {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   padding: var(--space-lg);
   background: var(--bg-card);
   color: var(--text-muted);
@@ -806,7 +806,7 @@ td.value-negative { color: var(--red); }
   border: 1px solid var(--border);
   color: var(--text-secondary);
   padding: 6px 14px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: var(--fs-sm);
   cursor: pointer;
   transition: all 0.15s;
@@ -832,6 +832,19 @@ td.value-negative { color: var(--red); }
 }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+.loading-shimmer--xs { width: 24px; }
+.loading-shimmer--sm { width: 50px; }
+.loading-shimmer--md { width: 90px; }
+.loading-shimmer--lg { width: 120px; }
+.loading-shimmer--half { width: 60%; margin: 0; }
+.loading-shimmer--wide { width: 90%; }
+
+.projection-error-cell {
+  text-align: center;
+  padding: 40px;
+  color: var(--red);
+}
+
 /* ==== Player Profile Modal ==== */
 .player-profile-backdrop {
   position: fixed;
@@ -847,7 +860,7 @@ td.value-negative { color: var(--red); }
 .player-profile-dialog {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   width: 100%;
   max-width: 860px;
   max-height: 85vh;

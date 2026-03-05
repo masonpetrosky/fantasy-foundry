@@ -103,6 +103,7 @@ export function AccountPanel({
               placeholder="you@example.com"
               autoComplete="email"
               required
+              disabled={submitting}
             />
           </label>
           <label className="account-field">
@@ -115,6 +116,7 @@ export function AccountPanel({
               autoComplete={mode === "signup" ? "new-password" : "current-password"}
               minLength={8}
               required
+              disabled={submitting}
             />
           </label>
           <div className="account-actions">

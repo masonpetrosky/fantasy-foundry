@@ -17,7 +17,7 @@ ProjectionResponseHandler = Callable[..., dict[str, Any]]
 ProjectionExportHandler = Callable[..., Any]
 ProjectionProfileHandler = Callable[..., dict[str, Any]]
 ProjectionCompareHandler = Callable[..., dict[str, Any]]
-ProjectionDeltasHandler = Callable[[], dict[str, Any]]
+ProjectionDeltasHandler = Callable[..., dict[str, Any]]
 
 
 class BaseProjectionQueryParams(BaseModel):
@@ -33,6 +33,10 @@ class BaseProjectionQueryParams(BaseModel):
     calculator_job_id: str | None = Field(default=None, max_length=100)
     sort_col: str | None = Field(default=None, max_length=50)
     sort_dir: Literal["asc", "desc"] = "desc"
+
+    def to_handler_kwargs(self) -> dict[str, Any]:
+        """Return field dict suitable for unpacking into projection_response_handler."""
+        return self.model_dump()
 
 
 class ProjectionListQueryParams(BaseProjectionQueryParams):
@@ -67,72 +71,21 @@ def build_projections_router(
         request: Request,
         query: Annotated[ProjectionListQueryParams, Depends()],
     ):
-        return projection_response_handler(
-            "all",
-            player=query.player,
-            team=query.team,
-            player_keys=query.player_keys,
-            year=query.year,
-            years=query.years,
-            pos=query.pos,
-            dynasty_years=query.dynasty_years,
-            career_totals=query.career_totals,
-            include_dynasty=query.include_dynasty,
-            calculator_job_id=query.calculator_job_id,
-            sort_col=query.sort_col,
-            sort_dir=query.sort_dir,
-            limit=query.limit,
-            offset=query.offset,
-            request=request,
-        )
+        return projection_response_handler("all", **query.to_handler_kwargs(), request=request)
 
     @router.get("/api/projections/bat", response_model=ProjectionListResponse, responses=PROJECTION_ERROR_RESPONSES)
     def get_bat_projections(
         request: Request,
         query: Annotated[ProjectionListQueryParams, Depends()],
     ):
-        return projection_response_handler(
-            "bat",
-            player=query.player,
-            team=query.team,
-            player_keys=query.player_keys,
-            year=query.year,
-            years=query.years,
-            pos=query.pos,
-            dynasty_years=query.dynasty_years,
-            career_totals=query.career_totals,
-            include_dynasty=query.include_dynasty,
-            calculator_job_id=query.calculator_job_id,
-            sort_col=query.sort_col,
-            sort_dir=query.sort_dir,
-            limit=query.limit,
-            offset=query.offset,
-            request=request,
-        )
+        return projection_response_handler("bat", **query.to_handler_kwargs(), request=request)
 
     @router.get("/api/projections/pitch", response_model=ProjectionListResponse, responses=PROJECTION_ERROR_RESPONSES)
     def get_pitch_projections(
         request: Request,
         query: Annotated[ProjectionListQueryParams, Depends()],
     ):
-        return projection_response_handler(
-            "pitch",
-            player=query.player,
-            team=query.team,
-            player_keys=query.player_keys,
-            year=query.year,
-            years=query.years,
-            pos=query.pos,
-            dynasty_years=query.dynasty_years,
-            career_totals=query.career_totals,
-            include_dynasty=query.include_dynasty,
-            calculator_job_id=query.calculator_job_id,
-            sort_col=query.sort_col,
-            sort_dir=query.sort_dir,
-            limit=query.limit,
-            offset=query.offset,
-            request=request,
-        )
+        return projection_response_handler("pitch", **query.to_handler_kwargs(), request=request)
 
     @router.get("/api/projections/player/{player_id}", response_model=ProjectionListResponse, responses=PROJECTION_ERROR_RESPONSES)
     def get_player_projection_series(
@@ -238,7 +191,7 @@ def build_projections_router(
     if projection_deltas_handler is not None:
 
         @router.get("/api/projections/deltas")
-        def get_projection_deltas():
-            return projection_deltas_handler()
+        def get_projection_deltas(request: Request):
+            return projection_deltas_handler(request=request)
 
     return router

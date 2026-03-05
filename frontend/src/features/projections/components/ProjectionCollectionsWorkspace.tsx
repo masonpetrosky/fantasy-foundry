@@ -87,7 +87,7 @@ export const ProjectionCollectionsWorkspace = React.memo(function ProjectionColl
         )}
       </div>
       {compareRowsCount > 0 && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<p className="methodology-note">Loading...</p>}>
           <LazyProjectionComparisonPanel
             compareRows={compareRows}
             maxComparePlayers={maxComparePlayers}
@@ -100,7 +100,7 @@ export const ProjectionCollectionsWorkspace = React.memo(function ProjectionColl
         </Suspense>
       )}
       {watchlistCount > 0 && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<p className="methodology-note">Loading...</p>}>
           <LazyProjectionWatchlistPanel
             watchlistCount={watchlistCount}
             watchlist={watchlist}

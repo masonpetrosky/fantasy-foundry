@@ -19,8 +19,7 @@ import type {
   HiddenColumnOverrides,
   HiddenColumnOverridesByTab,
 } from "../../../projections_view_config";
-
-type CalculatorSettings = Record<string, unknown> | null | undefined;
+import type { CalculatorSettings } from "../../../dynasty_calculator_config";
 
 export function resolveProjectionTableColumnHidden(
   tab: string,
@@ -93,7 +92,7 @@ export interface UseProjectionColumnVisibilityInput {
   tab: string;
   seasonCol: string;
   dynastyYearCols: string[];
-  activeCalculatorSettings: CalculatorSettings;
+  activeCalculatorSettings: CalculatorSettings | null | undefined;
 }
 
 export interface UseProjectionColumnVisibilityResult {

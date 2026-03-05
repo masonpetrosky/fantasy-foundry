@@ -8,12 +8,18 @@ import time
 from collections import deque
 from typing import Any, Callable
 
+# Bump this version whenever calculation logic changes in a way that
+# invalidates cached results.  Previous versions:
+#   v1 — initial roto-only valuation
+#   v2 — added points mode scoring
+#   v3 — points mode per-slot replacement-level valuation
+CALC_CACHE_VERSION = "v3"
+
 
 def calc_result_cache_key(settings: dict[str, Any]) -> str:
     canonical = json.dumps(settings, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-    # v3: points mode now uses per-slot replacement-level valuation
-    return f"v3:{digest}"
+    return f"{CALC_CACHE_VERSION}:{digest}"
 
 
 def cleanup_local_result_cache(

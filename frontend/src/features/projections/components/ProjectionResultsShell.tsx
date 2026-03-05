@@ -68,8 +68,8 @@ export const ProjectionResultsShell = React.memo(function ProjectionResultsShell
           {showInitialLoadSkeleton ? (
             Array.from({ length: 8 }).map((_, idx) => (
               <div className="projection-card" key={`loading-card-${idx}`}>
-                <div className="loading-shimmer" style={{ width: "60%", margin: 0 }} />
-                <div className="loading-shimmer" style={{ width: "90%", marginTop: 10 }} />
+                <div className="loading-shimmer loading-shimmer--half" />
+                <div className="loading-shimmer loading-shimmer--wide" />
               </div>
             ))
           ) : error && displayedPage.length === 0 ? (
@@ -128,14 +128,14 @@ export const ProjectionResultsShell = React.memo(function ProjectionResultsShell
                   {showInitialLoadSkeleton ? (
                     Array.from({ length: 15 }).map((_, i) => (
                       <tr key={i}>
-                        <td className="index-col"><div className="loading-shimmer" style={{ width: 24 }} /></td>
-                        {cols.map((c, j) => <td key={j}><div className="loading-shimmer" style={{ width: c === "Player" ? 120 : 50 }} /></td>)}
-                        <td><div className="loading-shimmer" style={{ width: 90 }} /></td>
+                        <td className="index-col"><div className="loading-shimmer loading-shimmer--xs" /></td>
+                        {cols.map((c, j) => <td key={j}><div className={`loading-shimmer ${c === "Player" ? "loading-shimmer--lg" : "loading-shimmer--sm"}`} /></td>)}
+                        <td><div className="loading-shimmer loading-shimmer--md" /></td>
                       </tr>
                     ))
                   ) : error && displayedPage.length === 0 ? (
                     <tr>
-                      <td colSpan={cols.length + 2} style={{ textAlign: "center", padding: "40px", color: "var(--red)" }}>
+                      <td colSpan={cols.length + 2} className="projection-error-cell">
                         Unable to load projections. {error}{" "}<button type="button" className="inline-btn" onClick={retryFetch}>Retry</button>
                       </td>
                     </tr>

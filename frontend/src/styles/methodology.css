@@ -9,7 +9,7 @@
 .methodology-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   padding: 24px;
 }
 
@@ -54,7 +54,7 @@
   margin: 0 0 16px;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
 }
 
@@ -70,7 +70,7 @@
 
 .glossary-item {
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
   padding: 14px 16px;
 }
@@ -97,7 +97,7 @@
 
 .faq-item {
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
   padding: 14px 16px;
 }

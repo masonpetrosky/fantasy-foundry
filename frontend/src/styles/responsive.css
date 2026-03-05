@@ -88,7 +88,7 @@
     min-width: 200px;
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
     padding: 6px;
     box-shadow: var(--shadow-lg);
     display: flex;
@@ -102,7 +102,7 @@
     text-align: left;
     padding: 12px 14px;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     background: transparent;
     color: var(--text-secondary);
     font-family: var(--ff-sans);
@@ -267,7 +267,7 @@
     justify-content: center;
     min-height: 46px;
     border: 1px solid var(--accent-dim);
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
     background: rgba(212, 168, 83, 0.95);
     color: #1b1f24;
     font-size: var(--fs-md);
@@ -409,7 +409,7 @@
     gap: var(--space-xs);
     background: var(--bg-primary);
     border: 1px solid var(--border-subtle);
-    border-radius: 7px;
+    border-radius: var(--radius-md);
     padding: 3px;
   }
 
@@ -420,7 +420,7 @@
     font-size: var(--fs-sm);
     font-weight: 600;
     padding: 6px 10px;
-    border-radius: 5px;
+    border-radius: var(--radius-md);
     min-height: 34px;
     touch-action: manipulation;
     min-width: 104px;
@@ -569,7 +569,7 @@
     bottom: 0;
     z-index: 160;
     max-height: 92vh;
-    border-radius: 16px 16px 0 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-bottom: none;
@@ -597,7 +597,7 @@
     content: '';
     width: 36px;
     height: 4px;
-    border-radius: 2px;
+    border-radius: var(--radius-sm);
     background: var(--border);
   }
 
@@ -648,7 +648,7 @@
   .brand-mark {
     width: 24px;
     height: 24px;
-    border-radius: 7px;
+    border-radius: var(--radius-md);
   }
 
   .brand-title {

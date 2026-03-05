@@ -728,7 +728,12 @@ app.include_router(
         ops_handler=get_ops,
     )
 )
-def _get_projection_deltas() -> dict:
+def _get_projection_deltas(*, request: Request) -> dict:
+    _enforce_rate_limit(
+        request,
+        action="proj-read",
+        limit_per_minute=PROJECTION_RATE_LIMIT_PER_MINUTE,
+    )
     return PROJECTION_DELTAS
 
 
@@ -753,6 +758,19 @@ app.include_router(
         calculate_authorize_handler=_authorize_calculate_request,
     )
 )
+
+# ---------------------------------------------------------------------------
+# Startup config validation — warn on incomplete credential pairs
+# ---------------------------------------------------------------------------
+_startup_logger = logging.getLogger("fantasy_foundry.startup")
+if bool(SETTINGS.stripe_secret_key) != bool(SETTINGS.stripe_webhook_secret):
+    _startup_logger.warning(
+        "Incomplete Stripe config: stripe_secret_key and stripe_webhook_secret must both be set; billing routes will NOT register"
+    )
+if bool(SETTINGS.supabase_url) != bool(SETTINGS.supabase_service_role_key):
+    _startup_logger.warning(
+        "Incomplete Supabase config: supabase_url and supabase_service_role_key must both be set; cloud sync will NOT work"
+    )
 
 # ---------------------------------------------------------------------------
 # Billing (Stripe) — conditional on credentials

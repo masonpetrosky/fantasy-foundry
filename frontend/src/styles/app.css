@@ -20,6 +20,9 @@
   --radius-lg: 12px;
   --radius-full: 999px;
 
+  /* Focus ring */
+  --focus-ring: rgba(212, 168, 83, 0.75);
+
   /* Shadow scale */
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
   --shadow-md: 0 4px 16px rgba(0,0,0,0.35);
@@ -144,7 +147,7 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid rgba(212, 168, 83, 0.55);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 

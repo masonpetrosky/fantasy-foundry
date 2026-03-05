@@ -24,7 +24,7 @@ import { ProjectionSectionTabs } from "./components/ProjectionSectionTabs";
 import { ProjectionStatusMessages } from "./components/ProjectionStatusMessages";
 import type { TierLimits } from "../../premium";
 import type { CalculatorSettings } from "../../dynasty_calculator_config";
-import type { PlayerWatchEntry } from "../../app_state_storage";
+import type { PlayerWatchEntry, ProjectionRow } from "../../app_state_storage";
 
 interface ProjectionsExplorerProps {
   apiBase: string;
@@ -34,7 +34,7 @@ interface ProjectionsExplorerProps {
   setWatchlist: React.Dispatch<React.SetStateAction<Record<string, PlayerWatchEntry>>>;
   hasSuccessfulCalcRun: boolean;
   activeCalculatorSettings: CalculatorSettings | null;
-  calculatorOverlayByPlayerKey: Record<string, unknown> | null;
+  calculatorOverlayByPlayerKey: Record<string, ProjectionRow> | null;
   calculatorOverlayActive: boolean;
   calculatorOverlayJobId: string;
   calculatorOverlayDataVersion: string;
@@ -113,7 +113,7 @@ export function ProjectionsExplorer({
     handleProjectionTableScroll,
   } = useProjectionLayoutState();
 
-  const [, setShowPosMenu] = useState(false);
+  const closePosMenu = useCallback(() => {}, []);
   const [profileRow, setProfileRow] = useState<Record<string, unknown> | null>(null);
   const handleViewProfile = useCallback((row: Record<string, unknown>) => setProfileRow(row), []);
   const handleCloseProfile = useCallback(() => setProfileRow(null), []);
@@ -126,7 +126,6 @@ export function ProjectionsExplorer({
     setShowOverlayWhy,
     applyCalculatorOverlayToRows,
   } = useProjectionOverlay({
-    // @ts-expect-error - overlay map is structurally compatible
     calculatorOverlayByPlayerKey,
     calculatorOverlayActive,
     calculatorOverlayJobId,
@@ -174,7 +173,7 @@ export function ProjectionsExplorer({
     saveCustomProjectionPreset,
     activeProjectionPresetKey,
     clearAllFilters,
-  } = useProjectionFilterPresets({ filterActions, filterState, setShowPosMenu });
+  } = useProjectionFilterPresets({ filterActions, filterState, setShowPosMenu: closePosMenu });
 
   const page = data;
   const collections = useProjectionCollections({
@@ -242,7 +241,7 @@ export function ProjectionsExplorer({
     setSortDir(DEFAULT_PROJECTIONS_SORT_DIR);
     setOffset(0);
     setPosFilters([]);
-    setShowPosMenu(false);
+    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   }
 
   const seasonCol = careerTotalsView ? "Years" : "Year";
