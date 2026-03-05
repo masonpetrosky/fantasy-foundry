@@ -15,7 +15,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@sentry/react": "^8.53.0",
+    "@sentry/react": "^10.41.0",
     "@supabase/supabase-js": "^2.98.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
