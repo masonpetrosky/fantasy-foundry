@@ -228,7 +228,7 @@ export function resolveActivationDiagnosticsPanelEnabled({
   locationSearch = "",
 }: DiagnosticsPanelEnabledInput = {}): boolean {
   const resolvedEnvEnabled = envEnabled === true || String(envEnabled).trim() === "1";
-  let queryEnabled = false;
+  let queryEnabled: boolean;
   try {
     const params = new URLSearchParams(String(locationSearch || ""));
     const raw = String(params.get(ACTIVATION_DIAGNOSTICS_QUERY_PARAM) || "").trim().toLowerCase();

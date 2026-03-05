@@ -101,7 +101,7 @@ export function useAccountSync({
     let unsubscribe: (() => void) | null = null;
 
     const setupAuth = async (): Promise<void> => {
-      let client: SupabaseClient | null = null;
+      let client: SupabaseClient | null;
       try {
         client = (await loadSupabaseClient()) as SupabaseClient | null;
       } catch (error: unknown) {
@@ -160,7 +160,7 @@ export function useAccountSync({
     setCloudReadyForSave(false);
 
     const loadCloudPreferences = async (): Promise<void> => {
-      let client: SupabaseClient | null = null;
+      let client: SupabaseClient | null;
       try {
         client = (await loadSupabaseClient()) as SupabaseClient | null;
       } catch (error: unknown) {
@@ -265,7 +265,7 @@ export function useAccountSync({
     if (!AUTH_SYNC_ENABLED || !authUser?.id || !cloudReadyForSave) return undefined;
 
     const timer = window.setTimeout(async () => {
-      let client: SupabaseClient | null = null;
+      let client: SupabaseClient | null;
       try {
         client = (await loadSupabaseClient()) as SupabaseClient | null;
       } catch (error: unknown) {
