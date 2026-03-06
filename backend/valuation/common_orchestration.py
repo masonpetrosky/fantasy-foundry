@@ -481,10 +481,13 @@ def calculate_common_dynasty_values(
     # Build sideband per-stat SGP data: player -> cat -> year -> sgp_value
     sgp_cols = [c for c in all_year.columns if c.startswith("SGP_")] if not all_year.empty else []
     stat_sgp_by_player: Dict[str, Dict[str, Dict[int, float]]] = {}
+    year_value_by_player: Dict[str, Dict[int, float]] = {}
     if sgp_cols:
         for _, row in all_year.iterrows():
             player = str(row.get("Player") or "")
             year_val = int(row.get("Year", 0))
+            yv = row.get("YearValue")
+            year_value_by_player.setdefault(player, {})[year_val] = float(yv) if yv is not None and not pd.isna(yv) else 0.0
             player_sgps = stat_sgp_by_player.setdefault(player, {})
             for col in sgp_cols:
                 cat = col[4:]  # strip "SGP_"
@@ -574,7 +577,10 @@ def calculate_common_dynasty_values(
     out["CenteringBaselineValue"] = baseline_value
     out["CenteringBaselineMean"] = baseline_value
 
-    # Proportional per-stat dynasty attribution
+    # Proportional per-stat dynasty attribution.
+    # Only include SGPs from years where the player is above replacement
+    # (YearValue > 0). Years with negative YearValue are effectively
+    # dropped in the dynasty DP and shouldn't affect the per-stat breakdown.
     if stat_sgp_by_player:
         all_cats = sorted({cat for cats in stat_sgp_by_player.values() for cat in cats})
         stat_dynasty_cols: Dict[str, List[float]] = {cat: [] for cat in all_cats}
@@ -582,11 +588,15 @@ def calculate_common_dynasty_values(
             player = str(r.get("Player") or "")
             dynasty_val = float(r.get("DynastyValue", 0.0))
             player_sgps = stat_sgp_by_player.get(player, {})
+            player_year_values = year_value_by_player.get(player, {})
             discounted_sums: Dict[str, float] = {}
             for cat in all_cats:
                 cat_years = player_sgps.get(cat, {})
                 ds = 0.0
                 for y in years:
+                    yv = player_year_values.get(int(y), 0.0)
+                    if yv <= 0:
+                        continue
                     sgp_v = cat_years.get(int(y), 0.0)
                     offset = int(y) - int(start_year)
                     ds += sgp_v * (lg.discount ** offset)
