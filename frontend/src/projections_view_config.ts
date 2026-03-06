@@ -2,7 +2,9 @@ import {
   POINTS_SCORING_FIELDS,
   ROTO_HITTER_CATEGORY_FIELDS,
   ROTO_PITCHER_CATEGORY_FIELDS,
+  ROTO_STAT_DYNASTY_PREFIX,
   coerceBooleanSetting,
+  resolveRotoSelectedStatColumns,
 } from "./dynasty_calculator_config";
 
 export const PROJECTION_TABS = ["all", "bat", "pitch"] as const;
@@ -71,6 +73,12 @@ function resolveScoringMode(settings: unknown): "roto" | "points" {
   if (!isSettingsObject(settings)) return "roto";
   const mode = String(settings.scoring_mode || "").trim().toLowerCase();
   return mode === "points" ? "points" : "roto";
+}
+
+function resolveStatDynastyCols(settings: CalculatorSettings): string[] {
+  if (resolveScoringMode(settings) !== "roto") return [];
+  const statCols = resolveRotoSelectedStatColumns(isSettingsObject(settings) ? settings : null);
+  return statCols.map(cat => `${ROTO_STAT_DYNASTY_PREFIX}${cat}`);
 }
 
 interface ProjectionRow {
@@ -247,6 +255,7 @@ export function normalizeHiddenColumnOverridesByTab(raw: unknown): HiddenColumnO
 
 export function projectionTableColumnCatalog(tab: string, seasonCol: string, dynastyYearCols: string[], calculatorSettings: CalculatorSettings = null): string[] {
   const identityCols = ["Player", "Team", "Pos", "Age", "DynastyValue", "AuctionDollars", "ProjectionDelta"];
+  const statDynCols = resolveStatDynastyCols(calculatorSettings);
 
   if (tab === "bat") {
     const statCandidates = uniqueColumnOrder([
@@ -265,6 +274,7 @@ export function projectionTableColumnCatalog(tab: string, seasonCol: string, dyn
       ...identityCols,
       ...priorityStats,
       ...(dynastyYearCols || []),
+      ...statDynCols,
       ...remainingStats,
       "OldestProjectionDate",
       seasonCol,
@@ -289,6 +299,7 @@ export function projectionTableColumnCatalog(tab: string, seasonCol: string, dyn
       ...identityCols,
       ...priorityStats,
       ...(dynastyYearCols || []),
+      ...statDynCols,
       ...remainingStats,
       "OldestProjectionDate",
       seasonCol,
@@ -319,6 +330,7 @@ export function projectionTableColumnCatalog(tab: string, seasonCol: string, dyn
     ...identityCols,
     ...priorityStats,
     ...(dynastyYearCols || []),
+    ...statDynCols,
     ...remainingStats,
     "OldestProjectionDate",
     seasonCol,
@@ -413,6 +425,7 @@ export function projectionTableColumnHiddenByDefault(tab: string, col: string): 
   if (tab === "all" && col === "Type") return true;
   if (col === "ProjectionDelta") return true;
   if (col === "AuctionDollars") return true;
+  if (col.startsWith(ROTO_STAT_DYNASTY_PREFIX)) return true;
   return false;
 }
 

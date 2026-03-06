@@ -27,7 +27,7 @@ function buildCalculatorOverlayMap(result: unknown): Record<string, OverlayRow> 
       overlayRow.DynastyValue = row.DynastyValue;
     }
     Object.keys(row || {}).forEach(col => {
-      if (!col.startsWith("Value_")) return;
+      if (!col.startsWith("Value_") && !col.startsWith("StatDynasty_")) return;
       const value = row[col];
       if (value == null || value === "") return;
       overlayRow[col] = value;

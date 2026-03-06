@@ -13,6 +13,7 @@ import {
   fmtInt,
   formatCellValue,
 } from "../../../formatting_utils";
+import { isRotoStatDynastyCol } from "../../../dynasty_calculator_config";
 
 export interface UseProjectionRowsMarkupInput {
   showCards: boolean;
@@ -77,6 +78,13 @@ export function useProjectionRowsMarkup({
       if ((val == null || val === "") && col === "DynastyValue" && row.DynastyMatchStatus === "no_unique_match") {
         return <td key={col} className="num" style={{ color: "var(--text-muted)" }}>No unique match</td>;
       }
+      const n = Number(val);
+      const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
+      const prefix = n > 0 ? "+" : n < 0 ? "\u2212" : "";
+      const display = val == null || val === "" || isNaN(n) ? "\u2014" : `${prefix}${Math.abs(n).toFixed(2)}`;
+      return <td key={col} className={`num ${cls}`}>{display}</td>;
+    }
+    if (isRotoStatDynastyCol(col)) {
       const n = Number(val);
       const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
       const prefix = n > 0 ? "+" : n < 0 ? "\u2212" : "";

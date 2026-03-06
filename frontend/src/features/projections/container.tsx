@@ -23,6 +23,7 @@ import { ProjectionResultsShell } from "./components/ProjectionResultsShell";
 import { ProjectionSectionTabs } from "./components/ProjectionSectionTabs";
 import { ProjectionStatusMessages } from "./components/ProjectionStatusMessages";
 import type { TierLimits } from "../../premium";
+import { isRotoStatDynastyCol, rotoStatDynastyLabel } from "../../dynasty_calculator_config";
 import type { CalculatorSettings } from "../../dynasty_calculator_config";
 import type { PlayerWatchEntry, ProjectionRow } from "../../app_state_storage";
 
@@ -304,8 +305,13 @@ export function ProjectionsExplorer({
     dynastyYearCols.forEach(col => {
       labels[col] = `${col.replace("Value_", "")} Dyn Value`;
     });
+    tableColumnCatalog.forEach(col => {
+      if (isRotoStatDynastyCol(col)) {
+        labels[col] = rotoStatDynastyLabel(col);
+      }
+    });
     return labels;
-  }, [dynastyYearCols]);
+  }, [dynastyYearCols, tableColumnCatalog]);
 
   const displayedPage = page;
   const showCards = mobileLayoutMode === "cards";
