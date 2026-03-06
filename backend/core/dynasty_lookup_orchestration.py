@@ -84,7 +84,10 @@ def default_dynasty_lookup(
             [col for col in out.columns if isinstance(col, str) and col.startswith("Value_")],
             key=value_col_sort_key,
         )
-        keep_cols = [col for col in ["Player", "Team", "DynastyValue"] + year_cols if col in out.columns]
+        stat_dynasty_cols = sorted(
+            col for col in out.columns if isinstance(col, str) and col.startswith("StatDynasty_")
+        )
+        keep_cols = [col for col in ["Player", "Team", "DynastyValue"] + year_cols + stat_dynasty_cols if col in out.columns]
         df = out[keep_cols].copy()
 
         for col in df.select_dtypes(include="float").columns:
@@ -281,6 +284,9 @@ def attach_dynasty_values(
 
         for col in cols:
             enriched[col] = player_values.get(col)
+        for col, val in player_values.items():
+            if col.startswith("StatDynasty_"):
+                enriched[col] = val
         enriched["DynastyMatchStatus"] = match_status
         enriched_rows.append(enriched)
 
