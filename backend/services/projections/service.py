@@ -221,7 +221,7 @@ class ProjectionService:
 
             # StatDynasty_* columns are attached by the dynasty lookup
             try:
-                lookup_by_entity, _, _, _ = ctx.get_default_dynasty_lookup()
+                lookup_by_entity, _, _, _ = ctx.dynasty_helpers.get_default_dynasty_lookup()
                 sample = next(iter(lookup_by_entity.values()), None)
                 if sample and isinstance(sample, dict):
                     cols.update(k for k in sample if isinstance(k, str) and k.startswith("StatDynasty_"))
