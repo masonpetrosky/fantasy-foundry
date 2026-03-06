@@ -219,6 +219,15 @@ class ProjectionService:
             for year in ctx.coerce_meta_years(ctx.get_meta()):
                 cols.add(f"Value_{year}")
 
+            # StatDynasty_* columns are attached by the dynasty lookup
+            try:
+                lookup_by_entity, _, _, _ = ctx.get_default_dynasty_lookup()
+                sample = next(iter(lookup_by_entity.values()), None)
+                if sample and isinstance(sample, dict):
+                    cols.update(k for k in sample if isinstance(k, str) and k.startswith("StatDynasty_"))
+            except Exception:
+                pass
+
             return frozenset(cols)
 
         self._cached_projection_rows = cached_projection_rows
