@@ -602,8 +602,12 @@ def calculate_common_dynasty_values(
                     ds += sgp_v * (lg.discount ** offset)
                 discounted_sums[cat] = ds
             total_discounted = sum(discounted_sums.values())
+            # Guard against unstable proportions: if the positive-year SGP
+            # total is tiny compared to the dynasty value, the per-stat
+            # ratios become extreme and misleading.  Fall back to zeros.
+            stable = abs(total_discounted) > max(1e-12, abs(dynasty_val) * 0.20)
             for cat in all_cats:
-                if abs(total_discounted) > 1e-12:
+                if stable:
                     stat_dynasty_cols[cat].append(dynasty_val * discounted_sums[cat] / total_discounted)
                 else:
                     stat_dynasty_cols[cat].append(0.0)
