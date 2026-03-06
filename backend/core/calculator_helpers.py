@@ -161,7 +161,7 @@ def build_calculation_explanations(
                     year_entry["points"] = points_detail
             per_year.append(year_entry)
 
-        explanations[explain_key] = {
+        explanation_entry: dict[str, Any] = {
             "player": player,
             "team": str(row_data.get("Team") or "").strip() or None,
             "pos": str(row_data.get("Pos") or "").strip() or None,
@@ -170,6 +170,15 @@ def build_calculation_explanations(
             "raw_dynasty_value": round(numeric_or_zero_fn(row_data.get("RawDynastyValue")), 4),
             "per_year": per_year,
         }
+        if scoring_mode == "roto":
+            stat_dynasty = {
+                col[len("StatDynasty_"):]: round(numeric_or_zero_fn(row_data.get(col)), 4)
+                for col in row_data
+                if isinstance(col, str) and col.startswith("StatDynasty_")
+            }
+            if stat_dynasty:
+                explanation_entry["stat_dynasty_contributions"] = stat_dynasty
+        explanations[explain_key] = explanation_entry
 
     return explanations
 

@@ -11,6 +11,8 @@ import {
   ROTO_COUNTING_STAT_COLS,
   ROTO_RATE_STAT_COLS,
   ROTO_THREE_DECIMAL_RATE_COLS,
+  isRotoStatDynastyCol,
+  rotoStatDynastyLabel,
 } from "./dynasty_calculator_config";
 import { fmt } from "./formatting_utils";
 import type { TierLimits } from "./premium";
@@ -281,7 +283,7 @@ export function DynastyCalculatorResults({ results, state, refs, actions }: Dyna
                     tabIndex={0}
                     aria-sort={sortCol === c ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                   >
-                    {columnLabels[c] || c.replace("Value_", "")}
+                    {columnLabels[c] || (isRotoStatDynastyCol(c) ? rotoStatDynastyLabel(c) : c.replace("Value_", ""))}
                     {sortCol === c && <span className="sort-arrow">{sortDir === "asc" ? "\u25B2" : "\u25BC"}</span>}
                   </th>
                 ))}
@@ -335,6 +337,11 @@ export function DynastyCalculatorResults({ results, state, refs, actions }: Dyna
                       }
                       if (POINTS_RESULT_SLOT_COLS.has(c)) {
                         return <td key={c} className={pinClass}>{(val as string) || "\u2014"}</td>;
+                      }
+                      if (isRotoStatDynastyCol(c)) {
+                        const n = Number(val);
+                        const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
+                        return <td key={c} className={`num ${cls} ${pinClass}`.trim()}>{fmt(val, 2)}</td>;
                       }
                       if (ROTO_COUNTING_STAT_COLS.has(c)) {
                         return <td key={c} className={`num ${pinClass}`.trim()}>{fmt(val, 0)}</td>;

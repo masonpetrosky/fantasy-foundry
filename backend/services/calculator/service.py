@@ -438,6 +438,10 @@ class CalculatorService:
                     col for col in CALCULATOR_RESULT_POINTS_EXPORT_ORDER
                     if col in out.columns
                 ]
+            stat_dynasty_cols: list[str] = []
+            if req.scoring_mode == "roto":
+                stat_dynasty_cols = sorted(c for c in out.columns if c.startswith("StatDynasty_"))
+
             explanations = self._ctx.build_calculation_explanations(out, settings=settings)
 
             # Auction dollar conversion
@@ -464,7 +468,7 @@ class CalculatorService:
                 "Team",
                 "Pos",
                 "Age",
-            ] + selected_roto_stat_cols + selected_points_summary_cols + [
+            ] + selected_roto_stat_cols + stat_dynasty_cols + selected_points_summary_cols + [
                 "DynastyValue",
                 "RawDynastyValue",
                 "minor_eligible",

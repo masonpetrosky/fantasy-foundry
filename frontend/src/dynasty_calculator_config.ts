@@ -182,6 +182,16 @@ export const ROTO_RATE_STAT_COLS: Set<string> = new Set(["AVG", "OBP", "SLG", "O
 export const ROTO_THREE_DECIMAL_RATE_COLS: Set<string> = new Set(["AVG", "OBP", "SLG", "OPS"]);
 export const ROTO_COUNTING_STAT_COLS: Set<string> = new Set(["R", "RBI", "HR", "SB", "H", "BB", "2B", "TB", "W", "K", "SV", "QS", "QA3", "SVH"]);
 
+export const ROTO_STAT_DYNASTY_PREFIX = "StatDynasty_";
+
+export function isRotoStatDynastyCol(col: string): boolean {
+  return col.startsWith(ROTO_STAT_DYNASTY_PREFIX);
+}
+
+export function rotoStatDynastyLabel(col: string): string {
+  return `SGP: ${col.slice(ROTO_STAT_DYNASTY_PREFIX.length)}`;
+}
+
 export function coerceBooleanSetting(value: unknown, fallback: boolean = false): boolean {
   if (typeof value === "boolean") return value;
   if (typeof value === "number" && Number.isFinite(value)) return value !== 0;

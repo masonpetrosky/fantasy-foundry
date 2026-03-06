@@ -3,11 +3,14 @@ import {
   buildCalculatorPayload,
   buildDefaultCalculatorSettings,
   coerceBooleanSetting,
+  isRotoStatDynastyCol,
   resolvePointsScoringDefaults,
   resolvePointsSlotDefaults,
   resolveRotoCategoryDefaults,
   resolveRotoSelectedStatColumns,
   resolveRotoSlotDefaults,
+  rotoStatDynastyLabel,
+  ROTO_STAT_DYNASTY_PREFIX,
 } from "./dynasty_calculator_config";
 
 describe("coerceBooleanSetting", () => {
@@ -322,5 +325,25 @@ describe("buildCalculatorPayload mode field", () => {
     const result = buildCalculatorPayload(settings, [2026], {});
     expect(result.error).toBeUndefined();
     expect(result.payload!.mode).toBe("common");
+  });
+});
+
+describe("roto stat dynasty column helpers", () => {
+  it("ROTO_STAT_DYNASTY_PREFIX is correct", () => {
+    expect(ROTO_STAT_DYNASTY_PREFIX).toBe("StatDynasty_");
+  });
+
+  it("isRotoStatDynastyCol identifies stat dynasty columns", () => {
+    expect(isRotoStatDynastyCol("StatDynasty_R")).toBe(true);
+    expect(isRotoStatDynastyCol("StatDynasty_ERA")).toBe(true);
+    expect(isRotoStatDynastyCol("DynastyValue")).toBe(false);
+    expect(isRotoStatDynastyCol("Value_2026")).toBe(false);
+    expect(isRotoStatDynastyCol("")).toBe(false);
+  });
+
+  it("rotoStatDynastyLabel generates correct labels", () => {
+    expect(rotoStatDynastyLabel("StatDynasty_R")).toBe("SGP: R");
+    expect(rotoStatDynastyLabel("StatDynasty_AVG")).toBe("SGP: AVG");
+    expect(rotoStatDynastyLabel("StatDynasty_ERA")).toBe("SGP: ERA");
   });
 });

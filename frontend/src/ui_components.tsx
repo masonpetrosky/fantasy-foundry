@@ -98,6 +98,7 @@ interface YearEntry {
   discount_factor?: number;
   discounted_contribution?: number;
   points?: Record<string, unknown>;
+  roto_stat_contributions?: Record<string, number>;
 }
 
 interface Explanation {
@@ -108,6 +109,7 @@ interface Explanation {
   raw_dynasty_value?: number;
   dynasty_value?: number;
   per_year?: YearEntry[];
+  stat_dynasty_contributions?: Record<string, number>;
 }
 
 interface ExplainabilityCardProps {
@@ -272,6 +274,29 @@ export function ExplainabilityCard({
           </div>
           {renderPointList("Hitting Rule Points", hittingRulePoints, HITTING_POINT_EVENT_ORDER, HITTING_POINT_LABELS)}
           {renderPointList("Pitching Rule Points", pitchingRulePoints, PITCHING_POINT_EVENT_ORDER, PITCHING_POINT_LABELS)}
+        </div>
+      )}
+      {explanation.mode === "roto" && explanation.stat_dynasty_contributions && Object.keys(explanation.stat_dynasty_contributions).length > 0 && (
+        <div className="explain-points-grid">
+          <div className="explain-points-card">
+            <h5>Per-Stat Dynasty Contributions</h5>
+            <table className="explain-mini-table">
+              <tbody>
+                {Object.entries(explanation.stat_dynasty_contributions)
+                  .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0))
+                  .map(([cat, value]) => {
+                    const n = Number(value);
+                    const cls = n > 0 ? "value-positive" : n < 0 ? "value-negative" : "";
+                    return (
+                      <tr key={cat}>
+                        <td>{cat}</td>
+                        <td className={`num ${cls}`.trim()}>{fmt(value, 2)}</td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

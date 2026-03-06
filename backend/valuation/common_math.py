@@ -751,6 +751,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
 
         best_val = -1e18
         best_slot = None
+        best_stat_sgps: Dict[str, float] = {}
 
         for slot in slots:
             if slot not in baseline_hit.index:
@@ -782,13 +783,17 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                 )
 
             val = 0.0
+            stat_sgps: Dict[str, float] = {}
             for c in hit_categories:
                 denom = float(sgp_hit[c])
-                val += (delta[c] / denom) if denom else 0.0
+                sgp_c = (delta[c] / denom) if denom else 0.0
+                val += sgp_c
+                stat_sgps[c] = sgp_c
 
             if val > best_val:
                 best_val = val
                 best_slot = slot
+                best_stat_sgps = stat_sgps
 
         hit_rows.append(
             {
@@ -800,6 +805,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                 "Pos": row.get("Pos", np.nan),
                 "BestSlot": best_slot,
                 "YearValue": float(best_val),
+                **{f"SGP_{cat}": best_stat_sgps.get(cat, 0.0) for cat in hit_categories},
             }
         )
 
@@ -815,6 +821,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
 
         best_val = -1e18
         best_slot = None
+        best_stat_sgps: Dict[str, float] = {}
 
         for slot in slots:
             if slot not in baseline_pit.index:
@@ -862,13 +869,17 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                 )
 
             val = 0.0
+            stat_sgps: Dict[str, float] = {}
             for c in pit_categories:
                 denom = float(sgp_pit[c])
-                val += (delta[c] / denom) if denom else 0.0
+                sgp_c = (delta[c] / denom) if denom else 0.0
+                val += sgp_c
+                stat_sgps[c] = sgp_c
 
             if val > best_val:
                 best_val = val
                 best_slot = slot
+                best_stat_sgps = stat_sgps
 
         pit_rows.append(
             {
@@ -880,6 +891,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                 "Pos": row.get("Pos", np.nan),
                 "BestSlot": best_slot,
                 "YearValue": float(best_val),
+                **{f"SGP_{cat}": best_stat_sgps.get(cat, 0.0) for cat in pit_categories},
             }
         )
 
@@ -979,6 +991,7 @@ def compute_year_player_values_vs_replacement(
 
         best_val = -1e18
         best_slot = None
+        best_stat_sgps: Dict[str, float] = {}
 
         for slot in slots:
             if slot not in baseline_hit_avg.index or slot not in repl_hit.index:
@@ -1001,13 +1014,17 @@ def compute_year_player_values_vs_replacement(
             }
 
             val = 0.0
+            stat_sgps: Dict[str, float] = {}
             for c in hit_categories:
                 denom = float(sgp_hit[c])
-                val += (delta[c] / denom) if denom else 0.0
+                sgp_c = (delta[c] / denom) if denom else 0.0
+                val += sgp_c
+                stat_sgps[c] = sgp_c
 
             if val > best_val:
                 best_val = val
                 best_slot = slot
+                best_stat_sgps = stat_sgps
 
         hit_rows.append(
             {
@@ -1019,6 +1036,7 @@ def compute_year_player_values_vs_replacement(
                 "Pos": row.get("Pos", np.nan),
                 "BestSlot": best_slot,
                 "YearValue": float(best_val),
+                **{f"SGP_{cat}": best_stat_sgps.get(cat, 0.0) for cat in hit_categories},
             }
         )
 
@@ -1033,6 +1051,7 @@ def compute_year_player_values_vs_replacement(
 
         best_val = -1e18
         best_slot = None
+        best_stat_sgps: Dict[str, float] = {}
 
         for slot in slots:
             if slot not in baseline_pit_avg.index or slot not in repl_pit.index:
@@ -1090,13 +1109,17 @@ def compute_year_player_values_vs_replacement(
                 )
 
             val = 0.0
+            stat_sgps: Dict[str, float] = {}
             for c in pit_categories:
                 denom = float(sgp_pit[c])
-                val += (delta[c] / denom) if denom else 0.0
+                sgp_c = (delta[c] / denom) if denom else 0.0
+                val += sgp_c
+                stat_sgps[c] = sgp_c
 
             if val > best_val:
                 best_val = val
                 best_slot = slot
+                best_stat_sgps = stat_sgps
 
         pit_rows.append(
             {
@@ -1108,6 +1131,7 @@ def compute_year_player_values_vs_replacement(
                 "Pos": row.get("Pos", np.nan),
                 "BestSlot": best_slot,
                 "YearValue": float(best_val),
+                **{f"SGP_{cat}": best_stat_sgps.get(cat, 0.0) for cat in pit_categories},
             }
         )
 
@@ -1116,16 +1140,41 @@ def compute_year_player_values_vs_replacement(
 
 
 def combine_two_way(hit_vals: pd.DataFrame, pit_vals: pd.DataFrame, two_way: str) -> pd.DataFrame:
+    hit_sgp_cols = [c for c in hit_vals.columns if c.startswith("SGP_")]
+    pit_sgp_cols = [c for c in pit_vals.columns if c.startswith("SGP_")]
+    hit_merge_cols = ["Player", "Year", "YearValue", "BestSlot", "Team", "Age", "Pos"] + hit_sgp_cols
+    pit_merge_cols = ["Player", "Year", "YearValue", "BestSlot", "Team", "Age", "Pos"] + pit_sgp_cols
     merged = pd.merge(
-        hit_vals[["Player", "Year", "YearValue", "BestSlot", "Team", "Age", "Pos"]],
-        pit_vals[["Player", "Year", "YearValue", "BestSlot", "Team", "Age", "Pos"]],
+        hit_vals[[c for c in hit_merge_cols if c in hit_vals.columns]],
+        pit_vals[[c for c in pit_merge_cols if c in pit_vals.columns]],
         on=["Player", "Year"],
         how="outer",
         suffixes=("_hit", "_pit"),
     )
 
+    hit_sgp_cat_set = {c[4:] for c in hit_sgp_cols}
+    pit_sgp_cat_set = {c[4:] for c in pit_sgp_cols}
+    all_sgp_cats = sorted(hit_sgp_cat_set | pit_sgp_cat_set)
+
+    def _get_sgp(r: pd.Series, cat: str, side: str) -> float:
+        """Get SGP value for a category from the merged row, handling suffix logic."""
+        # If the cat exists on both sides, pandas adds _hit/_pit suffixes
+        suffixed = f"SGP_{cat}_{side}"
+        if suffixed in r.index:
+            v = r[suffixed]
+            return float(v) if v is not None and not pd.isna(v) else 0.0
+        # If the cat exists only on one side, pandas keeps it unsuffixed
+        unsuffixed = f"SGP_{cat}"
+        if unsuffixed in r.index:
+            # Only return the value if this cat belongs to the requested side
+            if (side == "hit" and cat in hit_sgp_cat_set) or (side == "pit" and cat in pit_sgp_cat_set):
+                v = r[unsuffixed]
+                return float(v) if v is not None and not pd.isna(v) else 0.0
+        return 0.0
+
     out_vals = []
     out_slots = []
+    out_sgps: Dict[str, List[float]] = {cat: [] for cat in all_sgp_cats}
 
     for _, r in merged.iterrows():
         hv = r.get("YearValue_hit")
@@ -1134,14 +1183,20 @@ def combine_two_way(hit_vals: pd.DataFrame, pit_vals: pd.DataFrame, two_way: str
         if pd.isna(hv) and pd.isna(pv):
             out_vals.append(np.nan)
             out_slots.append(None)
+            for cat in all_sgp_cats:
+                out_sgps[cat].append(0.0)
             continue
         if pd.isna(hv):
             out_vals.append(float(pv))
             out_slots.append(r.get("BestSlot_pit"))
+            for cat in all_sgp_cats:
+                out_sgps[cat].append(_get_sgp(r, cat, "pit"))
             continue
         if pd.isna(pv):
             out_vals.append(float(hv))
             out_slots.append(r.get("BestSlot_hit"))
+            for cat in all_sgp_cats:
+                out_sgps[cat].append(_get_sgp(r, cat, "hit"))
             continue
 
         hv = float(hv)
@@ -1150,21 +1205,30 @@ def combine_two_way(hit_vals: pd.DataFrame, pit_vals: pd.DataFrame, two_way: str
         if two_way == "sum":
             out_vals.append(hv + pv)
             out_slots.append(f"{r.get('BestSlot_hit')}+{r.get('BestSlot_pit')}")
+            for cat in all_sgp_cats:
+                out_sgps[cat].append(_get_sgp(r, cat, "hit") + _get_sgp(r, cat, "pit"))
         else:  # "max"
             if hv >= pv:
                 out_vals.append(hv)
                 out_slots.append(r.get("BestSlot_hit"))
+                for cat in all_sgp_cats:
+                    out_sgps[cat].append(_get_sgp(r, cat, "hit"))
             else:
                 out_vals.append(pv)
                 out_slots.append(r.get("BestSlot_pit"))
+                for cat in all_sgp_cats:
+                    out_sgps[cat].append(_get_sgp(r, cat, "pit"))
 
     merged["YearValue"] = out_vals
     merged["BestSlot"] = out_slots
     merged["Team"] = merged["Team_hit"].combine_first(merged["Team_pit"])
     merged["Pos"] = merged["Pos_hit"].combine_first(merged["Pos_pit"])
     merged["Age"] = merged["Age_hit"].combine_first(merged["Age_pit"])
+    for cat in all_sgp_cats:
+        merged[f"SGP_{cat}"] = out_sgps[cat]
 
-    return merged[["Player", "Year", "YearValue", "BestSlot", "Team", "Pos", "Age"]]
+    base_cols = ["Player", "Year", "YearValue", "BestSlot", "Team", "Pos", "Age"]
+    return merged[base_cols + [f"SGP_{cat}" for cat in all_sgp_cats]]
 
 
 __all__ = [

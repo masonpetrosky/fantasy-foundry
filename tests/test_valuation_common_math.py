@@ -489,3 +489,166 @@ def test_combine_two_way_supports_max_and_sum() -> None:
     assert sum_by_player["TwoWay"] == (11.0, "UT+P")
     assert max_by_player["OnlyHit"] == (3.0, "UT")
     assert max_by_player["OnlyPit"] == (4.0, "P")
+
+
+def test_compute_year_player_values_returns_sgp_columns() -> None:
+    bat, pit = _sample_common_frames()
+    lg = CommonDynastyRotoSettings(
+        n_teams=1,
+        sims_for_sgp=2,
+        hitter_slots={"UT": 1},
+        pitcher_slots={"P": 1},
+        bench_slots=0,
+        minor_slots=0,
+        ir_slots=0,
+        ip_min=0.0,
+        ip_max=180.0,
+    )
+    ctx = common_math.compute_year_context(2026, bat, pit, lg, rng_seed=5)
+    hit_vals, pit_vals = common_math.compute_year_player_values(ctx, lg)
+
+    hit_sgp_cols = [c for c in hit_vals.columns if c.startswith("SGP_")]
+    pit_sgp_cols = [c for c in pit_vals.columns if c.startswith("SGP_")]
+
+    assert len(hit_sgp_cols) == len(lg.hitter_categories)
+    assert len(pit_sgp_cols) == len(lg.pitcher_categories)
+
+    for _, row in hit_vals.iterrows():
+        sgp_sum = sum(float(row[c]) for c in hit_sgp_cols)
+        assert math.isclose(sgp_sum, float(row["YearValue"]), abs_tol=1e-10)
+
+    for _, row in pit_vals.iterrows():
+        sgp_sum = sum(float(row[c]) for c in pit_sgp_cols)
+        assert math.isclose(sgp_sum, float(row["YearValue"]), abs_tol=1e-10)
+
+
+def test_compute_year_player_values_vs_replacement_returns_sgp_columns() -> None:
+    bat, pit = _sample_common_frames()
+    lg = CommonDynastyRotoSettings(
+        n_teams=1,
+        sims_for_sgp=2,
+        hitter_slots={"UT": 1},
+        pitcher_slots={"P": 1},
+        bench_slots=0,
+        minor_slots=0,
+        ir_slots=0,
+        ip_min=0.0,
+        ip_max=180.0,
+    )
+    ctx = common_math.compute_year_context(2026, bat, pit, lg, rng_seed=7)
+    repl_hit, repl_pit = common_math.compute_replacement_baselines(ctx, lg, rostered_players={"Nobody"}, n_repl=1)
+    hit_vals, pit_vals = common_math.compute_year_player_values_vs_replacement(ctx, lg, repl_hit, repl_pit)
+
+    hit_sgp_cols = [c for c in hit_vals.columns if c.startswith("SGP_")]
+    pit_sgp_cols = [c for c in pit_vals.columns if c.startswith("SGP_")]
+
+    assert len(hit_sgp_cols) == len(lg.hitter_categories)
+    assert len(pit_sgp_cols) == len(lg.pitcher_categories)
+
+    for _, row in hit_vals.iterrows():
+        sgp_sum = sum(float(row[c]) for c in hit_sgp_cols)
+        assert math.isclose(sgp_sum, float(row["YearValue"]), abs_tol=1e-10)
+
+    for _, row in pit_vals.iterrows():
+        sgp_sum = sum(float(row[c]) for c in pit_sgp_cols)
+        assert math.isclose(sgp_sum, float(row["YearValue"]), abs_tol=1e-10)
+
+
+def test_combine_two_way_preserves_sgp_columns() -> None:
+    hit_vals = pd.DataFrame([
+        {"Player": "TwoWay", "Year": 2026, "YearValue": 5.0, "BestSlot": "UT", "Team": "AAA", "Age": 25, "Pos": "1B", "SGP_R": 2.0, "SGP_HR": 3.0},
+        {"Player": "OnlyHit", "Year": 2026, "YearValue": 3.0, "BestSlot": "UT", "Team": "BBB", "Age": 27, "Pos": "OF", "SGP_R": 1.5, "SGP_HR": 1.5},
+    ])
+    pit_vals = pd.DataFrame([
+        {"Player": "TwoWay", "Year": 2026, "YearValue": 6.0, "BestSlot": "P", "Team": "AAA", "Age": 25, "Pos": "SP", "SGP_W": 4.0, "SGP_ERA": 2.0},
+        {"Player": "OnlyPit", "Year": 2026, "YearValue": 4.0, "BestSlot": "P", "Team": "CCC", "Age": 29, "Pos": "RP", "SGP_W": 2.5, "SGP_ERA": 1.5},
+    ])
+
+    sum_mode = common_math.combine_two_way(hit_vals, pit_vals, two_way="sum")
+    sgp_cols = [c for c in sum_mode.columns if c.startswith("SGP_")]
+    assert set(sgp_cols) == {"SGP_R", "SGP_HR", "SGP_W", "SGP_ERA"}
+
+    tw = sum_mode[sum_mode["Player"] == "TwoWay"].iloc[0]
+    assert math.isclose(float(tw["SGP_R"]), 2.0)
+    assert math.isclose(float(tw["SGP_HR"]), 3.0)
+    assert math.isclose(float(tw["SGP_W"]), 4.0)
+    assert math.isclose(float(tw["SGP_ERA"]), 2.0)
+
+    max_mode = common_math.combine_two_way(hit_vals, pit_vals, two_way="max")
+    tw_max = max_mode[max_mode["Player"] == "TwoWay"].iloc[0]
+    # max picks pit side (6 > 5), so only pit SGPs should be non-zero
+    assert math.isclose(float(tw_max["SGP_W"]), 4.0)
+    assert math.isclose(float(tw_max["SGP_ERA"]), 2.0)
+    assert math.isclose(float(tw_max["SGP_R"]), 0.0)
+    assert math.isclose(float(tw_max["SGP_HR"]), 0.0)
+
+    # Hitter-only and pitcher-only players should have correct SGP values
+    oh = max_mode[max_mode["Player"] == "OnlyHit"].iloc[0]
+    assert math.isclose(float(oh["SGP_R"]), 1.5)
+    op = max_mode[max_mode["Player"] == "OnlyPit"].iloc[0]
+    assert math.isclose(float(op["SGP_W"]), 2.5)
+
+
+def test_build_calculation_explanations_includes_stat_dynasty_contributions() -> None:
+    from backend.core.calculator_helpers import build_calculation_explanations
+
+    out = pd.DataFrame([{
+        "Player": "Test Player",
+        "PlayerKey": "test-player",
+        "EntityKey": "test-player",
+        "Team": "AAA",
+        "Pos": "1B",
+        "DynastyValue": 10.0,
+        "RawDynastyValue": 12.0,
+        "Value_2026": 5.0,
+        "Value_2027": 3.0,
+        "StatDynasty_R": 3.0,
+        "StatDynasty_HR": 4.0,
+        "StatDynasty_AVG": 3.0,
+    }])
+
+    explanations = build_calculation_explanations(
+        out,
+        settings={"scoring_mode": "roto", "discount": 0.94},
+        player_key_col="PlayerKey",
+        player_entity_key_col="EntityKey",
+        normalize_player_key_fn=lambda x: str(x).lower().replace(" ", "-"),
+        numeric_or_zero_fn=lambda v: float(v) if v is not None and not pd.isna(v) else 0.0,
+        value_col_sort_key_fn=lambda col: (0, int(col.split("_")[1]) if "_" in col else 0),
+    )
+
+    assert "test-player" in explanations
+    ex = explanations["test-player"]
+    assert "stat_dynasty_contributions" in ex
+    assert math.isclose(ex["stat_dynasty_contributions"]["R"], 3.0)
+    assert math.isclose(ex["stat_dynasty_contributions"]["HR"], 4.0)
+    assert math.isclose(ex["stat_dynasty_contributions"]["AVG"], 3.0)
+
+
+def test_build_calculation_explanations_no_stat_dynasty_for_points_mode() -> None:
+    from backend.core.calculator_helpers import build_calculation_explanations
+
+    out = pd.DataFrame([{
+        "Player": "Test Player",
+        "PlayerKey": "test-player",
+        "EntityKey": "test-player",
+        "Team": "AAA",
+        "Pos": "1B",
+        "DynastyValue": 10.0,
+        "RawDynastyValue": 12.0,
+        "Value_2026": 5.0,
+        "StatDynasty_R": 3.0,
+    }])
+
+    explanations = build_calculation_explanations(
+        out,
+        settings={"scoring_mode": "points", "discount": 0.94},
+        player_key_col="PlayerKey",
+        player_entity_key_col="EntityKey",
+        normalize_player_key_fn=lambda x: str(x).lower().replace(" ", "-"),
+        numeric_or_zero_fn=lambda v: float(v) if v is not None and not pd.isna(v) else 0.0,
+        value_col_sort_key_fn=lambda col: (0, int(col.split("_")[1]) if "_" in col else 0),
+    )
+
+    ex = explanations["test-player"]
+    assert "stat_dynasty_contributions" not in ex

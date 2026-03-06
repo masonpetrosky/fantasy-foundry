@@ -478,6 +478,20 @@ def calculate_common_dynasty_values(
 
     all_year = pd.concat(year_tables, ignore_index=True) if year_tables else pd.DataFrame()
 
+    # Build sideband per-stat SGP data: player -> cat -> year -> sgp_value
+    sgp_cols = [c for c in all_year.columns if c.startswith("SGP_")] if not all_year.empty else []
+    stat_sgp_by_player: Dict[str, Dict[str, Dict[int, float]]] = {}
+    if sgp_cols:
+        for _, row in all_year.iterrows():
+            player = str(row.get("Player") or "")
+            year_val = int(row.get("Year", 0))
+            player_sgps = stat_sgp_by_player.setdefault(player, {})
+            for col in sgp_cols:
+                cat = col[4:]  # strip "SGP_"
+                v = row.get(col)
+                cat_years = player_sgps.setdefault(cat, {})
+                cat_years[year_val] = float(v) if v is not None and not pd.isna(v) else 0.0
+
     # Wide format: one row per player with Value_YEAR columns
     wide = all_year.pivot_table(index="Player", columns="Year", values="YearValue", aggfunc="max").reset_index()
     wide.columns = ["Player"] + [f"Value_{int(c)}" for c in wide.columns[1:]]
@@ -559,6 +573,32 @@ def calculate_common_dynasty_values(
     out["DynastyValue"] = out["RawDynastyValue"] - baseline_value
     out["CenteringBaselineValue"] = baseline_value
     out["CenteringBaselineMean"] = baseline_value
+
+    # Proportional per-stat dynasty attribution
+    if stat_sgp_by_player:
+        all_cats = sorted({cat for cats in stat_sgp_by_player.values() for cat in cats})
+        stat_dynasty_cols: Dict[str, List[float]] = {cat: [] for cat in all_cats}
+        for _, r in out.iterrows():
+            player = str(r.get("Player") or "")
+            dynasty_val = float(r.get("DynastyValue", 0.0))
+            player_sgps = stat_sgp_by_player.get(player, {})
+            discounted_sums: Dict[str, float] = {}
+            for cat in all_cats:
+                cat_years = player_sgps.get(cat, {})
+                ds = 0.0
+                for y in years:
+                    sgp_v = cat_years.get(int(y), 0.0)
+                    offset = int(y) - int(start_year)
+                    ds += sgp_v * (lg.discount ** offset)
+                discounted_sums[cat] = ds
+            total_discounted = sum(discounted_sums.values())
+            for cat in all_cats:
+                if abs(total_discounted) > 1e-12:
+                    stat_dynasty_cols[cat].append(dynasty_val * discounted_sums[cat] / total_discounted)
+                else:
+                    stat_dynasty_cols[cat].append(0.0)
+        for cat in all_cats:
+            out[f"StatDynasty_{cat}"] = stat_dynasty_cols[cat]
 
     out = out.sort_values("DynastyValue", ascending=False).reset_index(drop=True)
     out = _attach_identity_columns_to_output(out, identity_lookup)
