@@ -25,4 +25,5 @@ Thumbs.db
 *:Zone.Identifier
 
 # Frontend tooling
+node_modules/
 frontend/node_modules/

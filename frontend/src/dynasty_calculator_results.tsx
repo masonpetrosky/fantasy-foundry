@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import { ColumnChooserControl, ExplainabilityCard } from "./ui_components";
 import {
   MAX_COMPARE_PLAYERS,
@@ -97,6 +97,21 @@ interface DynastyCalculatorResultsProps {
 }
 
 export function DynastyCalculatorResults({ results, state, refs, actions }: DynastyCalculatorResultsProps): React.ReactElement {
+  const [toolsExpanded, setToolsExpanded] = useState(false);
+  const [toolsDiscoverable, setToolsDiscoverable] = useState((): boolean => {
+    try { return !localStorage.getItem("ff:calc-tools-drawer-discovered"); } catch { return false; }
+  });
+
+  const handleToolsToggle = useCallback((): void => {
+    setToolsExpanded(v => {
+      if (!v && toolsDiscoverable) {
+        try { localStorage.setItem("ff:calc-tools-drawer-discovered", "1"); } catch { /* noop */ }
+        setToolsDiscoverable(false);
+      }
+      return !v;
+    });
+  }, [toolsDiscoverable]);
+
   if (!results) {
     return (
       <div className="calc-empty-state">
@@ -162,17 +177,49 @@ export function DynastyCalculatorResults({ results, state, refs, actions }: Dyna
 
   return (
     <>
+      {/* Mobile-only: always-visible search + position filter + drawer toggle */}
+      <div className="filter-bar-mobile-row calc-results-mobile-row">
+        <label className="sr-only" htmlFor="calc-rank-search-m">Search ranked players</label>
+        <input
+          id="calc-rank-search-m"
+          type="text"
+          placeholder="Search ranked players…"
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
+        />
+        <label className="sr-only" htmlFor="calc-rank-pos-m">Position filter</label>
+        <select id="calc-rank-pos-m" value={posFilter} onChange={e => setPosFilter(e.target.value)}>
+          <option value="">All Pos</option>
+          {POSITION_FILTER_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <button
+          type="button"
+          className={`inline-btn filter-mobile-toggle${toolsExpanded ? " open" : ""}${toolsDiscoverable && !toolsExpanded ? " discoverable" : ""}`}
+          aria-expanded={toolsExpanded}
+          aria-controls="calc-tools-panel"
+          onClick={handleToolsToggle}
+        >
+          Tools <span aria-hidden="true">{toolsExpanded ? "\u25B2" : "\u25BC"}</span>
+        </button>
+      </div>
+
+      {/* Collapsible panel: hidden on mobile unless expanded, always visible on desktop */}
+      <div
+        id="calc-tools-panel"
+        className={`filter-controls-panel ${toolsExpanded ? "filter-controls-open" : ""}`.trim()}
+      >
       <div className="filter-bar calc-results-toolbar">
         <label className="sr-only" htmlFor="calculator-rank-search">Search ranked players</label>
         <input
           id="calculator-rank-search"
+          className="calc-toolbar-desktop-only"
           type="text"
           placeholder="Search ranked players…"
           value={searchInput}
           onChange={e => setSearchInput(e.target.value)}
         />
         <label className="sr-only" htmlFor="calculator-rank-pos-filter">Position filter</label>
-        <select id="calculator-rank-pos-filter" value={posFilter} onChange={e => setPosFilter(e.target.value)}>
+        <select id="calculator-rank-pos-filter" className="calc-toolbar-desktop-only" value={posFilter} onChange={e => setPosFilter(e.target.value)}>
           <option value="">All Positions</option>
           {POSITION_FILTER_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
@@ -219,6 +266,7 @@ export function DynastyCalculatorResults({ results, state, refs, actions }: Dyna
         <button type="button" className="inline-btn" onClick={() => exportRankings("xlsx")} disabled={tierLimits != null && !tierLimits.allowExport}>
           {tierLimits != null && !tierLimits.allowExport ? "Export XLSX (Pro)" : "Export XLSX"}
         </button>
+      </div>
       </div>
       {rankCompareRows.length > 0 && (
         <div className="comparison-panel" role="region" aria-label="Ranked player comparison">

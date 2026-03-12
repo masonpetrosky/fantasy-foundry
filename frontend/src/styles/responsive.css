@@ -364,6 +364,30 @@
   .filter-bar-mobile-row { display: flex; }
   .active-filter-row { display: none; }
 
+  /* ---- Calculator results mobile drawer ---- */
+  .calc-results-mobile-row {
+    display: flex;
+    gap: var(--space-sm);
+    margin-bottom: 6px;
+  }
+
+  .calc-results-mobile-row input[type="text"] {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+  }
+
+  .calc-results-mobile-row select {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 80px;
+    min-height: 44px;
+  }
+
+  .calc-toolbar-desktop-only {
+    display: none;
+  }
+
   .active-filter-row {
     align-items: flex-start;
   }
