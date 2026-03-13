@@ -7,20 +7,26 @@ Runs the full valuation pipeline twice:
 Outputs a comparison of rank changes for specific players.
 """
 
-import sys
+from __future__ import annotations
+
 import os
+import sys
+from typing import TYPE_CHECKING
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from backend.valuation.models import CommonDynastyRotoSettings
 from backend.valuation.common_orchestration import calculate_common_dynasty_values
+from backend.valuation.models import CommonDynastyRotoSettings
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 EXCEL_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "Dynasty Baseball Projections.xlsx")
 SEED = 42
 START_YEAR = 2026
 
 
-def run_valuation(bench_slots: int) -> "pd.DataFrame":
+def run_valuation(bench_slots: int) -> pd.DataFrame:
     lg = CommonDynastyRotoSettings(
         n_teams=12,
         bench_slots=bench_slots,
@@ -109,7 +115,6 @@ def main():
         name = row["Player"]
         pos = row.get("Pos", "?")
         age = row.get("Age", "?")
-        team = row.get("Team", "?")
         r_with = int(row["Rank_With"])
         r_without = int(row["Rank_Without"]) if not pd.isna(row["Rank_Without"]) else "N/A"
         v_with = row[val_with]
