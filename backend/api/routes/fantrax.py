@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from backend.core.exceptions import ExternalServiceError
 from backend.services.fantrax.mapping import (
     build_player_lookup,
     build_suggested_settings,
@@ -55,7 +56,7 @@ def build_fantrax_router(
 
         try:
             league_info: LeagueInfo = await league_fetcher(league_id)
-        except Exception:
+        except (OSError, ValueError, ExternalServiceError):
             logger.exception("Failed to fetch Fantrax league %s", league_id)
             raise HTTPException(
                 status_code=502,
@@ -98,7 +99,7 @@ def build_fantrax_router(
 
         try:
             league_info: LeagueInfo = await league_fetcher(league_id)
-        except Exception:
+        except (OSError, ValueError, ExternalServiceError):
             logger.exception("Failed to fetch Fantrax league %s", league_id)
             raise HTTPException(
                 status_code=502,
@@ -153,7 +154,7 @@ def build_fantrax_router(
 
         try:
             league_info: LeagueInfo = await league_fetcher(league_id)
-        except Exception:
+        except (OSError, ValueError, ExternalServiceError):
             logger.exception("Failed to fetch Fantrax league %s", league_id)
             raise HTTPException(
                 status_code=502,

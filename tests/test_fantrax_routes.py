@@ -134,7 +134,7 @@ def test_get_league_settings(fantrax_app):
 
 def test_get_league_fetcher_error(fantrax_app):
     app, _, league_fetcher = fantrax_app
-    league_fetcher.side_effect = Exception("Fantrax unavailable")
+    league_fetcher.side_effect = OSError("Fantrax unavailable")
     client = TestClient(app)
     resp = client.get("/api/fantrax/league?leagueId=test-league-id")
     assert resp.status_code == 502

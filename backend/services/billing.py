@@ -39,8 +39,8 @@ async def resolve_supabase_user_id(
                 if str(user.get("email", "")).lower() == email.lower():
                     return str(user["id"])
             page += 1
-    except Exception:
-        logger.warning("Could not resolve Supabase user_id for email=%s", email, exc_info=True)
+    except (OSError, KeyError, ValueError) as exc:
+        logger.warning("Could not resolve Supabase user_id for email=%s: %s", email, exc, exc_info=True)
     return None
 
 

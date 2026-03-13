@@ -320,7 +320,7 @@ def test_refresh_data_if_needed_calls_error_hook_on_reload_exception(tmp_path: P
         return sequence.pop(0)
 
     def explode() -> None:
-        raise RuntimeError("reload failed")
+        raise OSError("reload failed")
 
     result = data_refresh.refresh_data_if_needed(
         data_refresh_lock=threading.Lock(),

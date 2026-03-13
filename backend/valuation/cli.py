@@ -145,7 +145,7 @@ def main() -> None:
                     table_name="PitchAggregatedTbl",
                     is_pitch=True,
                 )
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             print(f"WARNING: Failed to apply Excel formatting: {e}")
 
     print("\nTop 25 by DynastyValue:")

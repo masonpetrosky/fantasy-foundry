@@ -113,7 +113,7 @@ jobs:
         run: python scripts/check_max_file_lines.py
 
       - name: Run Backend Type Checks
-        run: mypy backend/api/middleware.py backend/core/settings.py backend/core/networking.py backend/core/rate_limit.py backend/core/result_cache.py backend/core/jobs.py backend/core/data_refresh.py backend/valuation/models.py backend/services/calculator/service.py
+        run: make typecheck
 
       # --- Dependency audit ---
 
@@ -231,7 +231,7 @@ jobs:
   e2e-smoke:
     needs: detect-changes
     if: |
-      (github.event_name == 'pull_request' && needs.detect-changes.outputs.e2e == 'true') ||
+      (github.event_name == 'pull_request' && (needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.frontend == 'true')) ||
       (github.event_name == 'workflow_dispatch' && inputs.run_e2e)
     runs-on: ubuntu-latest
     timeout-minutes: 25

@@ -372,7 +372,7 @@ def prewarm_default_calculation_caches(*, state: RuntimeStateHelpersState) -> No
                 }
             )
         state.CALC_LOGGER.info("calculator prewarm completed duration_ms=%s configs=%d", duration_ms, len(configs_to_run))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — prewarm is best-effort background task
         duration_ms = round((state.time.perf_counter() - started) * 1000.0, 1)
         with state.CALCULATOR_PREWARM_LOCK:
             state.CALCULATOR_PREWARM_STATE.update(
