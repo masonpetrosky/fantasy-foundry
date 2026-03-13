@@ -1,4 +1,4 @@
-.PHONY: guard-generated-artifacts test test-backend test-backend-fast test-backend-full-regression test-frontend lint lint-backend lint-frontend typecheck check format clean docker-build help
+.PHONY: guard-generated-artifacts test test-backend test-backend-fast test-backend-full-regression test-frontend lint lint-backend lint-frontend typecheck security check format clean docker-build help
 
 guard-generated-artifacts:
 	./scripts/check_generated_artifacts_untracked.sh
@@ -29,6 +29,9 @@ lint-frontend:
 typecheck:
 	mypy backend/api/middleware.py backend/core/settings.py backend/core/networking.py backend/core/rate_limit.py backend/core/result_cache.py backend/core/jobs.py backend/core/data_refresh.py backend/valuation/models.py backend/services/calculator/service.py backend/core/structured_logging.py backend/core/runtime_config.py backend/core/runtime_state_protocols.py backend/valuation/positions.py backend/valuation/assignment.py backend/api/routes/status.py backend/core/exceptions.py backend/valuation/team_stats.py backend/valuation/credit_guards.py backend/valuation/sgp_math.py
 
+security:
+	bandit -r backend -ll --quiet
+
 check: lint test-backend-fast test-frontend typecheck
 
 format:
@@ -54,6 +57,7 @@ help:
 	@echo "  make test-frontend         Frontend tests"
 	@echo "  make lint                  Run all linters"
 	@echo "  make typecheck             Run mypy type checks"
+	@echo "  make security              Run Bandit SAST scan"
 	@echo "  make check                 All quality gates"
 	@echo "  make format                Auto-format backend + frontend"
 	@echo "  make clean                 Remove caches and build artifacts"
