@@ -496,7 +496,7 @@ class CalculatorService:
         except HTTPException as exc:
             status_code = exc.status_code
             raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — last-resort catch to produce 500 response
             status_code = 500
             self._ctx.calc_logger.exception("calculator request failed source=%s", source)
             raise HTTPException(status_code=500, detail="Internal calculator error.") from exc
@@ -546,7 +546,7 @@ class CalculatorService:
                 error={"status_code": exc.status_code, "detail": exc.detail},
                 result=None,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 — last-resort safety net for async job finalization
             self._ctx.calc_logger.exception("calculator job crashed job_id=%s", job_id)
             finalize_job_locked(
                 self._ctx, job_id,
@@ -729,9 +729,7 @@ class CalculatorService:
             if callable(cancel_future):
                 try:
                     cancel_future()
-                except Exception:
-                    # Future.cancel() may raise if the executor is shutting down;
-                    # the job is already marked for cancellation so this is safe to ignore.
+                except Exception:  # noqa: BLE001 — Future.cancel() may raise on shutdown
                     logger.debug("cancel_future() raised for job_id=%s", job_id, exc_info=True)
             self._ctx.mark_job_cancelled_locked(job)
             self._ctx.cache_calculation_job_snapshot(job)

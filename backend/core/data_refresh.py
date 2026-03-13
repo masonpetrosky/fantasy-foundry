@@ -116,7 +116,7 @@ def inspect_precomputed_default_dynasty_lookup(
 
     try:
         payload = json.loads(dynasty_lookup_cache_path.read_text())
-    except Exception as exc:
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
         return LookupInspectionResult(
             status="invalid",
             expected_version=expected_version,
@@ -212,7 +212,7 @@ def refresh_data_if_needed(
 
         try:
             reload_projection_data_fn()
-        except Exception:
+        except (OSError, KeyError, ValueError):
             on_reload_exception()
             return None
 

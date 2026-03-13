@@ -152,7 +152,7 @@ def run_calculation_job(
             error={"status_code": exc.status_code, "detail": exc.detail},
             result=None,
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 — last-resort safety net for async job finalization
         ctx.calc_logger.exception("calculator job crashed job_id=%s", job_id)
         finalize_job_locked(
             ctx, job_id,
@@ -380,9 +380,7 @@ def cancel_calculate_dynasty_job(
         if callable(cancel_future):
             try:
                 cancel_future()
-            except Exception:
-                # Future.cancel() may raise if the executor is shutting down;
-                # the job is already marked for cancellation so this is safe to ignore.
+            except Exception:  # noqa: BLE001 — Future.cancel() may raise on shutdown
                 logger.debug("cancel_future() raised for job_id=%s", job_id, exc_info=True)
         ctx.mark_job_cancelled_locked(job)
         ctx.cache_calculation_job_snapshot(job)

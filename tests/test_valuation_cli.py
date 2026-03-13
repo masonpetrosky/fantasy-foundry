@@ -48,7 +48,7 @@ def test_main_common_writes_outputs_even_if_formatting_fails(monkeypatch, tmp_pa
     monkeypatch.setattr(cli, "calculate_common_dynasty_values", fake_common)
 
     def raise_format_error(*_args, **_kwargs):
-        raise RuntimeError("format failed")
+        raise ValueError("format failed")
 
     monkeypatch.setattr(cli._xlsx_fmt, "_xlsx_format_player_values", raise_format_error)
     monkeypatch.setattr(

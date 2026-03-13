@@ -177,8 +177,8 @@ def default_dynasty_lookup(
             lookup_by_entity.setdefault(entity_key, player_values)
 
         return lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, year_cols
-    except Exception:
-        logger.exception("Failed to build default dynasty lookup")
+    except (KeyError, ValueError, TypeError) as exc:
+        logger.exception("Failed to build default dynasty lookup: %s", exc)
         return {}, {}, set(), []
 
 

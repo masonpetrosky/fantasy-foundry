@@ -225,7 +225,7 @@ class ProjectionService:
                 sample = next(iter(lookup_by_entity.values()), None)
                 if sample and isinstance(sample, dict):
                     cols.update(k for k in sample if isinstance(k, str) and k.startswith("StatDynasty_"))
-            except Exception:
+            except (KeyError, StopIteration, TypeError):
                 pass
 
             return frozenset(cols)

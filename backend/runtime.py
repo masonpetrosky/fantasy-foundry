@@ -805,7 +805,7 @@ if SETTINGS.stripe_secret_key and SETTINGS.stripe_webhook_secret:
             try:
                 sub_obj = stripe.Subscription.retrieve(sub_id)
                 period_end = sub_obj.get("current_period_end")
-            except Exception:
+            except (OSError, ValueError, KeyError):
                 logging.getLogger(__name__).warning("Could not retrieve subscription %s for period_end", sub_id, exc_info=True)
         user_id = await _billing_resolve_user_id(
             supabase_url=_supabase_url,
@@ -830,7 +830,7 @@ if SETTINGS.stripe_secret_key and SETTINGS.stripe_webhook_secret:
             try:
                 customer = stripe.Customer.retrieve(customer_id)
                 customer_email = str(getattr(customer, "email", "") or "").strip()
-            except Exception:
+            except (OSError, ValueError, KeyError):
                 logging.getLogger(__name__).warning("Could not retrieve customer email for %s", customer_id)
         user_id = await _billing_resolve_user_id(
             supabase_url=_supabase_url,

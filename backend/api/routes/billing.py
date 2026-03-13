@@ -74,8 +74,8 @@ def build_billing_router(
             event = stripe.Webhook.construct_event(body, sig_header, stripe_webhook_secret)
         except stripe.SignatureVerificationError:
             raise HTTPException(status_code=400, detail="Invalid Stripe signature.")
-        except Exception:
-            logger.exception("Stripe webhook payload parsing failed")
+        except (ValueError, KeyError) as exc:
+            logger.exception("Stripe webhook payload parsing failed: %s", exc)
             raise HTTPException(status_code=400, detail="Invalid payload.")
 
         event_type = event.get("type", "")

@@ -13,6 +13,27 @@ try:
         build_team_slot_template,
         expand_slot_counts,
     )
+    from backend.valuation.credit_guards import (
+        _apply_hitter_playing_time_reliability_guard as _apply_hitter_playing_time_reliability_guard,
+    )
+    from backend.valuation.credit_guards import (
+        _apply_low_volume_non_ratio_positive_guard as _apply_low_volume_non_ratio_positive_guard,
+    )
+    from backend.valuation.credit_guards import (
+        _apply_low_volume_ratio_guard as _apply_low_volume_ratio_guard,
+    )
+    from backend.valuation.credit_guards import (
+        _apply_pitcher_playing_time_reliability_guard as _apply_pitcher_playing_time_reliability_guard,
+    )
+    from backend.valuation.credit_guards import (
+        _coerce_non_negative_float as _coerce_non_negative_float,
+    )
+    from backend.valuation.credit_guards import (
+        _low_volume_positive_credit_scale as _low_volume_positive_credit_scale,
+    )
+    from backend.valuation.credit_guards import (
+        _positive_credit_scale as _positive_credit_scale,
+    )
     from backend.valuation.models import (
         HIT_CATS,
         HIT_COMPONENT_COLS,
@@ -26,24 +47,123 @@ try:
         parse_hit_positions,
         parse_pit_positions,
     )
+    from backend.valuation.sgp_math import (
+        _mean_adjacent_rank_gap as _mean_adjacent_rank_gap,
+    )
+    from backend.valuation.sgp_math import (
+        _sgp_denominator_floor as _sgp_denominator_floor,
+    )
+    from backend.valuation.sgp_math import (
+        _sgp_estimator_options as _sgp_estimator_options,
+    )
+    from backend.valuation.sgp_math import (
+        simulate_sgp_hit as simulate_sgp_hit,
+    )
+    from backend.valuation.sgp_math import (
+        simulate_sgp_pit as simulate_sgp_pit,
+    )
+    from backend.valuation.team_stats import (
+        _team_avg as _team_avg,
+    )
+    from backend.valuation.team_stats import (
+        _team_era as _team_era,
+    )
+    from backend.valuation.team_stats import (
+        _team_obp as _team_obp,
+    )
+    from backend.valuation.team_stats import (
+        _team_whip as _team_whip,
+    )
+    from backend.valuation.team_stats import (
+        common_apply_pitching_bounds as common_apply_pitching_bounds,
+    )
+    from backend.valuation.team_stats import (
+        common_hit_category_totals as common_hit_category_totals,
+    )
+    from backend.valuation.team_stats import (
+        common_pitch_category_totals as common_pitch_category_totals,
+    )
+    from backend.valuation.team_stats import (
+        common_replacement_pitcher_rates as common_replacement_pitcher_rates,
+    )
 except ImportError:
-    from valuation.assignment import (
+    from valuation.assignment import (  # type: ignore[no-redef]
         assign_players_to_slots_with_vacancy_fill,
         build_team_slot_template,
         expand_slot_counts,
     )
-    from valuation.models import (
+    from valuation.credit_guards import (  # type: ignore[no-redef]
+        _apply_hitter_playing_time_reliability_guard as _apply_hitter_playing_time_reliability_guard,
+    )
+    from valuation.credit_guards import (
+        _apply_low_volume_non_ratio_positive_guard as _apply_low_volume_non_ratio_positive_guard,
+    )
+    from valuation.credit_guards import (
+        _apply_low_volume_ratio_guard as _apply_low_volume_ratio_guard,
+    )
+    from valuation.credit_guards import (
+        _apply_pitcher_playing_time_reliability_guard as _apply_pitcher_playing_time_reliability_guard,
+    )
+    from valuation.credit_guards import (
+        _coerce_non_negative_float as _coerce_non_negative_float,
+    )
+    from valuation.credit_guards import (
+        _low_volume_positive_credit_scale as _low_volume_positive_credit_scale,
+    )
+    from valuation.credit_guards import (
+        _positive_credit_scale as _positive_credit_scale,
+    )
+    from valuation.models import (  # type: ignore[no-redef]
         HIT_CATS,
         HIT_COMPONENT_COLS,
         PIT_CATS,
         PIT_COMPONENT_COLS,
         CommonDynastyRotoSettings,
     )
-    from valuation.positions import (
+    from valuation.positions import (  # type: ignore[no-redef]
         eligible_hit_slots,
         eligible_pit_slots,
         parse_hit_positions,
         parse_pit_positions,
+    )
+    from valuation.sgp_math import (  # type: ignore[no-redef]
+        _mean_adjacent_rank_gap as _mean_adjacent_rank_gap,
+    )
+    from valuation.sgp_math import (
+        _sgp_denominator_floor as _sgp_denominator_floor,
+    )
+    from valuation.sgp_math import (
+        _sgp_estimator_options as _sgp_estimator_options,
+    )
+    from valuation.sgp_math import (
+        simulate_sgp_hit as simulate_sgp_hit,
+    )
+    from valuation.sgp_math import (
+        simulate_sgp_pit as simulate_sgp_pit,
+    )
+    from valuation.team_stats import (  # type: ignore[no-redef]
+        _team_avg as _team_avg,
+    )
+    from valuation.team_stats import (
+        _team_era as _team_era,
+    )
+    from valuation.team_stats import (
+        _team_obp as _team_obp,
+    )
+    from valuation.team_stats import (
+        _team_whip as _team_whip,
+    )
+    from valuation.team_stats import (
+        common_apply_pitching_bounds as common_apply_pitching_bounds,
+    )
+    from valuation.team_stats import (
+        common_hit_category_totals as common_hit_category_totals,
+    )
+    from valuation.team_stats import (
+        common_pitch_category_totals as common_pitch_category_totals,
+    )
+    from valuation.team_stats import (
+        common_replacement_pitcher_rates as common_replacement_pitcher_rates,
     )
 
 
@@ -166,445 +286,6 @@ def _initial_pitcher_weight(df: pd.DataFrame, categories: Optional[List[str]] = 
     return w
 
 
-def _team_avg(h: float, ab: float) -> float:
-    return float(h / ab) if ab > 0 else 0.0
-
-
-def _team_obp(h: float, bb: float, hbp: float, ab: float, sf: float) -> float:
-    den = ab + bb + hbp + sf
-    return float((h + bb + hbp) / den) if den > 0 else 0.0
-
-
-def _team_era(er: float, ip: float) -> float:
-    return float(9.0 * er / ip) if ip > 0 else float("nan")
-
-
-def _team_whip(h: float, bb: float, ip: float) -> float:
-    return float((h + bb) / ip) if ip > 0 else float("nan")
-
-
-def common_hit_category_totals(totals: Dict[str, float]) -> Dict[str, float]:
-    h = float(totals.get("H", 0.0))
-    ab = float(totals.get("AB", 0.0))
-    b2 = float(totals.get("2B", 0.0))
-    b3 = float(totals.get("3B", 0.0))
-    hr = float(totals.get("HR", 0.0))
-    bb = float(totals.get("BB", 0.0))
-    hbp = float(totals.get("HBP", 0.0))
-    sf = float(totals.get("SF", 0.0))
-
-    tb = h + b2 + 2.0 * b3 + 3.0 * hr
-    obp = _team_obp(h, bb, hbp, ab, sf)
-    slg = float(tb / ab) if ab > 0 else 0.0
-
-    return {
-        "R": float(totals.get("R", 0.0)),
-        "RBI": float(totals.get("RBI", 0.0)),
-        "HR": hr,
-        "SB": float(totals.get("SB", 0.0)),
-        "AVG": _team_avg(h, ab),
-        "OBP": obp,
-        "SLG": slg,
-        "OPS": obp + slg,
-        "H": h,
-        "BB": bb,
-        "2B": b2,
-        "TB": tb,
-    }
-
-
-def common_pitch_category_totals(totals: Dict[str, float]) -> Dict[str, float]:
-    return {
-        "W": float(totals.get("W", 0.0)),
-        "K": float(totals.get("K", 0.0)),
-        "SV": float(totals.get("SV", 0.0)),
-        "ERA": float(totals.get("ERA", 0.0)),
-        "WHIP": float(totals.get("WHIP", 0.0)),
-        "QS": float(totals.get("QS", 0.0)),
-        "QA3": float(totals.get("QA3", 0.0)),
-        "SVH": float(totals.get("SVH", 0.0)),
-    }
-
-
-def common_replacement_pitcher_rates(
-    all_pit_df: pd.DataFrame,
-    assigned_pit_df: pd.DataFrame,
-    n_rep: int,
-) -> Dict[str, float]:
-    """Per-inning replacement rates from the best available non-starter pitchers."""
-    assigned_players = set(assigned_pit_df["Player"])
-    rep = all_pit_df[~all_pit_df["Player"].isin(assigned_players)].copy()
-    rep = rep.sort_values("weight", ascending=False).head(max(int(n_rep), 1))
-
-    ip = float(rep["IP"].sum()) if not rep.empty else 0.0
-    if ip <= 0:
-        return {k: 0.0 for k in ["W", "QS", "QA3", "K", "SV", "SVH", "ER", "H", "BB"]}
-
-    return {
-        "W": float(rep["W"].sum() / ip),
-        "QS": float(rep["QS"].sum() / ip),
-        "QA3": float(rep["QA3"].sum() / ip),
-        "K": float(rep["K"].sum() / ip),
-        "SV": float(rep["SV"].sum() / ip),
-        "SVH": float(rep["SVH"].sum() / ip),
-        "ER": float(rep["ER"].sum() / ip),
-        "H": float(rep["H"].sum() / ip),
-        "BB": float(rep["BB"].sum() / ip),
-    }
-
-
-def common_apply_pitching_bounds(
-    totals: Dict[str, float],
-    lg: CommonDynastyRotoSettings,
-    rep_rates: Optional[Dict[str, float]],
-    *,
-    fill_to_ip_max: bool = True,
-    enforce_ip_min: bool = True,
-) -> Dict[str, float]:
-    """Apply optional IP cap/fill and IP-min qualification to common-mode pitching totals."""
-    out = {k: float(totals.get(k, 0.0)) for k in PIT_COMPONENT_COLS}
-    ip = float(out["IP"])
-
-    if lg.ip_max is not None:
-        ip_cap = float(lg.ip_max)
-
-        # If over cap, scale all counting components down to cap.
-        if ip > ip_cap and ip > 0:
-            factor = ip_cap / ip
-            for col in PIT_COMPONENT_COLS:
-                out[col] = float(out[col]) * factor
-            ip = ip_cap
-
-        # If under cap, assume streamable replacement innings.
-        if fill_to_ip_max and ip < ip_cap and rep_rates is not None:
-            add = ip_cap - ip
-            out["IP"] = ip_cap
-            for col in ["W", "QS", "QA3", "K", "SV", "SVH", "ER", "H", "BB"]:
-                out[col] = float(out[col]) + add * float(rep_rates.get(col, 0.0))
-            ip = ip_cap
-
-    out["ERA"] = _team_era(out["ER"], ip)
-    out["WHIP"] = _team_whip(out["H"], out["BB"], ip)
-
-    # Optional IP minimum qualification rule (default OFF)
-    if enforce_ip_min and lg.ip_min and lg.ip_min > 0 and ip < lg.ip_min:
-        out["ERA"] = 99.0
-        out["WHIP"] = 5.0
-
-    return out
-
-
-def _coerce_non_negative_float(value: object) -> float:
-    """Best-effort numeric coercion for IP/share guards."""
-    number = pd.to_numeric(value, errors="coerce")
-    if pd.isna(number):
-        return 0.0
-    return float(max(number, 0.0))
-
-
-def _positive_credit_scale(
-    *,
-    player_volume: float,
-    slot_volume_reference: float,
-    min_share_for_positive_credit: float = 0.35,
-    full_share_for_positive_credit: float = 1.00,
-) -> float:
-    """Return a [0, 1] positive-credit scale based on projected workload share."""
-    slot_volume = _coerce_non_negative_float(slot_volume_reference)
-    player_workload = _coerce_non_negative_float(player_volume)
-    if slot_volume <= 0.0:
-        return 1.0
-
-    share = player_workload / slot_volume
-    min_share = float(min_share_for_positive_credit)
-    full_share = float(full_share_for_positive_credit)
-
-    if full_share <= min_share:
-        return 1.0 if share >= full_share else 0.0
-    if share <= min_share:
-        return 0.0
-    if share >= full_share:
-        return 1.0
-    return float((share - min_share) / (full_share - min_share))
-
-
-def _low_volume_positive_credit_scale(
-    *,
-    pitcher_ip: float,
-    slot_ip_reference: float,
-    min_share_for_positive_ratio_credit: float = 0.35,
-    full_share_for_positive_ratio_credit: float = 1.00,
-) -> float:
-    """Return a [0, 1] positive-credit scale based on projected innings share."""
-    return _positive_credit_scale(
-        player_volume=pitcher_ip,
-        slot_volume_reference=slot_ip_reference,
-        min_share_for_positive_credit=min_share_for_positive_ratio_credit,
-        full_share_for_positive_credit=full_share_for_positive_ratio_credit,
-    )
-
-
-def _apply_low_volume_non_ratio_positive_guard(
-    delta: Dict[str, float],
-    *,
-    pit_categories: List[str],
-    pitcher_ip: float,
-    slot_ip_reference: float,
-    min_share_for_positive_ratio_credit: float = 0.35,
-    full_share_for_positive_ratio_credit: float = 1.00,
-) -> None:
-    """Scale positive non-ratio pitching category credit for tiny workloads."""
-    scale = _low_volume_positive_credit_scale(
-        pitcher_ip=pitcher_ip,
-        slot_ip_reference=slot_ip_reference,
-        min_share_for_positive_ratio_credit=min_share_for_positive_ratio_credit,
-        full_share_for_positive_ratio_credit=full_share_for_positive_ratio_credit,
-    )
-    if scale >= 1.0:
-        return
-
-    for cat in pit_categories:
-        if cat in COMMON_REVERSED_PITCH_CATS:
-            continue
-        if float(delta.get(cat, 0.0)) > 0.0:
-            delta[cat] = float(delta[cat]) * scale
-
-
-def _apply_low_volume_ratio_guard(
-    delta: Dict[str, float],
-    *,
-    pit_categories: List[str],
-    pitcher_ip: float,
-    slot_ip_reference: float,
-    min_share_for_positive_ratio_credit: float = 0.35,
-    full_share_for_positive_ratio_credit: float = 1.00,
-) -> None:
-    """Scale positive ERA/WHIP credit based on projected innings share."""
-    scale = _low_volume_positive_credit_scale(
-        pitcher_ip=pitcher_ip,
-        slot_ip_reference=slot_ip_reference,
-        min_share_for_positive_ratio_credit=min_share_for_positive_ratio_credit,
-        full_share_for_positive_ratio_credit=full_share_for_positive_ratio_credit,
-    )
-    if scale >= 1.0:
-        return
-
-    for cat in COMMON_REVERSED_PITCH_CATS:
-        if cat in pit_categories and float(delta.get(cat, 0.0)) > 0.0:
-            delta[cat] = float(delta[cat]) * scale
-
-
-def _apply_hitter_playing_time_reliability_guard(
-    delta: Dict[str, float],
-    *,
-    hit_categories: List[str],
-    hitter_ab: float,
-    slot_ab_reference: float,
-    min_share_for_positive_credit: float = 0.35,
-    full_share_for_positive_credit: float = 1.00,
-) -> None:
-    """Scale positive hitter category credit for low projected AB workloads."""
-    scale = _positive_credit_scale(
-        player_volume=hitter_ab,
-        slot_volume_reference=slot_ab_reference,
-        min_share_for_positive_credit=min_share_for_positive_credit,
-        full_share_for_positive_credit=full_share_for_positive_credit,
-    )
-    if scale >= 1.0:
-        return
-    for cat in hit_categories:
-        if float(delta.get(cat, 0.0)) > 0.0:
-            delta[cat] = float(delta[cat]) * scale
-
-
-def _apply_pitcher_playing_time_reliability_guard(
-    delta: Dict[str, float],
-    *,
-    pit_categories: List[str],
-    pitcher_ip: float,
-    slot_ip_reference: float,
-    min_share_for_positive_credit: float = 0.35,
-    full_share_for_positive_credit: float = 1.00,
-) -> None:
-    """Scale positive pitching category credit for low projected IP workloads."""
-    scale = _positive_credit_scale(
-        player_volume=pitcher_ip,
-        slot_volume_reference=slot_ip_reference,
-        min_share_for_positive_credit=min_share_for_positive_credit,
-        full_share_for_positive_credit=full_share_for_positive_credit,
-    )
-    if scale >= 1.0:
-        return
-    for cat in pit_categories:
-        if float(delta.get(cat, 0.0)) > 0.0:
-            delta[cat] = float(delta[cat]) * scale
-
-
-def _mean_adjacent_rank_gap(
-    values: np.ndarray,
-    *,
-    ascending: bool,
-    robust: bool = False,
-    winsor_low_pct: float = 0.10,
-    winsor_high_pct: float = 0.90,
-) -> float:
-    """Mean absolute adjacent difference after rank-order sorting."""
-    arr = np.asarray(values, dtype=float)
-    arr = arr[np.isfinite(arr)]
-    if arr.size < 2:
-        return 0.0
-
-    sorted_arr = np.sort(arr)
-    if not ascending:
-        sorted_arr = sorted_arr[::-1]
-    diffs = np.abs(np.diff(sorted_arr))
-    if diffs.size == 0:
-        return 0.0
-    if robust:
-        low = float(np.clip(winsor_low_pct, 0.0, 1.0))
-        high = float(np.clip(winsor_high_pct, 0.0, 1.0))
-        if high < low:
-            low, high = high, low
-        lo_val = float(np.quantile(diffs, low))
-        hi_val = float(np.quantile(diffs, high))
-        diffs = np.clip(diffs, lo_val, hi_val)
-    return float(np.mean(diffs))
-
-
-def _sgp_estimator_options(lg: CommonDynastyRotoSettings) -> tuple[bool, float, float]:
-    mode = str(getattr(lg, "sgp_denominator_mode", "classic") or "classic").strip().lower()
-    robust = mode == "robust"
-    low = float(getattr(lg, "sgp_winsor_low_pct", 0.10))
-    high = float(getattr(lg, "sgp_winsor_high_pct", 0.90))
-    return robust, low, high
-
-
-def _sgp_denominator_floor(*, lg: CommonDynastyRotoSettings, category: str) -> float:
-    mode = str(getattr(lg, "sgp_denominator_mode", "classic") or "classic").strip().lower()
-    if mode != "robust":
-        return 0.0
-    if category in COMMON_REVERSED_PITCH_CATS or category in COMMON_RATE_HIT_CATS:
-        return float(max(getattr(lg, "sgp_epsilon_ratio", 0.0015), 0.0))
-    return float(max(getattr(lg, "sgp_epsilon_counting", 0.15), 0.0))
-
-
-def simulate_sgp_hit(
-    assigned_hit: pd.DataFrame,
-    lg: CommonDynastyRotoSettings,
-    rng: np.random.Generator,
-    categories: Optional[List[str]] = None,
-) -> Dict[str, float]:
-    """Estimate SGP denominators for hitting categories via simulation."""
-    per_team = lg.hitter_slots
-    active_categories = [c for c in HIT_CATS if c in set(categories or HIT_CATS)]
-    if not active_categories:
-        return {}
-    robust, winsor_low, winsor_high = _sgp_estimator_options(lg)
-    diffs = {c: [] for c in active_categories}
-
-    groups = {slot: assigned_hit[assigned_hit["AssignedSlot"] == slot] for slot in per_team.keys()}
-    component_idx = {col: HIT_COMPONENT_COLS.index(col) for col in HIT_COMPONENT_COLS}
-
-    for _ in range(lg.sims_for_sgp):
-        totals = {col: np.zeros(lg.n_teams) for col in HIT_COMPONENT_COLS}
-
-        for slot, cnt in per_team.items():
-            df_slot = groups[slot]
-            idx = rng.permutation(len(df_slot))
-            arr = df_slot.iloc[idx][HIT_COMPONENT_COLS].to_numpy(dtype=float)
-            arr = arr.reshape(lg.n_teams, cnt, len(HIT_COMPONENT_COLS))
-            sums = arr.sum(axis=1)
-
-            for col, idx_col in component_idx.items():
-                totals[col] += sums[:, idx_col]
-
-        vals = {c: [] for c in active_categories}
-        for t in range(lg.n_teams):
-            team_totals = {col: float(totals[col][t]) for col in HIT_COMPONENT_COLS}
-            team_cats = common_hit_category_totals(team_totals)
-            for cat in active_categories:
-                vals[cat].append(float(team_cats.get(cat, 0.0)))
-
-        for c in active_categories:
-            x = np.array(vals[c], dtype=float)
-            diffs[c].append(
-                _mean_adjacent_rank_gap(
-                    x,
-                    ascending=False,
-                    robust=robust,
-                    winsor_low_pct=winsor_low,
-                    winsor_high_pct=winsor_high,
-                )
-            )
-
-    out: Dict[str, float] = {}
-    for category in active_categories:
-        value = float(np.mean(diffs[category])) if diffs[category] else 0.0
-        floor = _sgp_denominator_floor(lg=lg, category=category)
-        out[category] = max(value, floor) if floor > 0.0 else value
-    return out
-
-
-def simulate_sgp_pit(
-    assigned_pit: pd.DataFrame,
-    lg: CommonDynastyRotoSettings,
-    rng: np.random.Generator,
-    rep_rates: Optional[Dict[str, float]] = None,
-    categories: Optional[List[str]] = None,
-) -> Dict[str, float]:
-    active_categories = [c for c in PIT_CATS if c in set(categories or PIT_CATS)]
-    if not active_categories:
-        return {}
-    robust, winsor_low, winsor_high = _sgp_estimator_options(lg)
-    diffs = {c: [] for c in active_categories}
-    per_team = lg.pitcher_slots
-    groups = {slot: assigned_pit[assigned_pit["AssignedSlot"] == slot] for slot in per_team.keys()}
-    component_idx = {col: PIT_COMPONENT_COLS.index(col) for col in PIT_COMPONENT_COLS}
-
-    for _ in range(lg.sims_for_sgp):
-        totals = {col: np.zeros(lg.n_teams) for col in PIT_COMPONENT_COLS}
-
-        for slot, cnt in per_team.items():
-            df_slot = groups[slot]
-            idx = rng.permutation(len(df_slot))
-            arr = df_slot.iloc[idx][PIT_COMPONENT_COLS].to_numpy(dtype=float)
-            arr = arr.reshape(lg.n_teams, cnt, len(PIT_COMPONENT_COLS))
-            sums = arr.sum(axis=1)
-
-            for col, idx_col in component_idx.items():
-                totals[col] += sums[:, idx_col]
-
-        vals = {c: [] for c in active_categories}
-        for t in range(lg.n_teams):
-            bounded = common_apply_pitching_bounds(
-                {col: float(totals[col][t]) for col in PIT_COMPONENT_COLS},
-                lg,
-                rep_rates,
-            )
-            team_cats = common_pitch_category_totals(bounded)
-            for cat in active_categories:
-                vals[cat].append(float(team_cats.get(cat, 0.0)))
-
-        for c in active_categories:
-            x = np.array(vals[c], dtype=float)
-            diffs[c].append(
-                _mean_adjacent_rank_gap(
-                    x,
-                    ascending=(c in COMMON_REVERSED_PITCH_CATS),
-                    robust=robust,
-                    winsor_low_pct=winsor_low,
-                    winsor_high_pct=winsor_high,
-                )
-            )
-
-    out: Dict[str, float] = {}
-    for category in active_categories:
-        value = float(np.mean(diffs[category])) if diffs[category] else 0.0
-        floor = _sgp_denominator_floor(lg=lg, category=category)
-        out[category] = max(value, floor) if floor > 0.0 else value
-    return out
-
-
 def compute_year_context(
     year: int,
     bat: pd.DataFrame,
@@ -638,13 +319,9 @@ def compute_year_context(
     pit_play = pit_y[pit_y["IP"] > 0].copy()
 
     if bat_play.empty:
-        raise ValueError(
-            f"Year {year}: no hitters with AB > 0 after filtering. Check Year values and AB projections."
-        )
+        raise ValueError(f"Year {year}: no hitters with AB > 0 after filtering. Check Year values and AB projections.")
     if pit_play.empty:
-        raise ValueError(
-            f"Year {year}: no pitchers with IP > 0 after filtering. Check Year values and IP projections."
-        )
+        raise ValueError(f"Year {year}: no pitchers with IP > 0 after filtering. Check Year values and IP projections.")
 
     # Initial weights to define the league baseline pool/positional scarcity
     bat_play["weight"] = _initial_hitter_weight(bat_play, categories=hit_categories)
@@ -763,10 +440,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                 new_tot[col] = new_tot[col] - b[col] + float(row.get(col, 0.0))
 
             new_hit_cats = common_hit_category_totals({col: float(new_tot[col]) for col in HIT_COMPONENT_COLS})
-            delta = {
-                cat: float(new_hit_cats.get(cat, 0.0) - base_hit_cats.get(cat, 0.0))
-                for cat in hit_categories
-            }
+            delta = {cat: float(new_hit_cats.get(cat, 0.0) - base_hit_cats.get(cat, 0.0)) for cat in hit_categories}
             if bool(getattr(lg, "enable_playing_time_reliability", False)):
                 _apply_hitter_playing_time_reliability_guard(
                     delta,
@@ -932,11 +606,7 @@ def compute_replacement_baselines(
 
     repl_hit_rows: List[dict] = []
     for slot in baseline_hit_avg.index:
-        cand = (
-            fa_hit[fa_hit["elig"].apply(lambda s: slot in s)]
-            .sort_values("weight", ascending=False)
-            .head(n_repl)
-        )
+        cand = fa_hit[fa_hit["elig"].apply(lambda s: slot in s)].sort_values("weight", ascending=False).head(n_repl)
         repl = baseline_hit_avg.loc[slot] if len(cand) == 0 else cand[HIT_COMPONENT_COLS].mean()
         row = {c: float(repl.get(c, 0.0)) for c in HIT_COMPONENT_COLS}
         row["AssignedSlot"] = slot
@@ -946,11 +616,7 @@ def compute_replacement_baselines(
 
     repl_pit_rows: List[dict] = []
     for slot in baseline_pit_avg.index:
-        cand = (
-            fa_pit[fa_pit["elig"].apply(lambda s: slot in s)]
-            .sort_values("weight", ascending=False)
-            .head(n_repl)
-        )
+        cand = fa_pit[fa_pit["elig"].apply(lambda s: slot in s)].sort_values("weight", ascending=False).head(n_repl)
         repl = baseline_pit_avg.loc[slot] if len(cand) == 0 else cand[PIT_COMPONENT_COLS].mean()
         row = {c: float(repl.get(c, 0.0)) for c in PIT_COMPONENT_COLS}
         row["AssignedSlot"] = slot
@@ -996,7 +662,6 @@ def compute_year_player_values_vs_replacement(
         for slot in slots:
             if slot not in baseline_hit_avg.index or slot not in repl_hit.index:
                 continue
-
             b_avg = baseline_hit_avg.loc[slot]
             b_rep = repl_hit.loc[slot]
 
@@ -1008,10 +673,7 @@ def compute_year_player_values_vs_replacement(
 
             base_hit_cats = common_hit_category_totals({col: float(base_tot[col]) for col in HIT_COMPONENT_COLS})
             new_hit_cats = common_hit_category_totals({col: float(new_tot[col]) for col in HIT_COMPONENT_COLS})
-            delta = {
-                cat: float(new_hit_cats.get(cat, 0.0) - base_hit_cats.get(cat, 0.0))
-                for cat in hit_categories
-            }
+            delta = {cat: float(new_hit_cats.get(cat, 0.0) - base_hit_cats.get(cat, 0.0)) for cat in hit_categories}
 
             val = 0.0
             stat_sgps: Dict[str, float] = {}
