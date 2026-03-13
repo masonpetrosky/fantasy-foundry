@@ -10,7 +10,21 @@ initSentry();
 initGA4();
 import { AUTH_SYNC_ENABLED } from "./supabase_client";
 import { AccountPanel } from "./account_panel";
-import { ActivationDiagnosticsPanel, resolveActivationDiagnosticsPanelEnabled } from "./activation_diagnostics_panel";
+function resolveActivationDiagnosticsPanelEnabled({
+  envEnabled = false,
+  locationSearch = "",
+}: { envEnabled?: boolean | string; locationSearch?: string } = {}): boolean {
+  const resolvedEnvEnabled = envEnabled === true || String(envEnabled).trim() === "1";
+  let queryEnabled: boolean;
+  try {
+    const params = new URLSearchParams(String(locationSearch || ""));
+    const raw = String(params.get("activation_debug") || "").trim().toLowerCase();
+    queryEnabled = raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+  } catch {
+    queryEnabled = false;
+  }
+  return resolvedEnvEnabled || queryEnabled;
+}
 import { resolveApiBase } from "./api_base";
 import { PRIMARY_NAV_ITEMS } from "./app_content";
 import { ProjectionsExplorer } from "./projections_explorer";
@@ -19,10 +33,6 @@ import { installAnalyticsDebugBridge, setAnalyticsContext, trackEvent } from "./
 import { ErrorBoundary } from "./error_boundary";
 import { FeatureErrorBoundary } from "./feature_error_boundary";
 import { ToastProvider } from "./Toast";
-import { PlayerPage } from "./PlayerPage";
-import { MoversPage } from "./MoversPage";
-import { TradeAnalyzer } from "./TradeAnalyzer";
-import { KeeperCalculator } from "./KeeperCalculator";
 import { PricingSection } from "./PricingSection";
 import { NewsletterSignup } from "./NewsletterSignup";
 import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProjectionLayoutState";
@@ -61,6 +71,11 @@ const LazyMethodologySection = lazy(() => (
 const LazyDynastyCalculator = lazy(() => (
   import("./dynasty_calculator").then(module => ({ default: module.DynastyCalculator }))
 ));
+const LazyPlayerPage = lazy(() => import("./PlayerPage").then(m => ({ default: m.PlayerPage })));
+const LazyMoversPage = lazy(() => import("./MoversPage").then(m => ({ default: m.MoversPage })));
+const LazyTradeAnalyzer = lazy(() => import("./TradeAnalyzer").then(m => ({ default: m.TradeAnalyzer })));
+const LazyKeeperCalculator = lazy(() => import("./KeeperCalculator").then(m => ({ default: m.KeeperCalculator })));
+const LazyActivationDiagnosticsPanel = lazy(() => import("./activation_diagnostics_panel").then(m => ({ default: m.ActivationDiagnosticsPanel })));
 
 function App(): React.ReactElement {
   const [section, setSection] = useState("projections"); // projections | methodology
@@ -395,10 +410,12 @@ function App(): React.ReactElement {
             </section>
           )}
           {activationDiagnosticsEnabled && (
-            <ActivationDiagnosticsPanel
-              section={section}
-              dataVersion={dataVersion}
-            />
+            <Suspense fallback={null}>
+              <LazyActivationDiagnosticsPanel
+                section={section}
+                dataVersion={dataVersion}
+              />
+            </Suspense>
           )}
           {sectionNeedsMeta && metaLoading && !metaError && !meta && (
             <p className="methodology-note">Loading projections metadata...</p>
@@ -507,18 +524,22 @@ function App(): React.ReactElement {
                   </div>
                 )}
                 {tradeAnalyzerOpen && tierLimits?.allowTradeAnalyzer && (
-                  <TradeAnalyzer
-                    calculatorResults={effectiveDynastyPlayers}
-                    onClose={() => setTradeAnalyzerOpen(false)}
-                    onOpenCalculator={() => { openCalculatorPanel("trade_analyzer"); scrollToCalculator(); }}
-                  />
+                  <Suspense fallback={null}>
+                    <LazyTradeAnalyzer
+                      calculatorResults={effectiveDynastyPlayers}
+                      onClose={() => setTradeAnalyzerOpen(false)}
+                      onOpenCalculator={() => { openCalculatorPanel("trade_analyzer"); scrollToCalculator(); }}
+                    />
+                  </Suspense>
                 )}
                 {keeperCalculatorOpen && tierLimits?.allowTradeAnalyzer && (
-                  <KeeperCalculator
-                    calculatorResults={effectiveDynastyPlayers}
-                    onClose={() => setKeeperCalculatorOpen(false)}
-                    onOpenCalculator={() => { openCalculatorPanel("keeper_calculator"); scrollToCalculator(); }}
-                  />
+                  <Suspense fallback={null}>
+                    <LazyKeeperCalculator
+                      calculatorResults={effectiveDynastyPlayers}
+                      onClose={() => setKeeperCalculatorOpen(false)}
+                      onOpenCalculator={() => { openCalculatorPanel("keeper_calculator"); scrollToCalculator(); }}
+                    />
+                  </Suspense>
                 )}
                 <FeatureErrorBoundary featureName="Projections Explorer">
                 <ProjectionsExplorer
@@ -627,8 +648,8 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <ToastProvider>
         <Routes>
-          <Route path="/player/:slug" element={<PlayerPage />} />
-          <Route path="/movers" element={<MoversPage />} />
+          <Route path="/player/:slug" element={<Suspense fallback={null}><LazyPlayerPage /></Suspense>} />
+          <Route path="/movers" element={<Suspense fallback={null}><LazyMoversPage /></Suspense>} />
           <Route path="*" element={<App />} />
         </Routes>
       </ToastProvider>

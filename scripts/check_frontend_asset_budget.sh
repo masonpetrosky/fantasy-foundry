@@ -25,20 +25,20 @@ for pattern in "${required_seo_patterns[@]}"; do
   fi
 done
 
-mapfile -t entry_assets < <(
-  cd "$DIST_DIR/assets"
-  find . -maxdepth 1 -type f \( -name "*.js" -o -name "*.css" \) | sort
-)
-if [[ ${#entry_assets[@]} -eq 0 ]]; then
-  echo "No JS/CSS assets found in $DIST_DIR/assets."
+# Extract entry-point JS/CSS assets referenced directly in index.html.
+# Lazy-loaded chunks (React.lazy, dynamic imports) are not entry assets
+# and should not count against the budget.
+entry_assets_raw="$(grep -oP 'assets/[^"'"'"']+\.(js|css)' "$INDEX_FILE" | sort -u)"
+if [[ -z "$entry_assets_raw" ]]; then
+  echo "No entry JS/CSS assets found in $INDEX_FILE."
   exit 1
 fi
+IFS=$'\n' read -r -d '' -a entry_assets <<< "$entry_assets_raw" || true
 
-echo "Checking asset budgets in frontend/dist/assets..."
+echo "Checking entry-point asset budgets..."
 status=0
-for asset in "${entry_assets[@]}"; do
-  rel_asset="${asset#./}"
-  abs_path="$DIST_DIR/assets/$rel_asset"
+for rel_asset in "${entry_assets[@]}"; do
+  abs_path="$DIST_DIR/$rel_asset"
   if [[ ! -f "$abs_path" ]]; then
     echo "Missing asset: $rel_asset"
     status=1
@@ -55,7 +55,7 @@ for asset in "${entry_assets[@]}"; do
   fi
 
   if (( size_bytes > limit )); then
-    echo "Budget exceeded for $type_label asset $rel_asset: ${size_bytes} bytes > ${limit} bytes."
+    echo "Budget exceeded for $type_label entry asset $rel_asset: ${size_bytes} bytes > ${limit} bytes."
     status=1
   else
     echo "OK $type_label $rel_asset: ${size_bytes} bytes (limit ${limit})."
