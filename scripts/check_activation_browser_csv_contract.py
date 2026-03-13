@@ -110,7 +110,7 @@ def _generate_browser_csv(repo_root: Path) -> str:
     ]
 
     node_script = (
-        "import { analyticsEventsToCsv } from './src/analytics.js';\n"
+        "import { analyticsEventsToCsv } from './src/analytics.ts';\n"
         f"const events = {json.dumps(sample_events)};\n"
         "process.stdout.write(analyticsEventsToCsv(events));\n"
     )
