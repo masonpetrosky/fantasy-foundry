@@ -39,6 +39,7 @@ import { useMobileNavMenu } from "./hooks/useMobileNavMenu";
 import { useAccountSync } from "./hooks/useAccountSync";
 import { usePremiumStatus } from "./hooks/usePremiumStatus";
 import { useTheme } from "./hooks/useTheme";
+import { useFantraxLeague } from "./hooks/useFantraxLeague";
 import { parseBillingRedirectParam, cleanBillingParam } from "./billing_redirect";
 import { useToastContext } from "./Toast";
 import {
@@ -111,6 +112,7 @@ function App(): React.ReactElement {
   const { mobileNavOpen, setMobileNavOpen, mobileNavMenuRef, mobileNavTriggerRef } = useMobileNavMenu({ section });
   const bottomSheet = useBottomSheet();
   const { theme, toggleTheme } = useTheme();
+  const fantrax = useFantraxLeague();
   const [tradeAnalyzerOpen, setTradeAnalyzerOpen] = useState(false);
   const [keeperCalculatorOpen, setKeeperCalculatorOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(() => window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches);
@@ -478,6 +480,7 @@ function App(): React.ReactElement {
                         onRegisterQuickStartRunner={handleRegisterQuickStartRunner}
                         onOpenMethodologyGlossary={openMethodologyGlossary}
                         tierLimits={tierLimits}
+                        fantrax={fantrax}
                       />
                     </Suspense>
                     </FeatureErrorBoundary>
@@ -534,6 +537,7 @@ function App(): React.ReactElement {
                   calculatorOverlaySummary={calculatorOverlaySummary}
                   onClearCalculatorOverlay={clearCalculatorOverlay}
                   tierLimits={tierLimits}
+                  fantraxRosterPlayerKeys={fantrax.rosterPlayerKeys}
                 />
                 </FeatureErrorBoundary>
               </div>
@@ -591,6 +595,7 @@ function App(): React.ReactElement {
                   onRegisterQuickStartRunner={handleRegisterQuickStartRunner}
                   onOpenMethodologyGlossary={openMethodologyGlossary}
                   tierLimits={tierLimits}
+                  fantrax={fantrax}
                 />
               </Suspense>
             </FeatureErrorBoundary>
