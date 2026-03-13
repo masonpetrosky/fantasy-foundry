@@ -19,12 +19,10 @@ try:
         _add_player_identity_keys,
         _apply_negative_value_stash_rules,
         _attach_identity_columns_to_output,
-        _build_bench_stash_penalty_map,
         _build_player_identity_lookup,
         _fillna_bool,
         _find_projection_date_col,
         _non_vacant_player_names,
-        _players_with_playing_time,
         _resolve_minor_eligibility_by_year,
         _select_mlb_roster_with_active_floor,
         average_recent_projections,
@@ -53,12 +51,10 @@ except ImportError:  # pragma: no cover - direct script execution fallback
         _add_player_identity_keys,
         _apply_negative_value_stash_rules,
         _attach_identity_columns_to_output,
-        _build_bench_stash_penalty_map,
         _build_player_identity_lookup,
         _fillna_bool,
         _find_projection_date_col,
         _non_vacant_player_names,
-        _players_with_playing_time,
         _resolve_minor_eligibility_by_year,
         _select_mlb_roster_with_active_floor,
         average_recent_projections,
@@ -349,12 +345,8 @@ def calculate_common_dynasty_values(
         if not elig_year_df.empty
         else {}
     )
-    bench_stash_players = _players_with_playing_time(bat, pit, years)
-
-    def _stash_row(row: pd.Series, bench_penalty_by_player: Dict[str, float]) -> float:
+    def _stash_row(row: pd.Series) -> float:
         player = str(row["Player"])
-        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and player in bench_stash_players)
-        bench_penalty = float(bench_penalty_by_player.get(player, 1.0))
         player_age = age_by_player.get(player)
         player_profile = profile_by_player.get(player, "hitter")
         vals: List[float] = []
@@ -377,22 +369,13 @@ def calculate_common_dynasty_values(
                     and lg.minor_slots > 0
                     and bool(minor_eligibility_by_year.get((player, int(y)), False))
                 ),
-                can_bench_stash=can_bench_stash,
-                bench_negative_penalty=bench_penalty,
+                can_bench_stash=False,
+                bench_negative_penalty=1.0,
             )
             vals.append(v)
         return dynasty_keep_or_drop_value(vals, years, lg.discount)
 
-    provisional_bench_penalty = {player: 0.0 for player in bench_stash_players}
-    wide_avg["StashScore"] = wide_avg.apply(lambda row: _stash_row(row, provisional_bench_penalty), axis=1)
-    provisional_stash_sorted = wide_avg[["Player", "StashScore"]].sort_values("StashScore", ascending=False).reset_index(drop=True)
-    bench_penalty_by_player = _build_bench_stash_penalty_map(
-        provisional_stash_sorted,
-        bench_stash_players=bench_stash_players,
-        n_teams=lg.n_teams,
-        bench_slots=lg.bench_slots,
-    )
-    wide_avg["StashScore"] = wide_avg.apply(lambda row: _stash_row(row, bench_penalty_by_player), axis=1)
+    wide_avg["StashScore"] = wide_avg.apply(_stash_row, axis=1)
     stash = wide_avg[["Player", "StashScore"]].copy()
     stash = stash.merge(elig_df, on="Player", how="left")
     stash["minor_eligible"] = _fillna_bool(stash["minor_eligible"])
@@ -522,8 +505,6 @@ def calculate_common_dynasty_values(
     raw_vals: List[float] = []
     for _, r in out.iterrows():
         player = str(r.get("Player") or "")
-        can_bench_stash = bool(lg.bench_slots and lg.bench_slots > 0 and player in bench_stash_players)
-        bench_penalty = float(bench_penalty_by_player.get(player, 1.0))
         player_age = age_by_player.get(player)
         player_profile = profile_by_player.get(player, "hitter")
 
@@ -547,8 +528,8 @@ def calculate_common_dynasty_values(
                     and lg.minor_slots > 0
                     and bool(minor_eligibility_by_year.get((player, int(y)), False))
                 ),
-                can_bench_stash=can_bench_stash,
-                bench_negative_penalty=bench_penalty,
+                can_bench_stash=False,
+                bench_negative_penalty=1.0,
             )
             vals.append(v)
 
