@@ -47,7 +47,6 @@ from backend.api.routes import (
     build_status_router,
 )
 from backend.api.routes.fantrax import build_fantrax_router
-from backend.services.fantrax.service import fetch_league_info as _fantrax_fetch_league
 from backend.core import runtime_infra as core_runtime_infra
 from backend.core import runtime_state_helpers as core_runtime_state_helpers
 from backend.core.calculator_helpers import (
@@ -294,6 +293,7 @@ from backend.domain.constants import (
     ROTO_PITCHER_CATEGORY_FIELDS,
 )
 from backend.services.calculator import CalculatorService
+from backend.services.fantrax.service import fetch_league_info as _fantrax_fetch_league
 from backend.services.projections import (
     ProjectionDynastyHelpers,
     ProjectionRateLimits,
