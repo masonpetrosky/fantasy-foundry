@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildSortedWatchlistEntries } from "./useProjectionWatchlistComposition";
+import { buildSortedWatchlistEntries, useProjectionWatchlistComposition } from "./useProjectionWatchlistComposition";
 import type { PlayerWatchEntry } from "../../../app_state_storage";
 
 describe("buildSortedWatchlistEntries", () => {
@@ -26,5 +26,28 @@ describe("buildSortedWatchlistEntries", () => {
     expect(sorted.length).toBe(40);
     expect(sorted[0].player).toBe("Player 00");
     expect(sorted[39].player).toBe("Player 39");
+  });
+
+  it("returns empty array for null/undefined watchlist", () => {
+    expect(buildSortedWatchlistEntries(null)).toEqual([]);
+    expect(buildSortedWatchlistEntries(undefined)).toEqual([]);
+  });
+
+  it("returns empty array for empty watchlist", () => {
+    expect(buildSortedWatchlistEntries({})).toEqual([]);
+  });
+
+  it("uses default limit of 40", () => {
+    const watchlist: Record<string, PlayerWatchEntry> = {};
+    for (let i = 0; i < 50; i++) {
+      watchlist[`p${i}`] = { key: `p${i}`, player: `Player ${i}`, team: "", pos: "" };
+    }
+    expect(buildSortedWatchlistEntries(watchlist).length).toBe(40);
+  });
+});
+
+describe("useProjectionWatchlistComposition", () => {
+  it("is exported as a function", () => {
+    expect(typeof useProjectionWatchlistComposition).toBe("function");
   });
 });

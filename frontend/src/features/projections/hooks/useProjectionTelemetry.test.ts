@@ -1,4 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../../../analytics", () => ({
+  trackEvent: vi.fn(),
+}));
 
 import {
   buildProjectionEmptyStateMarker,
@@ -30,6 +34,43 @@ describe("buildProjectionEmptyStateMarker", () => {
     });
 
     expect(marker).toBe("|||all||");
+  });
+
+  it("trims whitespace from all string fields", () => {
+    const marker = buildProjectionEmptyStateMarker({
+      tab: "  all  ",
+      resolvedYearFilter: " 2029 ",
+      teamFilter: " NYY ",
+      watchlistOnly: false,
+      search: "  Judge  ",
+      posFilters: ["OF"],
+    });
+
+    expect(marker).toBe("all|2029|NYY|all|Judge|OF");
+  });
+
+  it("handles null posFilters as empty string", () => {
+    const marker = buildProjectionEmptyStateMarker({
+      tab: "bat",
+      resolvedYearFilter: "2029",
+      teamFilter: "",
+      watchlistOnly: false,
+      search: "",
+      posFilters: null,
+    });
+    expect(marker).toBe("bat|2029||all||");
+  });
+
+  it("handles empty posFilters array", () => {
+    const marker = buildProjectionEmptyStateMarker({
+      tab: "bat",
+      resolvedYearFilter: "2029",
+      teamFilter: "",
+      watchlistOnly: false,
+      search: "",
+      posFilters: [],
+    });
+    expect(marker).toBe("bat|2029||all||");
   });
 });
 
@@ -63,5 +104,57 @@ describe("buildProjectionRefreshMarker", () => {
     });
 
     expect(changed).not.toBe(base);
+  });
+
+  it("handles empty displayedPage", () => {
+    const marker = buildProjectionRefreshMarker({
+      tab: "bat",
+      offset: 0,
+      totalRows: 0,
+      displayedPage: [],
+    });
+    expect(marker).toBe("bat|0|0|0|||");
+  });
+
+  it("handles missing fields in first row", () => {
+    const marker = buildProjectionRefreshMarker({
+      tab: "pit",
+      offset: 10,
+      totalRows: 50,
+      displayedPage: [{}],
+    });
+    expect(marker).toBe("pit|10|1|50|||");
+  });
+
+  it("handles non-array displayedPage gracefully", () => {
+    const marker = buildProjectionRefreshMarker({
+      tab: "all",
+      offset: 0,
+      totalRows: 0,
+      displayedPage: null as unknown as [],
+    });
+    expect(marker).toBe("all|0|0|0|||");
+  });
+
+  it("uses first row only even with multiple rows", () => {
+    const marker = buildProjectionRefreshMarker({
+      tab: "all",
+      offset: 0,
+      totalRows: 100,
+      displayedPage: [
+        { Player: "First", Team: "AAA", Year: 2030 },
+        { Player: "Second", Team: "BBB", Year: 2031 },
+      ],
+    });
+    expect(marker).toContain("First");
+    expect(marker).toContain("AAA");
+    expect(marker).not.toContain("Second");
+  });
+});
+
+describe("useProjectionTelemetry", () => {
+  it("is exported as a function", async () => {
+    const mod = await import("./useProjectionTelemetry");
+    expect(typeof mod.useProjectionTelemetry).toBe("function");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { formatApiError, readResponsePayload, sleepWithAbort } from "./request_helpers";
+import { formatApiError, readResponsePayload, sleepWithAbort, useDebouncedValue } from "./request_helpers";
 
 describe("formatApiError", () => {
   it("returns detail string when present", () => {
@@ -86,5 +86,33 @@ describe("sleepWithAbort", () => {
     const p = sleepWithAbort(1000, controller.signal);
     controller.abort();
     await expect(p).rejects.toThrow("Aborted");
+  });
+});
+
+describe("useDebouncedValue", () => {
+  it("is exported as a function", () => {
+    expect(typeof useDebouncedValue).toBe("function");
+  });
+
+  it("returns initial value immediately", async () => {
+    const React = await import("react");
+    const { createRoot } = await import("react-dom/client");
+    const { act } = await import("react");
+
+    interface HookResult<T> { current: T | null; }
+
+    function renderHook<T>(hookFn: () => T): { result: HookResult<T>; cleanup: () => void } {
+      const result: HookResult<T> = { current: null };
+      function TestComponent(): null { result.current = hookFn(); return null; }
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      let root: ReturnType<typeof createRoot>;
+      act(() => { root = createRoot(container); root.render(React.createElement(TestComponent)); });
+      return { result, cleanup: () => { act(() => root.unmount()); document.body.removeChild(container); } };
+    }
+
+    const { result, cleanup } = renderHook(() => useDebouncedValue("hello", 300));
+    expect(result.current).toBe("hello");
+    cleanup();
   });
 });

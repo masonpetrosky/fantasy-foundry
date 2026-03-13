@@ -27,7 +27,7 @@ lint-frontend:
 	cd frontend && npm run lint
 
 typecheck:
-	mypy backend/api/middleware.py backend/core/settings.py backend/core/networking.py backend/core/rate_limit.py backend/core/result_cache.py backend/core/jobs.py backend/core/data_refresh.py backend/valuation/models.py backend/services/calculator/service.py
+	mypy backend/api/middleware.py backend/core/settings.py backend/core/networking.py backend/core/rate_limit.py backend/core/result_cache.py backend/core/jobs.py backend/core/data_refresh.py backend/valuation/models.py backend/services/calculator/service.py backend/core/structured_logging.py backend/core/runtime_config.py backend/core/runtime_state_protocols.py backend/valuation/positions.py backend/valuation/assignment.py backend/api/routes/status.py
 
 check: lint test-backend-fast test-frontend typecheck
 

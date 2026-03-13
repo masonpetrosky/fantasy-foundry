@@ -82,6 +82,7 @@ export function useFantraxLeague(): UseFantraxLeagueResult {
       // Re-fetch league data silently
       fetchLeagueData(stored.leagueId, stored.selectedTeamId);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- init-only effect, guarded by initializedRef
   }, []);
 
   const fetchLeagueData = useCallback(async (lid: string, teamId: string | null) => {

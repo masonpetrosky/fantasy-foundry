@@ -231,6 +231,7 @@ export function DynastyCalculator({
     if (tierLimits?.allowPointsMode === false && settings.scoring_mode === "points") {
       applyScoringSetup("roto");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- applyScoringSetup is stable, only guard on tier/mode changes
   }, [tierLimits?.allowPointsMode, settings.scoring_mode]);
 
   useEffect(() => {
@@ -261,6 +262,7 @@ export function DynastyCalculator({
         calcAbortControllerRef.current = null;
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup-only effect, API is stable module-level const
   }, []);
 
   function update(key: string, val: unknown): void {

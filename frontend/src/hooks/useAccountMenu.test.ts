@@ -8,7 +8,7 @@ const React = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { act } = await import("react");
 
-const { useMobileNavMenu } = await import("./useMobileNavMenu");
+const { useAccountMenu } = await import("./useAccountMenu");
 
 interface HookResult<T> {
   current: T | null;
@@ -36,34 +36,30 @@ function renderHook<T>(hookFn: () => T): { result: HookResult<T>; cleanup: () =>
   };
 }
 
-describe("useMobileNavMenu", () => {
+describe("useAccountMenu", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("exports useMobileNavMenu function", () => {
-    expect(typeof useMobileNavMenu).toBe("function");
-  });
-
   it("returns initial closed state", () => {
-    const { result, cleanup } = renderHook(() => useMobileNavMenu({ section: "projections" }));
-    expect(result.current!.mobileNavOpen).toBe(false);
+    const { result, cleanup } = renderHook(() => useAccountMenu({ section: "projections" }));
+    expect(result.current!.accountMenuOpen).toBe(false);
     cleanup();
   });
 
-  it("returns expected shape (mobileNavOpen, setMobileNavOpen, refs)", () => {
-    const { result, cleanup } = renderHook(() => useMobileNavMenu({ section: "projections" }));
-    expect(result.current).toHaveProperty("mobileNavOpen");
-    expect(result.current).toHaveProperty("setMobileNavOpen");
-    expect(result.current).toHaveProperty("mobileNavMenuRef");
-    expect(result.current).toHaveProperty("mobileNavTriggerRef");
-    expect(typeof result.current!.setMobileNavOpen).toBe("function");
+  it("returns expected shape (accountMenuOpen, setAccountMenuOpen, refs)", () => {
+    const { result, cleanup } = renderHook(() => useAccountMenu({ section: "projections" }));
+    expect(result.current).toHaveProperty("accountMenuOpen");
+    expect(result.current).toHaveProperty("setAccountMenuOpen");
+    expect(result.current).toHaveProperty("accountMenuRef");
+    expect(result.current).toHaveProperty("accountTriggerRef");
+    expect(typeof result.current!.setAccountMenuOpen).toBe("function");
     cleanup();
   });
 
-  it("mobileNavOpen defaults to false", () => {
-    const { result, cleanup } = renderHook(() => useMobileNavMenu({ section: "methodology" }));
-    expect(result.current!.mobileNavOpen).toBe(false);
+  it("accountMenuOpen defaults to false", () => {
+    const { result, cleanup } = renderHook(() => useAccountMenu({ section: "methodology" }));
+    expect(result.current!.accountMenuOpen).toBe(false);
     cleanup();
   });
 });
