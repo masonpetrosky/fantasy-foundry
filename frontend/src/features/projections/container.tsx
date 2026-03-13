@@ -43,6 +43,7 @@ interface ProjectionsExplorerProps {
   calculatorOverlaySummary: Record<string, unknown> | null;
   onClearCalculatorOverlay: () => void;
   tierLimits: TierLimits | null;
+  fantraxRosterPlayerKeys?: Set<string>;
 }
 
 export function ProjectionsExplorer({
@@ -61,6 +62,7 @@ export function ProjectionsExplorer({
   calculatorOverlaySummary,
   onClearCalculatorOverlay,
   tierLimits,
+  fantraxRosterPlayerKeys,
 }: ProjectionsExplorerProps): React.ReactElement {
   const activeCalculatorJobId = calculatorOverlayActive
     ? String(calculatorOverlayJobId || "").trim()
@@ -114,6 +116,7 @@ export function ProjectionsExplorer({
     handleProjectionTableScroll,
   } = useProjectionLayoutState();
 
+  const [rosterOnly, setRosterOnly] = useState(false);
   const closePosMenu = useCallback(() => {}, []);
   const [profileRow, setProfileRow] = useState<Record<string, unknown> | null>(null);
   const handleViewProfile = useCallback((row: Record<string, unknown>) => setProfileRow(row), []);
@@ -159,6 +162,14 @@ export function ProjectionsExplorer({
     });
   }, [applyCalculatorOverlayToRows, baseData, deltaMap]);
 
+  const filteredData = useMemo(() => {
+    if (!rosterOnly || !fantraxRosterPlayerKeys || fantraxRosterPlayerKeys.size === 0) return data;
+    return data.filter((row) => {
+      const key = String(row.PlayerEntityKey || row.PlayerKey || "");
+      return key && fantraxRosterPlayerKeys.has(key);
+    });
+  }, [data, rosterOnly, fantraxRosterPlayerKeys]);
+
   const filterActions = useMemo(() => ({
     setTab, setSearch, setTeamFilter, setYearFilter, setPosFilters,
     setWatchlistOnly, setSortCol, setSortDir, setOffset,
@@ -176,7 +187,7 @@ export function ProjectionsExplorer({
     clearAllFilters,
   } = useProjectionFilterPresets({ filterActions, filterState, setShowPosMenu: closePosMenu });
 
-  const page = data;
+  const page = filteredData;
   const collections = useProjectionCollections({
     watchlist,
     setWatchlist,
@@ -447,6 +458,9 @@ export function ProjectionsExplorer({
         exportingFormat={exportingFormat}
         exportCurrentProjections={exportCurrentProjections}
         tierLimits={tierLimits}
+        rosterOnly={rosterOnly}
+        setRosterOnly={setRosterOnly}
+        rosterCount={fantraxRosterPlayerKeys?.size || 0}
       />
       <ProjectionOverlayBanner
         hasCalculatorOverlay={hasCalculatorOverlay}

@@ -46,6 +46,8 @@ from backend.api.routes import (
     build_projections_router,
     build_status_router,
 )
+from backend.api.routes.fantrax import build_fantrax_router
+from backend.services.fantrax.service import fetch_league_info as _fantrax_fetch_league
 from backend.core import runtime_infra as core_runtime_infra
 from backend.core import runtime_state_helpers as core_runtime_state_helpers
 from backend.core.calculator_helpers import (
@@ -886,6 +888,18 @@ if SETTINGS.buttondown_api_key:
         )
     )
 
+# ---------------------------------------------------------------------------
+# Fantrax league integration (always available — public API, no credentials)
+# ---------------------------------------------------------------------------
+app.include_router(
+    build_fantrax_router(
+        enforce_rate_limit=_enforce_rate_limit,
+        client_ip_resolver=_client_ip,
+        league_fetcher=_fantrax_fetch_league,
+        player_summary_getter=lambda: PLAYER_SUMMARY_INDEX,
+        rate_limit_per_minute=SETTINGS.fantrax_rate_limit_per_minute,
+    )
+)
 
 # ---------------------------------------------------------------------------
 # Serve frontend

@@ -51,6 +51,9 @@ interface ProjectionFilterBarProps {
   exportingFormat: string;
   exportCurrentProjections: (format: string) => void;
   tierLimits: TierLimits | null;
+  rosterOnly?: boolean;
+  setRosterOnly?: (updater: boolean | ((prev: boolean) => boolean)) => void;
+  rosterCount?: number;
 }
 
 export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
@@ -86,6 +89,9 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
   exportingFormat,
   exportCurrentProjections,
   tierLimits,
+  rosterOnly,
+  setRosterOnly,
+  rosterCount,
 }: ProjectionFilterBarProps): React.ReactElement {
   const [showPosMenu, setShowPosMenu] = useState(false);
   const [filterExpanded, setFilterExpanded] = useState(false);
@@ -314,6 +320,15 @@ export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
         >
           {watchlistOnly ? "All Players View" : "Watchlist View"}
         </button>
+        {setRosterOnly && rosterCount != null && rosterCount > 0 && (
+          <button
+            type="button"
+            className={`inline-btn ${rosterOnly ? "open" : ""}`.trim()}
+            onClick={() => setRosterOnly((value: boolean) => !value)}
+          >
+            {rosterOnly ? "All Players" : `My Roster (${rosterCount})`}
+          </button>
+        )}
         <button
           type="button"
           className="inline-btn"

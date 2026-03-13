@@ -976,3 +976,149 @@
   .keeper-table { font-size: var(--fs-xs); }
   .keeper-cost-input { width: 52px; }
 }
+
+/* Fantrax League Integration */
+.fantrax-league-section {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 14px;
+  margin-top: 14px;
+}
+
+.fantrax-toggle-btn {
+  cursor: pointer;
+  background: none;
+  border: none;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  margin: 2px 0 10px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.fantrax-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fantrax-connect-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.fantrax-league-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  font-size: var(--fs-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.fantrax-connect-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.fantrax-connect-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.fantrax-connect-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fantrax-connected-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fantrax-league-name {
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.fantrax-team-select-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fantrax-team-select-row label {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.fantrax-team-select-row select {
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  font-size: var(--fs-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.fantrax-roster-status {
+  color: var(--color-success, #22c55e);
+}
+
+.fantrax-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.fantrax-apply-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.fantrax-apply-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.fantrax-disconnect-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  cursor: pointer;
+  background: none;
+  color: var(--text-muted);
+}
+
+.fantrax-disconnect-btn:hover {
+  color: var(--color-danger, #ef4444);
+  border-color: var(--color-danger, #ef4444);
+}
+
+.fantrax-error {
+  color: var(--color-danger, #ef4444);
+}

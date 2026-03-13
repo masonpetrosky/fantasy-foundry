@@ -3,8 +3,10 @@ import { CalcTooltip } from "./dynasty_calculator_tooltip";
 import { RotoCategoriesForm } from "./dynasty_calculator_sidebar_categories";
 import { PointsScoringForm } from "./dynasty_calculator_sidebar_points";
 import { StarterSlotsForm } from "./dynasty_calculator_sidebar_slots";
+import { LeagueConnectPanel } from "./features/fantrax/LeagueConnectPanel";
 import type { CalculatorSettings } from "./dynasty_calculator_config";
 import type { TierLimits } from "./premium";
+import type { UseFantraxLeagueResult } from "./hooks/useFantraxLeague";
 
 interface SidebarState {
   canSavePreset: boolean;
@@ -58,6 +60,7 @@ interface DynastyCalculatorSidebarProps {
   settings: CalculatorSettings;
   state: SidebarState;
   actions: SidebarActions;
+  fantrax: UseFantraxLeagueResult | null;
 }
 
 export function DynastyCalculatorSidebar({
@@ -66,6 +69,7 @@ export function DynastyCalculatorSidebar({
   settings,
   state,
   actions,
+  fantrax,
 }: DynastyCalculatorSidebarProps): React.ReactElement {
   const {
     canSavePreset,
@@ -114,6 +118,13 @@ export function DynastyCalculatorSidebar({
         <h3>League Settings</h3>
         <p className="calc-sidebar-intro">Configure format, roster depth, and scoring. Then apply custom dynasty values to the main projections table.</p>
       </div>
+
+      {fantrax && (
+        <LeagueConnectPanel
+          fantrax={fantrax}
+          onApplySettings={() => fantrax.applyLeagueSettings(update)}
+        />
+      )}
 
       <div className="calc-summary-grid">
         <div className="calc-summary-chip">

@@ -30,6 +30,7 @@ import {
 import type { CalculatorSettings } from "./dynasty_calculator_config";
 import type { CalculatorPreset } from "./app_state_storage";
 import type { TierLimits } from "./premium";
+import type { UseFantraxLeagueResult } from "./hooks/useFantraxLeague";
 
 interface CalculatorMeta {
   years?: number[];
@@ -156,6 +157,7 @@ interface DynastyCalculatorProps {
   onRegisterQuickStartRunner?: (runner: ((mode: string) => void) | null) => void;
   onOpenMethodologyGlossary?: (anchorId?: string) => void;
   tierLimits?: TierLimits | null;
+  fantrax?: UseFantraxLeagueResult | null;
 }
 
 export function DynastyCalculator({
@@ -172,6 +174,7 @@ export function DynastyCalculator({
   onRegisterQuickStartRunner,
   onOpenMethodologyGlossary,
   tierLimits,
+  fantrax,
 }: DynastyCalculatorProps): React.ReactElement {
   const API = String(apiBase || "").trim();
   const [settings, setSettings] = useState<CalculatorSettings>(() => buildDefaultCalculatorSettings(meta));
@@ -634,6 +637,7 @@ export function DynastyCalculator({
         settings={settings}
         state={sidebarState}
         actions={sidebarActions}
+        fantrax={fantrax || null}
       />
     </div>
   );

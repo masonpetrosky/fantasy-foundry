@@ -68,6 +68,7 @@ export const PROJECTION_TABLE_HIDDEN_COLS_STORAGE_KEY = "ff:proj-table-hidden-co
 export const PROJECTION_CARD_HIDDEN_COLS_STORAGE_KEY = "ff:proj-card-hidden-cols:v1";
 export const PROJECTION_FILTER_PRESETS_STORAGE_KEY = "ff:proj-filter-presets:v1";
 export const PLAYER_WATCHLIST_STORAGE_KEY = "ff:player-watchlist:v1";
+export const FANTRAX_LEAGUE_STORAGE_KEY = "ff:fantrax-league:v1";
 export const ONBOARDING_DISMISSED_STORAGE_KEY = "ff:onboarding-dismissed:v1";
 export const FIRST_RUN_STATE_STORAGE_KEY = "ff:first-run-state:v1";
 export const FIRST_RUN_SESSION_LANDING_TS_STORAGE_KEY = "ff:first-run-session-landing-ts:v1";
@@ -556,4 +557,37 @@ export function decodeCalculatorSettings(encoded: string | null | undefined): Re
   } catch {
     return null;
   }
+}
+
+export interface FantraxLeagueState {
+  leagueId: string;
+  selectedTeamId: string | null;
+}
+
+export function readFantraxLeague(): FantraxLeagueState | null {
+  const raw = safeReadStorage(FANTRAX_LEAGUE_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const leagueId = String(parsed.leagueId || "").trim();
+    if (!leagueId) return null;
+    const selectedTeamId = parsed.selectedTeamId ? String(parsed.selectedTeamId).trim() : null;
+    return { leagueId, selectedTeamId };
+  } catch {
+    return null;
+  }
+}
+
+export function writeFantraxLeague(state: FantraxLeagueState | null): void {
+  if (!state) {
+    try {
+      window.localStorage.removeItem(FANTRAX_LEAGUE_STORAGE_KEY);
+    } catch { /* ignore */ }
+    return;
+  }
+  safeWriteStorage(FANTRAX_LEAGUE_STORAGE_KEY, JSON.stringify({
+    leagueId: state.leagueId,
+    selectedTeamId: state.selectedTeamId,
+  }));
 }
