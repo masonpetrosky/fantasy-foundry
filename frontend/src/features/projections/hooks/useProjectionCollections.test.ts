@@ -2,9 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildProjectionCompareHydrationRequest,
+  coerceRowYear,
+  mergeCompareRowsWithCap,
+  normalizeCompareKey,
+  pickPreferredCompareRow,
+  profilePayloadRows,
   resolveCompareShareHydrationNotice,
+  resolveProjectionDataset,
+  rowCompareIdentityKeys,
   selectHydratedCompareRows,
-} from "./useProjectionCollections";
+} from "./projectionCollectionUtils";
 
 describe("buildProjectionCompareHydrationRequest", () => {
   it("builds compare hydration request with dataset and calculator context", () => {
@@ -139,5 +146,174 @@ describe("resolveCompareShareHydrationNotice", () => {
       severity: "error",
       message: "Unable to load shared comparison players from link. Missing: alpha, beta, gamma (+1 more).",
     });
+  });
+
+  it("returns null for empty requestedKeys", () => {
+    expect(resolveCompareShareHydrationNotice({
+      requestedKeys: [],
+      matchedKeys: [],
+    })).toBeNull();
+  });
+});
+
+describe("normalizeCompareKey", () => {
+  it("trims and lowercases a string", () => {
+    expect(normalizeCompareKey("  Alpha  ")).toBe("alpha");
+  });
+
+  it("returns empty string for falsy input", () => {
+    expect(normalizeCompareKey(null)).toBe("");
+    expect(normalizeCompareKey(undefined)).toBe("");
+    expect(normalizeCompareKey("")).toBe("");
+  });
+});
+
+describe("coerceRowYear", () => {
+  it("returns rounded number for valid numeric input", () => {
+    expect(coerceRowYear(2027)).toBe(2027);
+    expect(coerceRowYear(2027.6)).toBe(2028);
+    expect(coerceRowYear("2026")).toBe(2026);
+  });
+
+  it("returns null for null/undefined/empty", () => {
+    expect(coerceRowYear(null)).toBeNull();
+    expect(coerceRowYear(undefined)).toBeNull();
+    expect(coerceRowYear("")).toBeNull();
+  });
+
+  it("returns null for non-finite values", () => {
+    expect(coerceRowYear(NaN)).toBeNull();
+    expect(coerceRowYear(Infinity)).toBeNull();
+    expect(coerceRowYear("abc")).toBeNull();
+  });
+});
+
+describe("rowCompareIdentityKeys", () => {
+  it("collects entity key, player key, and stable key", () => {
+    const keys = rowCompareIdentityKeys({
+      PlayerEntityKey: "entity1",
+      PlayerKey: "playerkey1",
+      Player: "Test",
+    });
+    expect(keys.size).toBeGreaterThanOrEqual(1);
+    expect(keys.has("entity1")).toBe(true);
+    expect(keys.has("playerkey1")).toBe(true);
+  });
+
+  it("returns a set for null/undefined input", () => {
+    const nullKeys = rowCompareIdentityKeys(null);
+    expect(nullKeys).toBeInstanceOf(Set);
+    const undefinedKeys = rowCompareIdentityKeys(undefined);
+    expect(undefinedKeys).toBeInstanceOf(Set);
+  });
+});
+
+describe("pickPreferredCompareRow", () => {
+  it("returns null for empty/null arrays", () => {
+    expect(pickPreferredCompareRow(null, { careerTotalsView: false, resolvedYearFilter: "2027" })).toBeNull();
+    expect(pickPreferredCompareRow([], { careerTotalsView: false, resolvedYearFilter: "2027" })).toBeNull();
+  });
+
+  it("returns career row when careerTotalsView is true", () => {
+    const rows = [
+      { Player: "A", Year: 2027 },
+      { Player: "A", Years: "2026-2028", YearStart: 2026, YearEnd: 2028 },
+    ];
+    const result = pickPreferredCompareRow(rows, { careerTotalsView: true, resolvedYearFilter: "__career_totals__" });
+    expect(result).toMatchObject({ Years: "2026-2028" });
+  });
+
+  it("falls back to first row when no career rows exist and careerTotalsView is true", () => {
+    const rows = [{ Player: "A", Year: 2027 }];
+    const result = pickPreferredCompareRow(rows, { careerTotalsView: true, resolvedYearFilter: "__career_totals__" });
+    expect(result).toMatchObject({ Year: 2027 });
+  });
+
+  it("returns exact year match when available", () => {
+    const rows = [
+      { Player: "A", Year: 2026 },
+      { Player: "A", Year: 2027 },
+    ];
+    const result = pickPreferredCompareRow(rows, { careerTotalsView: false, resolvedYearFilter: "2026" });
+    expect(result).toMatchObject({ Year: 2026 });
+  });
+
+  it("returns latest year when no exact match", () => {
+    const rows = [
+      { Player: "A", Year: 2026 },
+      { Player: "A", Year: 2029 },
+    ];
+    const result = pickPreferredCompareRow(rows, { careerTotalsView: false, resolvedYearFilter: "2030" });
+    expect(result).toMatchObject({ Year: 2029 });
+  });
+
+  it("returns first row when no year data and no career view", () => {
+    const rows = [{ Player: "A" }];
+    const result = pickPreferredCompareRow(rows, { careerTotalsView: false, resolvedYearFilter: "" });
+    expect(result).toMatchObject({ Player: "A" });
+  });
+});
+
+describe("profilePayloadRows", () => {
+  it("returns career_totals when careerTotalsView is true and available", () => {
+    const payload = { career_totals: [{ Player: "A" }], series: [{ Player: "B" }] };
+    expect(profilePayloadRows(payload, { careerTotalsView: true })).toEqual([{ Player: "A" }]);
+  });
+
+  it("returns series when careerTotalsView is false", () => {
+    const payload = { career_totals: [{ Player: "A" }], series: [{ Player: "B" }] };
+    expect(profilePayloadRows(payload, { careerTotalsView: false })).toEqual([{ Player: "B" }]);
+  });
+
+  it("falls back to data array", () => {
+    const payload = { data: [{ Player: "C" }] };
+    expect(profilePayloadRows(payload, { careerTotalsView: false })).toEqual([{ Player: "C" }]);
+    expect(profilePayloadRows(payload, { careerTotalsView: true })).toEqual([{ Player: "C" }]);
+  });
+
+  it("returns empty for non-object input", () => {
+    expect(profilePayloadRows(null, { careerTotalsView: false })).toEqual([]);
+    expect(profilePayloadRows("str", { careerTotalsView: false })).toEqual([]);
+  });
+});
+
+describe("mergeCompareRowsWithCap", () => {
+  it("merges new rows into existing", () => {
+    const current = { alpha: { PlayerEntityKey: "alpha", Player: "Alpha" } };
+    const result = mergeCompareRowsWithCap(current, [{ PlayerEntityKey: "beta", Player: "Beta" }]);
+    expect(result.alpha).toBeTruthy();
+    expect(result.beta).toBeTruthy();
+  });
+
+  it("updates existing key", () => {
+    const current = { alpha: { PlayerEntityKey: "alpha", Player: "Old" } };
+    const result = mergeCompareRowsWithCap(current, [{ PlayerEntityKey: "alpha", Player: "New" }]);
+    expect(result.alpha.Player).toBe("New");
+  });
+
+  it("handles null current", () => {
+    const result = mergeCompareRowsWithCap(null, [{ PlayerEntityKey: "a", Player: "A" }]);
+    expect(Object.keys(result).length).toBe(1);
+  });
+
+  it("skips null/invalid rows", () => {
+    const result = mergeCompareRowsWithCap({}, [null, undefined, "not-a-row" as unknown]);
+    expect(Object.keys(result).length).toBe(0);
+  });
+});
+
+describe("resolveProjectionDataset", () => {
+  it("returns bat for bat tab", () => {
+    expect(resolveProjectionDataset("bat")).toBe("bat");
+  });
+
+  it("returns pitch for pitch tab", () => {
+    expect(resolveProjectionDataset("pitch")).toBe("pitch");
+  });
+
+  it("returns all for other tabs", () => {
+    expect(resolveProjectionDataset("all")).toBe("all");
+    expect(resolveProjectionDataset("unknown")).toBe("all");
+    expect(resolveProjectionDataset("")).toBe("all");
   });
 });

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildProjectionCompareShareHref,
   buildProjectionComparisonColumns,
+  useProjectionComparisonComposition,
 } from "./useProjectionComparisonComposition";
 
 describe("buildProjectionComparisonColumns", () => {
@@ -45,5 +46,34 @@ describe("buildProjectionCompareShareHref", () => {
       locationHref: "https://example.com/app",
       compareRowsByKey: {},
     })).toBe("");
+  });
+
+  it("returns empty href when compareRowsByKey is null", () => {
+    expect(buildProjectionCompareShareHref({
+      locationHref: "https://example.com",
+      compareRowsByKey: null,
+    })).toBe("");
+  });
+
+  it("returns empty string for invalid URL", () => {
+    expect(buildProjectionCompareShareHref({
+      locationHref: "",
+      compareRowsByKey: { a: { Player: "A" } },
+    })).toBe("");
+  });
+});
+
+describe("buildProjectionComparisonColumns - all tab", () => {
+  it("returns combined columns for all tab", () => {
+    const cols = buildProjectionComparisonColumns({ tab: "all", seasonCol: "Year" });
+    expect(cols.includes("AB")).toBe(true);
+    expect(cols.includes("IP")).toBe(true);
+    expect(cols.includes("DynastyValue")).toBe(true);
+  });
+});
+
+describe("useProjectionComparisonComposition", () => {
+  it("is exported as a function", () => {
+    expect(typeof useProjectionComparisonComposition).toBe("function");
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { trackEvent } from "../../../analytics";
 import type { ProjectionRow } from "../../../app_state_storage";
 
@@ -89,7 +89,7 @@ export function useProjectionTelemetry({
   const emptyStateTrackedRef = useRef("");
   const lastRefreshMarkerRef = useRef("");
   const [lastRefreshedLabel, setLastRefreshedLabel] = useState("");
-  const rows = Array.isArray(displayedPage) ? displayedPage : [];
+  const rows = useMemo(() => Array.isArray(displayedPage) ? displayedPage : [], [displayedPage]);
 
   useEffect(() => {
     if (loading || error || rows.length > 0) return;

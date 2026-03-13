@@ -4,6 +4,7 @@ import {
   MOBILE_BREAKPOINT_QUERY,
   readInitialMobileLayoutMode,
   resolveProjectionHorizontalAffordance,
+  useProjectionLayoutState,
 } from "./useProjectionLayoutState";
 
 function stubWindow({ savedLayout = "", matches = false } = {}) {
@@ -78,5 +79,11 @@ describe("resolveProjectionHorizontalAffordance", () => {
       canScrollLeft: true,
       canScrollRight: false,
     });
+  });
+});
+
+describe("useProjectionLayoutState", () => {
+  it("is exported as a function", () => {
+    expect(typeof useProjectionLayoutState).toBe("function");
   });
 });

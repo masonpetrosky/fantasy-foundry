@@ -136,8 +136,12 @@ export function useProjectionColumnVisibility({
     [tab, seasonCol, dynastyYearCols, activeCalculatorSettings]
   );
 
-  const activeProjectionTableHiddenCols: HiddenColumnOverrides = projectionTableHiddenColsByTab[tab] || {};
   const requiredProjectionTableCols = useMemo<ReadonlySet<string>>(() => new Set(["Player"]), []);
+
+  const activeProjectionTableHiddenCols: HiddenColumnOverrides = useMemo(
+    () => projectionTableHiddenColsByTab[tab] || {},
+    [projectionTableHiddenColsByTab, tab]
+  );
 
   const isProjectionTableColHidden = useCallback((col: string, hiddenOverrides: HiddenColumnOverrides = activeProjectionTableHiddenCols): boolean => {
     return resolveProjectionTableColumnHidden(tab, col, hiddenOverrides);
@@ -166,7 +170,10 @@ export function useProjectionColumnVisibility({
     [tab, activeCalculatorSettings]
   );
 
-  const activeProjectionCardHiddenCols: HiddenColumnOverrides = projectionCardHiddenColsByTab[tab] || {};
+  const activeProjectionCardHiddenCols: HiddenColumnOverrides = useMemo(
+    () => projectionCardHiddenColsByTab[tab] || {},
+    [projectionCardHiddenColsByTab, tab]
+  );
 
   const isProjectionCardOptionalColHidden = useCallback((col: string, hiddenOverrides: HiddenColumnOverrides = activeProjectionCardHiddenCols): boolean => {
     return resolveProjectionCardColumnHidden(col, hiddenOverrides, cardDefaultVisibleSet);

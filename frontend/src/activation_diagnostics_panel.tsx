@@ -284,6 +284,7 @@ export function ActivationDiagnosticsPanel({
 
   const events = useMemo(
     () => readEvents(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshToken triggers recalculation intentionally
     [readEvents, refreshToken]
   );
   const summary = useMemo(

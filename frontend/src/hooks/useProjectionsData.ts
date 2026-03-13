@@ -355,6 +355,7 @@ export function useProjectionsData({
         abortControllerRef.current = null;
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- retryTrigger intentionally triggers refetch
   }, [
     API,
     tab,
@@ -391,6 +392,7 @@ export function useProjectionsData({
   }, [fetchData]);
 
   useEffect(() => {
+    const cacheMap = projectionCacheMapRef.current;
     return () => {
       requestSeqRef.current += 1;
       if (abortControllerRef.current) {
@@ -398,7 +400,7 @@ export function useProjectionsData({
         abortControllerRef.current = null;
       }
       hasLoadedProjectionPageRef.current = false;
-      projectionCacheMapRef.current.clear();
+      cacheMap.clear();
       projectionCacheOrderRef.current = [];
     };
   }, []);
