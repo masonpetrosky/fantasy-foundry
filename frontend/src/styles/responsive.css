@@ -568,6 +568,11 @@
     animation-delay: 1s;
   }
 
+  .fantrax-toggle-btn {
+    min-height: 44px;
+    padding: 8px 0;
+  }
+
   .form-row { grid-template-columns: 1fr; gap: 10px; }
   .calc-summary-grid { grid-template-columns: 1fr; }
   .calc-inline-actions { grid-template-columns: 1fr; }

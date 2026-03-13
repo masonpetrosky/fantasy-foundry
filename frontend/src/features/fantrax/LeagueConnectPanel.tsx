@@ -11,7 +11,7 @@ export const LeagueConnectPanel = React.memo(function LeagueConnectPanel({
   onApplySettings,
 }: LeagueConnectPanelProps): React.ReactElement {
   const [inputValue, setInputValue] = useState("");
-  const [collapsed, setCollapsed] = useState(!fantrax.leagueId);
+  const [collapsed, setCollapsed] = useState(Boolean(fantrax.leagueId));
 
   const handleConnect = useCallback(() => {
     const trimmed = inputValue.trim();
