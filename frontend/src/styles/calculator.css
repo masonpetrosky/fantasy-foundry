@@ -980,7 +980,9 @@
 /* Fantrax League Integration */
 .fantrax-league-section {
   border-top: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent);
   padding-top: 14px;
+  padding-left: 12px;
   margin-top: 14px;
 }
 
@@ -995,7 +997,7 @@
   margin: 2px 0 10px;
   font-size: var(--fs-xs);
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--text-primary);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
