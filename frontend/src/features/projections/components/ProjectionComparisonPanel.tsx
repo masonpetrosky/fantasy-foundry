@@ -126,7 +126,7 @@ export const ProjectionComparisonPanel = React.memo(function ProjectionCompariso
         )}
       </div>
       <ComparisonSparklines compareRows={compareRows} />
-      <div className="comparison-grid">
+      <div className="comparison-grid" aria-live="polite">
         {compareRows.map(row => {
           const compareKey = stablePlayerKeyFromRow(row);
           return (
