@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { act } from "react";
 
 vi.mock("../../../analytics", () => ({
   trackEvent: vi.fn(),
@@ -7,7 +10,9 @@ vi.mock("../../../analytics", () => ({
 import {
   buildProjectionEmptyStateMarker,
   buildProjectionRefreshMarker,
+  useProjectionTelemetry,
 } from "./useProjectionTelemetry";
+import type { UseProjectionTelemetryInput } from "./useProjectionTelemetry";
 
 describe("buildProjectionEmptyStateMarker", () => {
   it("builds a stable marker from filter state", () => {
@@ -71,6 +76,33 @@ describe("buildProjectionEmptyStateMarker", () => {
       posFilters: [],
     });
     expect(marker).toBe("bat|2029||all||");
+  });
+
+  it("produces distinct markers for different watchlist states", () => {
+    const base = {
+      tab: "all",
+      resolvedYearFilter: "2028",
+      teamFilter: "",
+      search: "",
+      posFilters: [] as string[],
+    };
+    const watchlistMarker = buildProjectionEmptyStateMarker({ ...base, watchlistOnly: true });
+    const allMarker = buildProjectionEmptyStateMarker({ ...base, watchlistOnly: false });
+    expect(watchlistMarker).not.toBe(allMarker);
+    expect(watchlistMarker).toContain("watchlist");
+    expect(allMarker).toContain("all");
+  });
+
+  it("handles multiple posFilters", () => {
+    const marker = buildProjectionEmptyStateMarker({
+      tab: "all",
+      resolvedYearFilter: "2028",
+      teamFilter: "",
+      watchlistOnly: false,
+      search: "",
+      posFilters: ["C", "1B", "SS"],
+    });
+    expect(marker).toContain("C,1B,SS");
   });
 });
 
@@ -150,11 +182,97 @@ describe("buildProjectionRefreshMarker", () => {
     expect(marker).toContain("AAA");
     expect(marker).not.toContain("Second");
   });
+
+  it("changes when offset changes", () => {
+    const page = [{ Player: "A", Team: "SEA", Year: 2028 }];
+    const m1 = buildProjectionRefreshMarker({ tab: "all", offset: 0, totalRows: 100, displayedPage: page });
+    const m2 = buildProjectionRefreshMarker({ tab: "all", offset: 25, totalRows: 100, displayedPage: page });
+    expect(m1).not.toBe(m2);
+  });
+
+  it("changes when totalRows changes", () => {
+    const page = [{ Player: "A", Team: "SEA", Year: 2028 }];
+    const m1 = buildProjectionRefreshMarker({ tab: "all", offset: 0, totalRows: 100, displayedPage: page });
+    const m2 = buildProjectionRefreshMarker({ tab: "all", offset: 0, totalRows: 200, displayedPage: page });
+    expect(m1).not.toBe(m2);
+  });
+
+  it("changes when tab changes", () => {
+    const page = [{ Player: "A", Team: "SEA", Year: 2028 }];
+    const m1 = buildProjectionRefreshMarker({ tab: "all", offset: 0, totalRows: 100, displayedPage: page });
+    const m2 = buildProjectionRefreshMarker({ tab: "bat", offset: 0, totalRows: 100, displayedPage: page });
+    expect(m1).not.toBe(m2);
+  });
 });
 
 describe("useProjectionTelemetry", () => {
-  it("is exported as a function", async () => {
-    const mod = await import("./useProjectionTelemetry");
-    expect(typeof mod.useProjectionTelemetry).toBe("function");
+  interface HookResult<T> { current: T | null }
+  function renderHook<T>(hookFn: () => T): { result: HookResult<T>; cleanup: () => void } {
+    const result: HookResult<T> = { current: null };
+    function TestComponent(): null { result.current = hookFn(); return null; }
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    let root: ReturnType<typeof createRoot>;
+    act(() => { root = createRoot(container); root.render(React.createElement(TestComponent)); });
+    return {
+      result,
+      cleanup: () => { act(() => root.unmount()); document.body.removeChild(container); },
+    };
+  }
+
+  function defaultInput(overrides: Partial<UseProjectionTelemetryInput> = {}): UseProjectionTelemetryInput {
+    return {
+      loading: false,
+      error: null,
+      displayedPage: [],
+      tab: "all",
+      resolvedYearFilter: "__career_totals__",
+      teamFilter: "",
+      watchlistOnly: false,
+      search: "",
+      posFilters: [],
+      offset: 0,
+      totalRows: 0,
+      ...overrides,
+    };
+  }
+
+  it("is exported as a function", () => {
+    expect(typeof useProjectionTelemetry).toBe("function");
+  });
+
+  it("returns empty lastRefreshedLabel initially when no rows", () => {
+    const { result, cleanup } = renderHook(() => useProjectionTelemetry(defaultInput()));
+    expect(result.current!.lastRefreshedLabel).toBe("");
+    cleanup();
+  });
+
+  it("returns lastRefreshedLabel when rows are present", () => {
+    const { result, cleanup } = renderHook(() => useProjectionTelemetry(defaultInput({
+      displayedPage: [{ Player: "Test", Team: "SEA", Year: 2028 }],
+      totalRows: 1,
+    })));
+    expect(result.current!.lastRefreshedLabel).not.toBe("");
+    cleanup();
+  });
+
+  it("returns empty lastRefreshedLabel when loading", () => {
+    const { result, cleanup } = renderHook(() => useProjectionTelemetry(defaultInput({
+      loading: true,
+      displayedPage: [{ Player: "Test" }],
+      totalRows: 1,
+    })));
+    expect(result.current!.lastRefreshedLabel).toBe("");
+    cleanup();
+  });
+
+  it("returns empty lastRefreshedLabel when error is present", () => {
+    const { result, cleanup } = renderHook(() => useProjectionTelemetry(defaultInput({
+      error: new Error("test"),
+      displayedPage: [{ Player: "Test" }],
+      totalRows: 1,
+    })));
+    expect(result.current!.lastRefreshedLabel).toBe("");
+    cleanup();
   });
 });

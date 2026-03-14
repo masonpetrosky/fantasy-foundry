@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { act } from "react";
 
 import {
   buildProjectionCompareHydrationRequest,
@@ -12,6 +15,8 @@ import {
   rowCompareIdentityKeys,
   selectHydratedCompareRows,
 } from "./projectionCollectionUtils";
+import { useProjectionCollections } from "./useProjectionCollections";
+import type { UseProjectionCollectionsResult } from "./useProjectionCollections";
 
 describe("buildProjectionCompareHydrationRequest", () => {
   it("builds compare hydration request with dataset and calculator context", () => {
@@ -315,5 +320,82 @@ describe("resolveProjectionDataset", () => {
     expect(resolveProjectionDataset("all")).toBe("all");
     expect(resolveProjectionDataset("unknown")).toBe("all");
     expect(resolveProjectionDataset("")).toBe("all");
+  });
+});
+
+describe("useProjectionCollections hook", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function renderHook<T>(hookFn: () => T): { result: { current: T | null }; cleanup: () => void } {
+    const result: { current: T | null } = { current: null };
+    function TestComponent(): null {
+      result.current = hookFn();
+      return null;
+    }
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    let root: ReturnType<typeof createRoot>;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(TestComponent));
+    });
+    return {
+      result,
+      cleanup: () => {
+        act(() => root.unmount());
+        document.body.removeChild(container);
+      },
+    };
+  }
+
+  it("returns expected shape from hook", () => {
+    const { result, cleanup } = renderHook(() =>
+      useProjectionCollections({
+        watchlist: {},
+        setWatchlist: vi.fn(),
+        data: [],
+        apiBase: "http://test",
+        tab: "all",
+        careerTotalsView: false,
+        resolvedYearFilter: "",
+        calculatorJobId: "",
+      }),
+    );
+    expect(result.current).not.toBeNull();
+    expect(result.current!.watchlistCount).toBe(0);
+    expect(result.current!.compareRows).toEqual([]);
+    expect(result.current!.compareShareHydrating).toBe(false);
+    expect(result.current!.maxComparePlayers).toBeGreaterThan(0);
+    expect(typeof result.current!.isRowWatched).toBe("function");
+    expect(typeof result.current!.toggleRowWatch).toBe("function");
+    expect(typeof result.current!.clearWatchlist).toBe("function");
+    expect(typeof result.current!.toggleCompareRow).toBe("function");
+    expect(typeof result.current!.clearCompareRows).toBe("function");
+    expect(typeof result.current!.removeCompareRow).toBe("function");
+    expect(typeof result.current!.removeWatchlistEntry).toBe("function");
+    expect(typeof result.current!.exportWatchlistCsv).toBe("function");
+    expect(typeof result.current!.quickAddRow).toBe("function");
+    expect(typeof result.current!.clearCompareShareNotice).toBe("function");
+    cleanup();
+  });
+
+  it("isRowWatched returns false for unwatched row", () => {
+    const { result, cleanup } = renderHook(() =>
+      useProjectionCollections({
+        watchlist: {},
+        setWatchlist: vi.fn(),
+        data: [],
+        apiBase: "http://test",
+        tab: "all",
+        careerTotalsView: false,
+        resolvedYearFilter: "",
+        calculatorJobId: "",
+      }),
+    );
+    const row = { Player: "Test", Team: "NYY", Pos: "1B", Year: 2026 };
+    expect(result.current!.isRowWatched(row)).toBe(false);
+    cleanup();
   });
 });

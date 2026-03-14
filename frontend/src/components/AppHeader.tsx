@@ -50,6 +50,7 @@ export const AppHeader = React.memo(function AppHeader({
 
   return (
     <header>
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       <div className="nav-inner">
         <a
           className="brand"
@@ -68,7 +69,7 @@ export const AppHeader = React.memo(function AppHeader({
             <span className="brand-tagline">Dynasty Baseball Intelligence</span>
           </span>
         </a>
-        <nav className="primary-nav" aria-label="Primary">
+        <nav className="primary-nav" aria-label="Main navigation">
           <div className="primary-nav-scroll">
             {PRIMARY_NAV_ITEMS.map(item => (
               <button
@@ -96,7 +97,7 @@ export const AppHeader = React.memo(function AppHeader({
             <span aria-hidden="true">{mobileNavOpen ? "\u2715" : "\u2630"}</span>
           </button>
           {mobileNavOpen && (
-            <nav id="mobile-nav-dropdown" className="mobile-nav-dropdown" aria-label="Primary">
+            <nav id="mobile-nav-dropdown" className="mobile-nav-dropdown" aria-label="Main navigation">
               {PRIMARY_NAV_ITEMS.map(item => (
                 <button
                   key={item.key}

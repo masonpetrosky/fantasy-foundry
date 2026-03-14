@@ -418,7 +418,7 @@ export function ProjectionsExplorer({
   );
 
   return (
-    <div className="fade-up fade-up-1">
+    <main id="main-content" className="fade-up fade-up-1">
       <ProjectionSectionTabs tab={tab as "bat" | "pitch" | "all"} onSelectTab={handleSelectTab} />
 
       <ProjectionFilterBar
@@ -550,6 +550,6 @@ export function ProjectionsExplorer({
           onClose={handleCloseProfile}
         />
       )}
-    </div>
+    </main>
   );
 }

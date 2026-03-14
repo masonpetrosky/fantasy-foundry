@@ -113,21 +113,26 @@ body {
 
 .skip-link {
   position: absolute;
-  top: -44px;
-  left: var(--space-lg);
-  z-index: var(--z-skip);
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
-  background: var(--accent);
-  color: #1b1f24;
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  text-decoration: none;
-  transition: top 0.2s ease;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  z-index: 9999;
 }
-
 .skip-link:focus {
-  top: 12px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: auto;
+  height: auto;
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-primary, #1a1a2e);
+  color: var(--text-primary, #fff);
+  font-size: 1rem;
+  text-decoration: none;
+  border: 2px solid var(--accent-primary, #4fc3f7);
+  border-radius: 0 0 4px 0;
 }
 
 .sr-only {

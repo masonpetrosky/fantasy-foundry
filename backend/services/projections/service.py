@@ -34,6 +34,21 @@ from backend.core.projections_export import (
 from backend.core.projections_export import (
     validate_sort_col as core_validate_sort_col,
 )
+from backend.services.projections.filters import (
+    career_group_key,
+    coerce_record_year,
+    merge_position_value,
+    normalize_filter_value,
+    normalize_player_keys_filter,
+    parse_player_keys_filter,
+    position_sort_key,
+    position_tokens,
+    projection_merge_key,
+    row_overlay_lookup_key,
+    row_player_filter_keys,
+    row_team_value,
+    value_col_sort_key,
+)
 from backend.services.projections.runtime_boundaries import (
     ProjectionDynastyHelpers,
     ProjectionRateLimits,
@@ -234,6 +249,10 @@ class ProjectionService:
         self._cached_all_projection_rows = cached_all_projection_rows
         self._projection_sortable_columns_for_dataset = projection_sortable_columns_for_dataset
 
+    # ------------------------------------------------------------------
+    # Cache management
+    # ------------------------------------------------------------------
+
     def clear_caches(self) -> None:
         self._cached_projection_rows.cache_clear()
         self._cached_all_projection_rows.cache_clear()
@@ -266,62 +285,36 @@ class ProjectionService:
     def attach_dynasty_values(self, rows: list[dict], dynasty_years: list[int] | None = None) -> list[dict]:
         return self._ctx.dynasty_helpers.attach_dynasty_values(rows, dynasty_years=dynasty_years)
 
+    # ------------------------------------------------------------------
+    # Delegating helpers (thin wrappers around extracted module functions)
+    # ------------------------------------------------------------------
+
     def _coerce_record_year(self, value: object) -> int | None:
-        """Normalize JSON year values from int/float/string to int for robust filtering."""
-        if value is None or isinstance(value, bool):
-            return None
-        if isinstance(value, int):
-            return value
-        if isinstance(value, float):
-            return int(value) if value.is_integer() else None
-        if isinstance(value, str):
-            text = value.strip()
-            if not text:
-                return None
-            try:
-                parsed = float(text)
-            except ValueError:
-                return None
-            return int(parsed) if parsed.is_integer() else None
-        return None
+        return coerce_record_year(value)
 
     def _position_tokens(self, value: object) -> set[str]:
-        text = str(value or "").strip().upper()
-        if not text:
-            return set()
-        return {token for token in self._ctx.position_token_split_re.split(text) if token}
+        return position_tokens(value, split_re=self._ctx.position_token_split_re)
 
     def _normalize_player_keys_filter(self, value: str | None) -> str:
-        text = str(value or "").strip()
-        if not text:
-            return ""
-        tokens = sorted({token.strip().lower() for token in re.split(r"[\s,]+", text) if token.strip()})
-        return ",".join(tokens)
+        return normalize_player_keys_filter(value)
 
     def _parse_player_keys_filter(self, value: str | None) -> set[str] | None:
-        normalized = self._normalize_player_keys_filter(value)
-        if not normalized:
-            return None
-        return {token for token in normalized.split(",") if token}
+        return parse_player_keys_filter(value)
 
     def _row_player_filter_keys(self, row: dict) -> set[str]:
-        keys: set[str] = set()
-        entity_key = str(row.get(self._ctx.player_entity_key_col) or "").strip().lower()
-        if entity_key:
-            keys.add(entity_key)
-        player_key = str(row.get(self._ctx.player_key_col) or "").strip().lower()
-        if player_key:
-            keys.add(player_key)
-        return keys
+        return row_player_filter_keys(
+            row,
+            player_key_col=self._ctx.player_key_col,
+            player_entity_key_col=self._ctx.player_entity_key_col,
+        )
 
     @staticmethod
     def _normalize_filter_value(value: str | None) -> str:
-        return (value or "").strip()
+        return normalize_filter_value(value)
 
     @staticmethod
     def _value_col_sort_key(col: str) -> tuple[int, int | str]:
-        suffix = col.split("_", 1)[1] if "_" in col else col
-        return (0, int(suffix)) if str(suffix).isdigit() else (1, suffix)
+        return value_col_sort_key(col)
 
     def _parse_export_columns(self, value: str | None) -> list[str]:
         return core_parse_export_columns(value)
@@ -343,38 +336,45 @@ class ProjectionService:
         )
 
     def _position_sort_key(self, token: str) -> tuple[int, str]:
-        order_map = {pos: idx for idx, pos in enumerate(self._ctx.position_display_order)}
-        return (order_map.get(token, len(order_map)), token)
+        return position_sort_key(token, position_display_order=self._ctx.position_display_order)
 
     @staticmethod
     def _row_team_value(row: dict) -> str:
-        return str(row.get("Team") or row.get("MLBTeam") or "").strip()
+        return row_team_value(row)
 
     def _projection_merge_key(self, row: dict) -> tuple[str, object, str]:
-        player = str(
-            row.get(self._ctx.player_entity_key_col)
-            or row.get(self._ctx.player_key_col)
-            or row.get("Player", "")
-        ).strip()
-        parsed_year = self._coerce_record_year(row.get("Year"))
-        merge_year: object = parsed_year if parsed_year is not None else str(row.get("Year", "")).strip()
-        team = self._row_team_value(row).upper()
-        return player, merge_year, team
+        return projection_merge_key(
+            row,
+            player_entity_key_col=self._ctx.player_entity_key_col,
+            player_key_col=self._ctx.player_key_col,
+        )
 
     def _merge_position_value(self, hit_pos: object, pit_pos: object) -> str | None:
-        tokens = self._position_tokens(hit_pos) | self._position_tokens(pit_pos)
-        if tokens:
-            return "/".join(sorted(tokens, key=self._position_sort_key))
-        hit_text = str(hit_pos or "").strip()
-        if hit_text:
-            return hit_text
-        pit_text = str(pit_pos or "").strip()
-        return pit_text or None
+        return merge_position_value(
+            hit_pos,
+            pit_pos,
+            split_re=self._ctx.position_token_split_re,
+            position_display_order=self._ctx.position_display_order,
+        )
 
     def _career_group_key(self, row: dict) -> str:
-        player_name = str(row.get("Player", "")).strip()
-        player_key = str(row.get(self._ctx.player_key_col) or "").strip() or self._ctx.normalize_player_key(player_name)
-        return str(row.get(self._ctx.player_entity_key_col) or "").strip() or player_key
+        return career_group_key(
+            row,
+            player_key_col=self._ctx.player_key_col,
+            player_entity_key_col=self._ctx.player_entity_key_col,
+            normalize_player_key_fn=self._ctx.normalize_player_key,
+        )
+
+    def _row_overlay_lookup_key(self, row: dict) -> str:
+        return row_overlay_lookup_key(
+            row,
+            player_entity_key_col=self._ctx.player_entity_key_col,
+            player_key_col=self._ctx.player_key_col,
+        )
+
+    # ------------------------------------------------------------------
+    # Aggregation / merge / sort / overlay (still delegate to core_*)
+    # ------------------------------------------------------------------
 
     def _aggregate_projection_career_rows(self, rows: list[dict], *, is_hitter: bool) -> list[dict]:
         return core_aggregate_projection_career_rows(
@@ -418,12 +418,6 @@ class ProjectionService:
             sortable_columns_for_dataset_fn=self._projection_sortable_columns_for_dataset,
         )
 
-    def _row_overlay_lookup_key(self, row: dict) -> str:
-        entity_key = str(row.get(self._ctx.player_entity_key_col) or "").strip().lower()
-        if entity_key:
-            return entity_key
-        return str(row.get(self._ctx.player_key_col) or "").strip().lower()
-
     def _apply_calculator_overlay_values(
         self,
         rows: list[dict],
@@ -461,6 +455,10 @@ class ProjectionService:
             all_tab_pitch_stat_cols=self._ctx.all_tab_pitch_stat_cols,
         )
 
+    # ------------------------------------------------------------------
+    # Public: filter_records
+    # ------------------------------------------------------------------
+
     def filter_records(
         self,
         records: list[dict],
@@ -493,6 +491,10 @@ class ProjectionService:
         if player_keys:
             out = [r for r in out if player_keys.intersection(self._row_player_filter_keys(r))]
         return out
+
+    # ------------------------------------------------------------------
+    # Private: row fetching
+    # ------------------------------------------------------------------
 
     def _get_projection_rows(
         self,
@@ -573,6 +575,10 @@ class ProjectionService:
             self._normalize_sort_dir(sort_dir),
         )
         return tuple(sorted_rows)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     def projection_response(
         self,

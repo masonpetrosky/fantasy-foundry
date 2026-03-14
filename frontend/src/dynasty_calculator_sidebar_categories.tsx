@@ -66,7 +66,7 @@ export const RotoCategoriesForm = React.memo(function RotoCategoriesForm({
           </label>
         ))}
       </div>
-      <button type="button" className="calc-secondary-btn" onClick={resetRotoCategoryDefaults} disabled={Boolean(categoriesLocked)}>
+      <button type="button" className="calc-secondary-btn" onClick={resetRotoCategoryDefaults} disabled={Boolean(categoriesLocked)} aria-label="Reset roto categories to default 5x5 configuration">
         Reset 5x5 Categories
       </button>
     </div>
