@@ -26,7 +26,7 @@ dynasty-site/
 ├── backend/
 │   ├── app.py                          # FastAPI compatibility entrypoint
 │   ├── runtime.py                      # FastAPI runtime wiring + app internals
-│   ├── api/routes/                     # Route registration modules (status/projections/calculate)
+│   ├── api/routes/                     # Route registration modules (status/projections/calculate/billing/fantrax/newsletter/og_cards/frontend_assets)
 │   ├── core/settings.py                # Typed env/config loader
 │   ├── core/calculator_orchestration.py # Calculator endpoint/job orchestration helpers
 │   ├── core/status_orchestration.py    # Status/health/version/readiness endpoint helpers
@@ -44,6 +44,9 @@ dynasty-site/
 │   ├── domain/constants.py             # Shared domain constants
 │   ├── services/projections/           # Projection service pipeline + runtime boundary helpers
 │   ├── services/valuation/             # Service boundary around legacy valuation entrypoints
+│   ├── services/calculator/            # Calculator job orchestration service
+│   ├── services/billing.py             # Stripe billing service
+│   ├── services/fantrax/               # Fantrax league integration service
 │   ├── dynasty_roto_values.py          # Main valuation workflow + CLI facade
 │   └── valuation/                      # Shared valuation modules (models/positions/assignment)
 ├── frontend/
@@ -169,7 +172,8 @@ npm run lint
 
 ### Type Checking
 ```bash
-mypy backend/api/middleware.py backend/core/settings.py backend/core/networking.py backend/core/rate_limit.py backend/core/result_cache.py backend/core/jobs.py backend/core/data_refresh.py
+# Full mypy check across all typed modules (see Makefile for complete file list)
+make typecheck
 ```
 
 ### Repository Search Hygiene
@@ -513,9 +517,4 @@ Identity fields are included end-to-end:
 
 Some ideas for future development:
 
-- **Player profile pages** — individual player pages with year-by-year projection charts
-- **Comparison tool** — side-by-side player comparisons
-- **League mode** — add the full custom league settings (SP/RP/P slots, OPS, SVH categories)
-- **Export** — download rankings as CSV or Excel
 - **Projection freshness indicators** — show when each player's projection was last updated
-- **Mobile optimization** — responsive improvements for phone-sized screens
