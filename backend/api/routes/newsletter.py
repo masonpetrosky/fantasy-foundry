@@ -28,7 +28,7 @@ def build_newsletter_router(
     """Create newsletter subscription route."""
     router = APIRouter(tags=["newsletter"])
 
-    @router.post("/api/newsletter/subscribe")
+    @router.post("/api/newsletter/subscribe", summary="Subscribe to newsletter")
     async def subscribe(body: SubscribeRequest, request: Request) -> JSONResponse:
         client_ip = client_ip_resolver(request)
         enforce_rate_limit(client_ip, "newsletter", rate_limit_per_minute)

@@ -13,6 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import RedirectResponse, Response
 
+from backend.core.metrics import MetricsCollector
+
 CallNext = Callable[[Request], Awaitable[Any]]
 
 
@@ -26,6 +28,7 @@ class MiddlewareConfig:
     client_identity_resolver: Callable[[Request | None], str]
     canonical_host: str
     environment: str
+    metrics_collector: MetricsCollector | None = None
 
 
 def _normalized_host(raw_value: str | None) -> str:
@@ -196,7 +199,8 @@ def register_middlewares(app: FastAPI, *, config: MiddlewareConfig) -> None:
             response = await call_next(request)
             return response
         finally:
-            duration_ms = round((time.perf_counter() - started) * 1000.0, 1)
+            duration_seconds = time.perf_counter() - started
+            duration_ms = round(duration_seconds * 1000.0, 1)
             status_code = response.status_code if response is not None else 500
             request_logger.info(
                 "api_request request_id=%s method=%s path=%s route_group=%s status=%s duration_ms=%s client_identity=%s",
@@ -208,3 +212,16 @@ def register_middlewares(app: FastAPI, *, config: MiddlewareConfig) -> None:
                 duration_ms,
                 config.client_identity_resolver(request),
             )
+            if duration_seconds >= 5.0:
+                request_logger.warning(
+                    "slow_request request_id=%s path=%s duration_ms=%s",
+                    request_id,
+                    request.url.path,
+                    duration_ms,
+                )
+            if config.metrics_collector is not None:
+                config.metrics_collector.record_request(
+                    status_code=status_code,
+                    duration_seconds=duration_seconds,
+                    route_group=route_group,
+                )

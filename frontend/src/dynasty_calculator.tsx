@@ -31,6 +31,7 @@ import type { CalculatorSettings } from "./dynasty_calculator_config";
 import type { CalculatorPreset } from "./app_state_storage";
 import type { TierLimits } from "./premium";
 import type { UseFantraxLeagueResult } from "./hooks/useFantraxLeague";
+import { useCalculatorOverlayContext } from "./contexts/CalculatorOverlayContext";
 
 interface CalculatorMeta {
   years?: number[];
@@ -149,10 +150,7 @@ interface DynastyCalculatorProps {
   presets: Record<string, CalculatorPreset>;
   setPresets: React.Dispatch<React.SetStateAction<Record<string, CalculatorPreset>>>;
   hasSuccessfulRun: boolean;
-  onApplyToMainTable?: (result: CalculationResult, settings: CalculatorSettings, runMeta: RunMeta) => void;
   onCalculationSuccess?: (info: CalculationSuccessInfo) => void;
-  onClearMainTableOverlay?: () => void;
-  mainTableOverlayActive?: boolean;
   onSettingsChange?: (settings: CalculatorSettings) => void;
   onRegisterQuickStartRunner?: (runner: ((mode: string) => void) | null) => void;
   onOpenMethodologyGlossary?: (anchorId?: string) => void;
@@ -166,16 +164,18 @@ export function DynastyCalculator({
   presets,
   setPresets,
   hasSuccessfulRun,
-  onApplyToMainTable,
   onCalculationSuccess,
-  onClearMainTableOverlay,
-  mainTableOverlayActive,
   onSettingsChange,
   onRegisterQuickStartRunner,
   onOpenMethodologyGlossary,
   tierLimits,
   fantrax,
 }: DynastyCalculatorProps): React.ReactElement {
+  const {
+    applyCalculatorOverlay: onApplyToMainTable,
+    clearCalculatorOverlay: onClearMainTableOverlay,
+    calculatorOverlayActive: mainTableOverlayActive,
+  } = useCalculatorOverlayContext();
   const API = String(apiBase || "").trim();
   const [settings, setSettings] = useState<CalculatorSettings>(() => buildDefaultCalculatorSettings(meta));
   const [loading, setLoading] = useState(false);

@@ -134,6 +134,7 @@ from backend.core.jobs import (
 from backend.core.jobs import (
     mark_job_cancelled_locked as core_mark_job_cancelled_locked,
 )
+from backend.core.metrics import MetricsCollector
 from backend.core.networking import (
     client_ip as core_client_ip,
 )
@@ -693,6 +694,8 @@ cancel_calculate_dynasty_job = RUNTIME_BOOTSTRAP.alias_map["cancel_calculate_dyn
 _log_precomputed_dynasty_lookup_cache_status()
 _validate_runtime_configuration()
 
+METRICS_COLLECTOR: MetricsCollector | None = MetricsCollector() if SETTINGS.metrics_enabled else None
+
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
@@ -710,6 +713,8 @@ app = create_app(
     enable_startup_calc_prewarm=ENABLE_STARTUP_CALC_PREWARM,
     prewarm_default_calculation_caches=_prewarm_default_calculation_caches,
     calculator_job_executor=CALCULATOR_JOB_EXECUTOR,
+    docs_enabled=SETTINGS.docs_enabled,
+    metrics_collector=METRICS_COLLECTOR,
 )
 
 # ---------------------------------------------------------------------------
@@ -728,6 +733,7 @@ app.include_router(
         health_handler=get_health,
         ready_handler=get_ready,
         ops_handler=get_ops,
+        metrics_collector=METRICS_COLLECTOR,
     )
 )
 def _get_projection_deltas(*, request: Request) -> dict:
