@@ -1,7 +1,11 @@
+import pytest
+
 from backend.core.points_calculator import (
     dynasty_keep_or_drop_values,
     optimize_points_slot_assignment,
 )
+
+pytestmark = pytest.mark.valuation
 
 
 def test_optimize_points_slot_assignment_respects_slot_capacity() -> None:

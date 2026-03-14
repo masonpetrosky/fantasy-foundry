@@ -10,7 +10,7 @@ import pandas as pd
 try:
     from backend.valuation.models import CommonDynastyRotoSettings
 except ImportError:
-    from valuation.models import CommonDynastyRotoSettings
+    from valuation.models import CommonDynastyRotoSettings  # type: ignore[no-redef]
 
 # Bench-stash penalty curve defaults:
 # - first stash round per team should still carry a small cost

@@ -14,6 +14,8 @@ from backend.valuation.assignment import (
 )
 from backend.valuation.positions import eligible_hit_slots, eligible_pit_slots
 
+pytestmark = pytest.mark.valuation
+
 # ---------------------------------------------------------------------------
 # expand_slot_counts
 # ---------------------------------------------------------------------------

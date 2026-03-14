@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from backend.valuation.positions import (
     eligible_hit_slots,
@@ -10,6 +11,8 @@ from backend.valuation.positions import (
     parse_hit_positions,
     parse_pit_positions,
 )
+
+pytestmark = pytest.mark.valuation
 
 # ---------------------------------------------------------------------------
 # parse_hit_positions

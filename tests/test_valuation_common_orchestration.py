@@ -12,6 +12,8 @@ from backend.valuation.common_orchestration import (
     _year_risk_multiplier,
 )
 
+pytestmark = pytest.mark.valuation
+
 # ---------------------------------------------------------------------------
 # _position_profile
 # ---------------------------------------------------------------------------

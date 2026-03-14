@@ -36,7 +36,7 @@ def _normalize_year_key(value: object) -> str:
     if value is None or value == "":
         return ""
     try:
-        numeric = float(value)
+        numeric = float(value)  # type: ignore[arg-type]
         if pd.notna(numeric) and numeric.is_integer():
             return str(int(numeric))
     except (TypeError, ValueError):

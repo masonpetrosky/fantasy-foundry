@@ -2,8 +2,11 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from backend.valuation import cli
+
+pytestmark = pytest.mark.valuation
 
 
 def _common_out_frame() -> pd.DataFrame:

@@ -11,9 +11,12 @@ are fully penalized regardless of bench_slots.  These tests run the real
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from backend.valuation.common_orchestration import calculate_common_dynasty_values
 from backend.valuation.models import CommonDynastyRotoSettings
+
+pytestmark = pytest.mark.valuation
 
 
 def _minimal_settings(**overrides) -> CommonDynastyRotoSettings:

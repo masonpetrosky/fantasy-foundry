@@ -3,12 +3,15 @@ import unittest
 import warnings
 
 import pandas as pd
+import pytest
 
 from backend.dynasty_roto_values import (
     CommonDynastyRotoSettings,
     compute_year_context,
     compute_year_player_values,
 )
+
+pytestmark = pytest.mark.valuation
 
 
 class SGPEdgeCaseTests(unittest.TestCase):

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from backend.valuation import minor_eligibility
+
+pytestmark = pytest.mark.valuation
 
 
 def test_infer_minor_eligibility_by_year_enforces_once_lost_rule() -> None:

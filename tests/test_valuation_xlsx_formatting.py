@@ -3,9 +3,12 @@ from __future__ import annotations
 from datetime import date
 
 import pandas as pd
+import pytest
 from openpyxl import Workbook
 
 from backend.valuation import xlsx_formatting
+
+pytestmark = pytest.mark.valuation
 
 
 def _sheet_from_dataframe(df: pd.DataFrame):

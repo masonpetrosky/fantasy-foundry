@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
+
+_logger = logging.getLogger("fantasy_foundry.data_refresh")
 
 
 def path_signature(path: Path) -> tuple[str, int | None, int | None]:
@@ -173,6 +176,57 @@ def inspect_precomputed_default_dynasty_lookup(
     )
 
 
+_REQUIRED_META_KEYS = ("years",)
+_REQUIRED_PROJECTION_KEYS = ("Player", "Year")
+
+
+def validate_projection_data(
+    meta: Any,
+    bat_data: list[dict],
+    pit_data: list[dict],
+) -> None:
+    """Validate loaded projection data has the expected schema.
+
+    Raises ``ValueError`` with a descriptive message on the first problem found
+    so startup fails fast instead of producing cryptic downstream errors.
+    """
+    if not isinstance(meta, dict):
+        raise ValueError(f"meta.json must be a JSON object, got {type(meta).__name__}")
+
+    for key in _REQUIRED_META_KEYS:
+        if key not in meta:
+            raise ValueError(f"meta.json is missing required key: {key!r}")
+
+    years = meta.get("years")
+    if not isinstance(years, list) or not years:
+        raise ValueError("meta.json 'years' must be a non-empty list")
+
+    if not isinstance(bat_data, list):
+        raise ValueError(f"bat.json must be a JSON array, got {type(bat_data).__name__}")
+    if not isinstance(pit_data, list):
+        raise ValueError(f"pitch.json must be a JSON array, got {type(pit_data).__name__}")
+
+    if not bat_data and not pit_data:
+        raise ValueError("Both bat.json and pitch.json are empty — no projection data available")
+
+    for label, rows in (("bat.json", bat_data), ("pitch.json", pit_data)):
+        if not rows:
+            continue
+        sample = rows[0]
+        if not isinstance(sample, dict):
+            raise ValueError(f"{label} rows must be JSON objects, got {type(sample).__name__}")
+        missing = [k for k in _REQUIRED_PROJECTION_KEYS if k not in sample]
+        if missing:
+            raise ValueError(f"{label} rows are missing required keys: {missing}")
+
+    _logger.info(
+        "Projection data validated: meta_years=%d bat_rows=%d pit_rows=%d",
+        len(years),
+        len(bat_data),
+        len(pit_data),
+    )
+
+
 def reload_projection_data(
     *,
     load_json: Callable[[str], Any],
@@ -183,6 +237,7 @@ def reload_projection_data(
     meta = load_json("meta.json")
     bat_data_raw = load_json("bat.json")
     pit_data_raw = load_json("pitch.json")
+    validate_projection_data(meta, bat_data_raw, pit_data_raw)
     bat_data_raw, pit_data_raw = with_player_identity_keys(bat_data_raw, pit_data_raw)
     bat_data = average_recent_projection_rows(bat_data_raw, is_hitter=True)
     pit_data = average_recent_projection_rows(pit_data_raw, is_hitter=False)

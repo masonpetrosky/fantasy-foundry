@@ -8,11 +8,14 @@ from collections import deque
 from unittest.mock import Mock, patch
 
 import pandas as pd
+import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
 import backend.app as app_module
+
+pytestmark = pytest.mark.integration
 
 
 class CalculatorValidationTests(unittest.TestCase):

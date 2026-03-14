@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 
 import backend.app as app_module
 
+pytestmark = pytest.mark.integration
+
 
 class ApiContractShapeTests(unittest.TestCase):
     @classmethod
