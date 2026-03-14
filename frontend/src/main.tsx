@@ -8,8 +8,9 @@ import { initGA4 } from "./ga4";
 
 initSentry();
 initGA4();
-import { AUTH_SYNC_ENABLED } from "./supabase_client";
-import { AccountPanel } from "./account_panel";
+import { AppHeader } from "./components/AppHeader";
+import { HeroSection } from "./components/HeroSection";
+import { AppFooter } from "./components/AppFooter";
 function resolveActivationDiagnosticsPanelEnabled({
   envEnabled = false,
   locationSearch = "",
@@ -26,7 +27,6 @@ function resolveActivationDiagnosticsPanelEnabled({
   return resolvedEnvEnabled || queryEnabled;
 }
 import { resolveApiBase } from "./api_base";
-import { PRIMARY_NAV_ITEMS } from "./app_content";
 import { ProjectionsExplorer } from "./projections_explorer";
 import { MobileCalculatorSheet } from "./MobileCalculatorSheet";
 import { installAnalyticsDebugBridge, setAnalyticsContext, trackEvent } from "./analytics";
@@ -34,7 +34,6 @@ import { ErrorBoundary } from "./error_boundary";
 import { FeatureErrorBoundary } from "./feature_error_boundary";
 import { ToastProvider } from "./Toast";
 import { PricingSection } from "./PricingSection";
-import { NewsletterSignup } from "./NewsletterSignup";
 import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProjectionLayoutState";
 import { resolveProjectionWindow } from "./formatting_utils";
 import { useBottomSheet } from "./hooks/useBottomSheet";
@@ -130,7 +129,6 @@ function App(): React.ReactElement {
     return () => mql.removeEventListener("change", handler);
   }, []);
   const landingTrackedRef = useRef(false);
-  const accountMenuLabel = !AUTH_SYNC_ENABLED || authUser ? "Account" : "Sign In";
   const sectionNeedsMeta = section === "projections";
   const projectionWindow = useMemo(() => resolveProjectionWindow(meta), [meta]);
   const resolvedScoringMode = String(calculatorSettings?.scoring_mode || "").trim().toLowerCase() === "points"
@@ -206,164 +204,36 @@ function App(): React.ReactElement {
     <CalculatorOverlayContext.Provider value={calculatorOverlay}>
     <>
       <a className="skip-link" href="#main-content">Skip to main content</a>
-      <header>
-        <div className="nav-inner">
-          <a
-            className="brand"
-            href="#"
-            onClick={event => {
-              event.preventDefault();
-              setSection("projections");
-            }}
-            aria-label="Fantasy Foundry home"
-          >
-            <span className="brand-mark" aria-hidden="true">
-              <img src="/assets/favicon.svg" alt="" />
-            </span>
-            <span className="brand-text">
-              <span className="brand-title">Fantasy Foundry</span>
-              <span className="brand-tagline">Dynasty Baseball Intelligence</span>
-            </span>
-          </a>
-          <nav className="primary-nav" aria-label="Primary">
-            <div className="primary-nav-scroll">
-              {PRIMARY_NAV_ITEMS.map(item => (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={`primary-nav-btn ${section === item.key ? "active" : ""}`.trim()}
-                  onClick={() => setSection(item.key)}
-                  aria-pressed={section === item.key}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </nav>
-          <div className="mobile-nav-menu" ref={mobileNavMenuRef}>
-            <button
-              type="button"
-              ref={mobileNavTriggerRef}
-              className={`inline-btn mobile-nav-toggle${mobileNavOpen ? " open" : ""}`}
-              onClick={() => setMobileNavOpen(prev => !prev)}
-              aria-expanded={mobileNavOpen}
-              aria-controls="mobile-nav-dropdown"
-              aria-label="Navigation menu"
-            >
-              <span aria-hidden="true">{mobileNavOpen ? "\u2715" : "\u2630"}</span>
-            </button>
-            {mobileNavOpen && (
-              <nav id="mobile-nav-dropdown" className="mobile-nav-dropdown" aria-label="Primary">
-                {PRIMARY_NAV_ITEMS.map(item => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className={`mobile-nav-item${section === item.key ? " active" : ""}`}
-                    onClick={() => setSection(item.key)}
-                    aria-pressed={section === item.key}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </nav>
-            )}
-          </div>
-          <button
-            type="button"
-            className="inline-btn theme-toggle"
-            onClick={toggleTheme}
-            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            title={theme === "dark" ? "Light mode" : "Dark mode"}
-          >
-            {theme === "dark" ? "\u2600" : "\u263E"}
-          </button>
-          <div className="account-menu" ref={accountMenuRef}>
-            <button
-              type="button"
-              ref={accountTriggerRef}
-              className={`inline-btn account-menu-btn ${accountMenuOpen ? "open" : ""}`.trim()}
-              onClick={() => setAccountMenuOpen(open => !open)}
-              aria-expanded={accountMenuOpen}
-              aria-controls="header-account-panel"
-            >
-              <span>{accountMenuLabel}</span>
-              {authUser && <span className="account-menu-pill">Signed In</span>}
-            </button>
-            {accountMenuOpen && (
-              <div id="header-account-panel" className="account-popover" role="region" aria-label="Account">
-                <AccountPanel
-                  authEnabled={AUTH_SYNC_ENABLED}
-                  authReady={authReady}
-                  authUser={authUser}
-                  authStatus={authStatus}
-                  cloudStatus={cloudStatus}
-                  onSignIn={signIn}
-                  onSignUp={signUp}
-                  onSignOut={signOut}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        section={section}
+        setSection={setSection}
+        theme={theme}
+        toggleTheme={toggleTheme}
+        authReady={authReady}
+        authUser={authUser}
+        authStatus={authStatus}
+        cloudStatus={cloudStatus}
+        signIn={signIn}
+        signUp={signUp}
+        signOut={signOut}
+        accountMenuOpen={accountMenuOpen}
+        setAccountMenuOpen={setAccountMenuOpen}
+        accountMenuRef={accountMenuRef}
+        accountTriggerRef={accountTriggerRef}
+        mobileNavOpen={mobileNavOpen}
+        setMobileNavOpen={setMobileNavOpen}
+        mobileNavMenuRef={mobileNavMenuRef}
+        mobileNavTriggerRef={mobileNavTriggerRef}
+      />
 
       <main id="main-content">
-        <div className="hero fade-up">
-          <h1>The Only <em>20-Year</em><br />Dynasty Baseball Projections</h1>
-          <p>Comprehensive player projections from 2026 through 2045. Browse the data, configure your league settings, and generate personalized dynasty rankings.</p>
-          <div className="hero-actions fade-up fade-up-2">
-            {subscription?.status !== "active" && (
-              <button className="hero-cta hero-cta-primary" onClick={scrollToCalculator}>
-                Get Started Free
-              </button>
-            )}
-            <button className="hero-cta hero-cta-secondary" onClick={() => setSection("methodology")}>
-              See Methodology
-            </button>
-          </div>
-          {meta && (
-            <>
-              <div className="hero-stats fade-up fade-up-2">
-                <div className="hero-stat">
-                  <div className="number">{String(meta.total_hitters)}</div>
-                  <div className="label">Hitters</div>
-                </div>
-                <div className="hero-stat">
-                  <div className="number">{String(meta.total_pitchers)}</div>
-                  <div className="label">Pitchers</div>
-                </div>
-                <div className="hero-stat">
-                  <div className="number">{projectionWindow.seasons || 20}</div>
-                  <div className="label">Seasons</div>
-                </div>
-              </div>
-              <div className="hero-proof fade-up fade-up-2">
-                <span>Updated for the 2026 season</span>
-              </div>
-            </>
-          )}
-        </div>
-
-        <section className="how-it-works fade-up" aria-labelledby="how-it-works-heading">
-          <h2 id="how-it-works-heading" className="sr-only">How It Works</h2>
-          <div className="how-it-works-steps">
-            <div className="how-it-works-step">
-              <div className="how-it-works-number">1</div>
-              <h3>Browse Projections</h3>
-              <p>Explore 20 years of MLB projections for hundreds of hitters and pitchers.</p>
-            </div>
-            <div className="how-it-works-step">
-              <div className="how-it-works-number">2</div>
-              <h3>Configure Your League</h3>
-              <p>Set your roster slots, scoring categories, and league size to match your format.</p>
-            </div>
-            <div className="how-it-works-step">
-              <div className="how-it-works-number">3</div>
-              <h3>Generate Rankings</h3>
-              <p>Run Monte Carlo simulations to produce custom dynasty values for every player.</p>
-            </div>
-          </div>
-        </section>
+        <HeroSection
+          meta={meta}
+          subscriptionActive={subscription?.status === "active"}
+          projectionSeasons={projectionWindow.seasons || 20}
+          scrollToCalculator={scrollToCalculator}
+          setSection={setSection}
+        />
 
         <div className="container">
           {showQuickStartOnboarding && ACTIVATION_SPRINT_ENABLED && (
@@ -413,7 +283,7 @@ function App(): React.ReactElement {
             </Suspense>
           )}
           {sectionNeedsMeta && metaLoading && !metaError && !meta && (
-            <p className="methodology-note">Loading projections metadata...</p>
+            <p className="methodology-note" role="status" aria-live="polite">Loading projections metadata...</p>
           )}
           {sectionNeedsMeta && metaError && (
             <section className="meta-error-panel" role="alert" aria-live="assertive">
@@ -477,7 +347,7 @@ function App(): React.ReactElement {
                 {calculatorPanelOpen && !isMobileViewport && (
                   <div id="embedded-calculator-content" className="embedded-calculator-content">
                     <FeatureErrorBoundary featureName="Dynasty Calculator">
-                    <Suspense fallback={<p className="methodology-note">Loading calculator...</p>}>
+                    <Suspense fallback={<p className="methodology-note" role="status" aria-live="polite">Loading calculator...</p>}>
                       <LazyDynastyCalculator
                         apiBase={API}
                         meta={meta}
@@ -516,22 +386,26 @@ function App(): React.ReactElement {
                   </div>
                 )}
                 {tradeAnalyzerOpen && tierLimits?.allowTradeAnalyzer && (
-                  <Suspense fallback={<p className="methodology-note">Loading trade analyzer...</p>}>
-                    <LazyTradeAnalyzer
-                      calculatorResults={effectiveDynastyPlayers}
-                      onClose={() => setTradeAnalyzerOpen(false)}
-                      onOpenCalculator={() => { openCalculatorPanel("trade_analyzer"); scrollToCalculator(); }}
-                    />
-                  </Suspense>
+                  <FeatureErrorBoundary featureName="Trade Analyzer">
+                    <Suspense fallback={<p className="methodology-note" role="status" aria-live="polite">Loading trade analyzer...</p>}>
+                      <LazyTradeAnalyzer
+                        calculatorResults={effectiveDynastyPlayers}
+                        onClose={() => setTradeAnalyzerOpen(false)}
+                        onOpenCalculator={() => { openCalculatorPanel("trade_analyzer"); scrollToCalculator(); }}
+                      />
+                    </Suspense>
+                  </FeatureErrorBoundary>
                 )}
                 {keeperCalculatorOpen && tierLimits?.allowTradeAnalyzer && (
-                  <Suspense fallback={<p className="methodology-note">Loading keeper calculator...</p>}>
-                    <LazyKeeperCalculator
-                      calculatorResults={effectiveDynastyPlayers}
-                      onClose={() => setKeeperCalculatorOpen(false)}
-                      onOpenCalculator={() => { openCalculatorPanel("keeper_calculator"); scrollToCalculator(); }}
-                    />
-                  </Suspense>
+                  <FeatureErrorBoundary featureName="Keeper Calculator">
+                    <Suspense fallback={<p className="methodology-note" role="status" aria-live="polite">Loading keeper calculator...</p>}>
+                      <LazyKeeperCalculator
+                        calculatorResults={effectiveDynastyPlayers}
+                        onClose={() => setKeeperCalculatorOpen(false)}
+                        onOpenCalculator={() => { openCalculatorPanel("keeper_calculator"); scrollToCalculator(); }}
+                      />
+                    </Suspense>
+                  </FeatureErrorBoundary>
                 )}
                 <FeatureErrorBoundary featureName="Projections Explorer">
                 <ProjectionsExplorer
@@ -553,7 +427,7 @@ function App(): React.ReactElement {
             <PricingSection authUser={authUser} subscription={subscription} />
           )}
           {section === "methodology" && (
-            <Suspense fallback={<p className="methodology-note">Loading methodology...</p>}>
+            <Suspense fallback={<p className="methodology-note" role="status" aria-live="polite">Loading methodology...</p>}>
               <LazyMethodologySection />
             </Suspense>
           )}
@@ -586,7 +460,7 @@ function App(): React.ReactElement {
             sheetStyle={bottomSheet.sheetStyle}
           >
             <FeatureErrorBoundary featureName="Dynasty Calculator">
-              <Suspense fallback={<p className="methodology-note">Loading calculator...</p>}>
+              <Suspense fallback={<p className="methodology-note" role="status" aria-live="polite">Loading calculator...</p>}>
                 <LazyDynastyCalculator
                   apiBase={API}
                   meta={meta}
@@ -606,18 +480,7 @@ function App(): React.ReactElement {
         )}
       </main>
 
-      <footer>
-        <div className="footer-inner">
-          <div>
-            {meta?.last_projection_update
-              ? <>Projections updated {meta.last_projection_update}.</>
-              : <>Projections updated as-needed.</>
-            }
-            {buildLabel && <span className="build-id">Build {buildLabel}</span>}
-          </div>
-          <NewsletterSignup apiBase={API} />
-        </div>
-      </footer>
+      <AppFooter meta={meta} buildLabel={buildLabel} apiBase={API} />
     </>
     </CalculatorOverlayContext.Provider>
   );
@@ -631,8 +494,20 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <ToastProvider>
         <Routes>
-          <Route path="/player/:slug" element={<Suspense fallback={<p className="methodology-note">Loading player...</p>}><LazyPlayerPage /></Suspense>} />
-          <Route path="/movers" element={<Suspense fallback={<p className="methodology-note">Loading movers...</p>}><LazyMoversPage /></Suspense>} />
+          <Route path="/player/:slug" element={
+            <FeatureErrorBoundary featureName="Player Page">
+              <Suspense fallback={<p className="methodology-note" role="status" aria-live="polite">Loading player...</p>}>
+                <LazyPlayerPage />
+              </Suspense>
+            </FeatureErrorBoundary>
+          } />
+          <Route path="/movers" element={
+            <FeatureErrorBoundary featureName="Movers Page">
+              <Suspense fallback={<p className="methodology-note" role="status" aria-live="polite">Loading movers...</p>}>
+                <LazyMoversPage />
+              </Suspense>
+            </FeatureErrorBoundary>
+          } />
           <Route path="*" element={<App />} />
         </Routes>
       </ToastProvider>

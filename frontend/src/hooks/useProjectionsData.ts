@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedValue } from "../request_helpers";
+import { extractApiErrorMessage } from "../utils/apiErrors";
 import type { ProjectionRow } from "../app_state_storage";
 
 export const DEFAULT_PROJECTIONS_TAB = "all";
@@ -349,7 +350,7 @@ export function useProjectionsData({
       if (requestSeq !== requestSeqRef.current) return;
       if ((err as Error)?.name === "AbortError") return;
       setLoading(false);
-      setError((err as Error)?.message || "Failed to load projections");
+      setError(extractApiErrorMessage(err));
     } finally {
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;

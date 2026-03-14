@@ -50,6 +50,12 @@ def _normalized_host(raw_value: str | None) -> str:
 
 def register_middlewares(app: FastAPI, *, config: MiddlewareConfig) -> None:
     request_logger = logging.getLogger("fantasy_foundry.http")
+    middleware_logger = logging.getLogger("fantasy_foundry.middleware")
+    if "*" in config.cors_allow_origins and str(config.environment).strip().lower() == "production":
+        middleware_logger.warning(
+            "CORS allow_origins contains wildcard '*' in production. "
+            "Set FF_CORS_ALLOW_ORIGINS to restrict origins (e.g. 'https://fantasy-foundry.com')."
+        )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(config.cors_allow_origins),

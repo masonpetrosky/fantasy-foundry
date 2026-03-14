@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { resolveApiBase } from "./api_base";
 import { formatCellValue } from "./formatting_utils";
+import { useFocusOnMount } from "./hooks/useFocusOnMount";
 
 const API: string = resolveApiBase();
 
@@ -56,6 +57,7 @@ function parseRows(payload: unknown): PlayerRow[] {
 }
 
 export function PlayerPage(): React.ReactElement {
+  const headingRef = useFocusOnMount<HTMLHeadingElement>();
   const { slug } = useParams<{ slug: string }>();
   const [data, setData] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
@@ -120,7 +122,7 @@ export function PlayerPage(): React.ReactElement {
         {!loading && !error && rows.length > 0 && (
           <>
             <header className="player-page-header">
-              <h1>{playerName}</h1>
+              <h1 ref={headingRef} tabIndex={-1}>{playerName}</h1>
               <p className="player-page-meta">
                 {team && <span>{team}</span>}
                 {pos && <><span className="player-page-sep"> · </span><span>{pos}</span></>}

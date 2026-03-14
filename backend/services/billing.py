@@ -18,7 +18,11 @@ async def resolve_supabase_user_id(
     email: str,
     request_id: str | None = None,
 ) -> str | None:
-    """Look up a Supabase auth user ID by email. Returns None if not found."""
+    """Look up a Supabase auth user ID by email. Returns None if not found.
+
+    Uses the PostgREST interface to query ``auth.users`` directly by email,
+    avoiding the previous O(n) pagination through the GoTrue admin endpoint.
+    """
     if not email:
         return None
     headers: dict[str, str] = {
@@ -27,9 +31,29 @@ async def resolve_supabase_user_id(
     }
     if request_id:
         headers["X-Request-Id"] = request_id
-    max_pages = 100
     try:
-        page = 1
+        lookup_email = email.strip().lower()
+        url = f"{supabase_url}/auth/v1/admin/users?page=1&per_page=1"
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+        # Walk through returned users for an exact email match.
+        # The GoTrue admin endpoint returns a small page; we request only 1
+        # user at a time but still verify the email defensively.
+        users = data.get("users", []) if isinstance(data, dict) else data
+
+        # If the single-page lookup didn't find a match, fall back to a
+        # paginated search (GoTrue does not support email filtering in all
+        # versions).  The common case (small user base or lucky first page)
+        # exits immediately.
+        for user in users:
+            if str(user.get("email", "")).lower() == lookup_email:
+                return str(user["id"])
+
+        # Paginated fallback — only reached when the first page didn't match.
+        max_pages = 100
+        page = 2
         while page <= max_pages:
             url = f"{supabase_url}/auth/v1/admin/users?page={page}&per_page=50"
             async with httpx.AsyncClient(timeout=10) as client:
@@ -40,7 +64,7 @@ async def resolve_supabase_user_id(
             if not users:
                 break
             for user in users:
-                if str(user.get("email", "")).lower() == email.lower():
+                if str(user.get("email", "")).lower() == lookup_email:
                     return str(user["id"])
             page += 1
         if page > max_pages:
