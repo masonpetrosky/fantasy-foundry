@@ -6,9 +6,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 from fastapi.testclient import TestClient
 
 import backend.app as app_module
+
+pytestmark = pytest.mark.integration
 
 
 class ProjectionEndpointValidationTests(unittest.TestCase):

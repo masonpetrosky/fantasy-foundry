@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 
 from backend.api.routes.newsletter import build_newsletter_router
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture()
 def newsletter_app():

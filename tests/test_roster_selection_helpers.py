@@ -1,8 +1,11 @@
 import unittest
 
 import pandas as pd
+import pytest
 
 from backend.dynasty_roto_values import _non_vacant_player_names, _select_mlb_roster_with_active_floor
+
+pytestmark = pytest.mark.valuation
 
 
 class RosterSelectionHelperTests(unittest.TestCase):

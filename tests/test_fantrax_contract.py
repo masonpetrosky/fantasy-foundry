@@ -15,6 +15,8 @@ from backend.services.fantrax.models import (
     TeamRoster,
 )
 
+pytestmark = pytest.mark.integration
+
 
 def _make_league_info() -> LeagueInfo:
     return LeagueInfo(

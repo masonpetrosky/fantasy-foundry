@@ -1,9 +1,12 @@
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.app_factory import create_app
+
+pytestmark = pytest.mark.integration
 
 
 def _build_test_app():

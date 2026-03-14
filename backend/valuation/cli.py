@@ -19,8 +19,8 @@ try:
     from backend.valuation.common_orchestration import calculate_common_dynasty_values
     from backend.valuation.models import CommonDynastyRotoSettings
 except ImportError:  # pragma: no cover - direct script execution fallback
-    from valuation import xlsx_formatting as _xlsx_fmt
-    from valuation.cli_args import (
+    from valuation import xlsx_formatting as _xlsx_fmt  # type: ignore[no-redef]
+    from valuation.cli_args import (  # type: ignore[no-redef]
         discount_arg,
         non_negative_float_arg,
         non_negative_int_arg,
@@ -28,8 +28,8 @@ except ImportError:  # pragma: no cover - direct script execution fallback
         positive_int_arg,
         validate_ip_bounds,
     )
-    from valuation.common_orchestration import calculate_common_dynasty_values
-    from valuation.models import CommonDynastyRotoSettings
+    from valuation.common_orchestration import calculate_common_dynasty_values  # type: ignore[no-redef]
+    from valuation.models import CommonDynastyRotoSettings  # type: ignore[no-redef]
 
 
 def _build_parser() -> argparse.ArgumentParser:

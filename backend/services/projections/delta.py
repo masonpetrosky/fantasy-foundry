@@ -26,13 +26,13 @@ DEFAULT_MOVERS_COUNT = 20
 
 def _aggregate_player_stats(
     rows: list[dict[str, Any]], *, stat_cols: tuple[str, ...], player_type: str
-) -> dict[str, dict[str, float]]:
+) -> dict[str, dict[str, Any]]:
     """Aggregate stats per player entity key across all projection years.
 
     For counting stats: sum across years.
     For rate stats: weighted average (by AB for hitters, IP for pitchers).
     """
-    accumulator: dict[str, dict[str, float]] = {}
+    accumulator: dict[str, dict[str, Any]] = {}
     weight_key = "AB" if player_type == "H" else "IP"
 
     for row in rows:
@@ -61,9 +61,9 @@ def _aggregate_player_stats(
                 accumulator[key][stat] += val
 
     # Finalize rate stats
-    result: dict[str, dict[str, float]] = {}
+    result: dict[str, dict[str, Any]] = {}
     for key, stats in accumulator.items():
-        total_weight = stats.pop("_weight")
+        total_weight = float(stats.pop("_weight"))
         name = stats.pop("_name")
         team = stats.pop("_team")
         pos = stats.pop("_pos")
@@ -129,47 +129,47 @@ def compute_projection_deltas(
             "has_previous": True
         }
     """
-    curr_hit = _aggregate_player_stats(current_bat, stat_cols=_HITTER_DELTA_STATS, player_type="H")
-    prev_hit = _aggregate_player_stats(prev_bat, stat_cols=_HITTER_DELTA_STATS, player_type="H")
-    curr_pit = _aggregate_player_stats(current_pit, stat_cols=_PITCHER_DELTA_STATS, player_type="P")
-    prev_pit = _aggregate_player_stats(prev_pit, stat_cols=_PITCHER_DELTA_STATS, player_type="P")
+    curr_hit_agg = _aggregate_player_stats(current_bat, stat_cols=_HITTER_DELTA_STATS, player_type="H")
+    prev_hit_agg = _aggregate_player_stats(prev_bat, stat_cols=_HITTER_DELTA_STATS, player_type="H")
+    curr_pit_agg = _aggregate_player_stats(current_pit, stat_cols=_PITCHER_DELTA_STATS, player_type="P")
+    prev_pit_agg = _aggregate_player_stats(prev_pit, stat_cols=_PITCHER_DELTA_STATS, player_type="P")
 
     delta_map: dict[str, dict[str, Any]] = {}
 
     # Hitters
-    for key in curr_hit:
-        if key not in prev_hit:
+    for key in curr_hit_agg:
+        if key not in prev_hit_agg:
             continue
         stat_deltas = {}
         for stat in _HITTER_DELTA_STATS:
-            stat_deltas[stat] = round(curr_hit[key].get(stat, 0) - prev_hit[key].get(stat, 0), 3)
-        composite = _compute_composite_delta(curr_hit[key], prev_hit[key], _HITTER_DELTA_STATS)
+            stat_deltas[stat] = round(curr_hit_agg[key].get(stat, 0) - prev_hit_agg[key].get(stat, 0), 3)
+        composite = _compute_composite_delta(curr_hit_agg[key], prev_hit_agg[key], _HITTER_DELTA_STATS)
         delta_map[key] = {
-            "player": curr_hit[key]["_name"],
-            "team": curr_hit[key]["_team"],
-            "pos": curr_hit[key]["_pos"],
+            "player": curr_hit_agg[key]["_name"],
+            "team": curr_hit_agg[key]["_team"],
+            "pos": curr_hit_agg[key]["_pos"],
             "type": "H",
             "deltas": stat_deltas,
             "composite_delta": composite,
         }
 
     # Pitchers
-    for key in curr_pit:
-        if key not in prev_pit:
+    for key in curr_pit_agg:
+        if key not in prev_pit_agg:
             continue
         stat_deltas = {}
         for stat in _PITCHER_DELTA_STATS:
-            stat_deltas[stat] = round(curr_pit[key].get(stat, 0) - prev_pit[key].get(stat, 0), 3)
-        composite = _compute_composite_delta(curr_pit[key], prev_pit[key], _PITCHER_DELTA_STATS)
+            stat_deltas[stat] = round(curr_pit_agg[key].get(stat, 0) - prev_pit_agg[key].get(stat, 0), 3)
+        composite = _compute_composite_delta(curr_pit_agg[key], prev_pit_agg[key], _PITCHER_DELTA_STATS)
         if key in delta_map:
             # Two-way player — add pitcher deltas and update composite
             delta_map[key]["deltas"].update(stat_deltas)
             delta_map[key]["composite_delta"] = round(delta_map[key]["composite_delta"] + composite, 3)
         else:
             delta_map[key] = {
-                "player": curr_pit[key]["_name"],
-                "team": curr_pit[key]["_team"],
-                "pos": curr_pit[key]["_pos"],
+                "player": curr_pit_agg[key]["_name"],
+                "team": curr_pit_agg[key]["_team"],
+                "pos": curr_pit_agg[key]["_pos"],
                 "type": "P",
                 "deltas": stat_deltas,
                 "composite_delta": composite,

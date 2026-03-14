@@ -2,9 +2,12 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 import backend.app as app_module
+
+pytestmark = pytest.mark.integration
 
 
 class OperationalHardeningTests(unittest.TestCase):

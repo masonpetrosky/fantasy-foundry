@@ -2,6 +2,7 @@ import unittest
 import warnings
 
 import pandas as pd
+import pytest
 
 from backend.dynasty_roto_values import (
     PIT_COMPONENT_COLS,
@@ -17,6 +18,8 @@ from backend.dynasty_roto_values import (
     compute_year_player_values,
     eligible_pit_slots,
 )
+
+pytestmark = pytest.mark.valuation
 
 
 class VacancyBackfillTests(unittest.TestCase):

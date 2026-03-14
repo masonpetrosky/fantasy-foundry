@@ -11,6 +11,8 @@ from backend.dynasty_roto_values import (
 )
 from backend.runtime import _calculate_common_dynasty_frame_cached
 
+pytestmark = pytest.mark.valuation
+
 
 class CommonPitcherBoundsRegressionTests(unittest.TestCase):
     def test_active_common_pitch_categories_includes_native_qa3(self) -> None:

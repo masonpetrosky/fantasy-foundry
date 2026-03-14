@@ -57,6 +57,7 @@ class StatusOrchestrationContext:
     projection_rate_limit_per_minute: int
     projection_export_rate_limit_per_minute: int
     redis_url: str
+    redis_client_getter: Callable[[], Any] | None
     bat_data_getter: Callable[[], list[dict]]
     pit_data_getter: Callable[[], list[dict]]
     calculator_worker_available: Callable[[], bool]
@@ -322,6 +323,21 @@ def get_version(request: Request, *, ctx: StatusOrchestrationContext):
     return JSONResponse(payload, headers=headers)
 
 
+def _redis_health_payload(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
+    """Check Redis connectivity and return a health payload."""
+    configured = bool(ctx.redis_url)
+    if not configured or ctx.redis_client_getter is None:
+        return {"configured": configured, "connected": False}
+    try:
+        client = ctx.redis_client_getter()
+        if client is None:
+            return {"configured": True, "connected": False}
+        client.ping()
+        return {"configured": True, "connected": True}
+    except Exception:
+        return {"configured": True, "connected": False}
+
+
 def get_health(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
     ctx.refresh_data_if_needed()
     job_status_counts = _job_status_counts(ctx=ctx)
@@ -330,6 +346,8 @@ def get_health(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
 
     with ctx.calculator_prewarm_lock:
         prewarm = dict(ctx.calculator_prewarm_state)
+
+    redis_health = _redis_health_payload(ctx=ctx)
 
     return {
         "status": "ok",
@@ -346,7 +364,8 @@ def get_health(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
         "dynasty_lookup_cache": dynasty_lookup_cache_health_payload(ctx=ctx),
         "result_cache": {
             "local_entries": local_result_cache_entries,
-            "redis_configured": bool(ctx.redis_url),
+            "redis_configured": redis_health["configured"],
+            "redis_connected": redis_health["connected"],
         },
         "calculator_prewarm": prewarm,
         "timestamp": ctx.iso_now(),
@@ -442,6 +461,8 @@ def get_ready(*, ctx: StatusOrchestrationContext):
     job_status_counts = _job_status_counts(ctx=ctx)
     queue_capacity_summary = _queue_capacity_summary(ctx=ctx, job_status_counts=job_status_counts)
 
+    redis_health = _redis_health_payload(ctx=ctx)
+
     return {
         "status": "ready",
         "build_id": ctx.app_build_id,
@@ -452,6 +473,7 @@ def get_ready(*, ctx: StatusOrchestrationContext):
             "projection_rows": {"bat": bat_rows, "pitch": pit_rows},
             "calculator_worker": True,
             "queue_capacity": queue_capacity_summary,
+            "redis": redis_health,
         },
         "timestamp": ctx.iso_now(),
     }

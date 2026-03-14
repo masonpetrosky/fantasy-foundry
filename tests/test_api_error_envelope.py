@@ -2,9 +2,12 @@ import types
 import unittest
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 import backend.app as app_module
+
+pytestmark = pytest.mark.integration
 
 
 class ApiErrorEnvelopeTests(unittest.TestCase):

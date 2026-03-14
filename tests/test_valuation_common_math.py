@@ -4,9 +4,12 @@ import math
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from backend.valuation import common_math
 from backend.valuation.models import PIT_COMPONENT_COLS, CommonDynastyRotoSettings
+
+pytestmark = pytest.mark.valuation
 
 
 def _sample_common_frames() -> tuple[pd.DataFrame, pd.DataFrame]:

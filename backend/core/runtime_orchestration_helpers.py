@@ -62,6 +62,7 @@ class RuntimeOrchestrationHelpers:
             projection_rate_limit_per_minute=state.PROJECTION_RATE_LIMITS.read_per_minute,
             projection_export_rate_limit_per_minute=state.PROJECTION_RATE_LIMITS.export_per_minute,
             redis_url=state.REDIS_URL,
+            redis_client_getter=getattr(state, "_redis_client", None),
             bat_data_getter=lambda: state.BAT_DATA,
             pit_data_getter=lambda: state.PIT_DATA,
             calculator_worker_available=lambda: not getattr(state.CALCULATOR_JOB_EXECUTOR, "_shutdown", False),
