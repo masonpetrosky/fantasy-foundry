@@ -50,8 +50,8 @@ def register_middlewares(app: FastAPI, *, config: MiddlewareConfig) -> None:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(config.cors_allow_origins),
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "X-Api-Key", "X-Request-Id"],
     )
     app.add_middleware(
         GZipMiddleware,

@@ -14,17 +14,17 @@ export default defineConfig({
       include: ["src/**/*.{js,jsx,ts,tsx}"],
       exclude: ["src/**/*.test.{js,jsx,ts,tsx}"],
       thresholds: {
-        lines: 45,
-        branches: 45,
-        functions: 45,
-        statements: 45,
+        lines: 55,
+        branches: 55,
+        functions: 55,
+        statements: 55,
       },
     },
   },
   build: {
     outDir: "dist",
     assetsDir: "assets",
-    sourcemap: false,
-    target: "es2020",
+    sourcemap: "hidden",
+    target: "es2022",
   },
 });
