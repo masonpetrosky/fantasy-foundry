@@ -28,7 +28,7 @@ COPY frontend/public ./public
 RUN npm run build
 
 
-FROM python:3.12-slim
+FROM python:3.12.9-slim
 
 WORKDIR /app
 
@@ -58,7 +58,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN useradd --system --no-create-home appuser
 
 COPY backend ./backend
-COPY frontend ./frontend
 COPY data ./data
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
