@@ -161,6 +161,23 @@ def register_middlewares(app: FastAPI, *, config: MiddlewareConfig) -> None:
             )
         return response
 
+    max_body_bytes = 1_048_576  # 1 MB
+
+    @app.middleware("http")
+    async def enforce_request_body_size_limit(request: Request, call_next: CallNext):
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                if int(content_length) > max_body_bytes:
+                    return Response(
+                        status_code=413,
+                        content='{"detail":"Request body too large."}',
+                        media_type="application/json",
+                    )
+            except (ValueError, TypeError):
+                pass
+        return await call_next(request)
+
     @app.middleware("http")
     async def log_api_request(request: Request, call_next: CallNext):
         if not request.url.path.startswith("/api/"):

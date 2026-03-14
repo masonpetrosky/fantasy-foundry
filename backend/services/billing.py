@@ -16,17 +16,21 @@ async def resolve_supabase_user_id(
     supabase_url: str,
     supabase_service_role_key: str,
     email: str,
+    request_id: str | None = None,
 ) -> str | None:
     """Look up a Supabase auth user ID by email. Returns None if not found."""
     if not email:
         return None
-    headers = {
+    headers: dict[str, str] = {
         "apikey": supabase_service_role_key,
         "Authorization": f"Bearer {supabase_service_role_key}",
     }
+    if request_id:
+        headers["X-Request-Id"] = request_id
+    max_pages = 100
     try:
         page = 1
-        while True:
+        while page <= max_pages:
             url = f"{supabase_url}/auth/v1/admin/users?page={page}&per_page=50"
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(url, headers=headers)
@@ -39,6 +43,8 @@ async def resolve_supabase_user_id(
                 if str(user.get("email", "")).lower() == email.lower():
                     return str(user["id"])
             page += 1
+        if page > max_pages:
+            logger.warning("resolve_supabase_user_id exceeded max_pages=%d for email=%s", max_pages, email)
     except (OSError, KeyError, ValueError) as exc:
         logger.warning("Could not resolve Supabase user_id for email=%s: %s", email, exc, exc_info=True)
     return None

@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Path, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from backend.api.models import (
     ErrorResponse,
@@ -33,6 +33,14 @@ class BaseProjectionQueryParams(BaseModel):
     calculator_job_id: str | None = Field(default=None, max_length=100)
     sort_col: str | None = Field(default=None, max_length=50)
     sort_dir: Literal["asc", "desc"] = "desc"
+
+    @model_validator(mode="after")
+    def validate_player_keys_count(self) -> "BaseProjectionQueryParams":
+        if self.player_keys:
+            key_count = self.player_keys.count(",") + 1
+            if key_count > 200:
+                raise ValueError(f"player_keys contains {key_count} keys; maximum is 200")
+        return self
 
     def to_handler_kwargs(self) -> dict[str, Any]:
         """Return field dict suitable for unpacking into projection_response_handler."""

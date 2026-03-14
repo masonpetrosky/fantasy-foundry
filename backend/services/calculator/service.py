@@ -120,6 +120,11 @@ class CalculateRequest(BaseModel):
             raise ValueError("At least one hitter slot must be greater than 0.")
         if total_pitcher_slots <= 0:
             raise ValueError("At least one pitcher slot must be greater than 0.")
+        total_roster = total_hitter_slots + total_pitcher_slots + self.bench + self.minors + self.ir
+        if total_roster > 150:
+            raise ValueError(
+                f"Total roster size ({total_roster}) exceeds the maximum of 150."
+            )
         if self.scoring_mode == "roto":
             if not any(bool(getattr(self, field_key, False)) for field_key, _stat_col, _default in ROTO_HITTER_CATEGORY_FIELDS):
                 raise ValueError("Roto scoring must include at least one hitting category.")
