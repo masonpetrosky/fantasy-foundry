@@ -43,7 +43,7 @@ def build_billing_router(
 
     router = APIRouter(tags=["billing"])
 
-    @router.post("/api/billing/create-checkout-session")
+    @router.post("/api/billing/create-checkout-session", summary="Create Stripe checkout session")
     async def create_checkout_session(body: CheckoutRequest) -> JSONResponse:
         price_id = price_map.get(body.price_lookup_key, "")
         if not price_id:
@@ -63,7 +63,7 @@ def build_billing_router(
 
         return JSONResponse({"checkout_url": session.url})
 
-    @router.post("/api/billing/webhook")
+    @router.post("/api/billing/webhook", summary="Handle Stripe webhook event")
     async def stripe_webhook(request: Request) -> JSONResponse:
         body = await request.body()
         sig_header = request.headers.get("stripe-signature", "")
@@ -91,7 +91,7 @@ def build_billing_router(
 
         return JSONResponse({"received": True})
 
-    @router.get("/api/billing/subscription-status")
+    @router.get("/api/billing/subscription-status", summary="Check subscription status")
     async def subscription_status(email: str = "") -> JSONResponse:
         email = email.strip()
         if not email:

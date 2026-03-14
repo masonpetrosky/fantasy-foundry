@@ -41,7 +41,7 @@ function SparkLine({ rows, col }: SparkLineProps): React.ReactElement | null {
     })
     .join(" ");
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="sparkline player-page-sparkline" aria-hidden="true">
+    <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="sparkline player-page-sparkline" role="img" aria-label="Dynasty value trajectory">
       <polyline points={points} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   );

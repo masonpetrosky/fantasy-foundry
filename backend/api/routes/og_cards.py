@@ -130,7 +130,7 @@ def build_og_cards_router(
     """Create OG image card routes."""
     router = APIRouter(tags=["og-cards"])
 
-    @router.get("/api/og/player/{slug}.png")
+    @router.get("/api/og/player/{slug}.png", summary="Generate player OG image card")
     def get_player_og_card(slug: str):
         """Generate an Open Graph image card for a player."""
         clean_slug = slug.strip("/").split("/")[0] if slug else ""

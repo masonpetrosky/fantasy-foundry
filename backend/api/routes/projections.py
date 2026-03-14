@@ -57,8 +57,8 @@ class ProjectionExportQueryParams(BaseProjectionQueryParams):
 
 
 PROJECTION_ERROR_RESPONSES = {
-    422: {"model": ErrorResponse},
-    429: {"model": ErrorResponse},
+    422: {"model": ErrorResponse, "description": "Validation error in query parameters"},
+    429: {"model": ErrorResponse, "description": "Rate limit exceeded — see Retry-After header"},
     500: {"model": ErrorResponse},
 }
 
@@ -74,28 +74,28 @@ def build_projections_router(
     """Create projections query/export routes with injected handlers."""
     router = APIRouter(tags=["projections"])
 
-    @router.get("/api/projections/all", response_model=ProjectionListResponse, responses=PROJECTION_ERROR_RESPONSES)
+    @router.get("/api/projections/all", summary="List all projections", response_model=ProjectionListResponse, responses=PROJECTION_ERROR_RESPONSES)
     def get_all_projections(
         request: Request,
         query: Annotated[ProjectionListQueryParams, Depends()],
     ):
         return projection_response_handler("all", **query.to_handler_kwargs(), request=request)
 
-    @router.get("/api/projections/bat", response_model=ProjectionListResponse, responses=PROJECTION_ERROR_RESPONSES)
+    @router.get("/api/projections/bat", summary="List hitter projections", response_model=ProjectionListResponse, responses=PROJECTION_ERROR_RESPONSES)
     def get_bat_projections(
         request: Request,
         query: Annotated[ProjectionListQueryParams, Depends()],
     ):
         return projection_response_handler("bat", **query.to_handler_kwargs(), request=request)
 
-    @router.get("/api/projections/pitch", response_model=ProjectionListResponse, responses=PROJECTION_ERROR_RESPONSES)
+    @router.get("/api/projections/pitch", summary="List pitcher projections", response_model=ProjectionListResponse, responses=PROJECTION_ERROR_RESPONSES)
     def get_pitch_projections(
         request: Request,
         query: Annotated[ProjectionListQueryParams, Depends()],
     ):
         return projection_response_handler("pitch", **query.to_handler_kwargs(), request=request)
 
-    @router.get("/api/projections/player/{player_id}", response_model=ProjectionListResponse, responses=PROJECTION_ERROR_RESPONSES)
+    @router.get("/api/projections/player/{player_id}", summary="Get player projection series", response_model=ProjectionListResponse, responses=PROJECTION_ERROR_RESPONSES)
     def get_player_projection_series(
         request: Request,
         player_id: str = Path(max_length=100),
@@ -124,6 +124,7 @@ def build_projections_router(
 
     @router.get(
         "/api/projections/profile/{player_id}",
+        summary="Get player profile",
         response_model=ProjectionProfileResponse,
         responses=PROJECTION_ERROR_RESPONSES,
     )
@@ -144,6 +145,7 @@ def build_projections_router(
 
     @router.get(
         "/api/projections/compare",
+        summary="Compare player projections",
         response_model=ProjectionCompareResponse,
         responses=PROJECTION_ERROR_RESPONSES,
     )
@@ -170,7 +172,7 @@ def build_projections_router(
             dynasty_years=dynasty_years,
         )
 
-    @router.get("/api/projections/export/{dataset}")
+    @router.get("/api/projections/export/{dataset}", summary="Export projections as CSV/XLSX", responses=PROJECTION_ERROR_RESPONSES)
     def export_projections(
         request: Request,
         dataset: Literal["all", "bat", "pitch"],
@@ -198,7 +200,7 @@ def build_projections_router(
 
     if projection_deltas_handler is not None:
 
-        @router.get("/api/projections/deltas")
+        @router.get("/api/projections/deltas", summary="Get week-over-week projection changes")
         def get_projection_deltas(request: Request):
             return projection_deltas_handler(request=request)
 

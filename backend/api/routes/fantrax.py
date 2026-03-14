@@ -46,7 +46,7 @@ def build_fantrax_router(
     """Create Fantrax league integration routes."""
     router = APIRouter(tags=["fantrax"])
 
-    @router.get("/api/fantrax/league")
+    @router.get("/api/fantrax/league", summary="Get Fantrax league info")
     async def get_league(request: Request, leagueId: str | None = None) -> JSONResponse:
         """Fetch Fantrax league info (teams, scoring, slots)."""
         client_ip = client_ip_resolver(request)
@@ -82,7 +82,7 @@ def build_fantrax_router(
             }
         )
 
-    @router.get("/api/fantrax/league/roster")
+    @router.get("/api/fantrax/league/roster", summary="Get team roster with FF matches")
     async def get_league_roster(
         request: Request,
         leagueId: str | None = None,
@@ -141,7 +141,7 @@ def build_fantrax_router(
             }
         )
 
-    @router.get("/api/fantrax/league/settings")
+    @router.get("/api/fantrax/league/settings", summary="Get suggested calculator settings")
     async def get_league_settings(
         request: Request,
         leagueId: str | None = None,

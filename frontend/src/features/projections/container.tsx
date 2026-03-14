@@ -25,7 +25,8 @@ import { ProjectionStatusMessages } from "./components/ProjectionStatusMessages"
 import type { TierLimits } from "../../premium";
 import { isRotoStatDynastyCol, rotoStatDynastyLabel } from "../../dynasty_calculator_config";
 import type { CalculatorSettings } from "../../dynasty_calculator_config";
-import type { PlayerWatchEntry, ProjectionRow } from "../../app_state_storage";
+import type { PlayerWatchEntry } from "../../app_state_storage";
+import { useCalculatorOverlayContext } from "../../contexts/CalculatorOverlayContext";
 
 interface ProjectionsExplorerProps {
   apiBase: string;
@@ -35,13 +36,6 @@ interface ProjectionsExplorerProps {
   setWatchlist: React.Dispatch<React.SetStateAction<Record<string, PlayerWatchEntry>>>;
   hasSuccessfulCalcRun: boolean;
   activeCalculatorSettings: CalculatorSettings | null;
-  calculatorOverlayByPlayerKey: Record<string, ProjectionRow> | null;
-  calculatorOverlayActive: boolean;
-  calculatorOverlayJobId: string;
-  calculatorOverlayDataVersion: string;
-  calculatorOverlayPlayerCount: number;
-  calculatorOverlaySummary: Record<string, unknown> | null;
-  onClearCalculatorOverlay: () => void;
   tierLimits: TierLimits | null;
   fantraxRosterPlayerKeys?: Set<string>;
 }
@@ -54,16 +48,18 @@ export function ProjectionsExplorer({
   setWatchlist,
   hasSuccessfulCalcRun,
   activeCalculatorSettings,
-  calculatorOverlayByPlayerKey,
-  calculatorOverlayActive,
-  calculatorOverlayJobId,
-  calculatorOverlayDataVersion,
-  calculatorOverlayPlayerCount,
-  calculatorOverlaySummary,
-  onClearCalculatorOverlay,
   tierLimits,
   fantraxRosterPlayerKeys,
 }: ProjectionsExplorerProps): React.ReactElement {
+  const {
+    calculatorOverlayByPlayerKey,
+    calculatorOverlayActive,
+    calculatorOverlayJobId,
+    calculatorOverlayDataVersion,
+    calculatorOverlayPlayerCount,
+    calculatorOverlaySummary,
+    clearCalculatorOverlay: onClearCalculatorOverlay,
+  } = useCalculatorOverlayContext();
   const activeCalculatorJobId = calculatorOverlayActive
     ? String(calculatorOverlayJobId || "").trim()
     : "";

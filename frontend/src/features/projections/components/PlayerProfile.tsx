@@ -55,7 +55,8 @@ function SparkLine({ rows, col }: SparkLineProps): React.ReactElement | null {
       width={W}
       height={H}
       className="sparkline"
-      aria-hidden="true"
+      role="img"
+      aria-label={`${col} trend over projected years`}
     >
       <polyline
         points={points}

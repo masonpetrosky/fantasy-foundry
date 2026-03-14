@@ -113,6 +113,8 @@ class AppSettings:
     supabase_url: str
     supabase_service_role_key: str
     fantrax_rate_limit_per_minute: int
+    docs_enabled: bool
+    metrics_enabled: bool
 
 
 def load_settings_from_env() -> AppSettings:
@@ -179,4 +181,6 @@ def load_settings_from_env() -> AppSettings:
         supabase_url=str(os.getenv("SUPABASE_URL", "")).strip(),
         supabase_service_role_key=str(os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")).strip(),
         fantrax_rate_limit_per_minute=_get_int("FF_FANTRAX_RATE_LIMIT_PER_MINUTE", default=10, minimum=1),
+        docs_enabled=_get_bool("FF_DOCS_ENABLED", default=True),
+        metrics_enabled=_get_bool("FF_METRICS_ENABLED", default=True),
     )

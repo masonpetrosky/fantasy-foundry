@@ -39,6 +39,7 @@ import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProject
 import { resolveProjectionWindow } from "./formatting_utils";
 import { useBottomSheet } from "./hooks/useBottomSheet";
 import { useCalculatorOverlay } from "./hooks/useCalculatorOverlay";
+import { CalculatorOverlayContext } from "./contexts/CalculatorOverlayContext";
 import { useDefaultDynastyPlayers } from "./hooks/useDefaultDynastyPlayers";
 import { useCalculatorState } from "./hooks/useCalculatorState";
 import { useMetadata } from "./hooks/useMetadata";
@@ -99,17 +100,8 @@ function App(): React.ReactElement {
     openMethodologyGlossary,
   } = useCalculatorState({ section, setSection, meta });
   const [watchlist, setWatchlist] = useState(() => readPlayerWatchlist());
-  const {
-    calculatorOverlayByPlayerKey,
-    calculatorOverlayActive,
-    calculatorOverlayJobId,
-    calculatorOverlayDataVersion,
-    calculatorOverlaySummary,
-    calculatorOverlayPlayerCount,
-    calculatorResultRows,
-    applyCalculatorOverlay,
-    clearCalculatorOverlay,
-  } = useCalculatorOverlay(dataVersion);
+  const calculatorOverlay = useCalculatorOverlay(dataVersion);
+  const { calculatorResultRows } = calculatorOverlay;
   const defaultDynastyPlayers = useDefaultDynastyPlayers(API);
   const effectiveDynastyPlayers = useMemo(
     () => (calculatorResultRows.length > 0 ? calculatorResultRows : defaultDynastyPlayers),
@@ -211,6 +203,7 @@ function App(): React.ReactElement {
   }, [toast]);
 
   return (
+    <CalculatorOverlayContext.Provider value={calculatorOverlay}>
     <>
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <header>
@@ -351,7 +344,8 @@ function App(): React.ReactElement {
           )}
         </div>
 
-        <section className="how-it-works fade-up">
+        <section className="how-it-works fade-up" aria-labelledby="how-it-works-heading">
+          <h2 id="how-it-works-heading" className="sr-only">How It Works</h2>
           <div className="how-it-works-steps">
             <div className="how-it-works-step">
               <div className="how-it-works-number">1</div>
@@ -404,6 +398,7 @@ function App(): React.ReactElement {
                 type="button"
                 className="activation-strip-dismiss"
                 onClick={dismissQuickStartOnboarding}
+                aria-label="Dismiss quick start guide"
               >
                 Dismiss
               </button>
@@ -490,10 +485,7 @@ function App(): React.ReactElement {
                         setPresets={setPresets}
                         hasSuccessfulRun={Boolean(lastSuccessfulCalcRun)}
                         onSettingsChange={setCalculatorSettings}
-                        onApplyToMainTable={applyCalculatorOverlay}
                         onCalculationSuccess={handleCalculationSuccess}
-                        onClearMainTableOverlay={clearCalculatorOverlay}
-                        mainTableOverlayActive={calculatorOverlayActive}
                         onRegisterQuickStartRunner={handleRegisterQuickStartRunner}
                         onOpenMethodologyGlossary={openMethodologyGlossary}
                         tierLimits={tierLimits}
@@ -550,13 +542,6 @@ function App(): React.ReactElement {
                   setWatchlist={setWatchlist}
                   hasSuccessfulCalcRun={Boolean(lastSuccessfulCalcRun)}
                   activeCalculatorSettings={calculatorSettings}
-                  calculatorOverlayByPlayerKey={calculatorOverlayByPlayerKey}
-                  calculatorOverlayActive={calculatorOverlayActive}
-                  calculatorOverlayJobId={calculatorOverlayJobId}
-                  calculatorOverlayDataVersion={calculatorOverlayDataVersion}
-                  calculatorOverlayPlayerCount={calculatorOverlayPlayerCount}
-                  calculatorOverlaySummary={calculatorOverlaySummary}
-                  onClearCalculatorOverlay={clearCalculatorOverlay}
                   tierLimits={tierLimits}
                   fantraxRosterPlayerKeys={fantrax.rosterPlayerKeys}
                 />
@@ -609,10 +594,7 @@ function App(): React.ReactElement {
                   setPresets={setPresets}
                   hasSuccessfulRun={Boolean(lastSuccessfulCalcRun)}
                   onSettingsChange={setCalculatorSettings}
-                  onApplyToMainTable={applyCalculatorOverlay}
                   onCalculationSuccess={handleCalculationSuccess}
-                  onClearMainTableOverlay={clearCalculatorOverlay}
-                  mainTableOverlayActive={calculatorOverlayActive}
                   onRegisterQuickStartRunner={handleRegisterQuickStartRunner}
                   onOpenMethodologyGlossary={openMethodologyGlossary}
                   tierLimits={tierLimits}
@@ -637,6 +619,7 @@ function App(): React.ReactElement {
         </div>
       </footer>
     </>
+    </CalculatorOverlayContext.Provider>
   );
 }
 

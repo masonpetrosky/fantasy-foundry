@@ -4,6 +4,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, Path, Request
 from pydantic import BaseModel
 
+from backend.api.models import ErrorResponse
+
 CalculateRequestModel = type[BaseModel]
 CalculateExportRequestModel = type[BaseModel]
 CalculateSyncHandler = Callable[[Any, Request], Any]
@@ -12,6 +14,12 @@ CalculateJobCreateHandler = Callable[[Any, Request], Any]
 CalculateJobReadHandler = Callable[[str, Request], Any]
 CalculateJobCancelHandler = Callable[[str, Request], Any]
 CalculateAuthorizeHandler = Callable[[Request], Any]
+
+CALCULATE_ERROR_RESPONSES = {
+    422: {"model": ErrorResponse, "description": "Validation error in calculator settings"},
+    429: {"model": ErrorResponse, "description": "Rate limit exceeded — see Retry-After header"},
+    500: {"model": ErrorResponse},
+}
 
 
 def build_calculate_router(
@@ -29,24 +37,42 @@ def build_calculate_router(
     dependencies = [Depends(calculate_authorize_handler)] if calculate_authorize_handler is not None else []
     router = APIRouter(tags=["calculate"], dependencies=dependencies)
 
-    @router.post("/api/calculate")
+    @router.post("/api/calculate", summary="Run dynasty value calculation", responses=CALCULATE_ERROR_RESPONSES)
     def calculate_dynasty_values(req: calculate_request_model, request: Request):
+        """Run the Monte Carlo dynasty valuation calculator synchronously and return results."""
         return calculate_handler(req, request)
 
-    @router.post("/api/calculate/export")
+    @router.post("/api/calculate/export", summary="Export calculation results", responses=CALCULATE_ERROR_RESPONSES)
     def export_calculate_dynasty_values(req: calculate_export_request_model, request: Request):
+        """Run the calculator and return results as a downloadable CSV/XLSX file."""
         return calculate_export_handler(req, request)
 
-    @router.post("/api/calculate/jobs", status_code=202)
+    @router.post(
+        "/api/calculate/jobs",
+        status_code=202,
+        summary="Create async calculation job",
+        responses=CALCULATE_ERROR_RESPONSES,
+    )
     def create_calculate_dynasty_job(req: calculate_request_model, request: Request):
+        """Submit a calculator job for asynchronous processing. Returns a job ID for polling."""
         return calculate_job_create_handler(req, request)
 
-    @router.get("/api/calculate/jobs/{job_id}")
+    @router.get(
+        "/api/calculate/jobs/{job_id}",
+        summary="Get calculation job status",
+        responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    )
     def get_calculate_dynasty_job(job_id: str = Path(max_length=100), *, request: Request):
+        """Poll the status of an async calculator job by ID."""
         return calculate_job_read_handler(job_id, request)
 
-    @router.delete("/api/calculate/jobs/{job_id}")
+    @router.delete(
+        "/api/calculate/jobs/{job_id}",
+        summary="Cancel calculation job",
+        responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    )
     def cancel_calculate_dynasty_job(job_id: str = Path(max_length=100), *, request: Request):
+        """Cancel a running async calculator job by ID."""
         return calculate_job_cancel_handler(job_id, request)
 
     return router

@@ -10,6 +10,25 @@ from fastapi import FastAPI, Request
 
 from backend.api.error_handlers import register_exception_handlers
 from backend.api.middleware import MiddlewareConfig, register_middlewares
+from backend.core.metrics import MetricsCollector
+
+_OPENAPI_TAGS = [
+    {"name": "projections", "description": "Player projection queries, exports, profiles, and comparisons."},
+    {"name": "calculate", "description": "Dynasty value calculator (sync, async jobs, exports)."},
+    {"name": "status", "description": "Health checks, readiness probes, and operational metadata."},
+    {"name": "fantrax", "description": "Fantrax league integration (roster import, settings)."},
+    {"name": "billing", "description": "Stripe subscription management and webhooks."},
+    {"name": "newsletter", "description": "Newsletter subscription via Buttondown."},
+    {"name": "og-cards", "description": "Open Graph image card generation for social sharing."},
+]
+
+_APP_DESCRIPTION = (
+    "Production MLB dynasty fantasy baseball API with 20-year projections (2026–2045), "
+    "a Monte Carlo dynasty valuation calculator, and optional cloud sync.\n\n"
+    "**Rate limiting:** Most endpoints enforce per-IP rate limits. "
+    "When exceeded, the API returns `429 Too Many Requests` with `Retry-After` and "
+    "`X-RateLimit-*` headers."
+)
 
 
 def create_app(
@@ -27,6 +46,8 @@ def create_app(
     enable_startup_calc_prewarm: bool,
     prewarm_default_calculation_caches: Callable[[], None],
     calculator_job_executor: Any,
+    docs_enabled: bool = True,
+    metrics_collector: MetricsCollector | None = None,
 ) -> FastAPI:
     """Create the FastAPI app with shared middleware and lifecycle behavior."""
 
@@ -39,7 +60,16 @@ def create_app(
         finally:
             calculator_job_executor.shutdown(wait=False, cancel_futures=True)
 
-    app = FastAPI(title=title, version=version, lifespan=app_lifespan)
+    app = FastAPI(
+        title=title,
+        version=version,
+        description=_APP_DESCRIPTION,
+        openapi_tags=_OPENAPI_TAGS,
+        lifespan=app_lifespan,
+        docs_url="/api/docs" if docs_enabled else None,
+        redoc_url="/api/redoc" if docs_enabled else None,
+        openapi_url="/api/openapi.json" if docs_enabled else None,
+    )
     register_exception_handlers(app)
     register_middlewares(
         app,
@@ -52,6 +82,7 @@ def create_app(
             client_identity_resolver=client_identity_resolver,
             canonical_host=canonical_host,
             environment=environment,
+            metrics_collector=metrics_collector,
         ),
     )
     return app
