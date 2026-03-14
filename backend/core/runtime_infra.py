@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import time
 from collections import deque
 from collections.abc import Callable
@@ -83,9 +84,20 @@ def calculate_rate_limit_identity(
     if state_identity:
         return str(state_identity)
     api_key = extract_calculate_api_key(request)
-    if api_key and api_key in calculate_api_key_identities:
-        return calculate_api_key_identities[api_key]
+    if api_key:
+        matched_identity = _match_api_key(api_key, calculate_api_key_identities)
+        if matched_identity is not None:
+            return matched_identity
     return f"ip:{client_ip(request)}"
+
+
+def _match_api_key(api_key: str, identities: dict[str, str]) -> str | None:
+    """Return the identity for a matching API key using constant-time comparison."""
+    matched: str | None = None
+    for known_key, identity in identities.items():
+        if hmac.compare_digest(api_key, known_key):
+            matched = identity
+    return matched
 
 
 def authorize_calculate_request(
@@ -97,8 +109,9 @@ def authorize_calculate_request(
     require_calculate_auth: bool,
 ) -> None:
     api_key = extract_calculate_api_key(request)
-    if api_key and api_key in calculate_api_key_identities:
-        request.state.calc_rate_limit_identity = calculate_api_key_identities[api_key]
+    matched_identity = _match_api_key(api_key, calculate_api_key_identities) if api_key else None
+    if matched_identity is not None:
+        request.state.calc_rate_limit_identity = matched_identity
         request.state.calc_api_key_authenticated = True
         return
 

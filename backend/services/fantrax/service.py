@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any
@@ -22,12 +23,13 @@ FANTRAX_STANDINGS_URL = f"{FANTRAX_BASE_URL}/getStandings"
 
 # In-memory cache: league_id -> (timestamp, LeagueInfo)
 _league_cache: dict[str, tuple[float, LeagueInfo]] = {}
+_league_cache_lock = asyncio.Lock()
 _CACHE_TTL_SECONDS = 900  # 15 minutes
 _MAX_CACHE_ENTRIES = 50
 
 
 def _prune_cache() -> None:
-    """Remove expired or excess cache entries."""
+    """Remove expired or excess cache entries (caller must hold _league_cache_lock)."""
     now = time.monotonic()
     expired = [k for k, (ts, _) in _league_cache.items() if now - ts > _CACHE_TTL_SECONDS]
     for k in expired:
@@ -39,6 +41,7 @@ def _prune_cache() -> None:
 
 
 def _get_cached(league_id: str) -> LeagueInfo | None:
+    """Read from cache (caller must hold _league_cache_lock)."""
     entry = _league_cache.get(league_id)
     if entry is None:
         return None
@@ -50,6 +53,7 @@ def _get_cached(league_id: str) -> LeagueInfo | None:
 
 
 def _set_cached(league_id: str, info: LeagueInfo) -> None:
+    """Write to cache (caller must hold _league_cache_lock)."""
     _prune_cache()
     _league_cache[league_id] = (time.monotonic(), info)
 
@@ -118,12 +122,13 @@ def _parse_standings_response(
     return league_name, scoring_type, categories, positions
 
 
-async def fetch_league_info(league_id: str) -> LeagueInfo:
+async def fetch_league_info(league_id: str, *, request_id: str | None = None) -> LeagueInfo:
     """Fetch league info from Fantrax public API.
 
     Returns cached data if available and fresh.
     """
-    cached = _get_cached(league_id)
+    async with _league_cache_lock:
+        cached = _get_cached(league_id)
     if cached is not None:
         return cached
 
@@ -133,7 +138,11 @@ async def fetch_league_info(league_id: str) -> LeagueInfo:
     positions: list[str] = []
     teams: list[TeamRoster] = []
 
-    async with httpx.AsyncClient(timeout=15) as client:
+    extra_headers: dict[str, str] = {}
+    if request_id:
+        extra_headers["X-Request-Id"] = request_id
+
+    async with httpx.AsyncClient(timeout=15, headers=extra_headers) as client:
         # Fetch rosters
         try:
             roster_resp = await client.get(
@@ -182,5 +191,6 @@ async def fetch_league_info(league_id: str) -> LeagueInfo:
         scoring_categories=categories,
         roster_positions=positions,
     )
-    _set_cached(league_id, info)
+    async with _league_cache_lock:
+        _set_cached(league_id, info)
     return info

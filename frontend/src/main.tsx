@@ -524,7 +524,7 @@ function App(): React.ReactElement {
                   </div>
                 )}
                 {tradeAnalyzerOpen && tierLimits?.allowTradeAnalyzer && (
-                  <Suspense fallback={null}>
+                  <Suspense fallback={<p className="methodology-note">Loading trade analyzer...</p>}>
                     <LazyTradeAnalyzer
                       calculatorResults={effectiveDynastyPlayers}
                       onClose={() => setTradeAnalyzerOpen(false)}
@@ -533,7 +533,7 @@ function App(): React.ReactElement {
                   </Suspense>
                 )}
                 {keeperCalculatorOpen && tierLimits?.allowTradeAnalyzer && (
-                  <Suspense fallback={null}>
+                  <Suspense fallback={<p className="methodology-note">Loading keeper calculator...</p>}>
                     <LazyKeeperCalculator
                       calculatorResults={effectiveDynastyPlayers}
                       onClose={() => setKeeperCalculatorOpen(false)}
@@ -648,8 +648,8 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <ToastProvider>
         <Routes>
-          <Route path="/player/:slug" element={<Suspense fallback={null}><LazyPlayerPage /></Suspense>} />
-          <Route path="/movers" element={<Suspense fallback={null}><LazyMoversPage /></Suspense>} />
+          <Route path="/player/:slug" element={<Suspense fallback={<p className="methodology-note">Loading player...</p>}><LazyPlayerPage /></Suspense>} />
+          <Route path="/movers" element={<Suspense fallback={<p className="methodology-note">Loading movers...</p>}><LazyMoversPage /></Suspense>} />
           <Route path="*" element={<App />} />
         </Routes>
       </ToastProvider>
