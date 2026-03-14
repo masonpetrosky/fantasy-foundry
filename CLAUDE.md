@@ -27,8 +27,20 @@ make lint
 # Type check (mypy on specific modules)
 make typecheck
 
-# All quality gates
+# Static security scan (Bandit)
+make security
+
+# All quality gates (lint + backend fast + frontend + typecheck + security)
 make check
+
+# Auto-format (Ruff + ESLint --fix)
+make format
+
+# Remove caches and build artifacts
+make clean
+
+# Build Docker image
+make docker-build
 ```
 
 **Frontend dev server:**
@@ -50,12 +62,15 @@ cd frontend && npm run dev
 |---|---|
 | `app.py` | FastAPI entrypoint |
 | `runtime.py` | App wiring (startup, middleware) |
-| `api/routes/` | Route modules: `projections.py`, `calculate.py`, `status.py` |
-| `core/` | Shared orchestration helpers (settings, caching, jobs, rate limits) |
+| `api/routes/` | Route modules: `projections.py`, `calculate.py`, `status.py`, `billing.py`, `fantrax.py`, `newsletter.py`, `og_cards.py`, `frontend_assets.py` |
+| `core/` | Shared orchestration helpers (settings, caching, jobs, rate limits, runtime wiring, export utils, calculator helpers) |
 | `core/settings.py` | Typed env/config loader (mypy'd) |
 | `domain/constants.py` | Shared domain constants |
 | `services/projections/` | Projection query pipeline + runtime boundaries |
 | `services/valuation/` | Service boundary around valuation entry points |
+| `services/calculator/` | Calculator job orchestration service |
+| `services/billing.py` | Stripe billing service |
+| `services/fantrax/` | Fantrax league integration service |
 | `dynasty_roto_values.py` | Legacy re-export facade for valuation + CLI |
 | `valuation/` | Core math: models, positions, assignment, common math |
 
@@ -85,7 +100,7 @@ cd frontend && npm run dev
 ## Code Quality Gates
 
 - **Ruff:** `ruff check backend tests preprocess.py scripts` — zero per-file ignores allowed (enforced by `scripts/check_ruff_per_file_ignores.py`)
-- **mypy:** runs on `backend/api/middleware.py`, `backend/core/settings.py`, `backend/core/networking.py`, `backend/core/rate_limit.py`, `backend/core/result_cache.py`, `backend/core/jobs.py`, `backend/core/data_refresh.py`
+- **mypy:** runs on modules across `backend/api/`, `backend/core/`, `backend/domain/`, `backend/valuation/`, and `backend/services/` — see `Makefile` typecheck target for the full list
 - **ESLint:** `cd frontend && npm run lint`
 - **Generated artifacts:** `scripts/check_generated_artifacts_untracked.sh` (run before lint)
 
