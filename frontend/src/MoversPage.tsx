@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { resolveApiBase } from "./api_base";
 import { useProjectionDeltas, DeltaMover } from "./hooks/useProjectionDeltas";
+import { useFocusOnMount } from "./hooks/useFocusOnMount";
 
 const API: string = resolveApiBase();
 
@@ -65,6 +66,7 @@ function MoverTable({ title, movers, emptyText }: { title: string; movers: Delta
 }
 
 export function MoversPage(): React.ReactElement {
+  const headingRef = useFocusOnMount<HTMLHeadingElement>();
   const { risers, fallers, hasPrevious, loading } = useProjectionDeltas(API);
 
   useEffect(() => {
@@ -76,7 +78,7 @@ export function MoversPage(): React.ReactElement {
       <nav style={{ marginBottom: "1rem" }}>
         <Link to="/" style={{ color: "var(--accent)" }}>{"\u2190"} Back to Projections</Link>
       </nav>
-      <h1>This Week{"\u2019"}s Biggest Movers</h1>
+      <h1 ref={headingRef} tabIndex={-1}>This Week{"\u2019"}s Biggest Movers</h1>
       <p style={{ color: "var(--text-muted)", marginBottom: "1.5rem" }}>
         Week-over-week projection changes across all dynasty players. Updated with each projection refresh.
       </p>

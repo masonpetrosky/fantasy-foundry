@@ -3,6 +3,7 @@ import {
   readFantraxLeague,
   writeFantraxLeague,
 } from "../app_state_storage";
+import { extractApiErrorMessage } from "../utils/apiErrors";
 import type { FantraxLeagueState } from "../app_state_storage";
 
 interface FantraxTeamSummary {
@@ -132,7 +133,7 @@ export function useFantraxLeague(): UseFantraxLeagueResult {
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") return;
-      setError(err instanceof Error ? err.message : "Failed to connect to Fantrax");
+      setError(extractApiErrorMessage(err));
     } finally {
       if (!controller.signal.aborted) {
         setLoading(false);
@@ -177,7 +178,7 @@ export function useFantraxLeague(): UseFantraxLeagueResult {
         })
         .catch((err: unknown) => {
           if (err instanceof Error && err.name === "AbortError") return;
-          setError(err instanceof Error ? err.message : "Failed to load roster");
+          setError(extractApiErrorMessage(err));
           setLoading(false);
         });
     }

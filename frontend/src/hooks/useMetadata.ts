@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { trackEvent } from "../analytics";
+import { extractApiErrorMessage } from "../utils/apiErrors";
 
 export function useMetadata(apiBase: string): {
   meta: Record<string, unknown> | null;
@@ -33,8 +34,8 @@ export function useMetadata(apiBase: string): {
       })
       .catch(err => {
         if ((err as Error)?.name === "AbortError") return;
-        const message = String((err as Error)?.message || "").trim();
-        setMetaError(message || "Failed to load metadata.");
+        const message = extractApiErrorMessage(err);
+        setMetaError(message);
         setMetaLoading(false);
         trackEvent("meta_load_error", { message: message || "unknown", section: "projections" });
         console.error(err);

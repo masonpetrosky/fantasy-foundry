@@ -29,7 +29,8 @@ export function useToast(): {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const addToast = useCallback((message: string, { type = "info", duration = 3000 }: AddToastOptions = {}) => {
+  const addToast = useCallback((message: string, { type = "info", duration }: AddToastOptions = {}) => {
+    duration = duration ?? (type === "error" ? 0 : 3000);
     const id = ++toastIdCounter;
     setToasts(prev => [...prev.slice(-4), { id, message, type }]);
     if (duration > 0) {

@@ -9,6 +9,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from backend.core.exceptions import (
+    CalculationError,
+    DataLoadError,
+    ExternalServiceError,
+    FantasyFoundryError,
+)
+
 
 def _request_id_from_request(request: Request) -> str:
     request_id = str(getattr(request.state, "request_id", "") or "").strip()
@@ -128,6 +135,35 @@ def register_exception_handlers(app: FastAPI) -> None:
             request_id=request_id,
         )
         return JSONResponse(status_code=422, content=payload, headers={"X-Request-Id": request_id})
+
+    def _status_for_domain_error(exc: FantasyFoundryError) -> int:
+        if isinstance(exc, ExternalServiceError):
+            return 502
+        if isinstance(exc, CalculationError):
+            return 422
+        if isinstance(exc, DataLoadError):
+            return 503
+        return 500
+
+    @app.exception_handler(FantasyFoundryError)
+    async def domain_exception_handler(request: Request, exc: FantasyFoundryError):
+        request_id = _request_id_from_request(request)
+        status_code = _status_for_domain_error(exc)
+        error_logger.warning(
+            "domain_exception request_id=%s method=%s path=%s route_group=%s exception_class=%s",
+            request_id,
+            request.method,
+            request.url.path,
+            _route_group(request.url.path),
+            exc.__class__.__name__,
+        )
+        payload = _json_error_payload(
+            status_code=status_code,
+            detail=str(exc),
+            message_default=str(exc) or "An error occurred.",
+            request_id=request_id,
+        )
+        return JSONResponse(status_code=status_code, content=payload, headers={"X-Request-Id": request_id})
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
