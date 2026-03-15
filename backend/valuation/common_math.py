@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Set, Tuple
-
 import numpy as np
 import pandas as pd
 
@@ -193,8 +191,8 @@ except ImportError:
     )
 
 
-COMMON_REVERSED_PITCH_CATS: Set[str] = {"ERA", "WHIP"}
-COMMON_RATE_HIT_CATS: Set[str] = {"AVG", "OBP", "SLG", "OPS"}
+COMMON_REVERSED_PITCH_CATS: set[str] = {"ERA", "WHIP"}
+COMMON_RATE_HIT_CATS: set[str] = {"AVG", "OBP", "SLG", "OPS"}
 
 
 def _zscore(s: pd.Series) -> pd.Series:
@@ -206,7 +204,7 @@ def _zscore(s: pd.Series) -> pd.Series:
     return (x - mu) / sd
 
 
-def _active_common_hit_categories(lg: CommonDynastyRotoSettings) -> List[str]:
+def _active_common_hit_categories(lg: CommonDynastyRotoSettings) -> list[str]:
     configured = getattr(lg, "hitter_categories", None)
     if not configured:
         return list(HIT_CATS)
@@ -215,7 +213,7 @@ def _active_common_hit_categories(lg: CommonDynastyRotoSettings) -> List[str]:
     return selected or list(HIT_CATS)
 
 
-def _active_common_pitch_categories(lg: CommonDynastyRotoSettings) -> List[str]:
+def _active_common_pitch_categories(lg: CommonDynastyRotoSettings) -> list[str]:
     configured = getattr(lg, "pitcher_categories", None)
     if not configured:
         return list(PIT_CATS)
@@ -229,7 +227,7 @@ def compute_year_context(
     bat: pd.DataFrame,
     pit: pd.DataFrame,
     lg: CommonDynastyRotoSettings,
-    rng_seed: Optional[int] = None,
+    rng_seed: int | None = None,
 ) -> dict:
     bat_y = bat[bat["Year"] == year].copy()
     pit_y = pit[pit["Year"] == year].copy()
@@ -336,7 +334,7 @@ def compute_year_context(
     }
 
 
-def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> tuple[pd.DataFrame, pd.DataFrame]:
     year = int(ctx["year"])
     bat_y = ctx["bat_y"]
     pit_y = ctx["pit_y"]
@@ -366,7 +364,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
 
         best_val = -1e18
         best_slot = None
-        best_stat_sgps: Dict[str, float] = {}
+        best_stat_sgps: dict[str, float] = {}
 
         for slot in slots:
             if slot not in baseline_hit.index:
@@ -395,7 +393,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                 )
 
             val = 0.0
-            stat_sgps: Dict[str, float] = {}
+            stat_sgps: dict[str, float] = {}
             for c in hit_categories:
                 denom = float(sgp_hit[c])
                 sgp_c = (delta[c] / denom) if denom else 0.0
@@ -433,7 +431,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
 
         best_val = -1e18
         best_slot = None
-        best_stat_sgps: Dict[str, float] = {}
+        best_stat_sgps: dict[str, float] = {}
 
         for slot in slots:
             if slot not in baseline_pit.index:
@@ -451,7 +449,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
             )
 
             new_pit_cats = common_pitch_category_totals(new_tot_bounded)
-            delta: Dict[str, float] = {}
+            delta: dict[str, float] = {}
             for cat in pit_categories:
                 new_val = float(new_pit_cats.get(cat, 0.0))
                 base_val = float(base_pit_cats.get(cat, 0.0))
@@ -481,7 +479,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> Tupl
                 )
 
             val = 0.0
-            stat_sgps: Dict[str, float] = {}
+            stat_sgps: dict[str, float] = {}
             for c in pit_categories:
                 denom = float(sgp_pit[c])
                 sgp_c = (delta[c] / denom) if denom else 0.0

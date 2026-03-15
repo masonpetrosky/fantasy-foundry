@@ -548,12 +548,41 @@ export function encodeCalculatorSettings(settings: Record<string, unknown>): str
   }
 }
 
+/** Known calculator setting keys used for schema validation of decoded presets. */
+const KNOWN_CALCULATOR_KEYS = new Set([
+  "mode", "scoring_mode", "two_way", "sgp_denominator_mode",
+  "sgp_winsor_low_pct", "sgp_winsor_high_pct", "sgp_epsilon_counting", "sgp_epsilon_ratio",
+  "enable_playing_time_reliability", "enable_age_risk_adjustment",
+  "enable_replacement_blend", "replacement_blend_alpha",
+  "teams", "sims", "horizon", "discount",
+  "hit_c", "hit_1b", "hit_2b", "hit_3b", "hit_ss", "hit_ci", "hit_mi", "hit_of", "hit_ut",
+  "pit_p", "pit_sp", "pit_rp", "bench", "minors", "ir",
+  "ip_min", "ip_max", "start_year", "auction_budget",
+  "roto_hit_r", "roto_hit_rbi", "roto_hit_hr", "roto_hit_sb", "roto_hit_avg",
+  "roto_hit_obp", "roto_hit_slg", "roto_hit_ops", "roto_hit_h", "roto_hit_bb",
+  "roto_hit_2b", "roto_hit_tb",
+  "roto_pit_w", "roto_pit_k", "roto_pit_sv", "roto_pit_era", "roto_pit_whip",
+  "roto_pit_qs", "roto_pit_qa3", "roto_pit_svh",
+  "pts_hit_1b", "pts_hit_2b", "pts_hit_3b", "pts_hit_hr", "pts_hit_r",
+  "pts_hit_rbi", "pts_hit_sb", "pts_hit_bb", "pts_hit_so",
+  "pts_pit_ip", "pts_pit_w", "pts_pit_l", "pts_pit_k", "pts_pit_sv",
+  "pts_pit_svh", "pts_pit_h", "pts_pit_er", "pts_pit_bb",
+]);
+
 export function decodeCalculatorSettings(encoded: string | null | undefined): Record<string, unknown> | null {
   if (!encoded) return null;
   try {
     const raw = window.atob(encoded);
     const parsed = JSON.parse(decodeURIComponent(raw));
-    return parsed && typeof parsed === "object" ? parsed : null;
+    if (!parsed || typeof parsed !== "object") return null;
+    // Strip unknown keys to prevent stale/invalid settings from breaking the calculator.
+    const validated: Record<string, unknown> = {};
+    for (const key of Object.keys(parsed)) {
+      if (KNOWN_CALCULATOR_KEYS.has(key)) {
+        validated[key] = parsed[key];
+      }
+    }
+    return Object.keys(validated).length > 0 ? validated : null;
   } catch {
     return null;
   }

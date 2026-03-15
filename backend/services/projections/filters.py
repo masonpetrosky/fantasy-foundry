@@ -9,7 +9,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Year / value coercion
 # ---------------------------------------------------------------------------
@@ -48,9 +47,15 @@ def position_tokens(value: object, *, split_re: re.Pattern[str]) -> set[str]:
     return {token for token in split_re.split(text) if token}
 
 
+_position_order_map_cache: dict[tuple[str, ...], dict[str, int]] = {}
+
+
 def position_sort_key(token: str, *, position_display_order: tuple[str, ...]) -> tuple[int, str]:
     """Sort key for a single position token given the canonical display order."""
-    order_map = {pos: idx for idx, pos in enumerate(position_display_order)}
+    order_map = _position_order_map_cache.get(position_display_order)
+    if order_map is None:
+        order_map = {pos: idx for idx, pos in enumerate(position_display_order)}
+        _position_order_map_cache[position_display_order] = order_map
     return (order_map.get(token, len(order_map)), token)
 
 
