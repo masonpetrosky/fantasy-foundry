@@ -1,4 +1,4 @@
-.PHONY: guard-generated-artifacts test test-backend test-backend-fast test-backend-full-regression test-frontend lint lint-backend lint-frontend typecheck security check format clean docker-build help
+.PHONY: guard-generated-artifacts test test-backend test-backend-fast test-backend-full-regression test-frontend lint lint-backend lint-frontend typecheck security check format clean docker-build dev help
 
 guard-generated-artifacts:
 	./scripts/check_generated_artifacts_untracked.sh
@@ -49,6 +49,9 @@ clean:
 docker-build:
 	docker build -t fantasy-foundry .
 
+dev:
+	docker compose -f docker-compose.dev.yml up --build
+
 help:
 	@echo "Available targets:"
 	@echo "  make test                  Run all tests (backend + frontend)"
@@ -62,4 +65,5 @@ help:
 	@echo "  make format                Auto-format backend + frontend"
 	@echo "  make clean                 Remove caches and build artifacts"
 	@echo "  make docker-build          Build Docker image"
+	@echo "  make dev                   Start dev environment (Docker Compose)"
 	@echo "  make help                  Show this help"

@@ -1,0 +1,33 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      FF_ENV: development
+      FF_CORS_ALLOW_ORIGINS: "*"
+      FF_REDIS_URL: redis://redis:6379/0
+      FF_PREWARM_DEFAULT_CALC: "0"
+      FF_REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP: "0"
+      FF_TRUST_X_FORWARDED_FOR: "0"
+      FF_DOCS_ENABLED: "1"
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data:ro
+
+volumes:
+  redis-data:

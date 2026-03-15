@@ -58,7 +58,9 @@ export const VirtualizedProjectionTable = React.memo(function VirtualizedProject
       >
         <table
           className="projections-table"
+          aria-label="Player projections"
           aria-busy={loading}
+          aria-rowcount={tableRowsMarkup.length}
           style={{ tableLayout: "fixed" }}
         >
           <thead>
