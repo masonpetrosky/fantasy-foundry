@@ -1,5 +1,8 @@
 import React from "react";
 import { SortableHeaderCell } from "../../../accessibility_components";
+import { VirtualizedProjectionTable } from "./VirtualizedProjectionTable";
+
+const VIRTUALIZATION_THRESHOLD = 50;
 
 interface ProjectionResultsShellProps {
   showCards: boolean;
@@ -61,6 +64,10 @@ export const ProjectionResultsShell = React.memo(function ProjectionResultsShell
   setOffset,
 }: ProjectionResultsShellProps): React.ReactElement {
   const scrollIndicatorClass = `table-scroll-indicators${canScrollLeft ? " can-scroll-left" : ""}${canScrollRight ? " can-scroll-right" : ""}`;
+
+  const hasNormalData = !showInitialLoadSkeleton && !(error && displayedPage.length === 0) && displayedPage.length > 0;
+  const useVirtualized = hasNormalData && Array.isArray(tableRowsMarkup) && tableRowsMarkup.length > VIRTUALIZATION_THRESHOLD;
+
   return (
     <>
       {showCards && (
@@ -103,7 +110,20 @@ export const ProjectionResultsShell = React.memo(function ProjectionResultsShell
 
       {(!showCards || totalRows > limit) && (
         <div className="table-wrapper">
-          {!showCards && (
+          {!showCards && useVirtualized ? (
+            <VirtualizedProjectionTable
+              cols={cols}
+              colLabels={colLabels}
+              sortCol={sortCol}
+              sortDir={sortDir}
+              onSort={onSort}
+              tableRowsMarkup={tableRowsMarkup as React.ReactElement[]}
+              loading={loading}
+              onTableScroll={onTableScroll}
+              canScrollLeft={canScrollLeft}
+              canScrollRight={canScrollRight}
+            />
+          ) : !showCards ? (
             <div className={scrollIndicatorClass}>
             <div className="table-scroll" ref={projectionTableScrollRef} onScroll={onTableScroll}>
               <table className="projections-table" aria-busy={showInitialLoadSkeleton || loading}>
@@ -154,7 +174,7 @@ export const ProjectionResultsShell = React.memo(function ProjectionResultsShell
               </table>
             </div>
             </div>
-          )}
+          ) : null}
           {totalRows > limit && (
             <div className="pagination">
               <button aria-label="Previous page" disabled={offset === 0 || loading} onClick={() => setOffset(Math.max(0, offset - limit))}>← Previous</button>

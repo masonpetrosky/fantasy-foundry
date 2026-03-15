@@ -2,7 +2,8 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
-import { VisuallyHidden, MenuButton, SortableHeaderCell, useMenuInteractions } from "./accessibility_components";
+import { checkA11y } from "./test/a11y-helpers";
+import { VisuallyHidden, MenuButton, SortableHeaderCell, useMenuInteractions, useFocusTrap } from "./accessibility_components";
 
 function renderToContainer(element: React.ReactElement): { container: HTMLDivElement; cleanup: () => void } {
   const container = document.createElement("div");
@@ -419,6 +420,103 @@ describe("useMenuInteractions", () => {
     });
     const item1 = container.querySelector('[data-testid="item1"]') as HTMLElement;
     expect(document.activeElement).toBe(item1);
+    cleanup();
+  });
+});
+
+describe("useFocusTrap", () => {
+  function TrapTestComponent({ onEscape }: { onEscape: () => void }) {
+    const containerRef = React.useRef<HTMLDivElement>(null);
+    useFocusTrap({ containerRef, onEscape });
+    return React.createElement("div", { ref: containerRef, tabIndex: -1, role: "dialog", "aria-modal": "true", "aria-label": "Test dialog" },
+      React.createElement("button", { "data-testid": "first" }, "First"),
+      React.createElement("button", { "data-testid": "second" }, "Second"),
+    );
+  }
+
+  it("calls onEscape when Escape is pressed", () => {
+    const onEscape = vi.fn();
+    const { cleanup } = renderToContainer(
+      React.createElement(TrapTestComponent, { onEscape })
+    );
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  it("traps Tab forward from last to first element", () => {
+    const { container, cleanup } = renderToContainer(
+      React.createElement(TrapTestComponent, { onEscape: vi.fn() })
+    );
+    const second = container.querySelector('[data-testid="second"]') as HTMLElement;
+    second.focus();
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+    const first = container.querySelector('[data-testid="first"]') as HTMLElement;
+    expect(document.activeElement).toBe(first);
+    cleanup();
+  });
+
+  it("traps Shift+Tab from first to last element", () => {
+    const { container, cleanup } = renderToContainer(
+      React.createElement(TrapTestComponent, { onEscape: vi.fn() })
+    );
+    const first = container.querySelector('[data-testid="first"]') as HTMLElement;
+    first.focus();
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }));
+    });
+    const second = container.querySelector('[data-testid="second"]') as HTMLElement;
+    expect(document.activeElement).toBe(second);
+    cleanup();
+  });
+
+  it("auto-focuses the container on mount", () => {
+    const { container, cleanup } = renderToContainer(
+      React.createElement(TrapTestComponent, { onEscape: vi.fn() })
+    );
+    const dialog = container.querySelector("[role='dialog']") as HTMLElement;
+    expect(document.activeElement).toBe(dialog);
+    cleanup();
+  });
+});
+
+describe("MenuButton axe checks", () => {
+  it("passes axe accessibility checks", async () => {
+    const { container, cleanup } = renderToContainer(
+      React.createElement(MenuButton, {
+        controlsId: "menu-a11y",
+        open: false,
+        onToggle: vi.fn(),
+        label: "Options",
+      })
+    );
+    await checkA11y(container);
+    cleanup();
+  });
+});
+
+describe("SortableHeaderCell axe checks", () => {
+  it("passes axe accessibility checks", async () => {
+    const { container, cleanup } = renderToContainer(
+      React.createElement("table", null,
+        React.createElement("thead", null,
+          React.createElement("tr", null,
+            React.createElement(SortableHeaderCell, {
+              columnKey: "val",
+              label: "Value",
+              sortCol: "val",
+              sortDir: "asc" as const,
+              onSort: vi.fn(),
+            })
+          )
+        )
+      )
+    );
+    await checkA11y(container);
     cleanup();
   });
 });

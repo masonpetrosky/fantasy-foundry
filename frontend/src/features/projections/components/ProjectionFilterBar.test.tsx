@@ -2,6 +2,7 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
+import { checkA11y } from "../../../test/a11y-helpers";
 import { ProjectionFilterBar } from "./ProjectionFilterBar";
 
 vi.mock("../../../ui_components", () => ({
@@ -257,6 +258,14 @@ describe("ProjectionFilterBar", () => {
       React.createElement(ProjectionFilterBar, defaultProps({ exportingFormat: "csv" }))
     );
     expect(container.textContent).toContain("Exporting CSV...");
+    cleanup();
+  });
+
+  it("passes axe accessibility checks", async () => {
+    const { container, cleanup } = renderToContainer(
+      React.createElement(ProjectionFilterBar, defaultProps())
+    );
+    await checkA11y(container);
     cleanup();
   });
 });

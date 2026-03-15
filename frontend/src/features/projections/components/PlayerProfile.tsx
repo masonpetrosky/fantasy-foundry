@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { formatCellValue } from "../../../formatting_utils";
+import { useFocusTrap } from "../../../accessibility_components";
 
 const KEY_STAT_COLS_BAT: readonly string[] = ["Year", "Team", "Pos", "PA", "HR", "RBI", "SB", "AVG", "OBP", "OPS", "DynastyValue"];
 const KEY_STAT_COLS_PIT: readonly string[] = ["Year", "Team", "Pos", "IP", "W", "K", "SV", "ERA", "WHIP", "DynastyValue"];
-const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 interface ProfileRow {
   [key: string]: unknown;
@@ -93,7 +93,6 @@ export function PlayerProfile({ row, tab, apiBase, calculatorJobId, onClose }: P
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<Element | null>(null);
 
   const playerKey = String(row?.PlayerEntityKey || row?.PlayerKey || "").trim();
   const playerName = String(row?.Player || "Player").trim();
@@ -137,43 +136,7 @@ export function PlayerProfile({ row, tab, apiBase, calculatorJobId, onClose }: P
     };
   }, [apiBase, calculatorJobId, playerKey, tab]);
 
-  useEffect(() => {
-    previousFocusRef.current = document.activeElement;
-    const handler = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") {
-        onClose();
-        return;
-      }
-      if (e.key === "Tab" && dialogRef.current) {
-        const focusable = Array.from(
-          dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
-        ).filter(el => !(el as HTMLButtonElement).disabled);
-        if (focusable.length === 0) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (e.shiftKey) {
-          if (document.activeElement === first || document.activeElement === dialogRef.current) {
-            e.preventDefault();
-            last.focus();
-          }
-        } else {
-          if (document.activeElement === last || document.activeElement === dialogRef.current) {
-            e.preventDefault();
-            first.focus();
-          }
-        }
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => {
-      window.removeEventListener("keydown", handler);
-      (previousFocusRef.current as HTMLElement | null)?.focus();
-    };
-  }, [onClose]);
-
-  useEffect(() => {
-    dialogRef.current?.focus();
-  }, []);
+  useFocusTrap({ containerRef: dialogRef, onEscape: onClose });
 
   const rows = data || [];
   const batRows = rows.filter(r => r.Type !== "P");
