@@ -5,6 +5,7 @@ import {
   safeReadStorage,
   safeWriteStorage,
 } from "../../../app_state_storage";
+import { trackEvent } from "../../../analytics";
 
 export const MOBILE_BREAKPOINT_QUERY = "(max-width: 768px)";
 
@@ -23,9 +24,9 @@ export interface HorizontalAffordance {
 
 export function resolveProjectionHorizontalAffordance(
   el: HTMLElement | null,
-  isMobileViewport: boolean,
+  _isMobileViewport: boolean,
 ): HorizontalAffordance {
-  if (!el || !isMobileViewport) {
+  if (!el) {
     return {
       canScrollLeft: false,
       canScrollRight: false,
@@ -84,8 +85,14 @@ export function useProjectionLayoutState(): ProjectionLayoutState {
     return () => mediaQuery.removeListener(onViewportChange);
   }, []);
 
+  const isInitialMountRef = useRef(true);
   useEffect(() => {
     safeWriteStorage(PROJECTION_MOBILE_LAYOUT_MODE_STORAGE_KEY, mobileLayoutMode);
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
+    trackEvent("ff_projection_view_toggle", { mode: mobileLayoutMode });
   }, [mobileLayoutMode]);
 
   return {

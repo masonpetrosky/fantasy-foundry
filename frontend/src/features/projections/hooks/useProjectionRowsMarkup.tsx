@@ -114,7 +114,7 @@ export function useProjectionRowsMarkup({
         <article className="projection-card" key={rowKey}>
           <div className="projection-card-head">
             <h4>{(row.Player as React.ReactNode) || "Player"}</h4>
-            <div className="projection-card-actions">
+            <div className="projection-card-actions" role="group" aria-label="Player actions">
               <button
                 type="button"
                 className={`inline-btn ${rowWatch ? "open" : ""}`.trim()}

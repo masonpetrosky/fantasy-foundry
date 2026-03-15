@@ -5,6 +5,7 @@ import {
   readHiddenColumnOverridesByTab,
   writeHiddenColumnOverridesByTab,
 } from "../../../app_state_storage";
+import { trackEvent } from "../../../analytics";
 import type { ProjectionRow } from "../../../app_state_storage";
 import {
   normalizeHiddenColumnOverridesByTab,
@@ -219,6 +220,7 @@ export function useProjectionColumnVisibility({
     if (requiredProjectionTableCols.has(col)) return;
     const currentlyHidden = isProjectionTableColHidden(col);
     setProjectionTableColumnHidden(col, !currentlyHidden);
+    trackEvent("ff_column_visibility_toggle", { column: col, visible: currentlyHidden, view: "table" });
   }, [isProjectionTableColHidden, requiredProjectionTableCols, setProjectionTableColumnHidden]);
 
   const showAllProjectionTableColumns = useCallback(() => {
@@ -244,6 +246,7 @@ export function useProjectionColumnVisibility({
     if (requiredProjectionCardCols.has(col)) return;
     const currentlyHidden = isProjectionCardOptionalColHidden(col);
     setProjectionCardOptionalColumnHidden(col, !currentlyHidden);
+    trackEvent("ff_column_visibility_toggle", { column: col, visible: currentlyHidden, view: "card" });
   }, [
     isProjectionCardOptionalColHidden,
     requiredProjectionCardCols,

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { formatCellValue } from "../../../formatting_utils";
 import { useFocusTrap } from "../../../accessibility_components";
+import { trackEvent } from "../../../analytics";
 
 const KEY_STAT_COLS_BAT: readonly string[] = ["Year", "Team", "Pos", "PA", "HR", "RBI", "SB", "AVG", "OBP", "OPS", "DynastyValue"];
 const KEY_STAT_COLS_PIT: readonly string[] = ["Year", "Team", "Pos", "IP", "W", "K", "SV", "ERA", "WHIP", "DynastyValue"];
@@ -104,6 +105,11 @@ export function PlayerProfile({ row, tab, apiBase, calculatorJobId, onClose }: P
       setData([]);
       return;
     }
+    trackEvent("ff_player_profile_view", {
+      player_key: playerKey,
+      player_name: playerName,
+      tab,
+    });
     setLoading(true);
     setError(null);
     const controller = new AbortController();
@@ -134,7 +140,7 @@ export function PlayerProfile({ row, tab, apiBase, calculatorJobId, onClose }: P
     return () => {
       controller.abort();
     };
-  }, [apiBase, calculatorJobId, playerKey, tab]);
+  }, [apiBase, calculatorJobId, playerKey, playerName, tab]);
 
   useFocusTrap({ containerRef: dialogRef, onEscape: onClose });
 

@@ -536,6 +536,29 @@
 .table-scroll::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 .table-scroll::-webkit-scrollbar-corner { background: var(--bg-secondary); }
 
+/* Desktop scroll overflow indicators — subtle gradient fade when columns are clipped */
+.table-scroll-indicators {
+  position: relative;
+}
+
+.table-scroll-indicators::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 32px;
+  z-index: 25;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  background: linear-gradient(to left, var(--bg-card), transparent);
+}
+
+.table-scroll-indicators.can-scroll-right::after {
+  opacity: 1;
+}
+
 table {
   width: max-content;
   min-width: 100%;

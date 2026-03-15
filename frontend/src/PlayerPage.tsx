@@ -94,15 +94,35 @@ export function PlayerPage(): React.ReactElement {
   const primaryCols = isPitcher ? KEY_STAT_COLS_PIT : KEY_STAT_COLS_BAT;
   const dynastyRows = rows.filter(r => r.DynastyValue != null);
 
-  // Dynamic document title
+  // Dynamic document title and meta tags for SEO
   useEffect(() => {
-    if (playerName && playerName !== slug) {
-      document.title = `${playerName} Dynasty Value & Projections | Fantasy Foundry`;
-    }
+    if (!playerName || playerName === slug) return;
+    const title = `${playerName} Dynasty Value & Projections | Fantasy Foundry`;
+    document.title = title;
+    const description = `${playerName}${team ? ` (${team})` : ""} — 20-year dynasty baseball projections, year-by-year stats, and dynasty value trajectory on Fantasy Foundry.`;
+    const setMeta = (attr: string, key: string, content: string): void => {
+      let el = document.querySelector(`meta[${attr}="${key}"]`);
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute(attr, key);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", content);
+    };
+    setMeta("name", "description", description);
+    setMeta("property", "og:title", title);
+    setMeta("property", "og:description", description);
+    setMeta("name", "twitter:title", title);
+    setMeta("name", "twitter:description", description);
     return () => {
       document.title = "Fantasy Foundry | 20-Year Dynasty Baseball Projections";
+      setMeta("name", "description", "Browse 2026-2045 MLB dynasty projections, configure league settings, and generate custom dynasty rankings in minutes.");
+      setMeta("property", "og:title", "Fantasy Foundry | 20-Year Dynasty Baseball Projections");
+      setMeta("property", "og:description", "Custom dynasty rankings powered by 20-year MLB projections and league-specific scoring settings.");
+      setMeta("name", "twitter:title", "Fantasy Foundry | 20-Year Dynasty Baseball Projections");
+      setMeta("name", "twitter:description", "Build league-specific dynasty rankings from 2026-2045 MLB projections.");
     };
-  }, [playerName, slug]);
+  }, [playerName, slug, team]);
 
   return (
     <div className="player-page">
