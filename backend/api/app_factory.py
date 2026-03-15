@@ -48,6 +48,7 @@ def create_app(
     calculator_job_executor: Any,
     docs_enabled: bool = True,
     metrics_collector: MetricsCollector | None = None,
+    slow_request_threshold_seconds: float = 5.0,
 ) -> FastAPI:
     """Create the FastAPI app with shared middleware and lifecycle behavior."""
 
@@ -82,6 +83,7 @@ def create_app(
             client_identity_resolver=client_identity_resolver,
             canonical_host=canonical_host,
             environment=environment,
+            slow_request_threshold_seconds=slow_request_threshold_seconds,
             metrics_collector=metrics_collector,
         ),
     )

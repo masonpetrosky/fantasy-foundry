@@ -147,3 +147,26 @@ def test_rate_limit_called(fantrax_app):
     client = TestClient(app)
     client.get("/api/fantrax/league?leagueId=test-league-id")
     enforce_rate_limit.assert_called_once_with("127.0.0.1", "fantrax", 10)
+
+
+def test_league_id_with_special_chars_rejected(fantrax_app):
+    """League IDs with special characters should be rejected."""
+    app, _, _ = fantrax_app
+    client = TestClient(app)
+    resp = client.get("/api/fantrax/league?leagueId=league%3Bdrop%20table")
+    assert resp.status_code == 400
+
+
+def test_league_id_with_slashes_rejected(fantrax_app):
+    app, _, _ = fantrax_app
+    client = TestClient(app)
+    resp = client.get("/api/fantrax/league?leagueId=../../etc/passwd")
+    assert resp.status_code == 400
+
+
+def test_league_id_alphanumeric_accepted(fantrax_app):
+    """Alphanumeric league IDs with hyphens and underscores should be accepted."""
+    app, _, _ = fantrax_app
+    client = TestClient(app)
+    resp = client.get("/api/fantrax/league?leagueId=abc123_test-league")
+    assert resp.status_code == 200

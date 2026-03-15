@@ -45,7 +45,7 @@ class SecurityHeaderTests(unittest.TestCase):
         self.assertEqual(response.headers.get("referrer-policy"), "strict-origin-when-cross-origin")
         self.assertEqual(
             response.headers.get("permissions-policy"),
-            "camera=(), microphone=(), geolocation=(), payment=()",
+            "camera=(), microphone=(), geolocation=(), payment=(), usb=(), xr-spatial-tracking=()",
         )
         self.assertIn("default-src 'self'", str(response.headers.get("content-security-policy") or ""))
         self.assertIsNone(response.headers.get("strict-transport-security"))

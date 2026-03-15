@@ -57,6 +57,12 @@ def build_billing_router(
                 cancel_url=body.cancel_url,
                 customer_email=body.user_email or None,
             )
+        except stripe.InvalidRequestError as exc:
+            logger.warning("Stripe checkout invalid request: %s", exc)
+            raise HTTPException(status_code=400, detail="Invalid checkout request.")
+        except stripe.AuthenticationError as exc:
+            logger.error("Stripe authentication error: %s", exc)
+            raise HTTPException(status_code=502, detail="Payment service configuration error.")
         except stripe.StripeError as exc:
             logger.error("Stripe checkout error: %s", exc)
             raise HTTPException(status_code=502, detail="Failed to create checkout session.")

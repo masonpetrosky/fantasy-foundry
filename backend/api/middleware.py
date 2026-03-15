@@ -28,6 +28,7 @@ class MiddlewareConfig:
     client_identity_resolver: Callable[[Request | None], str]
     canonical_host: str
     environment: str
+    slow_request_threshold_seconds: float = 5.0
     metrics_collector: MetricsCollector | None = None
 
 
@@ -113,7 +114,7 @@ def register_middlewares(app: FastAPI, *, config: MiddlewareConfig) -> None:
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=(), xr-spatial-tracking=()")
         response.headers.setdefault(
             "Content-Security-Policy",
             (
@@ -218,7 +219,7 @@ def register_middlewares(app: FastAPI, *, config: MiddlewareConfig) -> None:
                 duration_ms,
                 config.client_identity_resolver(request),
             )
-            if duration_seconds >= 5.0:
+            if duration_seconds >= config.slow_request_threshold_seconds:
                 request_logger.warning(
                     "slow_request request_id=%s path=%s duration_ms=%s",
                     request_id,

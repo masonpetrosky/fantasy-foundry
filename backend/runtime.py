@@ -715,6 +715,7 @@ app = create_app(
     calculator_job_executor=CALCULATOR_JOB_EXECUTOR,
     docs_enabled=SETTINGS.docs_enabled,
     metrics_collector=METRICS_COLLECTOR,
+    slow_request_threshold_seconds=SETTINGS.slow_request_threshold_seconds,
 )
 
 # ---------------------------------------------------------------------------
