@@ -8,7 +8,15 @@ from typing import Any
 
 import httpx
 
+from backend.core.circuit_breaker import CircuitBreaker
+
 logger = logging.getLogger(__name__)
+
+_supabase_cb = CircuitBreaker(name="supabase", failure_threshold=3, recovery_timeout=30.0)
+
+
+def _http_transport() -> httpx.AsyncHTTPTransport:
+    return httpx.AsyncHTTPTransport(retries=2)
 
 
 async def resolve_supabase_user_id(
@@ -31,10 +39,13 @@ async def resolve_supabase_user_id(
     }
     if request_id:
         headers["X-Request-Id"] = request_id
+    if not _supabase_cb.allow_request():
+        logger.warning("Circuit breaker open for Supabase — skipping user lookup for email=%s", email)
+        return None
     try:
         lookup_email = email.strip().lower()
         url = f"{supabase_url}/auth/v1/admin/users?page=1&per_page=1"
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=10, transport=_http_transport()) as client:
             resp = await client.get(url, headers=headers)
             resp.raise_for_status()
             data = resp.json()
@@ -49,6 +60,7 @@ async def resolve_supabase_user_id(
         # exits immediately.
         for user in users:
             if str(user.get("email", "")).lower() == lookup_email:
+                _supabase_cb.record_success()
                 return str(user["id"])
 
         # Paginated fallback — only reached when the first page didn't match.
@@ -56,7 +68,7 @@ async def resolve_supabase_user_id(
         page = 2
         while page <= max_pages:
             url = f"{supabase_url}/auth/v1/admin/users?page={page}&per_page=50"
-            async with httpx.AsyncClient(timeout=10) as client:
+            async with httpx.AsyncClient(timeout=10, transport=_http_transport()) as client:
                 resp = await client.get(url, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
@@ -65,11 +77,14 @@ async def resolve_supabase_user_id(
                 break
             for user in users:
                 if str(user.get("email", "")).lower() == lookup_email:
+                    _supabase_cb.record_success()
                     return str(user["id"])
             page += 1
         if page > max_pages:
             logger.warning("resolve_supabase_user_id exceeded max_pages=%d for email=%s", max_pages, email)
+        _supabase_cb.record_success()
     except (OSError, KeyError, ValueError) as exc:
+        _supabase_cb.record_failure()
         logger.warning("Could not resolve Supabase user_id for email=%s: %s", email, exc, exc_info=True)
     return None
 
@@ -117,9 +132,18 @@ async def upsert_subscription(
         "Upserting subscription: email=%s status=%s user_id=%s period_end=%s",
         user_email, status, payload.get("user_id"), payload.get("current_period_end"),
     )
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.post(url, json=payload, headers=headers)
-        resp.raise_for_status()
+    if not _supabase_cb.allow_request():
+        logger.warning("Circuit breaker open for Supabase — skipping subscription upsert for email=%s", user_email)
+        return payload
+    try:
+        async with httpx.AsyncClient(timeout=10, transport=_http_transport()) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            resp.raise_for_status()
+        _supabase_cb.record_success()
+    except (OSError, httpx.HTTPStatusError) as exc:
+        _supabase_cb.record_failure()
+        logger.warning("Supabase upsert_subscription failed for email=%s: %s", user_email, exc, exc_info=True)
+        raise
     return payload
 
 
@@ -137,9 +161,18 @@ async def revoke_subscription(
         "Content-Type": "application/json",
         "Prefer": "return=minimal",
     }
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.patch(url, json={"status": "canceled"}, headers=headers)
-        resp.raise_for_status()
+    if not _supabase_cb.allow_request():
+        logger.warning("Circuit breaker open for Supabase — skipping subscription revoke for id=%s", stripe_subscription_id)
+        return
+    try:
+        async with httpx.AsyncClient(timeout=10, transport=_http_transport()) as client:
+            resp = await client.patch(url, json={"status": "canceled"}, headers=headers)
+            resp.raise_for_status()
+        _supabase_cb.record_success()
+    except (OSError, httpx.HTTPStatusError) as exc:
+        _supabase_cb.record_failure()
+        logger.warning("Supabase revoke_subscription failed for id=%s: %s", stripe_subscription_id, exc, exc_info=True)
+        raise
     logger.info("Revoked subscription: subscription_id=%s", stripe_subscription_id)
 
 
@@ -159,10 +192,19 @@ async def get_subscription_status(
         "apikey": supabase_service_role_key,
         "Authorization": f"Bearer {supabase_service_role_key}",
     }
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(url, headers=headers)
-        resp.raise_for_status()
-        rows = resp.json()
+    if not _supabase_cb.allow_request():
+        logger.warning("Circuit breaker open for Supabase — returning no subscription for email=%s", user_email)
+        return {"status": "none", "active": False}
+    try:
+        async with httpx.AsyncClient(timeout=10, transport=_http_transport()) as client:
+            resp = await client.get(url, headers=headers)
+            resp.raise_for_status()
+            rows = resp.json()
+        _supabase_cb.record_success()
+    except (OSError, httpx.HTTPStatusError) as exc:
+        _supabase_cb.record_failure()
+        logger.warning("Supabase get_subscription_status failed for email=%s: %s", user_email, exc, exc_info=True)
+        return {"status": "none", "active": False}
     if rows and len(rows) > 0:
         return {"status": rows[0].get("status", "none"), "active": rows[0].get("status") == "active"}
     return {"status": "none", "active": False}

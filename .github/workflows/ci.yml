@@ -208,6 +208,42 @@ jobs:
         run: node ../scripts/check_npm_audit_direct.mjs
 
   # ──────────────────────────────────────────────────────────────
+  # Job 3b: Lighthouse CI — frontend performance & accessibility
+  # ──────────────────────────────────────────────────────────────
+  lighthouse:
+    needs: [detect-changes, frontend-quality]
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && needs.detect-changes.outputs.frontend == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build Frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          uploadArtifacts: true
+          configPath: .lighthouserc.json
+
+  # ──────────────────────────────────────────────────────────────
   # Job 4: Docker build — PR only, path-filtered
   # ──────────────────────────────────────────────────────────────
   docker-build:
@@ -281,8 +317,8 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: python -m playwright install-deps chromium
 
-      - name: Run Browser Smoke Test
-        run: FF_RUN_E2E=1 pytest -q --no-cov tests/test_e2e_projections_pagination.py
+      - name: Run Browser Smoke Tests
+        run: FF_RUN_E2E=1 pytest -q --no-cov tests/test_e2e_projections_pagination.py tests/test_e2e_calculator_smoke.py
 
   # ──────────────────────────────────────────────────────────────
   # Job 6: Full regression — push to main / schedule / manual
