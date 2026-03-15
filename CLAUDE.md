@@ -50,7 +50,7 @@ cd frontend && npm run dev
 
 **Coverage:**
 - Backend enforces ≥75% (pytest-cov)
-- Frontend thresholds in `frontend/vite.config.js` (lines/statements/functions/branches: 30%)
+- Frontend thresholds in `frontend/vite.config.js` (lines/statements/functions/branches: 60%)
 
 ---
 

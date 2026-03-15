@@ -140,7 +140,12 @@ async def upsert_subscription(
             resp = await client.post(url, json=payload, headers=headers)
             resp.raise_for_status()
         _supabase_cb.record_success()
-    except (OSError, httpx.HTTPStatusError) as exc:
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code >= 500:
+            _supabase_cb.record_failure()
+        logger.warning("Supabase upsert_subscription failed for email=%s: %s", user_email, exc, exc_info=True)
+        raise
+    except OSError as exc:
         _supabase_cb.record_failure()
         logger.warning("Supabase upsert_subscription failed for email=%s: %s", user_email, exc, exc_info=True)
         raise
@@ -169,7 +174,12 @@ async def revoke_subscription(
             resp = await client.patch(url, json={"status": "canceled"}, headers=headers)
             resp.raise_for_status()
         _supabase_cb.record_success()
-    except (OSError, httpx.HTTPStatusError) as exc:
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code >= 500:
+            _supabase_cb.record_failure()
+        logger.warning("Supabase revoke_subscription failed for id=%s: %s", stripe_subscription_id, exc, exc_info=True)
+        raise
+    except OSError as exc:
         _supabase_cb.record_failure()
         logger.warning("Supabase revoke_subscription failed for id=%s: %s", stripe_subscription_id, exc, exc_info=True)
         raise
@@ -201,7 +211,12 @@ async def get_subscription_status(
             resp.raise_for_status()
             rows = resp.json()
         _supabase_cb.record_success()
-    except (OSError, httpx.HTTPStatusError) as exc:
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code >= 500:
+            _supabase_cb.record_failure()
+        logger.warning("Supabase get_subscription_status failed for email=%s: %s", user_email, exc, exc_info=True)
+        return {"status": "none", "active": False}
+    except OSError as exc:
         _supabase_cb.record_failure()
         logger.warning("Supabase get_subscription_status failed for email=%s: %s", user_email, exc, exc_info=True)
         return {"status": "none", "active": False}

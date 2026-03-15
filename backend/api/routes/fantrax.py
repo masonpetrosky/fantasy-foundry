@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 _LEAGUE_ID_MAX_LEN = 64
 _LEAGUE_ID_MIN_LEN = 5
+_LEAGUE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 LeagueFetcher = Callable[[str], Any]
 PlayerSummaryGetter = Callable[[], dict[str, dict[str, Any]]]
@@ -31,6 +33,8 @@ def _validate_league_id(league_id: str | None) -> str:
         raise HTTPException(status_code=400, detail="leagueId query parameter is required.")
     league_id = league_id.strip()
     if len(league_id) < _LEAGUE_ID_MIN_LEN or len(league_id) > _LEAGUE_ID_MAX_LEN:
+        raise HTTPException(status_code=400, detail="Invalid leagueId format.")
+    if not _LEAGUE_ID_PATTERN.match(league_id):
         raise HTTPException(status_code=400, detail="Invalid leagueId format.")
     return league_id
 
