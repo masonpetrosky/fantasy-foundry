@@ -85,15 +85,15 @@ cd frontend && npm run dev
 | `features/projections/` | Projections explorer — container, hooks, components |
 | `features/projections/hooks/` | Extracted state hooks (column visibility, filter presets, export, etc.) |
 | `features/projections/components/` | UI components (FilterBar, ComparisonPanel, ResultsShell, etc.) |
-| `dynasty_calculator*.jsx` | Calculator sidebar, categories, slots, results |
-| `hooks/useProjectionsData.js` | Core data fetch hook |
-| `app_state_storage.js` | localStorage persistence + preset serialization |
-| `analytics.js` | Analytics event tracking |
+| `dynasty_calculator*.tsx` | Calculator sidebar, categories, slots, results |
+| `hooks/useProjectionsData.ts` | Core data fetch hook |
+| `app_state_storage.ts` | localStorage persistence + preset serialization |
+| `analytics.ts` | Analytics event tracking |
 | `styles/` | CSS: `app.css`, `projections.css`, `responsive.css`, `calculator.css` |
 
-**To add a new projection column:** update `useProjectionColumnVisibility.js` catalog and the backend query.
+**To add a new projection column:** update `useProjectionColumnVisibility.ts` catalog and the backend query.
 
-**To add a new calculator setting:** `dynasty_calculator_sidebar_categories.jsx` or `_slots.jsx` → `app_state_storage.js` preset serialization → `backend/api/routes/calculate.py` request schema → `backend/valuation/`.
+**To add a new calculator setting:** `dynasty_calculator_sidebar_categories.tsx` or `_slots.tsx` → `app_state_storage.ts` preset serialization → `backend/api/routes/calculate.py` request schema → `backend/valuation/`.
 
 ---
 
@@ -109,8 +109,8 @@ cd frontend && npm run dev
 ## Large / Sensitive Files — Avoid Bloating
 
 - `backend/dynasty_roto_values.py` — legacy re-export facade; add new logic to `backend/valuation/` submodules instead
-- `backend/valuation/common_math.py` — 1100+ lines; surgical edits only
-- `frontend/src/features/projections/container.jsx` — orchestration only; new logic belongs in hooks or components
+- `backend/valuation/common_math.py` — ~530 lines; surgical edits only
+- `frontend/src/features/projections/container.tsx` — orchestration only; new logic belongs in hooks or components
 - `data/` — large JSON projection files; do not modify by hand
 
 ---
@@ -119,7 +119,7 @@ cd frontend && npm run dev
 
 - **Re-exports in `dynasty_roto_values.py`** use `from X import Y as Y` syntax (signals intentional re-export to Ruff)
 - **`try/except ImportError`** pattern in `dynasty_roto_values.py` supports both `backend.*` import path and direct script execution
-- **URL preset sharing:** calculator settings are serialized to/from URL query params via `app_state_storage.js`
+- **URL preset sharing:** calculator settings are serialized to/from URL query params via `app_state_storage.ts`
 - **Data version tracking:** `dataVersion` prop threads through the app to invalidate stale calculator overlays
 - **Rate limiting:** projection queries and calculator jobs are rate-limited; see `backend/core/rate_limit.py`
-- **React components** use `React.memo` + extracted hooks; avoid adding logic directly to `container.jsx`
+- **React components** use `React.memo` + extracted hooks; avoid adding logic directly to `container.tsx`

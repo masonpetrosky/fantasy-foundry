@@ -27,6 +27,7 @@ import { isRotoStatDynastyCol, rotoStatDynastyLabel } from "../../dynasty_calcul
 import type { CalculatorSettings } from "../../dynasty_calculator_config";
 import type { PlayerWatchEntry } from "../../app_state_storage";
 import { useCalculatorOverlayContext } from "../../contexts/CalculatorOverlayContext";
+import { trackEvent } from "../../analytics";
 
 interface ProjectionsExplorerProps {
   apiBase: string;
@@ -232,12 +233,16 @@ export function ProjectionsExplorer({
   });
 
   function handleSort(col: string): void {
+    const nextDir = sortCol === col
+      ? (sortDir === "asc" ? "desc" : "asc")
+      : (col === "Player" || col === "Team" || col === "Pos" || col === "Type" || col === "Year" || col === "Years" ? "asc" : "desc");
     if (sortCol === col) {
       setSortDir(d => d === "asc" ? "desc" : "asc");
     } else {
       setSortCol(col);
-      setSortDir(col === "Player" || col === "Team" || col === "Pos" || col === "Type" || col === "Year" || col === "Years" ? "asc" : "desc");
+      setSortDir(nextDir);
     }
+    trackEvent("ff_projection_sort", { column: col, direction: nextDir, tab });
   }
 
   function handleSelectTab(nextTab: string): void {

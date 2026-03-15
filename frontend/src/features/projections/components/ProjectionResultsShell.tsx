@@ -1,8 +1,24 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { SortableHeaderCell } from "../../../accessibility_components";
 import { VirtualizedProjectionTable } from "./VirtualizedProjectionTable";
 
 const VIRTUALIZATION_THRESHOLD = 50;
+
+const CARD_SKELETON_COUNT = 8;
+const TABLE_SKELETON_COUNT = 15;
+
+const CardSkeletons = React.memo(function CardSkeletons(): React.ReactElement {
+  return (
+    <>
+      {Array.from({ length: CARD_SKELETON_COUNT }).map((_, idx) => (
+        <div className="projection-card" key={`loading-card-${idx}`}>
+          <div className="loading-shimmer loading-shimmer--half" />
+          <div className="loading-shimmer loading-shimmer--wide" />
+        </div>
+      ))}
+    </>
+  );
+});
 
 interface ProjectionResultsShellProps {
   showCards: boolean;
@@ -68,17 +84,22 @@ export const ProjectionResultsShell = React.memo(function ProjectionResultsShell
   const hasNormalData = !showInitialLoadSkeleton && !(error && displayedPage.length === 0) && displayedPage.length > 0;
   const useVirtualized = hasNormalData && Array.isArray(tableRowsMarkup) && tableRowsMarkup.length > VIRTUALIZATION_THRESHOLD;
 
+  const tableSkeletonRows = useMemo(() => (
+    Array.from({ length: TABLE_SKELETON_COUNT }).map((_, i) => (
+      <tr key={i}>
+        <td className="index-col"><div className="loading-shimmer loading-shimmer--xs" /></td>
+        {cols.map((c, j) => <td key={j}><div className={`loading-shimmer ${c === "Player" ? "loading-shimmer--lg" : "loading-shimmer--sm"}`} /></td>)}
+        <td><div className="loading-shimmer loading-shimmer--md" /></td>
+      </tr>
+    ))
+  ), [cols]);
+
   return (
     <>
       {showCards && (
         <div className="projection-card-list">
           {showInitialLoadSkeleton ? (
-            Array.from({ length: 8 }).map((_, idx) => (
-              <div className="projection-card" key={`loading-card-${idx}`}>
-                <div className="loading-shimmer loading-shimmer--half" />
-                <div className="loading-shimmer loading-shimmer--wide" />
-              </div>
-            ))
+            <CardSkeletons />
           ) : error && displayedPage.length === 0 ? (
             <div className="projection-card-empty">Unable to load projections. {error}{" "}<button type="button" className="inline-btn" onClick={retryFetch}>Retry</button></div>
           ) : displayedPage.length === 0 ? (
@@ -146,13 +167,7 @@ export const ProjectionResultsShell = React.memo(function ProjectionResultsShell
                 </thead>
                 <tbody>
                   {showInitialLoadSkeleton ? (
-                    Array.from({ length: 15 }).map((_, i) => (
-                      <tr key={i}>
-                        <td className="index-col"><div className="loading-shimmer loading-shimmer--xs" /></td>
-                        {cols.map((c, j) => <td key={j}><div className={`loading-shimmer ${c === "Player" ? "loading-shimmer--lg" : "loading-shimmer--sm"}`} /></td>)}
-                        <td><div className="loading-shimmer loading-shimmer--md" /></td>
-                      </tr>
-                    ))
+                    tableSkeletonRows
                   ) : error && displayedPage.length === 0 ? (
                     <tr>
                       <td colSpan={cols.length + 2} className="projection-error-cell">

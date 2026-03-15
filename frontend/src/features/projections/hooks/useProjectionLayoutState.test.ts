@@ -52,14 +52,21 @@ describe("readInitialMobileLayoutMode", () => {
 });
 
 describe("resolveProjectionHorizontalAffordance", () => {
-  it("returns no affordance for non-mobile or missing element", () => {
+  it("returns no affordance for missing element", () => {
     expect(resolveProjectionHorizontalAffordance(null, true)).toEqual({
       canScrollLeft: false,
       canScrollRight: false,
     });
-    expect(resolveProjectionHorizontalAffordance({ scrollWidth: 1000, clientWidth: 400, scrollLeft: 10 } as HTMLElement, false)).toEqual({
+    expect(resolveProjectionHorizontalAffordance(null, false)).toEqual({
       canScrollLeft: false,
       canScrollRight: false,
+    });
+  });
+
+  it("returns affordance on desktop when columns overflow", () => {
+    expect(resolveProjectionHorizontalAffordance({ scrollWidth: 1000, clientWidth: 400, scrollLeft: 10 } as HTMLElement, false)).toEqual({
+      canScrollLeft: true,
+      canScrollRight: true,
     });
   });
 

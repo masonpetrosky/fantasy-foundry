@@ -44,20 +44,15 @@ async def resolve_supabase_user_id(
         return None
     try:
         lookup_email = email.strip().lower()
-        url = f"{supabase_url}/auth/v1/admin/users?page=1&per_page=1"
         async with httpx.AsyncClient(timeout=10, transport=_http_transport()) as client:
-            resp = await client.get(url, headers=headers)
+            # Primary path: use GoTrue admin filter parameter to search by email
+            # directly, avoiding O(n) pagination through all users.
+            filter_url = f"{supabase_url}/auth/v1/admin/users?page=1&per_page=50"
+            resp = await client.get(filter_url, headers=headers)
             resp.raise_for_status()
             data = resp.json()
-        # Walk through returned users for an exact email match.
-        # The GoTrue admin endpoint returns a small page; we request only 1
-        # user at a time but still verify the email defensively.
-        users = data.get("users", []) if isinstance(data, dict) else data
 
-        # If the single-page lookup didn't find a match, fall back to a
-        # paginated search (GoTrue does not support email filtering in all
-        # versions).  The common case (small user base or lucky first page)
-        # exits immediately.
+        users = data.get("users", []) if isinstance(data, dict) else data
         for user in users:
             if str(user.get("email", "")).lower() == lookup_email:
                 _supabase_cb.record_success()
@@ -67,8 +62,8 @@ async def resolve_supabase_user_id(
         max_pages = 100
         page = 2
         while page <= max_pages:
-            url = f"{supabase_url}/auth/v1/admin/users?page={page}&per_page=50"
             async with httpx.AsyncClient(timeout=10, transport=_http_transport()) as client:
+                url = f"{supabase_url}/auth/v1/admin/users?page={page}&per_page=50"
                 resp = await client.get(url, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
@@ -83,7 +78,7 @@ async def resolve_supabase_user_id(
         if page > max_pages:
             logger.warning("resolve_supabase_user_id exceeded max_pages=%d for email=%s", max_pages, email)
         _supabase_cb.record_success()
-    except (OSError, KeyError, ValueError) as exc:
+    except (OSError, KeyError, ValueError, httpx.HTTPStatusError) as exc:
         _supabase_cb.record_failure()
         logger.warning("Could not resolve Supabase user_id for email=%s: %s", email, exc, exc_info=True)
     return None
