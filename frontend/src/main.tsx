@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./styles/typography-table.css";
 import "./styles/app.css";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { createAppQueryClient } from "./lib/queryClient";
 import { initSentry } from "./sentry";
 import { initGA4 } from "./ga4";
 
@@ -61,6 +63,7 @@ import {
 } from "./app_state_storage";
 
 const API = resolveApiBase();
+const queryClient = createAppQueryClient();
 const ACTIVATION_SPRINT_ENABLED = String(import.meta.env.VITE_FF_ACTIVATION_SPRINT_V1 || "1").trim() !== "0";
 const ACTIVATION_DIAGNOSTICS_PANEL_ENV_ENABLED = String(
   import.meta.env.VITE_FF_ACTIVATION_DIAGNOSTICS_PANEL_V1 || "0"
@@ -491,6 +494,7 @@ function App(): React.ReactElement {
 // ---------------------------------------------------------------------------
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
     <BrowserRouter>
       <ToastProvider>
         <Routes>
@@ -512,5 +516,6 @@ createRoot(document.getElementById("root")!).render(
         </Routes>
       </ToastProvider>
     </BrowserRouter>
+    </QueryClientProvider>
   </ErrorBoundary>
 );

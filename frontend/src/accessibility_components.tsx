@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 
 /* ------------------------------------------------------------------ */
 /*  VisuallyHidden                                                    */
@@ -126,6 +126,68 @@ export function useMenuInteractions({ open, setOpen, menuRef, triggerRef }: UseM
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [menuRef, open, setOpen, triggerRef]);
+}
+
+/* ------------------------------------------------------------------ */
+/*  useFocusTrap                                                      */
+/* ------------------------------------------------------------------ */
+
+const DEFAULT_FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+interface UseFocusTrapOptions {
+  containerRef: React.RefObject<HTMLElement | null>;
+  onEscape?: () => void;
+  focusableSelector?: string;
+  autoFocus?: boolean;
+}
+
+export function useFocusTrap({
+  containerRef,
+  onEscape,
+  focusableSelector = DEFAULT_FOCUSABLE_SELECTOR,
+  autoFocus = true,
+}: UseFocusTrapOptions): void {
+  const previousFocusRef = useRef<Element | null>(null);
+
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement;
+    const handler = (e: KeyboardEvent): void => {
+      if (e.key === "Escape" && onEscape) {
+        onEscape();
+        return;
+      }
+      if (e.key === "Tab" && containerRef.current) {
+        const focusable = Array.from(
+          containerRef.current.querySelectorAll<HTMLElement>(focusableSelector),
+        ).filter(el => !(el as HTMLButtonElement).disabled);
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first || document.activeElement === containerRef.current) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last || document.activeElement === containerRef.current) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      (previousFocusRef.current as HTMLElement | null)?.focus();
+    };
+  }, [containerRef, focusableSelector, onEscape]);
+
+  useEffect(() => {
+    if (autoFocus) {
+      containerRef.current?.focus();
+    }
+  }, [autoFocus, containerRef]);
 }
 
 /* ------------------------------------------------------------------ */
