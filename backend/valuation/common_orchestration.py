@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Set
 
 import pandas as pd
@@ -96,6 +97,20 @@ def _position_profile(pos_value: object) -> str:
 
 
 def _piecewise_age_factor(age: float, *, profile: str) -> float:
+    """Return a 0-to-1 multiplier reflecting age-related decline risk.
+
+    The curve is piecewise-linear with profile-specific peak ages and decline rates:
+      - **Hitter** (default): peak through age 29, linear decline to 0.88 at 35,
+        then to 0.75 at 39, floors at 0.75.
+      - **Pitcher**: peak through age 28, decline to 0.84 at 34, then to 0.70
+        at 38, floors at 0.70.
+      - **Catcher**: peak through age 27, steeper decline to 0.82 at 33, then
+        to 0.65 at 37, floors at 0.65.
+      - **Two-way**: uses the hitter curve as a conservative fallback.
+
+    These breakpoints approximate historical MLB aging curves and are intentionally
+    simple to remain interpretable in a dynasty valuation context.
+    """
     if profile == "pitcher":
         if age <= 28.0:
             return 1.0
@@ -133,6 +148,18 @@ def _year_risk_multiplier(
     profile: str,
     enabled: bool,
 ) -> float:
+    """Scale a player's yearly value by projected age-related decline.
+
+    Combines two factors:
+      1. **Piecewise age curve** (``_piecewise_age_factor``) — profile-specific
+         multiplier based on projected age in the target year.
+      2. **Compounding uncertainty penalty** — for players aged 31+ with
+         year_offset > 0, an additional 2%-per-year compounding discount
+         (``0.98 ** year_offset``) captures increasing projection uncertainty
+         farther into the future.
+
+    Returns 1.0 (no adjustment) when *enabled* is False or age is unknown.
+    """
     if not enabled:
         return 1.0
     if age_start is None or not math.isfinite(age_start):
@@ -312,17 +339,22 @@ def calculate_common_dynasty_values(
     total_mlb_slots = lg.n_teams * (active_per_team + lg.bench_slots + lg.ir_slots)
 
     # PASS 1: average-starter values to estimate who is rostered in a deep league.
+    # Each year's context + player values are independent, so compute in parallel.
     year_contexts: Dict[int, dict] = {}
     year_tables_avg: List[pd.DataFrame] = []
 
-    for y in years:
+    def _compute_year_pass1(y: int) -> tuple[int, dict, pd.DataFrame]:
         if verbose:
             print(f"Year {y}: baseline + SGP + player values (avg-starter pass) ...")
         ctx = compute_year_context(y, bat, pit, lg, rng_seed=seed + y)
-        year_contexts[y] = ctx
         hit_vals, pit_vals = compute_year_player_values(ctx, lg)
         combined = combine_two_way(hit_vals, pit_vals, two_way=lg.two_way)
-        year_tables_avg.append(combined)
+        return y, ctx, combined
+
+    with ThreadPoolExecutor(max_workers=min(len(years), 4)) as executor:
+        for y, ctx, combined in executor.map(_compute_year_pass1, years):
+            year_contexts[y] = ctx
+            year_tables_avg.append(combined)
 
     start_ctx = year_contexts.get(start_year, {})
     active_floor_names = (
