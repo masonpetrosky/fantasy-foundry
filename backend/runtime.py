@@ -226,6 +226,11 @@ from backend.core.runtime_defaults import (
     POINTS_HITTER_SLOT_DEFAULTS,
     POINTS_PITCHER_SLOT_DEFAULTS,
 )
+from backend.core.runtime_endpoint_handlers import (
+    RouterWiringConfig,
+    build_billing_wiring,
+    wire_routers,
+)
 from backend.core.runtime_facade import (
     apply_runtime_facade_aliases,
     build_runtime_facade_alias_map,
@@ -529,17 +534,28 @@ from backend.services.projections.delta import (
     load_previous_data as _load_previous_data,
 )
 
-_prev_data = _load_previous_data(DATA_DIR)
-if _prev_data is not None:
-    _prev_bat_raw, _prev_pit_raw = _prev_data
-    _prev_bat_raw, _prev_pit_raw = _with_player_identity_keys(_prev_bat_raw, _prev_pit_raw)
-    _prev_bat = _average_recent_projection_rows(_prev_bat_raw, is_hitter=True)
-    _prev_pit = _average_recent_projection_rows(_prev_pit_raw, is_hitter=False)
-    PROJECTION_DELTAS = _compute_projection_deltas(BAT_DATA, PIT_DATA, _prev_bat, _prev_pit)
-    del _prev_bat_raw, _prev_pit_raw, _prev_bat, _prev_pit
-else:
-    PROJECTION_DELTAS = _empty_delta_response()
-del _prev_data
+_projection_deltas_lock = Lock()
+_projection_deltas_cached: dict[str, Any] | None = None
+
+
+def _load_projection_deltas() -> dict[str, Any]:
+    """Lazy-load previous-week data and compute projection deltas on first access."""
+    global _projection_deltas_cached
+    if _projection_deltas_cached is not None:
+        return _projection_deltas_cached
+    with _projection_deltas_lock:
+        if _projection_deltas_cached is not None:
+            return _projection_deltas_cached
+        prev_data = _load_previous_data(DATA_DIR)
+        if prev_data is not None:
+            prev_bat_raw, prev_pit_raw = prev_data
+            prev_bat_raw, prev_pit_raw = _with_player_identity_keys(prev_bat_raw, prev_pit_raw)
+            prev_bat = _average_recent_projection_rows(prev_bat_raw, is_hitter=True)
+            prev_pit = _average_recent_projection_rows(prev_pit_raw, is_hitter=False)
+            _projection_deltas_cached = _compute_projection_deltas(BAT_DATA, PIT_DATA, prev_bat, prev_pit)
+        else:
+            _projection_deltas_cached = _empty_delta_response()
+        return _projection_deltas_cached
 DATA_REFRESH_PATHS = (
     DATA_DIR / "meta.json",
     DATA_DIR / "bat.json",
@@ -713,6 +729,8 @@ app = create_app(
     enable_startup_calc_prewarm=ENABLE_STARTUP_CALC_PREWARM,
     prewarm_default_calculation_caches=_prewarm_default_calculation_caches,
     calculator_job_executor=CALCULATOR_JOB_EXECUTOR,
+    calculator_jobs=CALCULATOR_JOBS,
+    calculator_job_lock=CALCULATOR_JOB_LOCK,
     docs_enabled=SETTINGS.docs_enabled,
     metrics_collector=METRICS_COLLECTOR,
     slow_request_threshold_seconds=SETTINGS.slow_request_threshold_seconds,
@@ -725,48 +743,14 @@ app = create_app(
 # can continue to reference stable module-level names.
 
 
-# Route registration is centralized into dedicated route modules so app.py keeps
-# request business logic while routing declarations stay focused and composable.
-app.include_router(
-    build_status_router(
-        meta_handler=get_meta,
-        version_handler=get_version,
-        health_handler=get_health,
-        ready_handler=get_ready,
-        ops_handler=get_ops,
-        metrics_collector=METRICS_COLLECTOR,
-    )
-)
 def _get_projection_deltas(*, request: Request) -> dict:
     _enforce_rate_limit(
         request,
         action="proj-read",
         limit_per_minute=PROJECTION_RATE_LIMIT_PER_MINUTE,
     )
-    return PROJECTION_DELTAS
+    return _load_projection_deltas()
 
-
-app.include_router(
-    build_projections_router(
-        projection_response_handler=projection_response,
-        projection_export_handler=export_projections,
-        projection_profile_handler=RUNTIME_ENDPOINT_HANDLERS.projection_profile,
-        projection_compare_handler=RUNTIME_ENDPOINT_HANDLERS.projection_compare,
-        projection_deltas_handler=_get_projection_deltas,
-    )
-)
-app.include_router(
-    build_calculate_router(
-        calculate_request_model=CalculateRequest,
-        calculate_export_request_model=CalculateExportRequest,
-        calculate_handler=calculate_dynasty_values,
-        calculate_export_handler=export_calculate_dynasty_values,
-        calculate_job_create_handler=create_calculate_dynasty_job,
-        calculate_job_read_handler=get_calculate_dynasty_job,
-        calculate_job_cancel_handler=cancel_calculate_dynasty_job,
-        calculate_authorize_handler=_authorize_calculate_request,
-    )
-)
 
 # ---------------------------------------------------------------------------
 # Startup config validation — warn on incomplete credential pairs
@@ -784,6 +768,7 @@ if bool(SETTINGS.supabase_url) != bool(SETTINGS.supabase_service_role_key):
 # ---------------------------------------------------------------------------
 # Billing (Stripe) — conditional on credentials
 # ---------------------------------------------------------------------------
+_BILLING_WIRING = None
 if SETTINGS.stripe_secret_key and SETTINGS.stripe_webhook_secret:
     import stripe
 
@@ -801,112 +786,16 @@ if SETTINGS.stripe_secret_key and SETTINGS.stripe_webhook_secret:
     )
 
     stripe.api_key = SETTINGS.stripe_secret_key
-    _supabase_url = SETTINGS.supabase_url
-    _supabase_service_role_key = SETTINGS.supabase_service_role_key
 
-    async def _on_checkout_completed(session):
-        email = str(session.get("customer_email", "")).strip()
-        sub_id = str(session.get("subscription", "")).strip()
-        period_end = None
-        if sub_id:
-            try:
-                sub_obj = stripe.Subscription.retrieve(sub_id)
-                period_end = sub_obj.get("current_period_end")
-            except (OSError, ValueError, KeyError):
-                logging.getLogger(__name__).warning("Could not retrieve subscription %s for period_end", sub_id, exc_info=True)
-        user_id = await _billing_resolve_user_id(
-            supabase_url=_supabase_url,
-            supabase_service_role_key=_supabase_service_role_key,
-            email=email,
-        )
-        await _billing_upsert(
-            supabase_url=_supabase_url,
-            supabase_service_role_key=_supabase_service_role_key,
-            user_email=email,
-            stripe_customer_id=str(session.get("customer", "")).strip(),
-            stripe_subscription_id=sub_id,
-            status="active",
-            user_id=user_id,
-            current_period_end=period_end,
-        )
-
-    async def _on_subscription_updated(subscription):
-        customer_id = str(subscription.get("customer", "")).strip()
-        customer_email = str(subscription.get("metadata", {}).get("email", "")).strip()
-        if not customer_email and customer_id:
-            try:
-                customer = stripe.Customer.retrieve(customer_id)
-                customer_email = str(getattr(customer, "email", "") or "").strip()
-            except (OSError, ValueError, KeyError):
-                logging.getLogger(__name__).warning("Could not retrieve customer email for %s", customer_id)
-        user_id = await _billing_resolve_user_id(
-            supabase_url=_supabase_url,
-            supabase_service_role_key=_supabase_service_role_key,
-            email=customer_email,
-        )
-        await _billing_upsert(
-            supabase_url=_supabase_url,
-            supabase_service_role_key=_supabase_service_role_key,
-            user_email=customer_email,
-            stripe_customer_id=customer_id,
-            stripe_subscription_id=str(subscription.get("id", "")).strip(),
-            status=str(subscription.get("status", "")).strip(),
-            user_id=user_id,
-            current_period_end=subscription.get("current_period_end"),
-        )
-
-    async def _on_subscription_deleted(subscription):
-        await _billing_revoke(
-            supabase_url=_supabase_url,
-            supabase_service_role_key=_supabase_service_role_key,
-            stripe_subscription_id=str(subscription.get("id", "")).strip(),
-        )
-
-    async def _get_billing_status(email):
-        return await _billing_get_status(
-            supabase_url=_supabase_url,
-            supabase_service_role_key=_supabase_service_role_key,
-            user_email=email,
-        )
-
-    app.include_router(
-        build_billing_router(
-            stripe_secret_key=SETTINGS.stripe_secret_key,
-            stripe_webhook_secret=SETTINGS.stripe_webhook_secret,
-            stripe_monthly_price_id=SETTINGS.stripe_monthly_price_id,
-            stripe_annual_price_id=SETTINGS.stripe_annual_price_id,
-            on_checkout_completed=_on_checkout_completed,
-            on_subscription_updated=_on_subscription_updated,
-            on_subscription_deleted=_on_subscription_deleted,
-            get_subscription_status=_get_billing_status,
-        )
+    _BILLING_WIRING = build_billing_wiring(
+        stripe_module=stripe,
+        supabase_url=SETTINGS.supabase_url,
+        supabase_service_role_key=SETTINGS.supabase_service_role_key,
+        billing_resolve_user_id=_billing_resolve_user_id,
+        billing_upsert=_billing_upsert,
+        billing_revoke=_billing_revoke,
+        billing_get_status=_billing_get_status,
     )
-
-# ---------------------------------------------------------------------------
-# Newsletter (Buttondown) — conditional on API key
-# ---------------------------------------------------------------------------
-if SETTINGS.buttondown_api_key:
-    app.include_router(
-        build_newsletter_router(
-            buttondown_api_key=SETTINGS.buttondown_api_key,
-            enforce_rate_limit=_enforce_rate_limit,
-            rate_limit_per_minute=10,
-            client_ip_resolver=_client_ip,
-        )
-    )
-
-# ---------------------------------------------------------------------------
-# Fantrax league integration (always available — public API, no credentials)
-# ---------------------------------------------------------------------------
-app.include_router(
-    build_fantrax_router(
-        enforce_rate_limit=_enforce_rate_limit,
-        client_ip_resolver=_client_ip,
-        league_fetcher=_fantrax_fetch_league,
-        player_summary_getter=lambda: PLAYER_SUMMARY_INDEX,
-        rate_limit_per_minute=SETTINGS.fantrax_rate_limit_per_minute,
-    )
-)
 
 # ---------------------------------------------------------------------------
 # Serve frontend
@@ -922,20 +811,57 @@ def _get_unique_player_entity_keys() -> list[str]:
             keys.append(key)
     return keys
 
-app.include_router(
-    build_og_cards_router(
-        player_summary_index=PLAYER_SUMMARY_INDEX,
-    )
-)
 
-if FRONTEND_DIR.exists():
-    app.include_router(
-        build_frontend_assets_router(
-            index_path=INDEX_PATH,
-            assets_root=FRONTEND_DIST_ASSETS_DIR,
-            app_build_id=APP_BUILD_ID,
-            index_build_token=INDEX_BUILD_TOKEN,
-            player_keys_getter=_get_unique_player_entity_keys,
-            player_summary_index=PLAYER_SUMMARY_INDEX,
-        )
-    )
+# ---------------------------------------------------------------------------
+# Router registration — centralized via wire_routers()
+# ---------------------------------------------------------------------------
+wire_routers(
+    app,
+    RouterWiringConfig(
+        meta_handler=get_meta,
+        version_handler=get_version,
+        health_handler=get_health,
+        ready_handler=get_ready,
+        ops_handler=get_ops,
+        metrics_collector=METRICS_COLLECTOR,
+        projection_response_handler=projection_response,
+        projection_export_handler=export_projections,
+        projection_profile_handler=RUNTIME_ENDPOINT_HANDLERS.projection_profile,
+        projection_compare_handler=RUNTIME_ENDPOINT_HANDLERS.projection_compare,
+        projection_deltas_handler=_get_projection_deltas,
+        calculate_request_model=CalculateRequest,
+        calculate_export_request_model=CalculateExportRequest,
+        calculate_handler=calculate_dynasty_values,
+        calculate_export_handler=export_calculate_dynasty_values,
+        calculate_job_create_handler=create_calculate_dynasty_job,
+        calculate_job_read_handler=get_calculate_dynasty_job,
+        calculate_job_cancel_handler=cancel_calculate_dynasty_job,
+        calculate_authorize_handler=_authorize_calculate_request,
+        enforce_rate_limit=_enforce_rate_limit,
+        client_ip_resolver=_client_ip,
+        league_fetcher=_fantrax_fetch_league,
+        player_summary_getter=lambda: PLAYER_SUMMARY_INDEX,
+        fantrax_rate_limit_per_minute=SETTINGS.fantrax_rate_limit_per_minute,
+        player_summary_index=PLAYER_SUMMARY_INDEX,
+        index_path=INDEX_PATH,
+        assets_root=FRONTEND_DIST_ASSETS_DIR,
+        app_build_id=APP_BUILD_ID,
+        index_build_token=INDEX_BUILD_TOKEN,
+        player_keys_getter=_get_unique_player_entity_keys,
+        frontend_exists=FRONTEND_DIR.exists(),
+        buttondown_api_key=SETTINGS.buttondown_api_key,
+        billing_wiring=_BILLING_WIRING,
+        stripe_secret_key=SETTINGS.stripe_secret_key,
+        stripe_webhook_secret=SETTINGS.stripe_webhook_secret,
+        stripe_monthly_price_id=SETTINGS.stripe_monthly_price_id,
+        stripe_annual_price_id=SETTINGS.stripe_annual_price_id,
+    ),
+    build_status_router_fn=build_status_router,
+    build_projections_router_fn=build_projections_router,
+    build_calculate_router_fn=build_calculate_router,
+    build_fantrax_router_fn=build_fantrax_router,
+    build_og_cards_router_fn=build_og_cards_router,
+    build_frontend_assets_router_fn=build_frontend_assets_router,
+    build_billing_router_fn=build_billing_router,
+    build_newsletter_router_fn=build_newsletter_router,
+)

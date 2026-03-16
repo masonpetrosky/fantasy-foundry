@@ -328,7 +328,7 @@ def get_calculate_dynasty_job(
         if job is None:
             cached_job = ctx.cached_calculation_job_snapshot(job_id)
             if cached_job is not None:
-                return cached_job
+                return ctx.calculation_job_public_payload(cached_job)
             raise HTTPException(status_code=404, detail="Calculation job not found or expired.")
         return ctx.calculation_job_public_payload(job)
 
@@ -366,7 +366,7 @@ def cancel_calculate_dynasty_job(
                     ctx.cache_calculation_job_snapshot(synthetic)
                     ctx.untrack_active_job(job_id, None)
                     return ctx.calculation_job_public_payload(synthetic)
-                return cached_job
+                return ctx.calculation_job_public_payload(cached_job)
             raise HTTPException(status_code=404, detail="Calculation job not found or expired.")
 
         status = str(job.get("status") or "").lower()

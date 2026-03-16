@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Callable
 from contextlib import asynccontextmanager
-from threading import Thread
+from datetime import datetime, timezone
+from threading import Lock, Thread
 from typing import Any
 
 from fastapi import FastAPI, Request
 
 from backend.api.error_handlers import register_exception_handlers
 from backend.api.middleware import MiddlewareConfig, register_middlewares
+from backend.core.jobs import mark_job_cancelled_locked
 from backend.core.metrics import MetricsCollector
+
+logger = logging.getLogger(__name__)
 
 _OPENAPI_TAGS = [
     {"name": "projections", "description": "Player projection queries, exports, profiles, and comparisons."},
@@ -46,6 +51,8 @@ def create_app(
     enable_startup_calc_prewarm: bool,
     prewarm_default_calculation_caches: Callable[[], None],
     calculator_job_executor: Any,
+    calculator_jobs: dict[str, dict] | None = None,
+    calculator_job_lock: Lock | None = None,
     docs_enabled: bool = True,
     metrics_collector: MetricsCollector | None = None,
     slow_request_threshold_seconds: float = 5.0,
@@ -59,6 +66,7 @@ def create_app(
         try:
             yield
         finally:
+            _cancel_active_jobs(calculator_jobs, calculator_job_lock)
             calculator_job_executor.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(
@@ -88,3 +96,29 @@ def create_app(
         ),
     )
     return app
+
+
+def _cancel_active_jobs(
+    calculator_jobs: dict[str, dict] | None,
+    calculator_job_lock: Lock | None,
+) -> None:
+    """Mark all queued/running calculator jobs as cancelled during shutdown."""
+    if calculator_jobs is None:
+        return
+    lock = calculator_job_lock or Lock()
+    now = datetime.now(tz=timezone.utc).isoformat()
+    shutdown_error = {"status_code": 503, "detail": "Server restarting, please retry."}
+    cancelled = 0
+    with lock:
+        for job in calculator_jobs.values():
+            status = str(job.get("status") or "").lower()
+            if status in {"queued", "running"}:
+                mark_job_cancelled_locked(
+                    job,
+                    now=now,
+                    cancelled_status="cancelled",
+                    cancelled_error=shutdown_error,
+                )
+                cancelled += 1
+    if cancelled:
+        logger.info("Graceful shutdown: cancelled %d active calculator job(s)", cancelled)

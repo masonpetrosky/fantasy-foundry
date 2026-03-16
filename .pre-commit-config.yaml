@@ -13,3 +13,9 @@ repos:
         entry: python scripts/check_ruff_per_file_ignores.py
         language: python
         pass_filenames: false
+      - id: eslint
+        name: eslint frontend
+        entry: bash -c 'cd frontend && npx eslint --max-warnings=0 "$@"' --
+        language: system
+        files: '^frontend/src/.*\.(ts|tsx)$'
+        types: [file]

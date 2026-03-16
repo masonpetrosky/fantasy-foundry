@@ -122,6 +122,11 @@ def result_cache_set(
         cleanup_local_result_cache_fn(None)
 
 
+def _serializable_job_dict(job: dict) -> dict:
+    """Return a copy of *job* with non-serializable fields removed."""
+    return {k: v for k, v in job.items() if k != "future"}
+
+
 def cache_calculation_job_snapshot(
     job: dict,
     *,
@@ -137,10 +142,10 @@ def cache_calculation_job_snapshot(
         redis_client.setex(
             f"{redis_job_prefix}{job['job_id']}",
             job_ttl_seconds,
-            json.dumps(calculation_job_public_payload_fn(job), separators=(",", ":"), sort_keys=True),
+            json.dumps(_serializable_job_dict(job), separators=(",", ":"), sort_keys=True),
         )
     except (ConnectionError, TimeoutError, OSError):
-        logger.warning("failed to cache calculator job payload in redis", exc_info=True)
+        logger.warning("failed to cache calculator job metadata in redis", exc_info=True)
 
 
 def cached_calculation_job_snapshot(
