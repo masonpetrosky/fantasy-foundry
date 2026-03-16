@@ -220,6 +220,7 @@ def enforce_rate_limit(
             if count == 1:
                 redis_client.expire(redis_key, 120)
             if count > limit_per_minute:
+                logger.warning("rate_limit_blocked action=%s identity=%s source=redis count=%d limit=%d", action, identity, count, limit_per_minute)
                 if on_decision is not None:
                     on_decision(
                         {
@@ -270,6 +271,7 @@ def enforce_rate_limit(
         bucket = request_rate_limit_buckets[bucket_key]
         prune_rate_limit_bucket(bucket, window_start)
         if len(bucket) >= limit_per_minute:
+            logger.warning("rate_limit_blocked action=%s identity=%s source=local count=%d limit=%d", action, identity, len(bucket), limit_per_minute)
             if on_decision is not None:
                 on_decision(
                     {

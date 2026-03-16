@@ -54,10 +54,15 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation requests: network-first with offline fallback
+  // Navigation requests: network-first with 3s timeout fallback to cached shell
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() => caches.match("/")),
+      Promise.race([
+        fetch(request),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("nav timeout")), 3000),
+        ),
+      ]).catch(() => caches.match("/")),
     );
     return;
   }

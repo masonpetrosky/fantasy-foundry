@@ -40,8 +40,12 @@ def build_newsletter_router(
         }
         payload = {"email_address": body.email, "type": "regular"}
 
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(BUTTONDOWN_API_URL, json=payload, headers=headers)
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(BUTTONDOWN_API_URL, json=payload, headers=headers)
+        except httpx.TimeoutException:
+            logger.error("Buttondown API timeout for newsletter subscribe")
+            raise HTTPException(status_code=502, detail="Newsletter service timeout.")
 
         if resp.status_code == 409:
             return JSONResponse({"subscribed": True, "already_subscribed": True})

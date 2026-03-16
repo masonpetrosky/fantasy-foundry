@@ -15,10 +15,10 @@ from backend.core.runtime_infra import RedisClientState
 
 
 class _Logger:
-    def info(self, _message: str) -> None:
+    def info(self, _message: str, *args: object) -> None:
         return None
 
-    def warning(self, _message: str, exc_info: bool = False) -> None:
+    def warning(self, _message: str, *args: object, exc_info: bool = False) -> None:
         _ = exc_info
         return None
 
