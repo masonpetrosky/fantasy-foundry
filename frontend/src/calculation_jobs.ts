@@ -97,7 +97,9 @@ export async function runCalculationJob({
         return;
       }
       if (Date.now() > deadline) {
-        throw new Error("Calculation timed out before completion.");
+        throw new Error(
+          "Calculation timed out. Try reducing the number of simulations or shortening the projection horizon."
+        );
       }
 
       const statusResp = await fetch(`${normalizedApiBase}/api/calculate/jobs/${encodeURIComponent(jobId)}`, {
@@ -169,7 +171,9 @@ export async function runCalculationJob({
         if (detail) {
           throw new Error(detail);
         }
-        throw new Error("Calculation job failed.");
+        throw new Error(
+          "Calculation failed. Try reducing the number of simulations or adjusting your league settings."
+        );
       }
 
       throw new Error("Unexpected calculation job status.");
