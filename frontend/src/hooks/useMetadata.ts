@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { trackEvent } from "../analytics";
+import { captureException } from "../sentry";
 import { extractApiErrorMessage } from "../utils/apiErrors";
 
 export function useMetadata(apiBase: string): {
@@ -38,7 +39,7 @@ export function useMetadata(apiBase: string): {
         setMetaError(message);
         setMetaLoading(false);
         trackEvent("meta_load_error", { message: message || "unknown", section: "projections" });
-        console.error(err);
+        captureException(err, { source: "meta_load" });
       });
     return () => {
       controller.abort();

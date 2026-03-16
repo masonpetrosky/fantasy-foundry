@@ -27,7 +27,7 @@ def sanitize_cell_value(value: object) -> object:
 
 def as_float(value: object) -> float | None:
     try:
-        parsed = float(value)
+        parsed = float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
     if math.isfinite(parsed):

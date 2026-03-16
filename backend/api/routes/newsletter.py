@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -21,9 +22,9 @@ class SubscribeRequest(BaseModel):
 def build_newsletter_router(
     *,
     buttondown_api_key: str,
-    enforce_rate_limit: object,
+    enforce_rate_limit: Callable[..., None],
     rate_limit_per_minute: int = 10,
-    client_ip_resolver: object,
+    client_ip_resolver: Callable[..., str],
 ) -> APIRouter:
     """Create newsletter subscription route."""
     router = APIRouter(tags=["newsletter"])

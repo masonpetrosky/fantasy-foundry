@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { BUILD_QUERY_PARAM, BUILD_STORAGE_KEY, safeReadStorage, safeWriteStorage } from "../app_state_storage";
+import { captureException } from "../sentry";
 
 const INDEX_BUILD_ID = (() => {
   const metaEl = document.querySelector('meta[name="ff-build-id"]');
@@ -79,7 +80,7 @@ export function useVersionPolling(apiBase: string): { buildLabel: string; dataVe
         safeWriteStorage(BUILD_STORAGE_KEY, buildId);
       } catch (err) {
         if ((err as Error)?.name === "AbortError" || cancelled) return;
-        console.warn("Version check failed:", err);
+        captureException(err, { source: "version_polling" });
       } finally {
         if (activeController === controller) {
           activeController = null;

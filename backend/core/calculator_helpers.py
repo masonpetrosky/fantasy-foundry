@@ -28,7 +28,7 @@ def roto_category_settings_from_dict(
 ) -> dict[str, bool]:
     settings = source if isinstance(source, dict) else {}
     return {
-        field_key: coerce_bool_fn(settings.get(field_key), default=default_value)
+        field_key: coerce_bool_fn(settings.get(field_key), default=default_value)  # type: ignore[call-arg]
         for field_key, default_value in defaults.items()
     }
 
