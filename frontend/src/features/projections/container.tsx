@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatCellValue } from "../../formatting_utils";
 import { useProjectionColumnVisibility } from "./hooks/useProjectionColumnVisibility";
 import { useProjectionCollections } from "./hooks/useProjectionCollections";
@@ -28,6 +28,7 @@ import type { CalculatorSettings } from "../../dynasty_calculator_config";
 import type { PlayerWatchEntry } from "../../app_state_storage";
 import { useCalculatorOverlayContext } from "../../contexts/CalculatorOverlayContext";
 import { trackEvent } from "../../analytics";
+import { useToastContext } from "../../Toast";
 
 interface ProjectionsExplorerProps {
   apiBase: string;
@@ -52,6 +53,16 @@ export function ProjectionsExplorer({
   tierLimits,
   fantraxRosterPlayerKeys,
 }: ProjectionsExplorerProps): React.ReactElement {
+  const toastCtx = useToastContext();
+
+  const prevDataVersionRef = useRef(dataVersion);
+  useEffect(() => {
+    if (prevDataVersionRef.current && prevDataVersionRef.current !== dataVersion) {
+      toastCtx?.addToast("Projection data has been updated.", { type: "info" });
+    }
+    prevDataVersionRef.current = dataVersion;
+  }, [dataVersion, toastCtx]);
+
   const {
     calculatorOverlayByPlayerKey,
     calculatorOverlayActive,
