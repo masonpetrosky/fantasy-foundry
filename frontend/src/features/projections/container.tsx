@@ -427,37 +427,47 @@ export function ProjectionsExplorer({
       <ProjectionSectionTabs tab={tab as "bat" | "pitch" | "all"} onSelectTab={handleSelectTab} />
 
       <ProjectionFilterBar
-        tab={tab}
-        meta={meta as { years: (string | number)[]; teams: string[] }}
-        search={search}
-        resolvedYearFilter={resolvedYearFilter}
-        teamFilter={teamFilter}
-        posFilters={posFilters}
-        watchlistOnly={watchlistOnly}
-        watchlistCount={watchlistCount}
-        totalRows={totalRows}
-        loading={loading}
-        searchIsDebouncing={searchIsDebouncing}
-        setSearch={setSearch}
-        setTeamFilter={setTeamFilter}
-        setYearFilter={setYearFilter}
-        setPosFilters={setPosFilters}
-        setWatchlistOnly={setWatchlistOnly}
-        activeProjectionPresetKey={activeProjectionPresetKey}
-        projectionFilterPresets={projectionFilterPresets}
-        applyProjectionFilterPreset={applyProjectionFilterPreset}
-        saveCustomProjectionPreset={saveCustomProjectionPreset}
-        clearAllFilters={clearAllFilters}
-        hasActiveFilters={hasActiveFilters}
-        activeFilterChips={activeFilterChips}
-        tableColumnCatalog={tableColumnCatalog}
-        resolvedProjectionTableHiddenCols={resolvedProjectionTableHiddenCols as Record<string, boolean>}
-        requiredProjectionTableCols={requiredProjectionTableCols as Set<string>}
-        toggleProjectionTableColumn={toggleProjectionTableColumn}
-        showAllProjectionTableColumns={showAllProjectionTableColumns}
-        colLabels={colLabels}
-        exportingFormat={exportingFormat}
-        exportCurrentProjections={exportCurrentProjections}
+        filterState={{
+          tab,
+          meta: meta as { bat_positions?: string[]; pit_positions?: string[]; years: (string | number)[]; teams: string[] },
+          search,
+          resolvedYearFilter,
+          teamFilter,
+          posFilters,
+          watchlistOnly,
+          watchlistCount,
+          totalRows,
+          loading,
+          searchIsDebouncing,
+          hasActiveFilters,
+          activeFilterChips,
+        }}
+        filterActions={{
+          setSearch,
+          setTeamFilter,
+          setYearFilter,
+          setPosFilters,
+          setWatchlistOnly,
+          clearAllFilters,
+        }}
+        presetConfig={{
+          activeProjectionPresetKey,
+          projectionFilterPresets,
+          applyProjectionFilterPreset,
+          saveCustomProjectionPreset,
+        }}
+        columnConfig={{
+          tableColumnCatalog,
+          resolvedProjectionTableHiddenCols: resolvedProjectionTableHiddenCols as Record<string, boolean>,
+          requiredProjectionTableCols: requiredProjectionTableCols as Set<string>,
+          toggleProjectionTableColumn,
+          showAllProjectionTableColumns,
+          colLabels,
+        }}
+        exportConfig={{
+          exportingFormat,
+          exportCurrentProjections,
+        }}
         tierLimits={tierLimits}
         rosterOnly={rosterOnly}
         setRosterOnly={setRosterOnly}

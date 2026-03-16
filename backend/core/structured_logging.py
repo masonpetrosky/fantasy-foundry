@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import traceback
 from datetime import datetime, timezone
+
+# ContextVar holding the current request ID for log correlation.
+request_id_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "request_id", default=None
+)
 
 
 class JsonFormatter(logging.Formatter):
@@ -18,6 +24,9 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+        rid = request_id_ctx.get()
+        if rid is not None:
+            log_entry["request_id"] = rid
         if record.exc_info and record.exc_info[1] is not None:
             log_entry["exception"] = traceback.format_exception(*record.exc_info)
         return json.dumps(log_entry, default=str)

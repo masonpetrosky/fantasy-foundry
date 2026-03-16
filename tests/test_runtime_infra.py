@@ -659,4 +659,4 @@ class RuntimeInfraTests(unittest.TestCase):
             redis_job_prefix="ff:job:",
             logger=logger,
         )
-        self.assertEqual(snapshot, {"job_id": "job-cache", "status": "completed"})
+        self.assertEqual(snapshot, {"job_id": "job-cache", "status": "completed", "result": {"value": 1}})

@@ -30,41 +30,78 @@ function renderToContainer(element: React.ReactElement): { container: HTMLDivEle
   };
 }
 
-function defaultProps(overrides: Partial<React.ComponentProps<typeof ProjectionFilterBar>> = {}) {
+interface FlatOverrides {
+  tab?: string;
+  search?: string;
+  resolvedYearFilter?: string;
+  teamFilter?: string;
+  posFilters?: string[];
+  watchlistOnly?: boolean;
+  watchlistCount?: number;
+  totalRows?: number;
+  loading?: boolean;
+  searchIsDebouncing?: boolean;
+  hasActiveFilters?: boolean;
+  activeFilterChips?: string[];
+  setSearch?: (v: string) => void;
+  setTeamFilter?: (v: string) => void;
+  setYearFilter?: (v: string) => void;
+  setPosFilters?: (u: string[] | ((p: string[]) => string[])) => void;
+  setWatchlistOnly?: (u: boolean | ((p: boolean) => boolean)) => void;
+  clearAllFilters?: () => void;
+  activeProjectionPresetKey?: string;
+  projectionFilterPresets?: null;
+  applyProjectionFilterPreset?: (k: string) => void;
+  saveCustomProjectionPreset?: () => void;
+  exportingFormat?: string;
+  exportCurrentProjections?: (f: string) => void;
+  tierLimits?: React.ComponentProps<typeof ProjectionFilterBar>["tierLimits"];
+}
+
+function defaultProps(overrides: FlatOverrides = {}): React.ComponentProps<typeof ProjectionFilterBar> {
   return {
-    tab: "all",
-    meta: { years: [2026, 2027, 2028], teams: ["SEA", "NYY", "LAD"], bat_positions: ["C", "1B", "OF"], pit_positions: ["SP", "RP"] },
-    search: "",
-    resolvedYearFilter: "__career_totals__",
-    teamFilter: "",
-    posFilters: [] as string[],
-    watchlistOnly: false,
-    watchlistCount: 5,
-    totalRows: 100,
-    loading: false,
-    searchIsDebouncing: false,
-    setSearch: vi.fn(),
-    setTeamFilter: vi.fn(),
-    setYearFilter: vi.fn(),
-    setPosFilters: vi.fn(),
-    setWatchlistOnly: vi.fn(),
-    activeProjectionPresetKey: "all",
-    projectionFilterPresets: null,
-    applyProjectionFilterPreset: vi.fn(),
-    saveCustomProjectionPreset: vi.fn(),
-    clearAllFilters: vi.fn(),
-    hasActiveFilters: false,
-    activeFilterChips: [] as string[],
-    tableColumnCatalog: ["Player", "Team", "Age"],
-    resolvedProjectionTableHiddenCols: {},
-    requiredProjectionTableCols: new Set<string>(["Player"]),
-    toggleProjectionTableColumn: vi.fn(),
-    showAllProjectionTableColumns: vi.fn(),
-    colLabels: { Player: "Player", Team: "Team", Age: "Age" },
-    exportingFormat: "",
-    exportCurrentProjections: vi.fn(),
-    tierLimits: null,
-    ...overrides,
+    filterState: {
+      tab: overrides.tab ?? "all",
+      meta: { years: [2026, 2027, 2028], teams: ["SEA", "NYY", "LAD"], bat_positions: ["C", "1B", "OF"], pit_positions: ["SP", "RP"] },
+      search: overrides.search ?? "",
+      resolvedYearFilter: overrides.resolvedYearFilter ?? "__career_totals__",
+      teamFilter: overrides.teamFilter ?? "",
+      posFilters: overrides.posFilters ?? [],
+      watchlistOnly: overrides.watchlistOnly ?? false,
+      watchlistCount: overrides.watchlistCount ?? 5,
+      totalRows: overrides.totalRows ?? 100,
+      loading: overrides.loading ?? false,
+      searchIsDebouncing: overrides.searchIsDebouncing ?? false,
+      hasActiveFilters: overrides.hasActiveFilters ?? false,
+      activeFilterChips: overrides.activeFilterChips ?? [],
+    },
+    filterActions: {
+      setSearch: overrides.setSearch ?? vi.fn(),
+      setTeamFilter: overrides.setTeamFilter ?? vi.fn(),
+      setYearFilter: overrides.setYearFilter ?? vi.fn(),
+      setPosFilters: overrides.setPosFilters ?? vi.fn(),
+      setWatchlistOnly: overrides.setWatchlistOnly ?? vi.fn(),
+      clearAllFilters: overrides.clearAllFilters ?? vi.fn(),
+    },
+    presetConfig: {
+      activeProjectionPresetKey: overrides.activeProjectionPresetKey ?? "all",
+      projectionFilterPresets: overrides.projectionFilterPresets ?? null,
+      applyProjectionFilterPreset: overrides.applyProjectionFilterPreset ?? vi.fn(),
+      saveCustomProjectionPreset: overrides.saveCustomProjectionPreset ?? vi.fn(),
+    },
+    columnConfig: {
+      tableColumnCatalog: ["Player", "Team", "Age"],
+      resolvedProjectionTableHiddenCols: {},
+      requiredProjectionTableCols: new Set<string>(["Player"]),
+      toggleProjectionTableColumn: vi.fn(),
+      showAllProjectionTableColumns: vi.fn(),
+      colLabels: { Player: "Player", Team: "Team", Age: "Age" },
+    },
+    exportConfig: {
+      exportingFormat: overrides.exportingFormat ?? "",
+      exportCurrentProjections: overrides.exportCurrentProjections ?? vi.fn(),
+    },
+    tierLimits: overrides.tierLimits ?? null,
   };
 }
 

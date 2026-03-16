@@ -14,6 +14,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import RedirectResponse, Response
 
 from backend.core.metrics import MetricsCollector
+from backend.core.structured_logging import request_id_ctx
 
 CallNext = Callable[[Request], Awaitable[Any]]
 
@@ -92,9 +93,13 @@ def register_middlewares(app: FastAPI, *, config: MiddlewareConfig) -> None:
     async def attach_request_id(request: Request, call_next: CallNext):
         request_id = str(request.headers.get("x-request-id") or "").strip() or uuid4().hex
         request.state.request_id = request_id
-        response = await call_next(request)
-        response.headers.setdefault("X-Request-Id", request_id)
-        return response
+        token = request_id_ctx.set(request_id)
+        try:
+            response = await call_next(request)
+            response.headers.setdefault("X-Request-Id", request_id)
+            return response
+        finally:
+            request_id_ctx.reset(token)
 
     @app.middleware("http")
     async def attach_build_header(request: Request, call_next: CallNext):

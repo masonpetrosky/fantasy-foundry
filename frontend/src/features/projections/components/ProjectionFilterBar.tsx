@@ -18,7 +18,7 @@ interface ProjectionMeta {
   teams: string[];
 }
 
-interface ProjectionFilterBarProps {
+interface FilterState {
   tab: string;
   meta: ProjectionMeta;
   search: string;
@@ -30,26 +30,46 @@ interface ProjectionFilterBarProps {
   totalRows: number;
   loading: boolean;
   searchIsDebouncing: boolean;
+  hasActiveFilters: boolean;
+  activeFilterChips: string[];
+}
+
+interface FilterActions {
   setSearch: (value: string) => void;
   setTeamFilter: (value: string) => void;
   setYearFilter: (value: string) => void;
   setPosFilters: (updater: string[] | ((prev: string[]) => string[])) => void;
   setWatchlistOnly: (updater: boolean | ((prev: boolean) => boolean)) => void;
+  clearAllFilters: () => void;
+}
+
+interface PresetConfig {
   activeProjectionPresetKey: string;
   projectionFilterPresets: ProjectionFilterPresetBundle | null;
   applyProjectionFilterPreset: (key: string) => void;
   saveCustomProjectionPreset: () => void;
-  clearAllFilters: () => void;
-  hasActiveFilters: boolean;
-  activeFilterChips: string[];
+}
+
+interface ColumnConfig {
   tableColumnCatalog: string[];
   resolvedProjectionTableHiddenCols: Record<string, boolean>;
   requiredProjectionTableCols: Set<string>;
   toggleProjectionTableColumn: (col: string) => void;
   showAllProjectionTableColumns: (() => void) | null;
   colLabels: Record<string, string>;
+}
+
+interface ExportConfig {
   exportingFormat: string;
   exportCurrentProjections: (format: string) => void;
+}
+
+interface ProjectionFilterBarProps {
+  filterState: FilterState;
+  filterActions: FilterActions;
+  presetConfig: PresetConfig;
+  columnConfig: ColumnConfig;
+  exportConfig: ExportConfig;
   tierLimits: TierLimits | null;
   rosterOnly?: boolean;
   setRosterOnly?: (updater: boolean | ((prev: boolean) => boolean)) => void;
@@ -57,42 +77,28 @@ interface ProjectionFilterBarProps {
 }
 
 export const ProjectionFilterBar = React.memo(function ProjectionFilterBar({
-  tab,
-  meta,
-  search,
-  resolvedYearFilter,
-  teamFilter,
-  posFilters,
-  watchlistOnly,
-  watchlistCount,
-  totalRows,
-  loading,
-  searchIsDebouncing,
-  setSearch,
-  setTeamFilter,
-  setYearFilter,
-  setPosFilters,
-  setWatchlistOnly,
-  activeProjectionPresetKey,
-  projectionFilterPresets,
-  applyProjectionFilterPreset,
-  saveCustomProjectionPreset,
-  clearAllFilters,
-  hasActiveFilters,
-  activeFilterChips,
-  tableColumnCatalog,
-  resolvedProjectionTableHiddenCols,
-  requiredProjectionTableCols,
-  toggleProjectionTableColumn,
-  showAllProjectionTableColumns,
-  colLabels,
-  exportingFormat,
-  exportCurrentProjections,
+  filterState,
+  filterActions,
+  presetConfig,
+  columnConfig,
+  exportConfig,
   tierLimits,
   rosterOnly,
   setRosterOnly,
   rosterCount,
 }: ProjectionFilterBarProps): React.ReactElement {
+  const {
+    tab, meta, search, resolvedYearFilter, teamFilter, posFilters,
+    watchlistOnly, watchlistCount, totalRows, loading, searchIsDebouncing,
+    hasActiveFilters, activeFilterChips,
+  } = filterState;
+  const { setSearch, setTeamFilter, setYearFilter, setPosFilters, setWatchlistOnly, clearAllFilters } = filterActions;
+  const { activeProjectionPresetKey, projectionFilterPresets, applyProjectionFilterPreset, saveCustomProjectionPreset } = presetConfig;
+  const {
+    tableColumnCatalog, resolvedProjectionTableHiddenCols, requiredProjectionTableCols,
+    toggleProjectionTableColumn, showAllProjectionTableColumns, colLabels,
+  } = columnConfig;
+  const { exportingFormat, exportCurrentProjections } = exportConfig;
   const [showPosMenu, setShowPosMenu] = useState(false);
   const [filterExpanded, setFilterExpanded] = useState(false);
   const posMenuRef = useRef<HTMLDivElement>(null);

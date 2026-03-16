@@ -696,7 +696,7 @@ def test_get_calculate_dynasty_job_falls_back_to_cached_snapshot() -> None:
 
     payload = get_calculate_dynasty_job("job-1", object(), ctx=harness.ctx)
 
-    assert payload == {"job_id": "job-1", "status": "completed"}
+    assert payload == {"job_id": "job-1", "status": "completed", "settings": None, "result": None}
 
 
 def test_get_calculate_dynasty_job_raises_404_when_missing() -> None:
@@ -726,7 +726,7 @@ def test_cancel_calculate_dynasty_job_returns_cached_terminal_job_without_change
 
     payload = cancel_calculate_dynasty_job("done", object(), ctx=harness.ctx)
 
-    assert payload == cached
+    assert payload == {"job_id": "done", "status": "completed", "settings": None, "result": {"total": 1}}
     assert harness.set_cancel_calls == []
 
 

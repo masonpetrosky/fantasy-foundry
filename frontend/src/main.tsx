@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, lazy, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./styles/typography-table.css";
@@ -31,36 +31,12 @@ function resolveActivationDiagnosticsPanelEnabled({
 import { resolveApiBase } from "./api_base";
 import { ProjectionsExplorer } from "./projections_explorer";
 import { MobileCalculatorSheet } from "./MobileCalculatorSheet";
-import { installAnalyticsDebugBridge, setAnalyticsContext, trackEvent } from "./analytics";
 import { ErrorBoundary } from "./error_boundary";
 import { FeatureErrorBoundary } from "./feature_error_boundary";
 import { ToastProvider } from "./Toast";
 import { PricingSection } from "./PricingSection";
-import { MOBILE_BREAKPOINT_QUERY } from "./features/projections/hooks/useProjectionLayoutState";
-import { resolveProjectionWindow } from "./formatting_utils";
-import { useBottomSheet } from "./hooks/useBottomSheet";
-import { useCalculatorOverlay } from "./hooks/useCalculatorOverlay";
 import { CalculatorOverlayContext } from "./contexts/CalculatorOverlayContext";
-import { useDefaultDynastyPlayers } from "./hooks/useDefaultDynastyPlayers";
-import { useCalculatorState } from "./hooks/useCalculatorState";
-import { useMetadata } from "./hooks/useMetadata";
-import { useQuickStart } from "./hooks/useQuickStart";
-import { useVersionPolling } from "./hooks/useVersionPolling";
-import { useAccountMenu } from "./hooks/useAccountMenu";
-import { useMobileNavMenu } from "./hooks/useMobileNavMenu";
-import { useAccountSync } from "./hooks/useAccountSync";
-import { usePremiumStatus } from "./hooks/usePremiumStatus";
-import { useTheme } from "./hooks/useTheme";
-import { useFantraxLeague } from "./hooks/useFantraxLeague";
-import { parseBillingRedirectParam, cleanBillingParam } from "./billing_redirect";
-import { useToastContext } from "./Toast";
-import {
-  readLastSuccessfulCalcRun,
-  readPlayerWatchlist,
-  readSessionFirstRunLandingTimestamp,
-  writeSessionFirstRunLandingTimestamp,
-  writePlayerWatchlist,
-} from "./app_state_storage";
+import { useAppState } from "./hooks/useAppState";
 
 const API = resolveApiBase();
 const queryClient = createAppQueryClient();
@@ -81,127 +57,61 @@ const LazyKeeperCalculator = lazy(() => import("./KeeperCalculator").then(m => (
 const LazyActivationDiagnosticsPanel = lazy(() => import("./activation_diagnostics_panel").then(m => ({ default: m.ActivationDiagnosticsPanel })));
 
 function App(): React.ReactElement {
-  const [section, setSection] = useState("projections"); // projections | methodology
-  const { meta, metaError, metaLoading, retryMetaLoad } = useMetadata(API);
-  const { buildLabel, dataVersion } = useVersionPolling(API);
+  const {
+    section, setSection,
+    meta, metaError, metaLoading, retryMetaLoad,
+    buildLabel, dataVersion,
+    calculatorState,
+    calculatorOverlay,
+    watchlist, setWatchlist,
+    effectiveDynastyPlayers,
+    auth,
+    premium,
+    accountMenu,
+    mobileNavMenu,
+    bottomSheet,
+    theme, toggleTheme,
+    fantrax,
+    tradeAnalyzerOpen, setTradeAnalyzerOpen,
+    keeperCalculatorOpen, setKeeperCalculatorOpen,
+    isMobileViewport,
+    sectionNeedsMeta,
+    projectionWindow,
+    quickStart,
+    calculatorPanelOpenSourceRef,
+    setCalculatorPanelOpen,
+  } = useAppState(API);
+
   const {
     calculatorPanelOpen,
-    setCalculatorPanelOpen,
     calculatorSettings,
-    setCalculatorSettings,
     lastSuccessfulCalcRun,
-    presets,
-    setPresets,
+    presets, setPresets,
     calculatorSectionRef,
     calculatorHeadingRef,
-    calculatorPanelOpenSourceRef,
     scrollToCalculator,
     focusFirstCalculatorInput,
     openCalculatorPanel,
     handleCalculationSuccess,
+    setCalculatorSettings,
     openMethodologyGlossary,
-  } = useCalculatorState({ section, setSection, meta });
-  const [watchlist, setWatchlist] = useState(() => readPlayerWatchlist());
-  const calculatorOverlay = useCalculatorOverlay(dataVersion);
-  const { calculatorResultRows } = calculatorOverlay;
-  const defaultDynastyPlayers = useDefaultDynastyPlayers(API);
-  const effectiveDynastyPlayers = useMemo(
-    () => (calculatorResultRows.length > 0 ? calculatorResultRows : defaultDynastyPlayers),
-    [calculatorResultRows, defaultDynastyPlayers],
-  );
-  const { authReady, authUser, authStatus, cloudStatus, signIn, signUp, signOut } = useAccountSync({
-    presets,
-    setPresets,
-    watchlist,
-    setWatchlist,
-  });
-  const { subscription, tierLimits } = usePremiumStatus(authUser);
-  const toast = useToastContext();
-  const { accountMenuOpen, setAccountMenuOpen, accountMenuRef, accountTriggerRef } = useAccountMenu({ section });
-  const { mobileNavOpen, setMobileNavOpen, mobileNavMenuRef, mobileNavTriggerRef } = useMobileNavMenu({ section });
-  const bottomSheet = useBottomSheet();
-  const { theme, toggleTheme } = useTheme();
-  const fantrax = useFantraxLeague();
-  const [tradeAnalyzerOpen, setTradeAnalyzerOpen] = useState(false);
-  const [keeperCalculatorOpen, setKeeperCalculatorOpen] = useState(false);
-  const [isMobileViewport, setIsMobileViewport] = useState(() => window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches);
-  useEffect(() => {
-    const mql = window.matchMedia(MOBILE_BREAKPOINT_QUERY);
-    const handler = (e: MediaQueryListEvent): void => setIsMobileViewport(e.matches);
-    mql.addEventListener("change", handler);
-    return () => mql.removeEventListener("change", handler);
-  }, []);
-  const landingTrackedRef = useRef(false);
-  const sectionNeedsMeta = section === "projections";
-  const projectionWindow = useMemo(() => resolveProjectionWindow(meta), [meta]);
-  const resolvedScoringMode = String(calculatorSettings?.scoring_mode || "").trim().toLowerCase() === "points"
-    ? "points"
-    : calculatorSettings
-      ? "roto"
-      : "unknown";
+  } = calculatorState;
 
+  const { authReady, authUser, authStatus, cloudStatus, signIn, signUp, signOut } = auth;
+  const { subscription, tierLimits } = premium;
+  const { accountMenuOpen, setAccountMenuOpen, accountMenuRef, accountTriggerRef } = accountMenu;
+  const { mobileNavOpen, setMobileNavOpen, mobileNavMenuRef, mobileNavTriggerRef } = mobileNavMenu;
   const {
     showQuickStartOnboarding,
     requestQuickStartRun,
     dismissQuickStartOnboarding,
     handleRegisterQuickStartRunner,
-  } = useQuickStart({
-    meta,
-    section,
-    dataVersion,
-    calculatorPanelOpen,
-    lastSuccessfulCalcRun,
-    openCalculatorPanel,
-    scrollToCalculator,
-    focusCalculatorHeading: focusFirstCalculatorInput,
-  });
+  } = quickStart;
+
   const activationDiagnosticsEnabled = useMemo(() => resolveActivationDiagnosticsPanelEnabled({
     envEnabled: ACTIVATION_DIAGNOSTICS_PANEL_ENV_ENABLED,
     locationSearch: typeof window !== "undefined" ? window.location.search : "",
   }), []);
-
-  useEffect(() => {
-    setAnalyticsContext({
-      section,
-      data_version: String(dataVersion || "").trim() || "unknown",
-      is_signed_in: Boolean(authUser),
-      scoring_mode: resolvedScoringMode,
-    });
-  }, [authUser, dataVersion, resolvedScoringMode, section]);
-
-  useEffect(() => {
-    installAnalyticsDebugBridge();
-  }, []);
-
-  useEffect(() => {
-    if (landingTrackedRef.current) return;
-    landingTrackedRef.current = true;
-    const hasPriorRun = Boolean(readLastSuccessfulCalcRun());
-    const existingLandingTs = readSessionFirstRunLandingTimestamp();
-    if (!existingLandingTs) {
-      writeSessionFirstRunLandingTimestamp(Date.now());
-    }
-    trackEvent("ff_landing_view", {
-      source: "app_boot",
-      is_first_run: !hasPriorRun,
-      section,
-    });
-  }, [section]);
-
-  useEffect(() => {
-    writePlayerWatchlist(watchlist);
-  }, [watchlist]);
-
-  useEffect(() => {
-    const billing = parseBillingRedirectParam(window.location.search);
-    if (!billing || !toast) return;
-    if (billing === "success") {
-      toast.addToast("Subscription activated!", { type: "success" });
-    } else {
-      toast.addToast("Checkout cancelled.", { type: "info" });
-    }
-    cleanBillingParam();
-  }, [toast]);
 
   return (
     <CalculatorOverlayContext.Provider value={calculatorOverlay}>
