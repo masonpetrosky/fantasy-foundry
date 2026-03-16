@@ -89,7 +89,7 @@ def coerce_numeric(value: object) -> float | None:
     if value is None or isinstance(value, bool):
         return None
     try:
-        parsed = float(value)
+        parsed = float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
     if pd.isna(parsed):

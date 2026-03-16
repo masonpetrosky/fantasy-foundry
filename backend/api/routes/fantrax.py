@@ -41,8 +41,8 @@ def _validate_league_id(league_id: str | None) -> str:
 
 def build_fantrax_router(
     *,
-    enforce_rate_limit: object,
-    client_ip_resolver: object,
+    enforce_rate_limit: Callable[..., None],
+    client_ip_resolver: Callable[..., str],
     league_fetcher: LeagueFetcher,
     player_summary_getter: PlayerSummaryGetter,
     rate_limit_per_minute: int = 10,

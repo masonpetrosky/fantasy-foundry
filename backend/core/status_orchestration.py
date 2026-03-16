@@ -381,6 +381,7 @@ def get_ops(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
         job_snapshot=job_snapshot,
     )
     local_result_cache_entries = _local_result_cache_entries(ctx=ctx)
+    redis_health = _redis_health_payload(ctx=ctx)
 
     return {
         "status": "ok",
@@ -404,8 +405,9 @@ def get_ops(*, ctx: StatusOrchestrationContext) -> dict[str, Any]:
             "canonical_host": ctx.canonical_host or None,
             "require_calculate_auth": ctx.require_calculate_auth,
             "calculate_api_keys_configured": ctx.calculate_api_keys_configured,
-            "redis_configured": bool(ctx.redis_url),
-            "rate_limit_backend": "redis" if ctx.redis_url else "local",
+            "redis_configured": redis_health["configured"],
+            "redis_connected": redis_health["connected"],
+            "rate_limit_backend": "redis" if redis_health["connected"] else "local",
         },
         "rate_limits": {
             "calculate_sync_per_minute": ctx.calculator_sync_rate_limit_per_minute,

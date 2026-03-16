@@ -13,11 +13,11 @@ class _Logger:
         self.warning_calls = 0
         self.info_calls = 0
 
-    def warning(self, _message: str, exc_info: bool = False) -> None:
+    def warning(self, _message: str, *args: object, exc_info: bool = False) -> None:
         _ = exc_info
         self.warning_calls += 1
 
-    def info(self, _message: str) -> None:
+    def info(self, _message: str, *args: object) -> None:
         self.info_calls += 1
 
 
@@ -320,7 +320,7 @@ class RuntimeInfraTests(unittest.TestCase):
                 logger=logger,
             )
         self.assertEqual(ctx.exception.status_code, 429)
-        self.assertEqual(logger.warning_calls, 0)
+        self.assertEqual(logger.warning_calls, 1)  # rate_limit_blocked log
 
     def test_enforce_rate_limit_falls_back_to_local_when_redis_fails(self) -> None:
         redis = _FailingRedis()

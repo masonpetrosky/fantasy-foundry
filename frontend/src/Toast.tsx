@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from "react";
+import React, { createContext, useContext, useMemo } from "react";
 import { useToast, type ToastEntry } from "./hooks/useToast";
 
 interface ToastContextValue {
@@ -19,8 +19,12 @@ interface ToastProviderProps {
 
 export function ToastProvider({ children }: ToastProviderProps): React.ReactElement {
   const toast = useToast();
+  const contextValue = useMemo(
+    () => ({ toasts: toast.toasts, addToast: toast.addToast, dismissToast: toast.dismissToast }),
+    [toast.toasts, toast.addToast, toast.dismissToast],
+  );
   return (
-    <ToastContext.Provider value={toast}>
+    <ToastContext.Provider value={contextValue}>
       {children}
       <ToastContainer toasts={toast.toasts} onDismiss={toast.dismissToast} />
     </ToastContext.Provider>

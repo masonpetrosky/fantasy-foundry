@@ -38,12 +38,12 @@ def build_calculate_router(
     router = APIRouter(tags=["calculate"], dependencies=dependencies)
 
     @router.post("/api/calculate", summary="Run dynasty value calculation", responses=CALCULATE_ERROR_RESPONSES)
-    def calculate_dynasty_values(req: calculate_request_model, request: Request):
+    def calculate_dynasty_values(req: calculate_request_model, request: Request):  # type: ignore[valid-type]
         """Run the Monte Carlo dynasty valuation calculator synchronously and return results."""
         return calculate_handler(req, request)
 
     @router.post("/api/calculate/export", summary="Export calculation results", responses=CALCULATE_ERROR_RESPONSES)
-    def export_calculate_dynasty_values(req: calculate_export_request_model, request: Request):
+    def export_calculate_dynasty_values(req: calculate_export_request_model, request: Request):  # type: ignore[valid-type]
         """Run the calculator and return results as a downloadable CSV/XLSX file."""
         return calculate_export_handler(req, request)
 
@@ -53,7 +53,7 @@ def build_calculate_router(
         summary="Create async calculation job",
         responses=CALCULATE_ERROR_RESPONSES,
     )
-    def create_calculate_dynasty_job(req: calculate_request_model, request: Request):
+    def create_calculate_dynasty_job(req: calculate_request_model, request: Request):  # type: ignore[valid-type]
         """Submit a calculator job for asynchronous processing. Returns a job ID for polling."""
         return calculate_job_create_handler(req, request)
 

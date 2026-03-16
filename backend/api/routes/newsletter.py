@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -21,9 +22,9 @@ class SubscribeRequest(BaseModel):
 def build_newsletter_router(
     *,
     buttondown_api_key: str,
-    enforce_rate_limit: object,
+    enforce_rate_limit: Callable[..., None],
     rate_limit_per_minute: int = 10,
-    client_ip_resolver: object,
+    client_ip_resolver: Callable[..., str],
 ) -> APIRouter:
     """Create newsletter subscription route."""
     router = APIRouter(tags=["newsletter"])
@@ -39,8 +40,12 @@ def build_newsletter_router(
         }
         payload = {"email_address": body.email, "type": "regular"}
 
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(BUTTONDOWN_API_URL, json=payload, headers=headers)
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(BUTTONDOWN_API_URL, json=payload, headers=headers)
+        except httpx.TimeoutException:
+            logger.error("Buttondown API timeout for newsletter subscribe")
+            raise HTTPException(status_code=502, detail="Newsletter service timeout.")
 
         if resp.status_code == 409:
             return JSONResponse({"subscribed": True, "already_subscribed": True})
