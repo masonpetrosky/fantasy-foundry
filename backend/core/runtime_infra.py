@@ -68,6 +68,16 @@ def get_redis_client(
         except (ConnectionError, TimeoutError, OSError):
             state.client = None
             logger.warning("redis cache unavailable; falling back to in-memory calculator cache")
+            try:
+                import sentry_sdk
+
+                sentry_sdk.add_breadcrumb(
+                    category="redis",
+                    message="Redis unavailable — falling back to in-memory cache",
+                    level="warning",
+                )
+            except ImportError:
+                pass
         return state.client
 
 

@@ -73,6 +73,10 @@ export interface UseAccountSyncReturn {
   signOut: () => Promise<void>;
 }
 
+async function getSupabaseClient(): Promise<SupabaseClient | null> {
+  return (await loadSupabaseClient()) as SupabaseClient | null;
+}
+
 export function useAccountSync({
   presets,
   setPresets,
@@ -103,7 +107,7 @@ export function useAccountSync({
     const setupAuth = async (): Promise<void> => {
       let client: SupabaseClient | null;
       try {
-        client = (await loadSupabaseClient()) as SupabaseClient | null;
+        client = await getSupabaseClient();
       } catch (error: unknown) {
         if (!mounted) return;
         setAuthStatus(`Account setup error: ${formatAuthError(error as { message?: string }, "Unable to initialize account sync.")}`);
@@ -162,7 +166,7 @@ export function useAccountSync({
     const loadCloudPreferences = async (): Promise<void> => {
       let client: SupabaseClient | null;
       try {
-        client = (await loadSupabaseClient()) as SupabaseClient | null;
+        client = await getSupabaseClient();
       } catch (error: unknown) {
         if (cancelled) return;
         setCloudStatus(`Cloud sync error: ${formatAuthError(error as { message?: string }, "Unable to initialize account settings.")}`);
@@ -267,7 +271,7 @@ export function useAccountSync({
     const timer = window.setTimeout(async () => {
       let client: SupabaseClient | null;
       try {
-        client = (await loadSupabaseClient()) as SupabaseClient | null;
+        client = await getSupabaseClient();
       } catch (error: unknown) {
         setCloudStatus(`Cloud save error: ${formatAuthError(error as { message?: string }, "Unable to initialize cloud sync.")}`);
         return;
@@ -309,7 +313,7 @@ export function useAccountSync({
     }
     setAuthStatus("");
     try {
-      const client = (await loadSupabaseClient()) as SupabaseClient | null;
+      const client = await getSupabaseClient();
       if (!client) return;
       const { error } = await client.auth.signInWithPassword({
         email: normalizedEmail,
@@ -335,7 +339,7 @@ export function useAccountSync({
     }
     setAuthStatus("");
     try {
-      const client = (await loadSupabaseClient()) as SupabaseClient | null;
+      const client = await getSupabaseClient();
       if (!client) return;
       const { data, error } = await client.auth.signUp({
         email: normalizedEmail,
@@ -358,7 +362,7 @@ export function useAccountSync({
   const signOut = useCallback(async (): Promise<void> => {
     if (!AUTH_SYNC_ENABLED) return;
     try {
-      const client = (await loadSupabaseClient()) as SupabaseClient | null;
+      const client = await getSupabaseClient();
       if (!client) return;
       const { error } = await client.auth.signOut();
       if (error) {
