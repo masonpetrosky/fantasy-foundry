@@ -20,6 +20,11 @@ coverage.xml
 htmlcov/
 frontend/coverage/
 
+# Generated temp/cache artifacts under tmp/
+tmp/.npm-cache/
+tmp/pystand*/
+tmp/venv-py*-backup-*/
+
 # OS/editor noise
 .DS_Store
 Thumbs.db

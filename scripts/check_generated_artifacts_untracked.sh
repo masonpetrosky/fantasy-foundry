@@ -10,11 +10,14 @@ mapfile -t tracked_generated_artifacts < <(
     .coverage.* \
     coverage.xml \
     htmlcov \
-    frontend/coverage
+    frontend/coverage \
+    tmp/.npm-cache \
+    'tmp/pystand*' \
+    'tmp/venv-py*-backup-*'
 )
 
 if [[ ${#tracked_generated_artifacts[@]} -gt 0 ]]; then
-  echo "Generated coverage artifacts are tracked by git (must remain untracked):"
+  echo "Generated cache/temp artifacts are tracked by git (must remain untracked):"
   printf ' - %s\n' "${tracked_generated_artifacts[@]}"
   echo
   echo "Remove each from the index, for example:"
@@ -22,4 +25,4 @@ if [[ ${#tracked_generated_artifacts[@]} -gt 0 ]]; then
   exit 1
 fi
 
-echo "Generated coverage artifacts are not tracked."
+echo "Generated cache/temp artifacts are not tracked."
