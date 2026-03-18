@@ -28,7 +28,7 @@
     "@eslint/js": "^10.0.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.4",
+    "@vitejs/plugin-react": "^6.0.1",
     "@vitest/coverage-v8": "^4.1.0",
     "eslint": "^10.0.3",
     "eslint-plugin-react-hooks": "^7.0.0",
@@ -37,7 +37,7 @@
     "rollup-plugin-visualizer": "^5.14.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1",
-    "vite": "^5.4.11",
+    "vite": "^8.0.0",
     "vitest": "^4.1.0",
     "vitest-axe": "^0.1.0"
   }

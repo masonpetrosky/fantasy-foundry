@@ -2,6 +2,28 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 const plugins = [react()];
+const manualChunkGroups = [
+  { name: "vendor-react", packages: ["react", "react-dom", "react-router-dom"] },
+  { name: "vendor-sentry", packages: ["@sentry/react"] },
+  { name: "vendor-supabase", packages: ["@supabase/supabase-js"] },
+  { name: "vendor-tanstack", packages: ["@tanstack/react-query", "@tanstack/react-virtual"] },
+];
+
+function resolveManualChunk(id) {
+  if (!id.includes("node_modules")) {
+    return undefined;
+  }
+
+  for (const group of manualChunkGroups) {
+    for (const packageName of group.packages) {
+      if (id.includes(`/node_modules/${packageName}/`)) {
+        return group.name;
+      }
+    }
+  }
+
+  return undefined;
+}
 
 if (process.env.ANALYZE === "true") {
   const { visualizer } = await import("rollup-plugin-visualizer");
@@ -37,12 +59,7 @@ export default defineConfig({
     target: "es2022",
     rollupOptions: {
       output: {
-        manualChunks: {
-          "vendor-react": ["react", "react-dom", "react-router-dom"],
-          "vendor-sentry": ["@sentry/react"],
-          "vendor-supabase": ["@supabase/supabase-js"],
-          "vendor-tanstack": ["@tanstack/react-query"],
-        },
+        manualChunks: resolveManualChunk,
       },
     },
   },
