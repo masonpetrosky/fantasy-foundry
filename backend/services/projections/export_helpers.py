@@ -8,12 +8,11 @@ from backend.core.projections_export import (
     apply_calculator_overlay_values as core_apply_calculator_overlay_values,
 )
 from backend.core.projections_export import (
-    parse_export_columns as core_parse_export_columns,
-)
-from backend.core.projections_export import (
     default_projection_export_columns as core_default_projection_export_columns,
 )
-
+from backend.core.projections_export import (
+    parse_export_columns as core_parse_export_columns,
+)
 from backend.services.projections.filters import (
     normalize_filter_value,
     row_overlay_lookup_key,

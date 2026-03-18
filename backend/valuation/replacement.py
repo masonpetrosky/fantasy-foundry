@@ -35,7 +35,6 @@ try:
         common_apply_pitching_bounds,
         common_hit_category_totals,
         common_pitch_category_totals,
-        common_replacement_pitcher_rates,
     )
     from backend.valuation.weighting import (
         _initial_hitter_weight,
@@ -69,7 +68,6 @@ except ImportError:
         common_apply_pitching_bounds,
         common_hit_category_totals,
         common_pitch_category_totals,
-        common_replacement_pitcher_rates,
     )
     from valuation.weighting import (  # type: ignore[no-redef]
         _initial_hitter_weight,

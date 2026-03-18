@@ -1,7 +1,7 @@
 import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react-router-dom", () => ({
   useParams: () => ({ slug: "mike-trout" }),

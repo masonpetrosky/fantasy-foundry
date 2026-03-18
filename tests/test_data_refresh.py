@@ -229,8 +229,8 @@ def test_reload_projection_data_loads_all_inputs_and_builds_averages() -> None:
         loaded_names.append(name)
         payloads = {
             "meta.json": {"years": [2026]},
-            "bat.json": [{"Player": "Hitter"}],
-            "pitch.json": [{"Player": "Pitcher"}],
+            "bat.json": [{"Player": "Hitter", "Year": 2026}],
+            "pitch.json": [{"Player": "Pitcher", "Year": 2026}],
         }
         return payloads[name]
 
