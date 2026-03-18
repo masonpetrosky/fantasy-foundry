@@ -258,65 +258,53 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
         self._start_calculation_with_retry(page)
         self._wait_for_calculation_completion_signal(page)
         self._assert_calculation_status_not_error(page)
-        self._wait_for_projection_results_visible(page)
+        self._wait_for_overlay_visible(page)
 
-    def _set_projection_layout(self, page, mode: str) -> None:
-        desired = "cards" if str(mode).strip().lower() == "cards" else "table"
-        label = "Cards" if desired == "cards" else "Table"
-        button = page.locator(".projection-view-toggle .projection-view-btn").filter(
-            has_text=re.compile(rf"^{label}$")
-        ).first
-        button.scroll_into_view_if_needed()
-        if button.get_attribute("aria-pressed") != "true":
-            button.click(force=True)
+    def _wait_for_overlay_visible(self, page) -> None:
+        page.wait_for_selector(".projections-overlay-message", state="visible", timeout=60000)
 
-        page.wait_for_function(
-            """
-            (targetMode) => {
-              const active = document.querySelector('.projection-view-toggle .projection-view-btn.active');
-              if (!active) return false;
-              const text = (active.textContent || '').trim().toLowerCase();
-              return text === targetMode;
-            }
-            """,
-            arg=desired,
-            timeout=10000,
-        )
-
-        if desired == "cards":
-            page.wait_for_selector(".projection-card-list .projection-card", timeout=30000)
-        else:
-            page.wait_for_selector(".projections-table tbody tr", timeout=30000)
-
-    def _assert_result_count_format(self, page) -> None:
-        count_text = page.locator(".filter-bar .result-count").first.inner_text().strip()
-        match = re.search(r"([\d,]+)\s+rows", count_text)
-        self.assertIsNotNone(match, f"Expected row count text format, got {count_text!r}")
+    def _assert_apply_status(self, page) -> int:
+        status_text = page.locator(".calc-status").first.inner_text().strip()
+        match = re.search(r"Applied\s+([\d,]+)\s+players\s+to\s+the\s+table\.", status_text)
+        self.assertIsNotNone(match, f"Expected apply-success status, got {status_text!r}")
         total_count = int(match.group(1).replace(",", ""))
-        self.assertGreater(total_count, 0, "Expected at least one projection row")
+        self.assertGreater(total_count, 0, "Expected at least one applied player")
+        return total_count
 
-    def _open_columns_menu(self, page, force: bool = False, button_text: str = "Table Columns"):
-        columns_button = page.locator("button").filter(
-            has_text=re.compile(rf"^{re.escape(button_text)}")
-        ).first
-        menu_container = columns_button.locator(
-            "xpath=ancestor::div[contains(@class, 'multi-select')]"
-        ).first
+    def _assert_overlay_banner(self, page, expected_count: int) -> None:
+        overlay = page.locator(".projections-overlay-message").first
+        overlay_text = overlay.inner_text().strip()
+        self.assertIn("calculator-adjusted dynasty values", overlay_text.lower())
+        self.assertIn("Points mode", overlay_text)
+        self.assertIn("Start 2026", overlay_text)
+        self.assertIn("20-year horizon", overlay_text)
+        match = re.search(r"\(([\d,]+)\s+available\)", overlay_text)
+        self.assertIsNotNone(match, f"Expected overlay availability count, got {overlay_text!r}")
+        available_count = int(match.group(1).replace(",", ""))
+        self.assertEqual(available_count, expected_count)
 
-        for _ in range(2):
-            columns_button.scroll_into_view_if_needed()
-            if columns_button.get_attribute("aria-expanded") != "true":
-                columns_button.click(force=force)
-            try:
-                menu_container.locator(".multi-select-menu").first.wait_for(state="visible", timeout=5000)
-                return columns_button
-            except PlaywrightError:
-                if columns_button.get_attribute("aria-expanded") == "true":
-                    columns_button.click(force=True)
-                page.wait_for_timeout(200)
+    def _assert_overlay_explanation_toggle(self, page) -> None:
+        overlay = page.locator(".projections-overlay-message").first
+        why_button = overlay.get_by_role("button", name="Why this changed")
+        why_button.scroll_into_view_if_needed()
+        why_button.click()
+        why_copy = page.locator(".overlay-why-copy").first
+        why_copy.wait_for(state="visible", timeout=10000)
+        self.assertIn("league setup", why_copy.inner_text().lower())
+        overlay.get_by_role("button", name="Hide why this changed").click()
+        why_copy.wait_for(state="hidden", timeout=10000)
 
-        menu_container.locator(".multi-select-menu").first.wait_for(state="visible", timeout=5000)
-        return columns_button
+    def _clear_overlay_and_assert_reset(self, page) -> None:
+        overlay = page.locator(".projections-overlay-message").first
+        clear_button = overlay.get_by_role("button", name="Clear applied values")
+        clear_button.scroll_into_view_if_needed()
+        clear_button.click(force=True)
+        page.wait_for_selector(".projections-overlay-message", state="hidden", timeout=10000)
+
+    def _close_mobile_sheet(self, page) -> None:
+        close_button = page.get_by_role("button", name="Close calculator")
+        close_button.click()
+        page.wait_for_selector(".mobile-sheet", state="hidden", timeout=10000)
 
     def test_desktop_calculator_polish_smoke(self) -> None:
         context = self.browser.new_context(viewport={"width": 1440, "height": 900})
@@ -326,35 +314,10 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
             self._assert_preset_save_and_select_load_flow(page)
             self._switch_to_points_mode(page)
             self._run_calculation_and_wait(page)
-            self._assert_result_count_format(page)
-
-            overlay_text = page.locator(".projections-overlay-message").first.inner_text().strip()
-            self.assertIn("calculator-adjusted dynasty values", overlay_text.lower())
-
-            search_input = page.locator("#projections-search").first
-            search_input.fill("shohei")
-            page.wait_for_timeout(250)
-            self.assertEqual(search_input.input_value().lower(), "shohei")
-
-            columns_button = self._open_columns_menu(page)
-            optional_col_inputs = page.locator(
-                ".multi-select-menu .multi-select-option input[type='checkbox']:not([disabled])"
-            )
-            self.assertGreater(optional_col_inputs.count(), 0, "Expected at least one optional column toggle")
-            optional_col_inputs.first.uncheck()
-
-            show_all_btn = page.get_by_role("button", name="Show All Optional Columns")
-            self.assertTrue(show_all_btn.is_enabled(), "Expected show-all button enabled after hiding a column")
-            show_all_btn.click()
-            columns_button.click()
-
-            columns_text = columns_button.inner_text().strip()
-            self.assertRegex(columns_text, r"^Table Columns \(\d+/\d+\)$")
-
-            first_row = page.locator(".projections-table tbody tr").first
-            first_row.scroll_into_view_if_needed()
-            track_button = first_row.locator("button.inline-btn").filter(has_text=re.compile("Track|Tracked")).first
-            self.assertTrue(track_button.is_visible())
+            applied_count = self._assert_apply_status(page)
+            self._assert_overlay_banner(page, applied_count)
+            self._assert_overlay_explanation_toggle(page)
+            self._clear_overlay_and_assert_reset(page)
         finally:
             context.close()
 
@@ -365,30 +328,23 @@ class CalculatorSmokeE2ETests(unittest.TestCase):
             self._open_calculator(page)
             self._switch_to_points_mode(page)
             self._run_calculation_and_wait(page)
-            self._assert_result_count_format(page)
+            applied_count = self._assert_apply_status(page)
+            self._assert_overlay_banner(page, applied_count)
 
-            toolbar = page.locator(".filter-bar").first
-            toolbar.scroll_into_view_if_needed()
-            self.assertTrue(toolbar.is_visible())
+            overlay = page.locator(".projections-overlay-message").first
+            overlay.scroll_into_view_if_needed()
+            self.assertTrue(overlay.is_visible())
 
             viewport_width = int(page.evaluate("window.innerWidth"))
-            toolbar_width = float(
+            overlay_width = float(
                 page.evaluate(
-                    "() => document.querySelector('.filter-bar').getBoundingClientRect().width"
+                    "() => document.querySelector('.projections-overlay-message').getBoundingClientRect().width"
                 )
             )
-            self.assertLessEqual(round(toolbar_width), viewport_width)
+            self.assertLessEqual(round(overlay_width), viewport_width)
 
-            self._set_projection_layout(page, "cards")
-            self.assertTrue(page.locator(".projection-card-list .projection-card").first.is_visible())
-
-            self._open_columns_menu(page, force=True, button_text="Card Stats")
-            self.assertTrue(page.locator(".multi-select-menu").first.is_visible())
-
-            self._set_projection_layout(page, "table")
-            first_row = page.locator(".projections-table tbody tr").first
-            first_row.scroll_into_view_if_needed()
-            self.assertTrue(first_row.is_visible())
+            self._close_mobile_sheet(page)
+            self._assert_overlay_explanation_toggle(page)
         finally:
             context.close()
 
