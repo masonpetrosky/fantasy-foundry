@@ -79,8 +79,11 @@ dynasty-site/
 ### Prerequisites
 - Python 3.12+
 - Node.js 22+ (for frontend build)
+- GNU `make` (optional, for `make typecheck` and `make check`)
+- Docker (optional, for local image build/run validation)
 
 Version pins are included in `.python-version` and `.nvmrc` for local parity with CI.
+You do not need `make` or Docker for ordinary local app development.
 
 ### Setup
 ```bash
@@ -171,6 +174,8 @@ npm run lint
 ```
 
 ### Type Checking
+GNU `make` is required for the shortcut below.
+
 ```bash
 # Full mypy check across all typed modules (see Makefile for complete file list)
 make typecheck
@@ -187,6 +192,8 @@ rg --no-ignore <pattern>
 ```
 
 ### Unified Local Check
+GNU `make` is required for the shortcut below.
+
 ```bash
 # Runs lint + backend fast suite + frontend tests + backend type checks
 make check
@@ -368,6 +375,8 @@ Production deployments enforce the precomputed cache by default (`FF_REQUIRE_PRE
 ## Deployment
 
 ### Docker
+Docker is only required if you want to validate the container image locally.
+
 ```bash
 docker build -t dynasty-projections .
 docker run -p 8000:8000 dynasty-projections
