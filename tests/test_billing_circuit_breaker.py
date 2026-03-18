@@ -43,6 +43,11 @@ def _make_mock_client_post(status_code: int) -> AsyncMock:
     return mock_cm
 
 
+def _run(coro):
+    """Run an async billing operation without relying on a global event loop."""
+    return asyncio.run(coro)
+
+
 def test_upsert_4xx_does_not_trigger_circuit_breaker() -> None:
     """A 4xx error from Supabase should NOT trip the circuit breaker."""
     from backend.services.billing import _supabase_cb, upsert_subscription
@@ -51,7 +56,7 @@ def test_upsert_4xx_does_not_trigger_circuit_breaker() -> None:
 
     with patch("backend.services.billing.httpx.AsyncClient", return_value=mock_client):
         with pytest.raises(httpx.HTTPStatusError):
-            asyncio.get_event_loop().run_until_complete(
+            _run(
                 upsert_subscription(
                     supabase_url="https://test.supabase.co",
                     supabase_service_role_key="test-key",
@@ -76,7 +81,7 @@ def test_upsert_5xx_does_trigger_circuit_breaker() -> None:
     for _ in range(3):
         with patch("backend.services.billing.httpx.AsyncClient", return_value=mock_client):
             with pytest.raises(httpx.HTTPStatusError):
-                asyncio.get_event_loop().run_until_complete(
+                _run(
                     upsert_subscription(
                         supabase_url="https://test.supabase.co",
                         supabase_service_role_key="test-key",
@@ -97,7 +102,7 @@ def test_get_subscription_status_4xx_no_circuit_break() -> None:
     mock_client = _make_mock_client_post(404)
 
     with patch("backend.services.billing.httpx.AsyncClient", return_value=mock_client):
-        result = asyncio.get_event_loop().run_until_complete(
+        result = _run(
             get_subscription_status(
                 supabase_url="https://test.supabase.co",
                 supabase_service_role_key="test-key",
@@ -119,7 +124,7 @@ def test_revoke_os_error_triggers_circuit_breaker() -> None:
     for _ in range(3):
         with patch("backend.services.billing.httpx.AsyncClient", return_value=mock_cm):
             with pytest.raises(OSError):
-                asyncio.get_event_loop().run_until_complete(
+                _run(
                     revoke_subscription(
                         supabase_url="https://test.supabase.co",
                         supabase_service_role_key="test-key",
