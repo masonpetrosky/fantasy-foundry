@@ -14,8 +14,10 @@ CalculateJobCreateHandler = Callable[[Any, Request], Any]
 CalculateJobReadHandler = Callable[[str, Request], Any]
 CalculateJobCancelHandler = Callable[[str, Request], Any]
 CalculateAuthorizeHandler = Callable[[Request], Any]
+RouteResponseSpec = dict[str, Any]
+RouteResponses = dict[int | str, RouteResponseSpec]
 
-CALCULATE_ERROR_RESPONSES = {
+CALCULATE_ERROR_RESPONSES: RouteResponses = {
     422: {"model": ErrorResponse, "description": "Validation error in calculator settings"},
     429: {"model": ErrorResponse, "description": "Rate limit exceeded — see Retry-After header"},
     500: {"model": ErrorResponse},

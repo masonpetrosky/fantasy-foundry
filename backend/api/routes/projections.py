@@ -18,6 +18,8 @@ ProjectionExportHandler = Callable[..., Any]
 ProjectionProfileHandler = Callable[..., dict[str, Any]]
 ProjectionCompareHandler = Callable[..., dict[str, Any]]
 ProjectionDeltasHandler = Callable[..., dict[str, Any]]
+RouteResponseSpec = dict[str, Any]
+RouteResponses = dict[int | str, RouteResponseSpec]
 
 
 class BaseProjectionQueryParams(BaseModel):
@@ -56,7 +58,7 @@ class ProjectionExportQueryParams(BaseProjectionQueryParams):
     columns: str | None = Field(default=None, max_length=2000)
 
 
-PROJECTION_ERROR_RESPONSES = {
+PROJECTION_ERROR_RESPONSES: RouteResponses = {
     422: {"model": ErrorResponse, "description": "Validation error in query parameters"},
     429: {"model": ErrorResponse, "description": "Rate limit exceeded — see Retry-After header"},
     500: {"model": ErrorResponse},

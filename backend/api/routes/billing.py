@@ -50,13 +50,16 @@ def build_billing_router(
             raise HTTPException(status_code=400, detail="Invalid price_lookup_key. Use 'monthly' or 'annual'.")
 
         try:
-            session = stripe.checkout.Session.create(
-                mode="subscription",
-                line_items=[{"price": price_id, "quantity": 1}],
-                success_url=body.success_url,
-                cancel_url=body.cancel_url,
-                customer_email=body.user_email or None,
-            )
+            session_kwargs: dict[str, Any] = {
+                "mode": "subscription",
+                "line_items": [{"price": price_id, "quantity": 1}],
+                "success_url": body.success_url,
+                "cancel_url": body.cancel_url,
+            }
+            if body.user_email.strip():
+                session_kwargs["customer_email"] = body.user_email.strip()
+
+            session = stripe.checkout.Session.create(**session_kwargs)
         except stripe.InvalidRequestError as exc:
             logger.warning("Stripe checkout invalid request: %s", exc)
             raise HTTPException(status_code=400, detail="Invalid checkout request.")
