@@ -12,6 +12,7 @@ mapfile -t tracked_generated_artifacts < <(
     htmlcov \
     frontend/coverage \
     tmp/.npm-cache \
+    tmp/projection_quality_report.json \
     'tmp/pystand*' \
     'tmp/venv-py*-backup-*'
 )
