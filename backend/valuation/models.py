@@ -80,6 +80,11 @@ class CommonDynastyRotoSettings:
     # Optional predictive modifiers.
     enable_playing_time_reliability: bool = False
     enable_age_risk_adjustment: bool = False
+    enable_prospect_risk_adjustment: bool = False
+    enable_bench_stash_relief: bool = False
+    bench_negative_penalty: float = 0.55
+    enable_ir_stash_relief: bool = False
+    ir_negative_penalty: float = 0.20
 
     # Minor eligibility (best-effort inference, since projections file usually
     # lacks career AB/IP):

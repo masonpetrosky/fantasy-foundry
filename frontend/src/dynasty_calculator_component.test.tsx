@@ -237,6 +237,36 @@ describe("DynastyCalculator component", () => {
     expect(mockApplyOverlay).toHaveBeenCalled();
   });
 
+  it("surfaces deep-roster centering fallback notice after a successful run", async () => {
+    let resolveJob: () => void;
+    mockRunCalculationJob.mockImplementation((_input) => new Promise<void>(r => { resolveJob = r; }));
+    const props = makeDefaultProps();
+    ({ cleanup } = renderToContainer(React.createElement(DynastyCalculator, props)));
+
+    act(() => {
+      getSidebarActions().run();
+    });
+
+    const jobCallArgs = getRunCalculationJobInput();
+    const onCompleted = jobCallArgs.onCompleted as (result: Record<string, unknown>, meta?: Record<string, unknown>) => void;
+    act(() => {
+      onCompleted(
+        {
+          total: 250,
+          data: [],
+          diagnostics: {
+            ForcedRosterFallbackApplied: true,
+            CenteringMode: "forced_roster",
+          },
+        },
+        { jobId: "job-1" },
+      );
+    });
+    await act(async () => { resolveJob!(); });
+
+    expect(String(getSidebarState().calculationNotice || "")).toContain("Deep-roster fallback applied");
+  });
+
   it("shows error status on run failure", async () => {
     mockRunCalculationJob.mockImplementation((_input) => Promise.resolve());
     const props = makeDefaultProps();

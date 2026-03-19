@@ -66,6 +66,26 @@ class RosterSelectionHelperTests(unittest.TestCase):
         self.assertNotIn("B", set(selected["Player"]))
         self.assertIn("D", set(selected["Player"]))
 
+    def test_select_mlb_roster_with_active_floor_prefers_mlb_playing_time_players(self) -> None:
+        stash_sorted = pd.DataFrame(
+            [
+                {"Player": "Prospect A", "StashScore": 0.0},
+                {"Player": "Prospect B", "StashScore": 0.0},
+                {"Player": "Veteran A", "StashScore": -0.1},
+                {"Player": "Veteran B", "StashScore": -0.2},
+            ]
+        )
+
+        selected = _select_mlb_roster_with_active_floor(
+            stash_sorted,
+            excluded_players=set(),
+            total_mlb_slots=2,
+            active_floor_names=set(),
+            mlb_playing_time_players={"Veteran A", "Veteran B"},
+        )
+
+        self.assertEqual(list(selected["Player"]), ["Veteran A", "Veteran B"])
+
 
 if __name__ == "__main__":
     unittest.main()

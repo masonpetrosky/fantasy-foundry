@@ -170,6 +170,49 @@ def build_calculation_explanations(
             "raw_dynasty_value": round(numeric_or_zero_fn(row_data.get("RawDynastyValue")), 4),
             "per_year": per_year,
         }
+        centering_fields_present = any(
+            key in row_data
+            for key in (
+                "CenteringMode",
+                "ForcedRosterFallbackApplied",
+                "CenteringScore",
+                "CenteringBaselineValue",
+                "CenteringScoreBaselineValue",
+                "ForcedRosterValue",
+            )
+        )
+        if centering_fields_present:
+            centering_mode = str(row_data.get("CenteringMode") or "standard").strip() or "standard"
+            centering_fallback_value = row_data.get("ForcedRosterFallbackApplied")
+            centering_fallback_applied = False if pd.isna(centering_fallback_value) else bool(centering_fallback_value)
+            centering_score = numeric_or_zero_fn(
+                row_data.get("CenteringScore") if "CenteringScore" in row_data else row_data.get("RawDynastyValue")
+            )
+            centering_baseline_value = numeric_or_zero_fn(
+                row_data.get("CenteringScoreBaselineValue")
+                if "CenteringScoreBaselineValue" in row_data
+                else row_data.get("CenteringBaselineValue")
+            )
+            centering: dict[str, Any] = {
+                "mode": centering_mode,
+                "fallback_applied": centering_fallback_applied,
+                "score": round(centering_score, 4),
+                "baseline_value": round(centering_baseline_value, 4),
+            }
+            if "CenteringBaselineValue" in row_data:
+                centering["raw_baseline_value"] = round(numeric_or_zero_fn(row_data.get("CenteringBaselineValue")), 4)
+            if "ForcedRosterValue" in row_data:
+                centering["forced_roster_value"] = round(numeric_or_zero_fn(row_data.get("ForcedRosterValue")), 4)
+            minor_slot_cost_value = row_data.get("MinorSlotCostValue")
+            if "MinorSlotCostValue" in row_data and not pd.isna(minor_slot_cost_value):
+                centering["minor_slot_cost_value"] = round(numeric_or_zero_fn(minor_slot_cost_value), 4)
+            minor_eta_offset = row_data.get("MinorEtaOffset")
+            if "MinorEtaOffset" in row_data and not pd.isna(minor_eta_offset):
+                centering["minor_eta_offset"] = int(round(numeric_or_zero_fn(minor_eta_offset)))
+            minor_projected_volume_score = row_data.get("MinorProjectedVolumeScore")
+            if "MinorProjectedVolumeScore" in row_data and not pd.isna(minor_projected_volume_score):
+                centering["minor_projected_volume_score"] = round(numeric_or_zero_fn(minor_projected_volume_score), 4)
+            explanation_entry["centering"] = centering
         if scoring_mode == "roto":
             stat_dynasty = {
                 col[len("StatDynasty_"):]: round(numeric_or_zero_fn(row_data.get(col)), 4)
@@ -259,6 +302,11 @@ def default_calculation_cache_params(
         "sgp_epsilon_ratio": 0.0015,
         "enable_playing_time_reliability": False,
         "enable_age_risk_adjustment": False,
+        "enable_prospect_risk_adjustment": False,
+        "enable_bench_stash_relief": False,
+        "bench_negative_penalty": 0.55,
+        "enable_ir_stash_relief": False,
+        "ir_negative_penalty": 0.20,
         "enable_replacement_blend": False,
         "replacement_blend_alpha": 0.70,
     }
@@ -344,6 +392,35 @@ PREWARM_CONFIGS: list[dict[str, Any]] = [
     {"label": "14T-5x5-roto", "teams": 14},
     # 4) 12-team points
     {"label": "12T-points", "mode": "points"},
-    # 5) 12-team 6x6 roto (OBP + QS)
-    {"label": "12T-6x6-roto", "roto_hit_obp": True, "roto_pit_qs": True},
+    # 5) 12-team deep 6x6 roto (OPS + QA3/SVH with stash realism)
+    {
+        "label": "12T-deep-dynasty-roto",
+        "hit_c": 2,
+        "hit_1b": 1,
+        "hit_2b": 1,
+        "hit_3b": 1,
+        "hit_ss": 1,
+        "hit_ci": 1,
+        "hit_mi": 1,
+        "hit_of": 5,
+        "hit_ut": 2,
+        "pit_p": 3,
+        "pit_sp": 3,
+        "pit_rp": 3,
+        "bench": 14,
+        "minors": 20,
+        "ir": 8,
+        "ip_min": 1000.0,
+        "ip_max": 1500.0,
+        "roto_hit_ops": True,
+        "roto_hit_avg": True,
+        "roto_pit_sv": False,
+        "roto_pit_qa3": True,
+        "roto_pit_svh": True,
+        "enable_prospect_risk_adjustment": True,
+        "enable_bench_stash_relief": True,
+        "bench_negative_penalty": 0.55,
+        "enable_ir_stash_relief": True,
+        "ir_negative_penalty": 0.20,
+    },
 ]

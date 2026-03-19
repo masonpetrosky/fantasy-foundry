@@ -384,13 +384,6 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> tupl
                     hitter_ab=_coerce_non_negative_float(row.get("AB", 0.0)),
                     slot_ab_reference=_coerce_non_negative_float(b.get("AB", 0.0)),
                 )
-            if bool(getattr(lg, "enable_playing_time_reliability", False)):
-                _apply_hitter_playing_time_reliability_guard(
-                    delta,
-                    hit_categories=hit_categories,
-                    hitter_ab=_coerce_non_negative_float(row.get("AB", 0.0)),
-                    slot_ab_reference=_coerce_non_negative_float(b.get("AB", 0.0)),
-                )
 
             val = 0.0
             stat_sgps: dict[str, float] = {}

@@ -6,11 +6,16 @@ import pandas as pd
 import pytest
 
 from backend.valuation.common_orchestration import (
+    _adjust_dynasty_year_value,
+    _apply_dynasty_centering,
     _blend_replacement_frame,
+    _forced_roster_value,
     _piecewise_age_factor,
     _position_profile,
+    _prospect_risk_multiplier,
     _year_risk_multiplier,
 )
+from backend.valuation.models import CommonDynastyRotoSettings
 
 pytestmark = pytest.mark.valuation
 
@@ -222,6 +227,265 @@ class TestYearRiskMultiplier:
         )
         # offset=0, age=30, piecewise(30, hitter) = 1.0 + (0.88-1.0)*((30-29)/6) = ~0.98
         assert result == pytest.approx(1.0 + (0.88 - 1.0) * (1.0 / 6.0), abs=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# _prospect_risk_multiplier / _adjust_dynasty_year_value
+# ---------------------------------------------------------------------------
+
+class TestProspectRiskMultiplier:
+    def test_disabled_returns_one(self):
+        assert _prospect_risk_multiplier(
+            year=2028,
+            start_year=2026,
+            profile="hitter",
+            minor_eligible=True,
+            enabled=False,
+        ) == 1.0
+
+    def test_non_minor_returns_one(self):
+        assert _prospect_risk_multiplier(
+            year=2028,
+            start_year=2026,
+            profile="hitter",
+            minor_eligible=False,
+            enabled=True,
+        ) == 1.0
+
+    def test_hitter_discount_compounds_by_year(self):
+        assert _prospect_risk_multiplier(
+            year=2028,
+            start_year=2026,
+            profile="hitter",
+            minor_eligible=True,
+            enabled=True,
+        ) == pytest.approx(0.92 ** 2)
+
+    def test_pitcher_discount_respects_floor(self):
+        assert _prospect_risk_multiplier(
+            year=2034,
+            start_year=2026,
+            profile="pitcher",
+            minor_eligible=True,
+            enabled=True,
+        ) == pytest.approx(0.45)
+
+
+class TestAdjustDynastyYearValue:
+    def test_positive_minor_eligible_value_gets_prospect_discount(self):
+        lg = CommonDynastyRotoSettings(enable_prospect_risk_adjustment=True)
+        adjusted = _adjust_dynasty_year_value(
+            10.0,
+            player="Prospect",
+            year=2028,
+            start_year=2026,
+            age_start=22.0,
+            profile="hitter",
+            lg=lg,
+            minor_eligibility_by_year={("Prospect", 2028): True},
+            minor_stash_players=set(),
+            bench_stash_players=set(),
+            ir_stash_players=set(),
+            hitter_ab_by_player_year={("Prospect", 2028): 150.0},
+            pitcher_ip_by_player_year={},
+        )
+        assert adjusted == pytest.approx(10.0 * (0.92 ** 2))
+
+    def test_negative_values_follow_minor_ir_then_bench_stash_paths(self):
+        lg = CommonDynastyRotoSettings(
+            enable_prospect_risk_adjustment=True,
+            enable_bench_stash_relief=True,
+            bench_negative_penalty=0.5,
+            enable_ir_stash_relief=True,
+            ir_negative_penalty=0.25,
+        )
+
+        minor_adjusted = _adjust_dynasty_year_value(
+            -10.0,
+            player="Prospect",
+            year=2028,
+            start_year=2026,
+            age_start=22.0,
+            profile="hitter",
+            lg=lg,
+            minor_eligibility_by_year={("Prospect", 2028): True},
+            minor_stash_players={"Prospect"},
+            bench_stash_players=set(),
+            ir_stash_players=set(),
+            hitter_ab_by_player_year={("Prospect", 2028): 0.0},
+            pitcher_ip_by_player_year={},
+        )
+        assert minor_adjusted == 0.0
+
+        ir_adjusted = _adjust_dynasty_year_value(
+            -8.0,
+            player="Injured Vet",
+            year=2027,
+            start_year=2026,
+            age_start=31.0,
+            profile="hitter",
+            lg=lg,
+            minor_eligibility_by_year={},
+            minor_stash_players=set(),
+            bench_stash_players=set(),
+            ir_stash_players={"Injured Vet"},
+            hitter_ab_by_player_year={("Injured Vet", 2027): 0.0},
+            pitcher_ip_by_player_year={},
+        )
+        assert ir_adjusted == pytest.approx(-2.0)
+
+        bench_adjusted = _adjust_dynasty_year_value(
+            -6.0,
+            player="Bench Bat",
+            year=2027,
+            start_year=2026,
+            age_start=28.0,
+            profile="hitter",
+            lg=lg,
+            minor_eligibility_by_year={},
+            minor_stash_players=set(),
+            bench_stash_players={"Bench Bat"},
+            ir_stash_players=set(),
+            hitter_ab_by_player_year={("Bench Bat", 2027): 250.0},
+            pitcher_ip_by_player_year={},
+        )
+        assert bench_adjusted == pytest.approx(-3.0)
+
+
+class TestForcedRosterValue:
+    def test_empty_inputs_return_zero(self):
+        assert _forced_roster_value([], [], 0.94) == 0.0
+
+    def test_single_year_returns_year_value_without_drop_floor(self):
+        assert _forced_roster_value([-2.5], [2026], 0.94) == pytest.approx(-2.5)
+
+    def test_negative_now_positive_later_keeps_future_salvage(self):
+        result = _forced_roster_value([-3.0, 8.0], [2026, 2027], 0.94)
+        assert result == pytest.approx(-3.0 + (0.94 * 8.0))
+
+
+class TestApplyDynastyCentering:
+    def test_forced_roster_fallback_separates_raw_zero_cluster(self):
+        out = pd.DataFrame(
+            [
+                {"Player": "A", "RawDynastyValue": 10.0},
+                {"Player": "B", "RawDynastyValue": 8.0},
+                {"Player": "C", "RawDynastyValue": 0.0},
+                {"Player": "D", "RawDynastyValue": 0.0},
+                {"Player": "E", "RawDynastyValue": 0.0},
+                {"Player": "F", "RawDynastyValue": 0.0},
+            ]
+        )
+
+        centered, diagnostics = _apply_dynasty_centering(
+            out,
+            forced_roster_values=[10.0, 8.0, -0.2, -1.0, -2.0, -3.0],
+            total_minor_slots=0,
+            total_ir_slots=0,
+            total_bench_slots=0,
+            total_active_slots=5,
+            active_floor_names=set(),
+            minor_candidate_players=set(),
+            ir_candidate_players=set(),
+            bench_candidate_players=set(),
+        )
+
+        by_player = centered.set_index("Player")
+        assert diagnostics["CenteringMode"] == "forced_roster"
+        assert diagnostics["ForcedRosterFallbackApplied"] is True
+        assert diagnostics["CenteringBaselineValue"] == pytest.approx(0.0)
+        assert diagnostics["CenteringScoreBaselineValue"] == pytest.approx(-2.0)
+        assert diagnostics["RawZeroValuePlayerCount"] == 4
+        assert diagnostics["DynastyZeroValuePlayerCount"] == 1
+        assert diagnostics["deep_roster_zero_baseline_warning"] is True
+        assert by_player.loc["C", "DynastyValue"] == pytest.approx(1.8)
+        assert by_player.loc["D", "DynastyValue"] == pytest.approx(1.0)
+        assert by_player.loc["E", "DynastyValue"] == pytest.approx(0.0)
+        assert by_player.loc["F", "DynastyValue"] == pytest.approx(-1.0)
+
+    def test_standard_mode_keeps_raw_baseline_centering(self):
+        out = pd.DataFrame(
+            [
+                {"Player": "A", "RawDynastyValue": 10.0},
+                {"Player": "B", "RawDynastyValue": 8.0},
+                {"Player": "C", "RawDynastyValue": 5.0},
+                {"Player": "D", "RawDynastyValue": 4.0},
+            ]
+        )
+
+        centered, diagnostics = _apply_dynasty_centering(
+            out,
+            forced_roster_values=[10.0, 8.0, 5.0, 4.0],
+            total_minor_slots=0,
+            total_ir_slots=0,
+            total_bench_slots=0,
+            total_active_slots=3,
+            active_floor_names=set(),
+            minor_candidate_players=set(),
+            ir_candidate_players=set(),
+            bench_candidate_players=set(),
+        )
+
+        by_player = centered.set_index("Player")
+        assert diagnostics["CenteringMode"] == "standard"
+        assert diagnostics["ForcedRosterFallbackApplied"] is False
+        assert diagnostics["CenteringBaselineValue"] == pytest.approx(5.0)
+        assert diagnostics["CenteringScoreBaselineValue"] == pytest.approx(5.0)
+        assert diagnostics["RawZeroValuePlayerCount"] == 0
+        assert diagnostics["DynastyZeroValuePlayerCount"] == 1
+        assert diagnostics["deep_roster_zero_baseline_warning"] is False
+        assert by_player.loc["A", "DynastyValue"] == pytest.approx(5.0)
+        assert by_player.loc["B", "DynastyValue"] == pytest.approx(3.0)
+        assert by_player.loc["C", "DynastyValue"] == pytest.approx(0.0)
+
+    def test_residual_minor_slot_cost_applies_when_forced_roster_cutoff_stays_zero(self):
+        out = pd.DataFrame(
+            [
+                {"Player": "A", "RawDynastyValue": 10.0, "minor_eligible": False},
+                {"Player": "B", "RawDynastyValue": 8.0, "minor_eligible": False},
+                {"Player": "Soon Prospect", "RawDynastyValue": 0.0, "minor_eligible": True},
+                {"Player": "Later Prospect", "RawDynastyValue": 0.0, "minor_eligible": True},
+                {"Player": "Vet Edge", "RawDynastyValue": 0.0, "minor_eligible": False},
+                {"Player": "Vet Tail", "RawDynastyValue": 0.0, "minor_eligible": False},
+            ]
+        )
+
+        centered, diagnostics = _apply_dynasty_centering(
+            out,
+            forced_roster_values=[10.0, 8.0, 0.0, 0.0, -0.5, -1.0],
+            total_minor_slots=0,
+            total_ir_slots=0,
+            total_bench_slots=0,
+            total_active_slots=4,
+            active_floor_names=set(),
+            minor_candidate_players={"Soon Prospect", "Later Prospect"},
+            ir_candidate_players=set(),
+            bench_candidate_players=set(),
+            n_teams=1,
+            years=[2026, 2027],
+            start_year=2026,
+            hitter_ab_by_player_year={
+                ("Soon Prospect", 2027): 10.0,
+            },
+            pitcher_ip_by_player_year={},
+        )
+
+        by_player = centered.set_index("Player")
+        assert diagnostics["CenteringMode"] == "forced_roster_minor_cost"
+        assert diagnostics["ForcedRosterFallbackApplied"] is True
+        assert diagnostics["ResidualMinorSlotCostApplied"] is True
+        assert diagnostics["ResidualZeroMinorCandidateCount"] == 2
+        assert diagnostics["CenteringBaselineValue"] == pytest.approx(0.0)
+        assert diagnostics["CenteringScoreBaselineValue"] == pytest.approx(
+            float(by_player.loc["Later Prospect", "MinorSlotCostValue"])
+        )
+        assert diagnostics["CenteringScoreBaselineValue"] < 0.0
+        assert diagnostics["CenteringScoreZeroPlayerCount"] == 0
+        assert by_player.loc["Soon Prospect", "MinorEtaOffset"] == pytest.approx(1.0)
+        assert by_player.loc["Soon Prospect", "MinorProjectedVolumeScore"] == pytest.approx(10.0)
+        assert by_player.loc["Soon Prospect", "MinorSlotCostValue"] > by_player.loc["Later Prospect", "MinorSlotCostValue"]
+        assert by_player.loc["Soon Prospect", "DynastyValue"] > 0.0
+        assert by_player.loc["Later Prospect", "DynastyValue"] == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------

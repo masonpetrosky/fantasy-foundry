@@ -713,12 +713,14 @@ def _select_mlb_roster_with_active_floor(
     excluded_players: Set[str],
     total_mlb_slots: int,
     active_floor_names: Set[str],
+    mlb_playing_time_players: Optional[Set[str]] = None,
 ) -> pd.DataFrame:
     return _minor_elig._select_mlb_roster_with_active_floor(
         stash_sorted,
         excluded_players=excluded_players,
         total_mlb_slots=total_mlb_slots,
         active_floor_names=active_floor_names,
+        mlb_playing_time_players=mlb_playing_time_players,
     )
 
 
@@ -762,12 +764,16 @@ def _apply_negative_value_stash_rules(
     value: float,
     *,
     can_minor_stash: bool,
+    can_ir_stash: bool = False,
+    ir_negative_penalty: float = 1.0,
     can_bench_stash: bool,
     bench_negative_penalty: float,
 ) -> float:
     return _minor_elig._apply_negative_value_stash_rules(
         value,
         can_minor_stash=can_minor_stash,
+        can_ir_stash=can_ir_stash,
+        ir_negative_penalty=ir_negative_penalty,
         can_bench_stash=can_bench_stash,
         bench_negative_penalty=bench_negative_penalty,
     )

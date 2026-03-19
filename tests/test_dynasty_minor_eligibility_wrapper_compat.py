@@ -74,12 +74,14 @@ def test_wrapper_select_mlb_roster_with_active_floor_delegates() -> None:
             excluded_players={"B"},
             total_mlb_slots=5,
             active_floor_names={"A"},
+            mlb_playing_time_players={"A", "C"},
         )
     mocked.assert_called_once_with(
         stash,
         excluded_players={"B"},
         total_mlb_slots=5,
         active_floor_names={"A"},
+        mlb_playing_time_players={"A", "C"},
     )
     assert result is sentinel
 
@@ -139,12 +141,16 @@ def test_wrapper_apply_negative_value_stash_rules_delegates() -> None:
         result = dynasty_roto_values._apply_negative_value_stash_rules(
             -3.0,
             can_minor_stash=False,
+            can_ir_stash=True,
+            ir_negative_penalty=0.2,
             can_bench_stash=True,
             bench_negative_penalty=0.25,
         )
     mocked.assert_called_once_with(
         -3.0,
         can_minor_stash=False,
+        can_ir_stash=True,
+        ir_negative_penalty=0.2,
         can_bench_stash=True,
         bench_negative_penalty=0.25,
     )

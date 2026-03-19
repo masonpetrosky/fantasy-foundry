@@ -115,6 +115,11 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(req.sgp_denominator_mode, "classic")
         self.assertFalse(req.enable_playing_time_reliability)
         self.assertFalse(req.enable_age_risk_adjustment)
+        self.assertFalse(req.enable_prospect_risk_adjustment)
+        self.assertFalse(req.enable_bench_stash_relief)
+        self.assertEqual(req.bench_negative_penalty, 0.55)
+        self.assertFalse(req.enable_ir_stash_relief)
+        self.assertEqual(req.ir_negative_penalty, 0.20)
         self.assertFalse(req.enable_replacement_blend)
 
     def test_mode_must_be_common_or_league(self) -> None:
@@ -207,6 +212,12 @@ class CalculatorValidationTests(unittest.TestCase):
                 }
             ]
         )
+        fake_out.attrs["valuation_diagnostics"] = {
+            "CenteringBaselineValue": 0.0,
+            "PositiveValuePlayerCount": 1,
+            "ZeroValuePlayerCount": 0,
+            "deep_roster_zero_baseline_warning": False,
+        }
 
         class FakeSettings:
             def __init__(self, **kwargs) -> None:
@@ -241,6 +252,7 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["diagnostics"]["PositiveValuePlayerCount"], 1)
         row = payload["data"][0]
         self.assertEqual(row["PlayerKey"], "jane-roe")
         self.assertEqual(row["PlayerEntityKey"], "jane-roe")
@@ -380,6 +392,11 @@ class CalculatorValidationTests(unittest.TestCase):
                     "sgp_denominator_mode": "robust",
                     "enable_playing_time_reliability": True,
                     "enable_age_risk_adjustment": True,
+                    "enable_prospect_risk_adjustment": True,
+                    "enable_bench_stash_relief": True,
+                    "bench_negative_penalty": 0.45,
+                    "enable_ir_stash_relief": True,
+                    "ir_negative_penalty": 0.15,
                     "enable_replacement_blend": True,
                     "replacement_blend_alpha": 0.55,
                 },
@@ -395,6 +412,11 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(captured_kwargs.get("sgp_denominator_mode"), "robust")
         self.assertTrue(captured_kwargs.get("enable_playing_time_reliability"))
         self.assertTrue(captured_kwargs.get("enable_age_risk_adjustment"))
+        self.assertTrue(captured_kwargs.get("enable_prospect_risk_adjustment"))
+        self.assertTrue(captured_kwargs.get("enable_bench_stash_relief"))
+        self.assertEqual(captured_kwargs.get("bench_negative_penalty"), 0.45)
+        self.assertTrue(captured_kwargs.get("enable_ir_stash_relief"))
+        self.assertEqual(captured_kwargs.get("ir_negative_penalty"), 0.15)
         self.assertTrue(captured_kwargs.get("enable_replacement_blend"))
         self.assertEqual(captured_kwargs.get("replacement_blend_alpha"), 0.55)
 

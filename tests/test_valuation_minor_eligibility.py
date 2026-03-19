@@ -116,10 +116,12 @@ def test_build_bench_stash_penalty_map_groups_players_into_team_rounds() -> None
     assert penalties["E"] == 1.0
 
 
-def test_apply_negative_value_stash_rules_respects_minor_and_bench_paths() -> None:
+def test_apply_negative_value_stash_rules_respects_minor_ir_and_bench_paths() -> None:
     assert minor_eligibility._apply_negative_value_stash_rules(
         -4.0,
         can_minor_stash=True,
+        can_ir_stash=True,
+        ir_negative_penalty=0.1,
         can_bench_stash=True,
         bench_negative_penalty=0.2,
     ) == 0.0
@@ -127,6 +129,17 @@ def test_apply_negative_value_stash_rules_respects_minor_and_bench_paths() -> No
     assert minor_eligibility._apply_negative_value_stash_rules(
         -4.0,
         can_minor_stash=False,
+        can_ir_stash=True,
+        ir_negative_penalty=0.25,
+        can_bench_stash=True,
+        bench_negative_penalty=0.5,
+    ) == -1.0
+
+    assert minor_eligibility._apply_negative_value_stash_rules(
+        -4.0,
+        can_minor_stash=False,
+        can_ir_stash=False,
+        ir_negative_penalty=0.25,
         can_bench_stash=True,
         bench_negative_penalty=0.25,
     ) == -1.0
@@ -134,6 +147,8 @@ def test_apply_negative_value_stash_rules_respects_minor_and_bench_paths() -> No
     assert minor_eligibility._apply_negative_value_stash_rules(
         -4.0,
         can_minor_stash=False,
+        can_ir_stash=False,
+        ir_negative_penalty=0.25,
         can_bench_stash=True,
         bench_negative_penalty=2.0,
     ) == -4.0

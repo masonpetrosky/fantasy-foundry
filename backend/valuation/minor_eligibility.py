@@ -157,6 +157,7 @@ def _select_mlb_roster_with_active_floor(
     excluded_players: Set[str],
     total_mlb_slots: int,
     active_floor_names: Set[str],
+    mlb_playing_time_players: Optional[Set[str]] = None,
 ) -> pd.DataFrame:
     """Pick MLB rostered players while guaranteeing active-floor names when possible."""
     remaining = stash_sorted[~stash_sorted["Player"].isin(excluded_players)].copy()
@@ -173,8 +174,25 @@ def _select_mlb_roster_with_active_floor(
     if fill_needed == 0:
         return floor.reset_index(drop=True)
 
-    fill = remaining[~remaining["Player"].isin(floor_names)].head(fill_needed).copy()
-    return pd.concat([floor, fill], ignore_index=True)
+    selected = floor.reset_index(drop=True)
+    selected_names = set(selected["Player"]) if not selected.empty else set()
+
+    preferred_players = {str(player) for player in (mlb_playing_time_players or set()) if str(player)}
+    if preferred_players:
+        preferred_fill = remaining[
+            (~remaining["Player"].isin(selected_names))
+            & (remaining["Player"].isin(preferred_players))
+        ].head(fill_needed).copy()
+        if not preferred_fill.empty:
+            selected = pd.concat([selected, preferred_fill], ignore_index=True)
+            selected_names = set(selected["Player"])
+
+    remaining_needed = max(total_mlb_slots - len(selected), 0)
+    if remaining_needed <= 0:
+        return selected.reset_index(drop=True)
+
+    fill = remaining[~remaining["Player"].isin(selected_names)].head(remaining_needed).copy()
+    return pd.concat([selected, fill], ignore_index=True)
 
 
 def _estimate_bench_negative_penalty(start_ctx: dict, lg: object) -> float:
@@ -273,6 +291,8 @@ def _apply_negative_value_stash_rules(
     value: float,
     *,
     can_minor_stash: bool,
+    can_ir_stash: bool = False,
+    ir_negative_penalty: float = 1.0,
     can_bench_stash: bool,
     bench_negative_penalty: float,
 ) -> float:
@@ -281,6 +301,8 @@ def _apply_negative_value_stash_rules(
         return float(value)
     if can_minor_stash:
         return 0.0
+    if can_ir_stash:
+        return float(value) * float(np.clip(ir_negative_penalty, 0.0, 1.0))
     if can_bench_stash:
         return float(value) * float(np.clip(bench_negative_penalty, 0.0, 1.0))
     return float(value)

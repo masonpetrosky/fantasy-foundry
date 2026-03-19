@@ -24,6 +24,7 @@ try:
         _fillna_bool,
         _find_projection_date_col,
         _non_vacant_player_names,
+        _players_with_playing_time,
         _resolve_minor_eligibility_by_year,
         _select_mlb_roster_with_active_floor,
         average_recent_projections,
@@ -56,6 +57,7 @@ except ImportError:  # pragma: no cover - direct script execution fallback
         _fillna_bool,
         _find_projection_date_col,
         _non_vacant_player_names,
+        _players_with_playing_time,
         _resolve_minor_eligibility_by_year,
         _select_mlb_roster_with_active_floor,
         average_recent_projections,
@@ -77,6 +79,8 @@ except ImportError:  # pragma: no cover - direct script execution fallback
 
 _PITCH_POSITION_TOKENS = {"P", "SP", "RP"}
 _POSITION_TOKEN_RE = re.compile(r"[,\s/;+|]+")
+_CENTERING_ZERO_EPSILON = 1e-12
+_DEEP_ROSTER_ZERO_CLUSTER_MIN_SHARE = 0.10
 
 
 def _position_profile(pos_value: object) -> str:
@@ -172,6 +176,272 @@ def _year_risk_multiplier(
     return float(max(min(factor, 1.0), 0.0))
 
 
+def _prospect_risk_multiplier(
+    *,
+    year: int,
+    start_year: int,
+    profile: str,
+    minor_eligible: bool,
+    enabled: bool,
+) -> float:
+    """Apply an extra uncertainty discount to minor-eligible players."""
+    if not enabled or not minor_eligible:
+        return 1.0
+
+    year_offset = max(int(year) - int(start_year), 0)
+    if profile == "pitcher":
+        return float(max(0.45, 0.88 ** year_offset))
+    return float(max(0.60, 0.92 ** year_offset))
+
+
+def _is_near_zero_playing_time(
+    player: str,
+    year: int,
+    *,
+    hitter_ab_by_player_year: Dict[tuple[str, int], float],
+    pitcher_ip_by_player_year: Dict[tuple[str, int], float],
+    hitter_ab_threshold: float = 60.0,
+    pitcher_ip_threshold: float = 15.0,
+) -> bool:
+    hit_ab = float(hitter_ab_by_player_year.get((player, int(year)), 0.0))
+    pit_ip = float(pitcher_ip_by_player_year.get((player, int(year)), 0.0))
+    return hit_ab <= float(hitter_ab_threshold) and pit_ip <= float(pitcher_ip_threshold)
+
+
+def _coerce_projected_volume(value: object) -> float:
+    parsed = pd.to_numeric(value, errors="coerce")
+    if pd.isna(parsed):
+        return 0.0
+    return float(parsed)
+
+
+def _adjust_dynasty_year_value(
+    value: float,
+    *,
+    player: str,
+    year: int,
+    start_year: int,
+    age_start: float | None,
+    profile: str,
+    lg: CommonDynastyRotoSettings,
+    minor_eligibility_by_year: Dict[tuple[str, int], bool],
+    minor_stash_players: Set[str],
+    bench_stash_players: Set[str],
+    ir_stash_players: Set[str],
+    hitter_ab_by_player_year: Dict[tuple[str, int], float],
+    pitcher_ip_by_player_year: Dict[tuple[str, int], float],
+) -> float:
+    adjusted = float(value)
+    adjusted *= _year_risk_multiplier(
+        age_start=age_start,
+        year=int(year),
+        start_year=int(start_year),
+        profile=profile,
+        enabled=bool(getattr(lg, "enable_age_risk_adjustment", False)),
+    )
+
+    minor_eligible = bool(minor_eligibility_by_year.get((player, int(year)), False))
+    adjusted *= _prospect_risk_multiplier(
+        year=int(year),
+        start_year=int(start_year),
+        profile=profile,
+        minor_eligible=minor_eligible,
+        enabled=bool(getattr(lg, "enable_prospect_risk_adjustment", False)),
+    )
+
+    return _apply_negative_value_stash_rules(
+        adjusted,
+        can_minor_stash=player in minor_stash_players and minor_eligible,
+        can_ir_stash=bool(getattr(lg, "enable_ir_stash_relief", False))
+        and player in ir_stash_players
+        and _is_near_zero_playing_time(
+            player,
+            int(year),
+            hitter_ab_by_player_year=hitter_ab_by_player_year,
+            pitcher_ip_by_player_year=pitcher_ip_by_player_year,
+        ),
+        ir_negative_penalty=float(getattr(lg, "ir_negative_penalty", 1.0)),
+        can_bench_stash=bool(getattr(lg, "enable_bench_stash_relief", False)) and player in bench_stash_players,
+        bench_negative_penalty=float(getattr(lg, "bench_negative_penalty", 1.0)),
+    )
+
+
+def _build_stash_frame(
+    base_frame: pd.DataFrame,
+    *,
+    years: List[int],
+    value_columns_by_year: Dict[int, object],
+    start_year: int,
+    lg: CommonDynastyRotoSettings,
+    age_by_player: Dict[str, float | None],
+    profile_by_player: Dict[str, str],
+    minor_eligibility_by_year: Dict[tuple[str, int], bool],
+    minor_stash_players: Set[str],
+    bench_stash_players: Set[str],
+    ir_stash_players: Set[str],
+    elig_df: pd.DataFrame,
+    hitter_ab_by_player_year: Dict[tuple[str, int], float],
+    pitcher_ip_by_player_year: Dict[tuple[str, int], float],
+) -> tuple[pd.DataFrame, Set[str], Set[str]]:
+    scores: List[float] = []
+    negative_year_players: Set[str] = set()
+    ir_candidate_players: Set[str] = set()
+
+    for _, row in base_frame.iterrows():
+        player = str(row.get("Player") or "")
+        player_age = age_by_player.get(player)
+        player_profile = profile_by_player.get(player, "hitter")
+        adjusted_values: List[float] = []
+        has_negative_year = False
+        has_ir_candidate_year = False
+
+        for year in years:
+            raw_key = value_columns_by_year[int(year)]
+            raw_value = row.get(raw_key)
+            if pd.isna(raw_value):
+                raw_value = 0.0
+
+            adjusted = _adjust_dynasty_year_value(
+                float(raw_value),
+                player=player,
+                year=int(year),
+                start_year=int(start_year),
+                age_start=player_age,
+                profile=player_profile,
+                lg=lg,
+                minor_eligibility_by_year=minor_eligibility_by_year,
+                minor_stash_players=minor_stash_players,
+                bench_stash_players=bench_stash_players,
+                ir_stash_players=ir_stash_players,
+                hitter_ab_by_player_year=hitter_ab_by_player_year,
+                pitcher_ip_by_player_year=pitcher_ip_by_player_year,
+            )
+            adjusted_values.append(adjusted)
+            if adjusted < 0.0:
+                has_negative_year = True
+                if _is_near_zero_playing_time(
+                    player,
+                    int(year),
+                    hitter_ab_by_player_year=hitter_ab_by_player_year,
+                    pitcher_ip_by_player_year=pitcher_ip_by_player_year,
+                ):
+                    has_ir_candidate_year = True
+
+        if has_negative_year:
+            negative_year_players.add(player)
+        if has_ir_candidate_year:
+            ir_candidate_players.add(player)
+        scores.append(dynasty_keep_or_drop_value(adjusted_values, years, lg.discount))
+
+    stash = base_frame[["Player"]].copy()
+    stash["StashScore"] = scores
+    stash = stash.merge(elig_df, on="Player", how="left")
+    stash["minor_eligible"] = _fillna_bool(stash["minor_eligible"])
+    stash = stash.sort_values("StashScore", ascending=False).reset_index(drop=True)
+    return stash, negative_year_players, ir_candidate_players
+
+
+def _select_preferred_players(
+    sorted_frame: pd.DataFrame,
+    *,
+    preferred_players: Set[str],
+    count: int,
+    excluded_players: Set[str],
+    avoid_players: Optional[Set[str]] = None,
+) -> pd.DataFrame:
+    remaining = sorted_frame[~sorted_frame["Player"].isin(excluded_players)].copy()
+    if count <= 0 or remaining.empty:
+        return remaining.iloc[0:0].copy()
+
+    avoid = avoid_players or set()
+    preferred = remaining[remaining["Player"].isin(preferred_players)]
+    preferred_primary = preferred[~preferred["Player"].isin(avoid)].head(count).copy()
+    selected = preferred_primary
+
+    if len(selected) < count:
+        selected_names = set(selected["Player"])
+        preferred_fallback = preferred[
+            ~preferred["Player"].isin(selected_names)
+        ].head(count - len(selected)).copy()
+        if not preferred_fallback.empty:
+            selected = pd.concat([selected, preferred_fallback], ignore_index=True)
+
+    if len(selected) < count:
+        selected_names = set(selected["Player"])
+        fill_primary = remaining[
+            (~remaining["Player"].isin(selected_names)) & (~remaining["Player"].isin(avoid))
+        ].head(count - len(selected)).copy()
+        if not fill_primary.empty:
+            selected = pd.concat([selected, fill_primary], ignore_index=True)
+
+    if len(selected) < count:
+        selected_names = set(selected["Player"])
+        fill_fallback = remaining[
+            ~remaining["Player"].isin(selected_names)
+        ].head(count - len(selected)).copy()
+        if not fill_fallback.empty:
+            selected = pd.concat([selected, fill_fallback], ignore_index=True)
+
+    return selected.reset_index(drop=True)
+
+
+def _select_roster_groups(
+    stash_sorted: pd.DataFrame,
+    *,
+    total_minor_slots: int,
+    total_ir_slots: int,
+    total_bench_slots: int,
+    total_active_slots: int,
+    active_floor_names: Set[str],
+    minor_candidate_players: Set[str],
+    ir_candidate_players: Set[str],
+    bench_candidate_players: Set[str],
+    active_candidate_players: Optional[Set[str]] = None,
+) -> dict[str, pd.DataFrame]:
+    used_players: Set[str] = set()
+
+    minor_sel = _select_preferred_players(
+        stash_sorted,
+        preferred_players=minor_candidate_players,
+        count=total_minor_slots,
+        excluded_players=used_players,
+    )
+    used_players.update(minor_sel["Player"].astype(str).tolist())
+
+    ir_sel = _select_preferred_players(
+        stash_sorted,
+        preferred_players=ir_candidate_players,
+        count=total_ir_slots,
+        excluded_players=used_players,
+        avoid_players=active_floor_names,
+    )
+    used_players.update(ir_sel["Player"].astype(str).tolist())
+
+    bench_sel = _select_preferred_players(
+        stash_sorted,
+        preferred_players=bench_candidate_players,
+        count=total_bench_slots,
+        excluded_players=used_players,
+        avoid_players=active_floor_names,
+    )
+    used_players.update(bench_sel["Player"].astype(str).tolist())
+
+    active_sel = _select_mlb_roster_with_active_floor(
+        stash_sorted,
+        excluded_players=used_players,
+        total_mlb_slots=total_active_slots,
+        active_floor_names=active_floor_names,
+        mlb_playing_time_players=active_candidate_players,
+    )
+
+    return {
+        "minor": minor_sel.reset_index(drop=True),
+        "ir": ir_sel.reset_index(drop=True),
+        "bench": bench_sel.reset_index(drop=True),
+        "active": active_sel.reset_index(drop=True),
+    }
+
+
 def _blend_replacement_frame(
     frozen_frame: pd.DataFrame,
     current_frame: pd.DataFrame,
@@ -185,6 +455,298 @@ def _blend_replacement_frame(
     frozen_aligned = frozen.reindex(index=idx, columns=cols).fillna(0.0)
     current_aligned = current.reindex(index=idx, columns=cols).fillna(0.0)
     return (float(alpha) * frozen_aligned) + ((1.0 - float(alpha)) * current_aligned)
+
+
+def _forced_roster_value(values: List[float], years: List[int], discount: float) -> float:
+    """Score a player when the league forces one season of roster occupancy.
+
+    Raw dynasty value allows an immediate drop to 0. This helper instead prices
+    the "forced carry for the current slot-year, then optimize later" case:
+
+        forced = values[0] + discount**gap * keep_or_drop(values[1:])
+
+    That keeps top-of-board players unchanged while meaningfully separating the
+    deep-league fringe that all tie at raw dynasty value 0.
+    """
+    if not years or not values:
+        return 0.0
+    if len(values) != len(years):
+        raise ValueError("values and years must have the same length")
+    if len(values) == 1:
+        return float(values[0])
+
+    gap = int(years[1]) - int(years[0])
+    if gap < 0:
+        raise ValueError("years must be increasing")
+    future_value = dynasty_keep_or_drop_value(values[1:], years[1:], discount)
+    return float(values[0] + (discount ** gap) * future_value)
+
+
+def _centering_baseline_from_score(
+    frame: pd.DataFrame,
+    *,
+    score_col: str,
+    total_minor_slots: int,
+    total_ir_slots: int,
+    total_bench_slots: int,
+    total_active_slots: int,
+    active_floor_names: Set[str],
+    minor_candidate_players: Set[str],
+    ir_candidate_players: Set[str],
+    bench_candidate_players: Set[str],
+    active_candidate_players: Optional[Set[str]] = None,
+) -> float:
+    stash_sorted = frame.sort_values(score_col, ascending=False).reset_index(drop=True).copy()
+    stash_sorted["StashScore"] = pd.to_numeric(stash_sorted.get(score_col), errors="coerce").fillna(0.0)
+    center_groups = _select_roster_groups(
+        stash_sorted,
+        total_minor_slots=total_minor_slots,
+        total_ir_slots=total_ir_slots,
+        total_bench_slots=total_bench_slots,
+        total_active_slots=total_active_slots,
+        active_floor_names=active_floor_names,
+        minor_candidate_players=minor_candidate_players,
+        ir_candidate_players=ir_candidate_players,
+        bench_candidate_players=bench_candidate_players,
+        active_candidate_players=active_candidate_players,
+    )
+    rostered = pd.concat(
+        [
+            center_groups["minor"],
+            center_groups["ir"],
+            center_groups["bench"],
+            center_groups["active"],
+        ],
+        ignore_index=True,
+    )
+    return float(rostered["StashScore"].iloc[-1]) if len(rostered) else 0.0
+
+
+def _minor_slot_residual_metrics(
+    player: str,
+    *,
+    years: List[int],
+    start_year: int,
+    hitter_ab_by_player_year: Dict[tuple[str, int], float],
+    pitcher_ip_by_player_year: Dict[tuple[str, int], float],
+) -> tuple[int, float]:
+    eta_offset: Optional[int] = None
+    total_ab = 0.0
+    total_ip = 0.0
+
+    for year in years:
+        year_int = int(year)
+        if year_int < int(start_year):
+            continue
+        ab = float(hitter_ab_by_player_year.get((player, year_int), 0.0))
+        ip = float(pitcher_ip_by_player_year.get((player, year_int), 0.0))
+        if eta_offset is None and (ab > 0.0 or ip > 0.0):
+            eta_offset = year_int - int(start_year)
+        total_ab += ab
+        total_ip += ip
+
+    if eta_offset is None:
+        eta_offset = len(years) + 1
+    projected_volume_score = total_ab + (3.0 * total_ip)
+    return int(eta_offset), float(projected_volume_score)
+
+
+def _apply_residual_minor_slot_cost(
+    centered: pd.DataFrame,
+    *,
+    raw_zero_mask: pd.Series,
+    zero_epsilon: float,
+    years: List[int],
+    start_year: int,
+    n_teams: int,
+    hitter_ab_by_player_year: Dict[tuple[str, int], float],
+    pitcher_ip_by_player_year: Dict[tuple[str, int], float],
+) -> tuple[pd.DataFrame, int]:
+    if "minor_eligible" not in centered.columns:
+        return centered, 0
+
+    centering_score = pd.to_numeric(centered["CenteringScore"], errors="coerce").fillna(0.0)
+    minor_eligible_series = _fillna_bool(centered["minor_eligible"])
+    residual_mask = raw_zero_mask & (centering_score.abs() <= float(zero_epsilon)) & minor_eligible_series
+    residual_candidates = centered.loc[residual_mask, ["Player"]].copy()
+    if residual_candidates.empty:
+        return centered, 0
+
+    negative_forced = pd.to_numeric(centered.loc[raw_zero_mask, "ForcedRosterValue"], errors="coerce").fillna(0.0)
+    negative_forced = negative_forced[negative_forced < -float(zero_epsilon)]
+    reference_cost = abs(float(negative_forced.max())) if not negative_forced.empty else 0.03
+    slot_cost_unit = float(min(max(reference_cost, 0.03), 0.12))
+    teams_count = max(int(n_teams), 1)
+
+    eta_offsets: List[int] = []
+    projected_volume_scores: List[float] = []
+    for player in residual_candidates["Player"].astype(str).tolist():
+        eta_offset, projected_volume_score = _minor_slot_residual_metrics(
+            player,
+            years=years,
+            start_year=int(start_year),
+            hitter_ab_by_player_year=hitter_ab_by_player_year,
+            pitcher_ip_by_player_year=pitcher_ip_by_player_year,
+        )
+        eta_offsets.append(int(eta_offset))
+        projected_volume_scores.append(float(projected_volume_score))
+
+    residual_candidates["MinorEtaOffset"] = eta_offsets
+    residual_candidates["MinorProjectedVolumeScore"] = projected_volume_scores
+    residual_candidates = residual_candidates.reset_index().rename(columns={"index": "row_index"}).sort_values(
+        ["MinorEtaOffset", "MinorProjectedVolumeScore", "Player"],
+        ascending=[True, False, True],
+        kind="stable",
+    ).reset_index(drop=True)
+
+    for rank, row in enumerate(residual_candidates.itertuples(index=False)):
+        eta_offset = int(row.MinorEtaOffset)
+        round_number = 1 + (rank // teams_count)
+        eta_multiplier = 1.0 + (0.15 * min(max(eta_offset, 0), 5))
+        round_multiplier = 1.0 + (0.05 * (round_number - 1))
+        minor_slot_cost_value = -float(slot_cost_unit * eta_multiplier * round_multiplier) - (1e-6 * float(rank))
+        centered.at[int(row.row_index), "MinorSlotCostValue"] = minor_slot_cost_value
+        centered.at[int(row.row_index), "MinorEtaOffset"] = float(eta_offset)
+        centered.at[int(row.row_index), "MinorProjectedVolumeScore"] = float(row.MinorProjectedVolumeScore)
+        centered.at[int(row.row_index), "CenteringScore"] = minor_slot_cost_value
+
+    return centered, int(len(residual_candidates))
+
+
+def _apply_dynasty_centering(
+    out: pd.DataFrame,
+    *,
+    forced_roster_values: List[float],
+    total_minor_slots: int,
+    total_ir_slots: int,
+    total_bench_slots: int,
+    total_active_slots: int,
+    active_floor_names: Set[str],
+    minor_candidate_players: Set[str],
+    ir_candidate_players: Set[str],
+    bench_candidate_players: Set[str],
+    active_candidate_players: Optional[Set[str]] = None,
+    n_teams: int = 1,
+    years: Optional[List[int]] = None,
+    start_year: int = 0,
+    hitter_ab_by_player_year: Optional[Dict[tuple[str, int], float]] = None,
+    pitcher_ip_by_player_year: Optional[Dict[tuple[str, int], float]] = None,
+    zero_epsilon: float = _CENTERING_ZERO_EPSILON,
+    zero_cluster_min_share: float = _DEEP_ROSTER_ZERO_CLUSTER_MIN_SHARE,
+) -> tuple[pd.DataFrame, Dict[str, float | int | bool | str]]:
+    if len(out) != len(forced_roster_values):
+        raise ValueError("forced_roster_values must align one-to-one with the output frame")
+
+    centered = out.copy()
+    valuation_years = [int(year) for year in (years or ([int(start_year)] if start_year else []))]
+    hitter_volume = hitter_ab_by_player_year or {}
+    pitcher_volume = pitcher_ip_by_player_year or {}
+    raw_series = pd.to_numeric(centered.get("RawDynastyValue"), errors="coerce").fillna(0.0)
+    centered["ForcedRosterValue"] = pd.Series(forced_roster_values, index=centered.index, dtype="float64")
+    centered["CenteringScore"] = raw_series.astype(float)
+    centered["MinorSlotCostValue"] = math.nan
+    centered["MinorEtaOffset"] = math.nan
+    centered["MinorProjectedVolumeScore"] = math.nan
+
+    raw_baseline_value = _centering_baseline_from_score(
+        centered,
+        score_col="RawDynastyValue",
+        total_minor_slots=total_minor_slots,
+        total_ir_slots=total_ir_slots,
+        total_bench_slots=total_bench_slots,
+        total_active_slots=total_active_slots,
+        active_floor_names=active_floor_names,
+        minor_candidate_players=minor_candidate_players,
+        ir_candidate_players=ir_candidate_players,
+        bench_candidate_players=bench_candidate_players,
+        active_candidate_players=active_candidate_players,
+    )
+    raw_zero_mask = raw_series.abs() <= float(zero_epsilon)
+    raw_zero_value_count = int(raw_zero_mask.sum())
+    raw_zero_share = (float(raw_zero_value_count) / float(len(centered))) if len(centered) else 0.0
+    deep_roster_zero_baseline_warning = bool(
+        abs(float(raw_baseline_value)) <= float(zero_epsilon)
+        and len(centered) > 0
+        and raw_zero_share >= float(zero_cluster_min_share)
+    )
+
+    centering_mode = "standard"
+    fallback_applied = False
+    residual_minor_slot_cost_applied = False
+    residual_zero_minor_candidate_count = 0
+    centering_score_baseline_value = float(raw_baseline_value)
+    if deep_roster_zero_baseline_warning:
+        centered.loc[raw_zero_mask, "CenteringScore"] = centered.loc[raw_zero_mask, "ForcedRosterValue"]
+        centering_score_baseline_value = _centering_baseline_from_score(
+            centered,
+            score_col="CenteringScore",
+            total_minor_slots=total_minor_slots,
+            total_ir_slots=total_ir_slots,
+            total_bench_slots=total_bench_slots,
+            total_active_slots=total_active_slots,
+            active_floor_names=active_floor_names,
+            minor_candidate_players=minor_candidate_players,
+            ir_candidate_players=ir_candidate_players,
+            bench_candidate_players=bench_candidate_players,
+            active_candidate_players=active_candidate_players,
+        )
+        centering_mode = "forced_roster"
+        fallback_applied = True
+        if abs(float(centering_score_baseline_value)) <= float(zero_epsilon):
+            centered, residual_zero_minor_candidate_count = _apply_residual_minor_slot_cost(
+                centered,
+                raw_zero_mask=raw_zero_mask,
+                zero_epsilon=float(zero_epsilon),
+                years=valuation_years,
+                start_year=int(start_year),
+                n_teams=int(n_teams),
+                hitter_ab_by_player_year=hitter_volume,
+                pitcher_ip_by_player_year=pitcher_volume,
+            )
+            if residual_zero_minor_candidate_count > 0:
+                centering_score_baseline_value = _centering_baseline_from_score(
+                    centered,
+                    score_col="CenteringScore",
+                    total_minor_slots=total_minor_slots,
+                    total_ir_slots=total_ir_slots,
+                    total_bench_slots=total_bench_slots,
+                    total_active_slots=total_active_slots,
+                    active_floor_names=active_floor_names,
+                    minor_candidate_players=minor_candidate_players,
+                    ir_candidate_players=ir_candidate_players,
+                    bench_candidate_players=bench_candidate_players,
+                    active_candidate_players=active_candidate_players,
+                )
+                centering_mode = "forced_roster_minor_cost"
+                residual_minor_slot_cost_applied = True
+
+    centered["DynastyValue"] = centered["CenteringScore"] - float(centering_score_baseline_value)
+    centered["CenteringMode"] = centering_mode
+    centered["ForcedRosterFallbackApplied"] = fallback_applied
+    centered["CenteringBaselineValue"] = float(raw_baseline_value)
+    centered["CenteringScoreBaselineValue"] = float(centering_score_baseline_value)
+    centered["CenteringBaselineMean"] = float(centering_score_baseline_value)
+
+    centering_score_series = pd.to_numeric(centered["CenteringScore"], errors="coerce").fillna(0.0)
+    dynasty_series = pd.to_numeric(centered["DynastyValue"], errors="coerce").fillna(0.0)
+    positive_value_count = int((dynasty_series > float(zero_epsilon)).sum())
+    centering_score_zero_player_count = int((centering_score_series.abs() <= float(zero_epsilon)).sum())
+    dynasty_zero_value_count = int((dynasty_series.abs() <= float(zero_epsilon)).sum())
+    valuation_diagnostics: Dict[str, float | int | bool | str] = {
+        "CenteringMode": centering_mode,
+        "ForcedRosterFallbackApplied": fallback_applied,
+        "ResidualMinorSlotCostApplied": residual_minor_slot_cost_applied,
+        "CenteringBaselineValue": float(raw_baseline_value),
+        "CenteringScoreBaselineValue": float(centering_score_baseline_value),
+        "PositiveValuePlayerCount": positive_value_count,
+        "ZeroValuePlayerCount": dynasty_zero_value_count,
+        "RawZeroValuePlayerCount": raw_zero_value_count,
+        "CenteringScoreZeroPlayerCount": centering_score_zero_player_count,
+        "DynastyZeroValuePlayerCount": dynasty_zero_value_count,
+        "ResidualZeroMinorCandidateCount": residual_zero_minor_candidate_count,
+        "deep_roster_zero_baseline_warning": deep_roster_zero_baseline_warning,
+    }
+    return centered, valuation_diagnostics
 
 
 def calculate_common_dynasty_values(
@@ -315,28 +877,35 @@ def calculate_common_dynasty_values(
                 )
             )
             profile_by_player[str(player)] = _position_profile(pos_text)
-    if lg.minor_slots and lg.minor_slots > 0:
-        elig_year_df = _resolve_minor_eligibility_by_year(
-            bat,
-            pit,
-            years=years,
-            hitter_usage_max=lg.minor_ab_max,
-            pitcher_usage_max=lg.minor_ip_max,
-            hitter_age_max=lg.minor_age_max_hit,
-            pitcher_age_max=lg.minor_age_max_pit,
-        )
-        start_minor = elig_year_df[elig_year_df["Year"] == int(start_year)][["Player", "minor_eligible"]].copy()
-        if start_minor.empty:
-            elig_df = pd.DataFrame(columns=["Player", "minor_eligible"])
-        else:
-            elig_df = start_minor.groupby("Player", as_index=False)["minor_eligible"].max()
-    else:
-        elig_year_df = pd.DataFrame(columns=["Player", "Year", "minor_eligible"])
+    elig_year_df = _resolve_minor_eligibility_by_year(
+        bat,
+        pit,
+        years=years,
+        hitter_usage_max=lg.minor_ab_max,
+        pitcher_usage_max=lg.minor_ip_max,
+        hitter_age_max=lg.minor_age_max_hit,
+        pitcher_age_max=lg.minor_age_max_pit,
+    )
+    start_minor = elig_year_df[elig_year_df["Year"] == int(start_year)][["Player", "minor_eligible"]].copy()
+    if start_minor.empty:
         elig_df = pd.DataFrame(columns=["Player", "minor_eligible"])
+    else:
+        elig_df = start_minor.groupby("Player", as_index=False)["minor_eligible"].max()
 
     active_per_team = sum(lg.hitter_slots.values()) + sum(lg.pitcher_slots.values())
+    total_active_slots = lg.n_teams * active_per_team
     total_minor_slots = lg.n_teams * lg.minor_slots
-    total_mlb_slots = lg.n_teams * (active_per_team + lg.bench_slots + lg.ir_slots)
+    total_bench_slots = lg.n_teams * lg.bench_slots
+    total_ir_slots = lg.n_teams * lg.ir_slots
+
+    hitter_ab_by_player_year = {
+        (str(row.Player), int(row.Year)): _coerce_projected_volume(row.AB)
+        for row in bat[["Player", "Year", "AB"]].itertuples(index=False)
+    }
+    pitcher_ip_by_player_year = {
+        (str(row.Player), int(row.Year)): _coerce_projected_volume(row.IP)
+        for row in pit[["Player", "Year", "IP"]].itertuples(index=False)
+    }
 
     # PASS 1: average-starter values to estimate who is rostered in a deep league.
     # Each year's context + player values are independent, so compute in parallel.
@@ -361,6 +930,7 @@ def calculate_common_dynasty_values(
         _non_vacant_player_names(start_ctx.get("assigned_hit"))
         | _non_vacant_player_names(start_ctx.get("assigned_pit"))
     )
+    active_candidate_players = _players_with_playing_time(bat, pit, [int(start_year)])
 
     all_year_avg = pd.concat(year_tables_avg, ignore_index=True)
     wide_avg = all_year_avg.pivot_table(index="Player", columns="Year", values="YearValue", aggfunc="max").reset_index()
@@ -377,58 +947,79 @@ def calculate_common_dynasty_values(
         if not elig_year_df.empty
         else {}
     )
-    def _stash_row(row: pd.Series) -> float:
-        player = str(row["Player"])
-        player_age = age_by_player.get(player)
-        player_profile = profile_by_player.get(player, "hitter")
-        vals: List[float] = []
-        for y in years:
-            v = row.get(y)
-            if pd.isna(v):
-                v = 0.0
-            v = float(v)
-            v *= _year_risk_multiplier(
-                age_start=player_age,
-                year=int(y),
-                start_year=int(start_year),
-                profile=player_profile,
-                enabled=bool(getattr(lg, "enable_age_risk_adjustment", False)),
-            )
-            v = _apply_negative_value_stash_rules(
-                v,
-                can_minor_stash=bool(
-                    lg.minor_slots
-                    and lg.minor_slots > 0
-                    and bool(minor_eligibility_by_year.get((player, int(y)), False))
-                ),
-                can_bench_stash=False,
-                bench_negative_penalty=1.0,
-            )
-            vals.append(v)
-        return dynasty_keep_or_drop_value(vals, years, lg.discount)
-
-    wide_avg["StashScore"] = wide_avg.apply(_stash_row, axis=1)
-    stash = wide_avg[["Player", "StashScore"]].copy()
-    stash = stash.merge(elig_df, on="Player", how="left")
-    stash["minor_eligible"] = _fillna_bool(stash["minor_eligible"])
-
-    stash_sorted = stash.sort_values("StashScore", ascending=False).reset_index(drop=True)
-    minors_pool = stash_sorted[stash_sorted["minor_eligible"]]
-    minors_sel = minors_pool.head(total_minor_slots)
-    minor_names = set(minors_sel["Player"])
-
-    remaining = stash_sorted[~stash_sorted["Player"].isin(minor_names)]
-    extra_minor_needed = max(total_minor_slots - len(minors_sel), 0)
-    extra_minors = remaining.head(extra_minor_needed)
-    extra_minor_names = set(extra_minors["Player"])
-
-    mlb_sel = _select_mlb_roster_with_active_floor(
-        stash_sorted,
-        excluded_players=minor_names | extra_minor_names,
-        total_mlb_slots=total_mlb_slots,
-        active_floor_names=active_floor_names,
+    minor_candidate_players = set(
+        elig_df.loc[_fillna_bool(elig_df.get("minor_eligible", pd.Series(dtype="boolean"))), "Player"].astype(str)
     )
-    rostered_names: Set[str] = set(mlb_sel["Player"]) | minor_names | extra_minor_names
+    empty_players: Set[str] = set()
+    stash_sorted_base, negative_year_players, ir_candidate_players = _build_stash_frame(
+        wide_avg,
+        years=years,
+        value_columns_by_year={int(year): int(year) for year in years},
+        start_year=int(start_year),
+        lg=lg,
+        age_by_player=age_by_player,
+        profile_by_player=profile_by_player,
+        minor_eligibility_by_year=minor_eligibility_by_year,
+        minor_stash_players=empty_players,
+        bench_stash_players=empty_players,
+        ir_stash_players=empty_players,
+        elig_df=elig_df,
+        hitter_ab_by_player_year=hitter_ab_by_player_year,
+        pitcher_ip_by_player_year=pitcher_ip_by_player_year,
+    )
+    provisional_groups = _select_roster_groups(
+        stash_sorted_base,
+        total_minor_slots=total_minor_slots,
+        total_ir_slots=total_ir_slots,
+        total_bench_slots=total_bench_slots,
+        total_active_slots=total_active_slots,
+        active_floor_names=active_floor_names,
+        minor_candidate_players=minor_candidate_players,
+        ir_candidate_players=ir_candidate_players,
+        bench_candidate_players=negative_year_players,
+        active_candidate_players=active_candidate_players,
+    )
+    provisional_minor_players = set(provisional_groups["minor"]["Player"].astype(str).tolist())
+    provisional_ir_players = set(provisional_groups["ir"]["Player"].astype(str).tolist()) & ir_candidate_players
+    provisional_bench_players = set(provisional_groups["bench"]["Player"].astype(str).tolist()) & negative_year_players
+
+    stash_sorted, final_negative_year_players, final_ir_candidate_players = _build_stash_frame(
+        wide_avg,
+        years=years,
+        value_columns_by_year={int(year): int(year) for year in years},
+        start_year=int(start_year),
+        lg=lg,
+        age_by_player=age_by_player,
+        profile_by_player=profile_by_player,
+        minor_eligibility_by_year=minor_eligibility_by_year,
+        minor_stash_players=provisional_minor_players,
+        bench_stash_players=provisional_bench_players,
+        ir_stash_players=provisional_ir_players,
+        elig_df=elig_df,
+        hitter_ab_by_player_year=hitter_ab_by_player_year,
+        pitcher_ip_by_player_year=pitcher_ip_by_player_year,
+    )
+    final_groups = _select_roster_groups(
+        stash_sorted,
+        total_minor_slots=total_minor_slots,
+        total_ir_slots=total_ir_slots,
+        total_bench_slots=total_bench_slots,
+        total_active_slots=total_active_slots,
+        active_floor_names=active_floor_names,
+        minor_candidate_players=minor_candidate_players,
+        ir_candidate_players=final_ir_candidate_players,
+        bench_candidate_players=final_negative_year_players,
+        active_candidate_players=active_candidate_players,
+    )
+    minor_stash_players = set(final_groups["minor"]["Player"].astype(str).tolist()) & minor_candidate_players
+    ir_stash_players = set(final_groups["ir"]["Player"].astype(str).tolist()) & final_ir_candidate_players
+    bench_stash_players = set(final_groups["bench"]["Player"].astype(str).tolist()) & final_negative_year_players
+    rostered_names: Set[str] = (
+        set(final_groups["active"]["Player"].astype(str).tolist())
+        | set(final_groups["bench"]["Player"].astype(str).tolist())
+        | set(final_groups["ir"]["Player"].astype(str).tolist())
+        | set(final_groups["minor"]["Player"].astype(str).tolist())
+    )
 
     # PASS 2: replacement-level per-year values from the unrostered pool.
     # By default, replacement baselines are frozen from start_year.
@@ -535,60 +1126,75 @@ def calculate_common_dynasty_values(
     #   - Otherwise, negative years *do* count as a cost if you keep the player, but you can always drop
     #     the player permanently for 0 (so truly droppable players won't go negative overall).
     raw_vals: List[float] = []
+    forced_roster_vals: List[float] = []
+    raw_negative_year_players: Set[str] = set()
+    raw_ir_candidate_players: Set[str] = set()
     for _, r in out.iterrows():
         player = str(r.get("Player") or "")
         player_age = age_by_player.get(player)
         player_profile = profile_by_player.get(player, "hitter")
 
         vals: List[float] = []
+        has_negative_year = False
+        has_ir_candidate_year = False
         for y in years:
             v = r.get(f"Value_{y}")
             if pd.isna(v):
                 v = 0.0
-            v = float(v)
-            v *= _year_risk_multiplier(
-                age_start=player_age,
+            adjusted = _adjust_dynasty_year_value(
+                float(v),
+                player=player,
                 year=int(y),
                 start_year=int(start_year),
+                age_start=player_age,
                 profile=player_profile,
-                enabled=bool(getattr(lg, "enable_age_risk_adjustment", False)),
+                lg=lg,
+                minor_eligibility_by_year=minor_eligibility_by_year,
+                minor_stash_players=minor_stash_players,
+                bench_stash_players=bench_stash_players,
+                ir_stash_players=ir_stash_players,
+                hitter_ab_by_player_year=hitter_ab_by_player_year,
+                pitcher_ip_by_player_year=pitcher_ip_by_player_year,
             )
-            v = _apply_negative_value_stash_rules(
-                v,
-                can_minor_stash=bool(
-                    lg.minor_slots
-                    and lg.minor_slots > 0
-                    and bool(minor_eligibility_by_year.get((player, int(y)), False))
-                ),
-                can_bench_stash=False,
-                bench_negative_penalty=1.0,
-            )
-            vals.append(v)
+            vals.append(adjusted)
+            if adjusted < 0.0:
+                has_negative_year = True
+                if _is_near_zero_playing_time(
+                    player,
+                    int(y),
+                    hitter_ab_by_player_year=hitter_ab_by_player_year,
+                    pitcher_ip_by_player_year=pitcher_ip_by_player_year,
+                ):
+                    has_ir_candidate_year = True
 
         raw_vals.append(dynasty_keep_or_drop_value(vals, years, lg.discount))
+        forced_roster_vals.append(_forced_roster_value(vals, years, lg.discount))
+        if has_negative_year:
+            raw_negative_year_players.add(player)
+        if has_ir_candidate_year:
+            raw_ir_candidate_players.add(player)
 
     out["RawDynastyValue"] = raw_vals
 
     # Centering: replacement-level roster cutoff with minors reserved first.
-    out_sorted = out.sort_values("RawDynastyValue", ascending=False).reset_index(drop=True)
-    minors_pool = out_sorted[out_sorted["minor_eligible"]]
-    minors_sel = minors_pool.head(total_minor_slots)
-    minor_names = set(minors_sel["Player"])
-
-    remaining = out_sorted[~out_sorted["Player"].isin(minor_names)]
-    extra_minor_needed = max(total_minor_slots - len(minors_sel), 0)
-    extra_minors = remaining.head(extra_minor_needed)
-    extra_minor_names = set(extra_minors["Player"])
-
-    remaining = remaining[~remaining["Player"].isin(extra_minor_names)]
-    mlb_sel = remaining.head(total_mlb_slots)
-
-    rostered = pd.concat([minors_sel, extra_minors, mlb_sel], ignore_index=True)
-    baseline_value = float(rostered["RawDynastyValue"].iloc[-1]) if len(rostered) else 0.0
-
-    out["DynastyValue"] = out["RawDynastyValue"] - baseline_value
-    out["CenteringBaselineValue"] = baseline_value
-    out["CenteringBaselineMean"] = baseline_value
+    out, valuation_diagnostics = _apply_dynasty_centering(
+        out,
+        forced_roster_values=forced_roster_vals,
+        total_minor_slots=total_minor_slots,
+        total_ir_slots=total_ir_slots,
+        total_bench_slots=total_bench_slots,
+        total_active_slots=total_active_slots,
+        active_floor_names=active_floor_names,
+        minor_candidate_players=minor_candidate_players,
+        ir_candidate_players=raw_ir_candidate_players,
+        bench_candidate_players=raw_negative_year_players,
+        active_candidate_players=active_candidate_players,
+        n_teams=lg.n_teams,
+        years=years,
+        start_year=int(start_year),
+        hitter_ab_by_player_year=hitter_ab_by_player_year,
+        pitcher_ip_by_player_year=pitcher_ip_by_player_year,
+    )
 
     # Proportional per-stat dynasty attribution.
     # Only include SGPs from years where the player is above replacement
@@ -629,6 +1235,7 @@ def calculate_common_dynasty_values(
 
     out = out.sort_values("DynastyValue", ascending=False).reset_index(drop=True)
     out = _attach_identity_columns_to_output(out, identity_lookup)
+    out.attrs["valuation_diagnostics"] = valuation_diagnostics
 
     if not return_details:
         return out

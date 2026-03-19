@@ -62,6 +62,11 @@ function makeDefaultProps() {
       sgp_epsilon_ratio: 0.0015,
       enable_playing_time_reliability: false,
       enable_age_risk_adjustment: false,
+      enable_prospect_risk_adjustment: false,
+      enable_bench_stash_relief: false,
+      bench_negative_penalty: 0.55,
+      enable_ir_stash_relief: false,
+      ir_negative_penalty: 0.2,
       enable_replacement_blend: false,
       replacement_blend_alpha: 0.7,
       bench: 5,
@@ -78,6 +83,7 @@ function makeDefaultProps() {
       points_rules: {},
     },
     state: {
+      calculationNotice: "",
       canSavePreset: false,
       hittersPerTeam: 10,
       isPointsMode: false,
@@ -142,6 +148,7 @@ describe("DynastyCalculatorSidebar", () => {
     const buttons = Array.from(container.querySelectorAll("button")).map(b => b.textContent);
     expect(buttons).toContain("Run 12-Team 5x5 Roto");
     expect(buttons).toContain("Run 12-Team Points");
+    expect(buttons).toContain("Run 12-Team Deep Dynasty");
     cleanup();
   });
 
@@ -375,6 +382,16 @@ describe("DynastyCalculatorSidebar", () => {
     );
     const statusEl = container.querySelector(".calc-preset-status.error");
     expect(statusEl).not.toBeNull();
+    cleanup();
+  });
+
+  it("renders calculation notice when provided", () => {
+    const props = makeDefaultProps();
+    props.state.calculationNotice = "Deep-roster fallback applied.";
+    const { container, cleanup } = renderToContainer(
+      <DynastyCalculatorSidebar {...props} />
+    );
+    expect(container.textContent).toContain("Deep-roster fallback applied.");
     cleanup();
   });
 

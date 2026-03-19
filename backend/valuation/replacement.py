@@ -9,6 +9,9 @@ import pandas as pd
 
 try:
     from backend.valuation.credit_guards import (
+        _apply_hitter_playing_time_reliability_guard as _apply_hitter_playing_time_reliability_guard,
+    )
+    from backend.valuation.credit_guards import (
         _apply_low_volume_non_ratio_positive_guard as _apply_low_volume_non_ratio_positive_guard,
     )
     from backend.valuation.credit_guards import (
@@ -42,6 +45,9 @@ try:
     )
 except ImportError:
     from valuation.credit_guards import (  # type: ignore[no-redef]
+        _apply_hitter_playing_time_reliability_guard as _apply_hitter_playing_time_reliability_guard,
+    )
+    from valuation.credit_guards import (
         _apply_low_volume_non_ratio_positive_guard as _apply_low_volume_non_ratio_positive_guard,
     )
     from valuation.credit_guards import (
@@ -204,6 +210,13 @@ def compute_year_player_values_vs_replacement(
             base_hit_cats = common_hit_category_totals({col: float(base_tot[col]) for col in HIT_COMPONENT_COLS})
             new_hit_cats = common_hit_category_totals({col: float(new_tot[col]) for col in HIT_COMPONENT_COLS})
             delta = {cat: float(new_hit_cats.get(cat, 0.0) - base_hit_cats.get(cat, 0.0)) for cat in hit_categories}
+            if bool(getattr(lg, "enable_playing_time_reliability", False)):
+                _apply_hitter_playing_time_reliability_guard(
+                    delta,
+                    hit_categories=hit_categories,
+                    hitter_ab=_coerce_non_negative_float(row.get("AB", 0.0)),
+                    slot_ab_reference=_coerce_non_negative_float(b_avg.get("AB", 0.0)),
+                )
 
             val = 0.0
             stat_sgps: Dict[str, float] = {}

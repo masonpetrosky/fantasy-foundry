@@ -22,7 +22,10 @@ export function MethodologySection(): React.ReactElement {
           </li>
           <li>
             Aggregate yearly values into <code>RawDynastyValue</code> with discounting, then center at
-            the replacement roster cutoff to produce <code>DynastyValue</code>.
+            the replacement roster cutoff to produce <code>DynastyValue</code>. In very deep leagues where
+            the normal cutoff collapses to raw value 0, the calculator applies a forced-roster fallback to
+            separate the fringe, and can add a small minors-slot scarcity cost when zero-value MiLB stashes
+            still tie at the cutoff.
           </li>
         </ol>
         <p><strong>Core equations:</strong></p>
@@ -35,6 +38,19 @@ export function MethodologySection(): React.ReactElement {
           </li>
           <li>
             <code>DynastyValue = RawDynastyValue - CenteringBaselineValue</code>
+          </li>
+          <li>
+            Deep-roster fallback:
+            {" "}
+            <code>CenteringScore = RawDynastyValue</code> for positive raw values, otherwise
+            {" "}
+            <code>ForcedRosterValue = v_0 + discount ** gap * keep_or_drop(v_1...)</code>.
+          </li>
+          <li>
+            Residual MiLB stash pricing:
+            {" "}
+            zero-value minor-eligible fringe players can receive a small negative slot-cost score based on
+            ETA and projected future volume so the deep-league cutoff does not remain pinned at 0.
           </li>
         </ul>
         <p><strong>Roto mode (SGP) math:</strong></p>

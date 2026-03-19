@@ -186,6 +186,11 @@ function buildValidRotoSettings(overrides: Record<string, unknown> = {}): Record
     sgp_epsilon_ratio: 0.0015,
     enable_playing_time_reliability: false,
     enable_age_risk_adjustment: false,
+    enable_prospect_risk_adjustment: false,
+    enable_bench_stash_relief: false,
+    bench_negative_penalty: 0.55,
+    enable_ir_stash_relief: false,
+    ir_negative_penalty: 0.2,
     enable_replacement_blend: false,
     replacement_blend_alpha: 0.7,
     start_year: 2026,
@@ -203,6 +208,9 @@ describe("buildCalculatorPayload", () => {
     expect(result.payload).toBeDefined();
     expect(result.payload!.scoring_mode).toBe("roto");
     expect(result.payload!.teams).toBe(12);
+    expect(result.payload!.enable_prospect_risk_adjustment).toBe(false);
+    expect(result.payload!.bench_negative_penalty).toBe(0.55);
+    expect(result.payload!.ir_negative_penalty).toBe(0.2);
   });
 
   it("returns error for invalid scoring mode", () => {
@@ -245,6 +253,16 @@ describe("buildCalculatorPayload", () => {
   it("returns error when start_year not in available years", () => {
     const result = buildCalculatorPayload(buildValidRotoSettings({ start_year: 2099 }), [2026, 2027], {});
     expect(result.error).toMatch(/start year/i);
+  });
+
+  it("returns error when bench penalty is outside zero to one", () => {
+    const result = buildCalculatorPayload(buildValidRotoSettings({ bench_negative_penalty: 1.5 }), [2026], {});
+    expect(result.error).toMatch(/bench stash penalty/i);
+  });
+
+  it("returns error when IR penalty is outside zero to one", () => {
+    const result = buildCalculatorPayload(buildValidRotoSettings({ ir_negative_penalty: -0.1 }), [2026], {});
+    expect(result.error).toMatch(/IR stash penalty/i);
   });
 
   it("returns error when roto mode has no hitting categories", () => {

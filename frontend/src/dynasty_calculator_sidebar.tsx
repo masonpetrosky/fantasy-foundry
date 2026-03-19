@@ -9,6 +9,7 @@ import type { TierLimits } from "./premium";
 import type { UseFantraxLeagueResult } from "./hooks/useFantraxLeague";
 
 interface SidebarState {
+  calculationNotice: string;
   canSavePreset: boolean;
   hittersPerTeam: number;
   isPointsMode: boolean;
@@ -72,6 +73,7 @@ export function DynastyCalculatorSidebar({
   fantrax,
 }: DynastyCalculatorSidebarProps): React.ReactElement {
   const {
+    calculationNotice,
     canSavePreset,
     hittersPerTeam,
     isPointsMode,
@@ -165,7 +167,16 @@ export function DynastyCalculatorSidebar({
           >
             Run 12-Team Points
           </button>
+          <button
+            type="button"
+            className="calc-secondary-btn"
+            onClick={() => applyQuickStartAndRun("deep")}
+            disabled={loading}
+          >
+            Run 12-Team Deep Dynasty
+          </button>
         </div>
+        <p className="calc-note">Deep dynasty preset matches a 20-year 12-team 6x6 roto with large bench, minors, and IR depth.</p>
       </div>
 
       <div className="calc-section">
@@ -333,6 +344,74 @@ export function DynastyCalculatorSidebar({
       </div>
 
       <div className="calc-section">
+        <p className="calc-section-title">Dynasty Modeling</p>
+        <p className="calc-note">Optional realism adjustments for prospect uncertainty and stash economics in deeper keeper formats.</p>
+        <div className="calc-checkbox-grid">
+          <label className="calc-checkbox-option">
+            <input
+              type="checkbox"
+              checked={Boolean(settings.enable_prospect_risk_adjustment)}
+              onChange={e => update("enable_prospect_risk_adjustment", e.target.checked)}
+            />
+            <span>Prospect Risk Adjustment</span>
+          </label>
+          <label className="calc-checkbox-option">
+            <input
+              type="checkbox"
+              checked={Boolean(settings.enable_bench_stash_relief)}
+              onChange={e => update("enable_bench_stash_relief", e.target.checked)}
+            />
+            <span>Bench Stash Relief</span>
+          </label>
+          <label className="calc-checkbox-option">
+            <input
+              type="checkbox"
+              checked={Boolean(settings.enable_ir_stash_relief)}
+              onChange={e => update("enable_ir_stash_relief", e.target.checked)}
+            />
+            <span>IR Stash Relief</span>
+          </label>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="calc-bench-negative-penalty">
+              Bench Penalty
+              <CalcTooltip label="Bench Penalty">
+                Scales negative holding costs for bench-stashed players. Lower values mean bench slots absorb more of the pain.
+              </CalcTooltip>
+            </label>
+            <input
+              id="calc-bench-negative-penalty"
+              type="number"
+              value={settings.bench_negative_penalty}
+              onChange={e => update("bench_negative_penalty", e.target.value)}
+              min="0"
+              max="1"
+              step="0.05"
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="calc-ir-negative-penalty">
+              IR Penalty
+              <CalcTooltip label="IR Penalty">
+                Scales negative holding costs for near-zero playing-time seasons that can sit on IR.
+              </CalcTooltip>
+            </label>
+            <input
+              id="calc-ir-negative-penalty"
+              type="number"
+              value={settings.ir_negative_penalty}
+              onChange={e => update("ir_negative_penalty", e.target.value)}
+              min="0"
+              max="1"
+              step="0.05"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="calc-section">
         <p className="calc-section-title">Presets And Sharing</p>
         <div className="form-row">
           <div className="form-group">
@@ -474,6 +553,11 @@ export function DynastyCalculatorSidebar({
               ? `Fix settings: ${validationError}`
               : status || (validationWarning ? `Warning: ${validationWarning}` : "")}
         </div>
+        {calculationNotice && (
+          <p className="calc-note" role="status" aria-live="polite">
+            {calculationNotice}
+          </p>
+        )}
       </div>
     </div>
   );

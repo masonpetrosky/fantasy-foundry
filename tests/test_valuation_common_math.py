@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from backend.valuation import common_math
+from backend.valuation import replacement as replacement_math
 from backend.valuation.models import PIT_COMPONENT_COLS, CommonDynastyRotoSettings
 
 pytestmark = pytest.mark.valuation
@@ -338,6 +339,59 @@ def test_replacement_and_vs_replacement_paths_smoke() -> None:
     assert len(pit_vals) == 1
 
 
+def test_compute_year_player_values_applies_hitter_reliability_guard_once(monkeypatch) -> None:
+    bat, pit = _sample_common_frames()
+    lg = CommonDynastyRotoSettings(
+        n_teams=1,
+        sims_for_sgp=2,
+        hitter_slots={"UT": 1},
+        pitcher_slots={"P": 1},
+        bench_slots=0,
+        minor_slots=0,
+        ir_slots=0,
+        ip_min=0.0,
+        ip_max=180.0,
+        enable_playing_time_reliability=True,
+    )
+    ctx = common_math.compute_year_context(2026, bat, pit, lg, rng_seed=13)
+    calls: list[float] = []
+
+    def fake_guard(delta, *, hit_categories, hitter_ab, slot_ab_reference) -> None:
+        calls.append(float(hitter_ab))
+
+    monkeypatch.setattr(common_math, "_apply_hitter_playing_time_reliability_guard", fake_guard)
+    common_math.compute_year_player_values(ctx, lg)
+
+    assert calls == [540.0]
+
+
+def test_vs_replacement_path_applies_hitter_reliability_guard_once(monkeypatch) -> None:
+    bat, pit = _sample_common_frames()
+    lg = CommonDynastyRotoSettings(
+        n_teams=1,
+        sims_for_sgp=2,
+        hitter_slots={"UT": 1},
+        pitcher_slots={"P": 1},
+        bench_slots=0,
+        minor_slots=0,
+        ir_slots=0,
+        ip_min=0.0,
+        ip_max=180.0,
+        enable_playing_time_reliability=True,
+    )
+    ctx = common_math.compute_year_context(2026, bat, pit, lg, rng_seed=17)
+    repl_hit, repl_pit = common_math.compute_replacement_baselines(ctx, lg, rostered_players={"Nobody"}, n_repl=1)
+    calls: list[float] = []
+
+    def fake_guard(delta, *, hit_categories, hitter_ab, slot_ab_reference) -> None:
+        calls.append(float(hitter_ab))
+
+    monkeypatch.setattr(replacement_math, "_apply_hitter_playing_time_reliability_guard", fake_guard)
+    replacement_math.compute_year_player_values_vs_replacement(ctx, lg, repl_hit, repl_pit)
+
+    assert calls == [540.0]
+
+
 def test_zscore_returns_zeros_when_all_equal() -> None:
     s = pd.Series([5.0, 5.0, 5.0])
     result = common_math._zscore(s)
@@ -655,3 +709,84 @@ def test_build_calculation_explanations_no_stat_dynasty_for_points_mode() -> Non
 
     ex = explanations["test-player"]
     assert "stat_dynasty_contributions" not in ex
+
+
+def test_build_calculation_explanations_include_centering_metadata() -> None:
+    from backend.core.calculator_helpers import build_calculation_explanations
+
+    out = pd.DataFrame([{
+        "Player": "Test Player",
+        "PlayerKey": "test-player",
+        "EntityKey": "test-player",
+        "Team": "AAA",
+        "Pos": "1B",
+        "DynastyValue": 1.8,
+        "RawDynastyValue": 0.0,
+        "CenteringMode": "forced_roster",
+        "ForcedRosterFallbackApplied": True,
+        "CenteringScore": -0.2,
+        "ForcedRosterValue": -0.2,
+        "CenteringBaselineValue": 0.0,
+        "CenteringScoreBaselineValue": -2.0,
+        "Value_2026": -1.5,
+        "Value_2027": 2.0,
+    }])
+
+    explanations = build_calculation_explanations(
+        out,
+        settings={"scoring_mode": "roto", "discount": 0.94},
+        player_key_col="PlayerKey",
+        player_entity_key_col="EntityKey",
+        normalize_player_key_fn=lambda x: str(x).lower().replace(" ", "-"),
+        numeric_or_zero_fn=lambda v: float(v) if v is not None and not pd.isna(v) else 0.0,
+        value_col_sort_key_fn=lambda col: (0, int(col.split("_")[1]) if "_" in col else 0),
+    )
+
+    ex = explanations["test-player"]
+    assert ex["centering"]["mode"] == "forced_roster"
+    assert ex["centering"]["fallback_applied"] is True
+    assert math.isclose(ex["centering"]["score"], -0.2)
+    assert math.isclose(ex["centering"]["baseline_value"], -2.0)
+    assert math.isclose(ex["centering"]["raw_baseline_value"], 0.0)
+    assert math.isclose(ex["centering"]["forced_roster_value"], -0.2)
+
+
+def test_build_calculation_explanations_include_residual_minor_slot_metadata() -> None:
+    from backend.core.calculator_helpers import build_calculation_explanations
+
+    out = pd.DataFrame([{
+        "Player": "Soon Prospect",
+        "PlayerKey": "soon-prospect",
+        "EntityKey": "soon-prospect",
+        "Team": "AAA",
+        "Pos": "OF",
+        "DynastyValue": 0.036,
+        "RawDynastyValue": 0.0,
+        "CenteringMode": "forced_roster_minor_cost",
+        "ForcedRosterFallbackApplied": True,
+        "CenteringScore": -0.138,
+        "ForcedRosterValue": 0.0,
+        "CenteringBaselineValue": 0.0,
+        "CenteringScoreBaselineValue": -0.174001,
+        "MinorSlotCostValue": -0.138,
+        "MinorEtaOffset": 1.0,
+        "MinorProjectedVolumeScore": 10.0,
+        "Value_2026": 0.0,
+        "Value_2027": 0.0,
+    }])
+
+    explanations = build_calculation_explanations(
+        out,
+        settings={"scoring_mode": "roto", "discount": 0.94},
+        player_key_col="PlayerKey",
+        player_entity_key_col="EntityKey",
+        normalize_player_key_fn=lambda x: str(x).lower().replace(" ", "-"),
+        numeric_or_zero_fn=lambda v: float(v) if v is not None and not pd.isna(v) else 0.0,
+        value_col_sort_key_fn=lambda col: (0, int(col.split("_")[1]) if "_" in col else 0),
+    )
+
+    ex = explanations["soon-prospect"]
+    assert ex["centering"]["mode"] == "forced_roster_minor_cost"
+    assert math.isclose(ex["centering"]["minor_slot_cost_value"], -0.138)
+    assert ex["centering"]["minor_eta_offset"] == 1
+    assert math.isclose(ex["centering"]["minor_projected_volume_score"], 10.0)

@@ -553,6 +553,8 @@ const KNOWN_CALCULATOR_KEYS = new Set([
   "mode", "scoring_mode", "two_way", "sgp_denominator_mode",
   "sgp_winsor_low_pct", "sgp_winsor_high_pct", "sgp_epsilon_counting", "sgp_epsilon_ratio",
   "enable_playing_time_reliability", "enable_age_risk_adjustment",
+  "enable_prospect_risk_adjustment", "enable_bench_stash_relief", "bench_negative_penalty",
+  "enable_ir_stash_relief", "ir_negative_penalty",
   "enable_replacement_blend", "replacement_blend_alpha",
   "teams", "sims", "horizon", "discount",
   "hit_c", "hit_1b", "hit_2b", "hit_3b", "hit_ss", "hit_ci", "hit_mi", "hit_of", "hit_ut",

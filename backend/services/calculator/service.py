@@ -34,6 +34,11 @@ class CalculateRequest(BaseModel):
     sgp_epsilon_ratio: float = Field(default=0.0015, ge=0.0, le=1000.0)
     enable_playing_time_reliability: bool = False
     enable_age_risk_adjustment: bool = False
+    enable_prospect_risk_adjustment: bool = False
+    enable_bench_stash_relief: bool = False
+    bench_negative_penalty: float = Field(default=0.55, ge=0.0, le=1.0)
+    enable_ir_stash_relief: bool = False
+    ir_negative_penalty: float = Field(default=0.20, ge=0.0, le=1.0)
     enable_replacement_blend: bool = False
     replacement_blend_alpha: float = Field(default=0.70, ge=0.0, le=1.0)
     teams: int = Field(default=12, ge=2, le=30)
@@ -378,6 +383,11 @@ class CalculatorService:
                         sgp_epsilon_ratio=req.sgp_epsilon_ratio,
                         enable_playing_time_reliability=req.enable_playing_time_reliability,
                         enable_age_risk_adjustment=req.enable_age_risk_adjustment,
+                        enable_prospect_risk_adjustment=req.enable_prospect_risk_adjustment,
+                        enable_bench_stash_relief=req.enable_bench_stash_relief,
+                        bench_negative_penalty=req.bench_negative_penalty,
+                        enable_ir_stash_relief=req.enable_ir_stash_relief,
+                        ir_negative_penalty=req.ir_negative_penalty,
                         enable_replacement_blend=req.enable_replacement_blend,
                         replacement_blend_alpha=req.replacement_blend_alpha,
                         **self._ctx.roto_category_settings_from_dict(settings),
@@ -488,12 +498,16 @@ class CalculatorService:
 
             records = df.to_dict(orient="records")
             records = self._ctx.clean_records_for_json(records)
+            diagnostics = out.attrs.get("valuation_diagnostics", {})
+            if not isinstance(diagnostics, dict):
+                diagnostics = {}
 
             payload = {
                 "total": len(records),
                 "settings": settings,
                 "data": records,
                 "explanations": explanations,
+                "diagnostics": diagnostics,
             }
             self._ctx.result_cache_set(result_cache_key, payload)
             return payload
