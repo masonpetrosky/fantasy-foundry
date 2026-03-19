@@ -22,30 +22,28 @@ function renderToContainer(element: React.ReactElement): { container: HTMLDivEle
 }
 
 describe("CalcTooltip", () => {
+  function renderTooltip(): { container: HTMLDivElement; cleanup: () => void } {
+    return renderToContainer(<CalcTooltip label="Help">Tooltip content</CalcTooltip>);
+  }
+
   it("is exported as a function", () => {
     expect(typeof CalcTooltip).toBe("function");
   });
 
   it("renders the label", () => {
-    const { container, cleanup } = renderToContainer(
-      React.createElement(CalcTooltip, { label: "Help" }, "Tooltip content")
-    );
+    const { container, cleanup } = renderTooltip();
     expect(container.textContent).toContain("Help");
     cleanup();
   });
 
   it("does not show tooltip content initially", () => {
-    const { container, cleanup } = renderToContainer(
-      React.createElement(CalcTooltip, { label: "Help" }, "Tooltip content")
-    );
+    const { container, cleanup } = renderTooltip();
     expect(container.querySelector('[role="tooltip"]')).toBeNull();
     cleanup();
   });
 
   it("shows tooltip content when button is clicked", () => {
-    const { container, cleanup } = renderToContainer(
-      React.createElement(CalcTooltip, { label: "Help" }, "Tooltip content")
-    );
+    const { container, cleanup } = renderTooltip();
     const button = container.querySelector("button") as HTMLButtonElement;
     act(() => { button.click(); });
     expect(container.querySelector('[role="tooltip"]')).not.toBeNull();
@@ -54,9 +52,7 @@ describe("CalcTooltip", () => {
   });
 
   it("toggles tooltip on repeated clicks", () => {
-    const { container, cleanup } = renderToContainer(
-      React.createElement(CalcTooltip, { label: "Help" }, "Tooltip content")
-    );
+    const { container, cleanup } = renderTooltip();
     const button = container.querySelector("button") as HTMLButtonElement;
     act(() => { button.click(); });
     expect(container.querySelector('[role="tooltip"]')).not.toBeNull();
@@ -66,9 +62,7 @@ describe("CalcTooltip", () => {
   });
 
   it("sets aria-expanded on button", () => {
-    const { container, cleanup } = renderToContainer(
-      React.createElement(CalcTooltip, { label: "Help" }, "Tooltip content")
-    );
+    const { container, cleanup } = renderTooltip();
     const button = container.querySelector("button") as HTMLButtonElement;
     expect(button.getAttribute("aria-expanded")).toBe("false");
     act(() => { button.click(); });
@@ -77,9 +71,7 @@ describe("CalcTooltip", () => {
   });
 
   it("closes on Escape key", () => {
-    const { container, cleanup } = renderToContainer(
-      React.createElement(CalcTooltip, { label: "Help" }, "Tooltip content")
-    );
+    const { container, cleanup } = renderTooltip();
     const button = container.querySelector("button") as HTMLButtonElement;
     act(() => { button.click(); });
     expect(container.querySelector('[role="tooltip"]')).not.toBeNull();

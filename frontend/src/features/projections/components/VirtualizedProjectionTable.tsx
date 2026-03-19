@@ -4,6 +4,7 @@ import { SortableHeaderCell } from "../../../accessibility_components";
 
 const ESTIMATED_ROW_HEIGHT = 40;
 const OVERSCAN_COUNT = 5;
+type VirtualizedTableRowProps = React.ComponentPropsWithoutRef<"tr">;
 
 interface VirtualizedProjectionTableProps {
   cols: string[];
@@ -87,12 +88,19 @@ export const VirtualizedProjectionTable = React.memo(function VirtualizedProject
               </tr>
             )}
             {virtualItems.map(virtualRow => {
-              const row = tableRowsMarkup[virtualRow.index];
-              return React.cloneElement(row, {
-                key: row.key ?? virtualRow.index,
-                "data-index": virtualRow.index,
-                ref: rowVirtualizer.measureElement,
-              });
+              const row = tableRowsMarkup[virtualRow.index] as React.ReactElement<VirtualizedTableRowProps>;
+              const { children, ...rowProps } = row.props;
+
+              return (
+                <tr
+                  {...rowProps}
+                  key={row.key ?? virtualRow.index}
+                  data-index={virtualRow.index}
+                  ref={rowVirtualizer.measureElement}
+                >
+                  {children}
+                </tr>
+              );
             })}
             {paddingBottom > 0 && (
               <tr aria-hidden="true">

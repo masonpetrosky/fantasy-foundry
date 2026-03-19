@@ -6,6 +6,9 @@ const { act } = await import("react");
 
 const mod = await import("./useProjectionDeltas");
 const { useProjectionDeltas } = mod;
+type DeltaMap = import("./useProjectionDeltas").DeltaMap;
+type DeltaMover = import("./useProjectionDeltas").DeltaMover;
+type ProjectionDeltasResponse = import("./useProjectionDeltas").ProjectionDeltasResponse;
 
 interface HookResult<T> {
   current: T | null;
@@ -50,8 +53,8 @@ describe("useProjectionDeltas", () => {
 
   it("exported types can be imported (DeltaMap, DeltaMover interfaces)", () => {
     // TypeScript compile-time check: if these types didn't exist, the import would fail
-    const _deltaMapCheck: mod.DeltaMap = { "player:1": { composite_delta: 0.5 } };
-    const _deltaMoverCheck: mod.DeltaMover = {
+    const _deltaMapCheck: DeltaMap = { "player:1": { composite_delta: 0.5 } };
+    const _deltaMoverCheck: DeltaMover = {
       key: "k", player: "p", team: "t", pos: "OF", type: "hitter",
       deltas: { HR: 1 }, composite_delta: 0.5,
     };
@@ -77,7 +80,7 @@ describe("useProjectionDeltas", () => {
   });
 
   it("populates data after successful fetch", async () => {
-    const mockResponse: mod.ProjectionDeltasResponse = {
+    const mockResponse: ProjectionDeltasResponse = {
       risers: [{ key: "p1", player: "Player A", team: "NYY", pos: "1B", type: "hitter", deltas: { HR: 2 }, composite_delta: 1.5 }],
       fallers: [{ key: "p2", player: "Player B", team: "BOS", pos: "SP", type: "pitcher", deltas: { ERA: -0.5 }, composite_delta: -1.0 }],
       delta_map: { "p1": { composite_delta: 1.5 }, "p2": { composite_delta: -1.0 } },

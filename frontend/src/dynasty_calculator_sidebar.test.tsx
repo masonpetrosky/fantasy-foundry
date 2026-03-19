@@ -2,6 +2,7 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi, afterEach } from "vitest";
+import type { TierLimits } from "./premium";
 
 vi.mock("./dynasty_calculator_tooltip", () => ({
   CalcTooltip: ({ label, children }: { label: string; children: React.ReactNode }) =>
@@ -44,6 +45,7 @@ function makeDefaultProps() {
     meta: { years: [2026, 2027, 2028, 2029, 2030] },
     presets: {},
     settings: {
+      mode: "common",
       teams: 12,
       start_year: 2026,
       horizon: 10,
@@ -53,6 +55,15 @@ function makeDefaultProps() {
       sims: 300,
       ip_min: 1000,
       ip_max: null as string | null,
+      sgp_denominator_mode: "classic",
+      sgp_winsor_low_pct: 0.1,
+      sgp_winsor_high_pct: 0.9,
+      sgp_epsilon_counting: 0.15,
+      sgp_epsilon_ratio: 0.0015,
+      enable_playing_time_reliability: false,
+      enable_age_risk_adjustment: false,
+      enable_replacement_blend: false,
+      replacement_blend_alpha: 0.7,
       bench: 5,
       minors: 5,
       ir: 2,
@@ -88,7 +99,7 @@ function makeDefaultProps() {
       validationError: "",
       validationWarning: "",
       hasSuccessfulRun: false,
-      tierLimits: null,
+      tierLimits: null as TierLimits | null,
     },
     actions: {
       applyQuickStartAndRun: vi.fn(),

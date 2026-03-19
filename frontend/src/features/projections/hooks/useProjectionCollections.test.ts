@@ -2,6 +2,7 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react";
+import type { ProjectionRow } from "../../../app_state_storage";
 
 import {
   buildProjectionCompareHydrationRequest,
@@ -302,7 +303,7 @@ describe("mergeCompareRowsWithCap", () => {
   });
 
   it("skips null/invalid rows", () => {
-    const result = mergeCompareRowsWithCap({}, [null, undefined, "not-a-row" as unknown]);
+    const result = mergeCompareRowsWithCap({}, [null, undefined, "not-a-row" as unknown as ProjectionRow]);
     expect(Object.keys(result).length).toBe(0);
   });
 });

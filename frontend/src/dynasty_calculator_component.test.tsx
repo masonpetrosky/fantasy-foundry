@@ -2,16 +2,21 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
+import type { RunCalculationJobInput } from "./calculation_jobs";
+import type { TierLimits } from "./premium";
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockRunCalculationJob = vi.fn(() => Promise.resolve());
-const mockCancelCalculationJob = vi.fn(() => Promise.resolve());
+const { mockRunCalculationJob, mockCancelCalculationJob } = vi.hoisted(() => ({
+  mockRunCalculationJob: vi.fn((_input: RunCalculationJobInput) => Promise.resolve()),
+  mockCancelCalculationJob: vi.fn((_apiBase: unknown, _jobId: unknown) => Promise.resolve()),
+}));
+
 vi.mock("./calculation_jobs", () => ({
-  runCalculationJob: (...args: unknown[]) => mockRunCalculationJob(...args),
-  cancelCalculationJob: (...args: unknown[]) => mockCancelCalculationJob(...args),
+  runCalculationJob: (...args: Parameters<typeof mockRunCalculationJob>) => mockRunCalculationJob(...args),
+  cancelCalculationJob: (...args: Parameters<typeof mockCancelCalculationJob>) => mockCancelCalculationJob(...args),
 }));
 
 vi.mock("./analytics", () => ({
@@ -88,9 +93,18 @@ function makeDefaultProps() {
     onSettingsChange: vi.fn(),
     onRegisterQuickStartRunner: vi.fn(),
     onOpenMethodologyGlossary: vi.fn(),
-    tierLimits: null,
+    tierLimits: null as TierLimits | null,
     fantrax: null,
   };
+}
+
+function getRunCalculationJobInput(): RunCalculationJobInput {
+  const [input] = mockRunCalculationJob.mock.calls[0] ?? [];
+  expect(input).toBeDefined();
+  if (!input) {
+    throw new Error("Expected runCalculationJob to have been called.");
+  }
+  return input;
 }
 
 function getSidebarActions(): Record<string, (...args: unknown[]) => unknown> {
@@ -199,7 +213,7 @@ describe("DynastyCalculator component", () => {
 
   it("triggers run and transitions loading state", async () => {
     let resolveJob: () => void;
-    mockRunCalculationJob.mockImplementation(() => new Promise<void>(r => { resolveJob = r; }));
+    mockRunCalculationJob.mockImplementation((_input) => new Promise<void>(r => { resolveJob = r; }));
     const props = makeDefaultProps();
     ({ cleanup } = renderToContainer(React.createElement(DynastyCalculator, props)));
 
@@ -210,7 +224,7 @@ describe("DynastyCalculator component", () => {
     expect(getSidebarState().status).toBe("Submitting simulation...");
 
     // Simulate completion via the onCompleted callback
-    const jobCallArgs = mockRunCalculationJob.mock.calls[0][0] as Record<string, unknown>;
+    const jobCallArgs = getRunCalculationJobInput();
     const onCompleted = jobCallArgs.onCompleted as (result: Record<string, unknown>, meta?: Record<string, unknown>) => void;
     act(() => {
       onCompleted({ total: 250, data: [] }, { jobId: "job-1" });
@@ -224,7 +238,7 @@ describe("DynastyCalculator component", () => {
   });
 
   it("shows error status on run failure", async () => {
-    mockRunCalculationJob.mockImplementation(() => Promise.resolve());
+    mockRunCalculationJob.mockImplementation((_input) => Promise.resolve());
     const props = makeDefaultProps();
     ({ cleanup } = renderToContainer(React.createElement(DynastyCalculator, props)));
 
@@ -232,7 +246,7 @@ describe("DynastyCalculator component", () => {
       getSidebarActions().run();
     });
 
-    const jobCallArgs = mockRunCalculationJob.mock.calls[0][0] as Record<string, unknown>;
+    const jobCallArgs = getRunCalculationJobInput();
     const onError = jobCallArgs.onError as (message: string) => void;
     act(() => {
       onError("Timeout exceeded");
@@ -243,7 +257,7 @@ describe("DynastyCalculator component", () => {
   });
 
   it("aborts controller on unmount when a run is active", () => {
-    mockRunCalculationJob.mockImplementation(() => new Promise<void>(() => {}));
+    mockRunCalculationJob.mockImplementation((_input) => new Promise<void>(() => {}));
     const props = makeDefaultProps();
     ({ cleanup } = renderToContainer(React.createElement(DynastyCalculator, props)));
 
@@ -253,7 +267,7 @@ describe("DynastyCalculator component", () => {
     expect(getSidebarState().loading).toBe(true);
 
     // Simulate the job having set an active job id via the onStatus callback
-    const jobCallArgs = mockRunCalculationJob.mock.calls[0][0] as Record<string, unknown>;
+    const jobCallArgs = getRunCalculationJobInput();
     const activeJobIdRef = jobCallArgs.activeJobIdRef as { current: string };
     activeJobIdRef.current = "test-job-123";
 
@@ -268,7 +282,7 @@ describe("DynastyCalculator component", () => {
   });
 
   it("applies quick start and triggers run", () => {
-    mockRunCalculationJob.mockImplementation(() => Promise.resolve());
+    mockRunCalculationJob.mockImplementation((_input) => Promise.resolve());
     const props = makeDefaultProps();
     ({ cleanup } = renderToContainer(React.createElement(DynastyCalculator, props)));
 
@@ -299,7 +313,14 @@ describe("DynastyCalculator component", () => {
 
   it("enforces tier sims limit", () => {
     const props = makeDefaultProps();
-    props.tierLimits = { maxSims: 100, allowPointsMode: true, allowTradeAnalyzer: true } as Record<string, unknown>;
+    props.tierLimits = {
+      maxSims: 100,
+      allowExport: true,
+      allowPointsMode: true,
+      allowTradeAnalyzer: true,
+      allowCustomCategories: true,
+      allowCloudSync: true,
+    };
     ({ cleanup } = renderToContainer(React.createElement(DynastyCalculator, props)));
     // Default sims is 300 via buildDefaultCalculatorSettings; tier caps it to 100
     const lastSettingsCall = props.onSettingsChange.mock.calls[props.onSettingsChange.mock.calls.length - 1];
@@ -310,7 +331,14 @@ describe("DynastyCalculator component", () => {
 
   it("forces roto mode when points mode is disallowed by tier", () => {
     const props = makeDefaultProps();
-    props.tierLimits = { maxSims: 1000, allowPointsMode: false, allowTradeAnalyzer: false } as Record<string, unknown>;
+    props.tierLimits = {
+      maxSims: 1000,
+      allowExport: false,
+      allowPointsMode: false,
+      allowTradeAnalyzer: false,
+      allowCustomCategories: false,
+      allowCloudSync: false,
+    };
     ({ cleanup } = renderToContainer(React.createElement(DynastyCalculator, props)));
 
     // Try switching to points - should be forced back to roto
@@ -323,14 +351,14 @@ describe("DynastyCalculator component", () => {
   });
 
   it("handles cancelled calculation", () => {
-    mockRunCalculationJob.mockImplementation(() => Promise.resolve());
+    mockRunCalculationJob.mockImplementation((_input) => Promise.resolve());
     const props = makeDefaultProps();
     ({ cleanup } = renderToContainer(React.createElement(DynastyCalculator, props)));
 
     act(() => {
       getSidebarActions().run();
     });
-    const jobCallArgs = mockRunCalculationJob.mock.calls[0][0] as Record<string, unknown>;
+    const jobCallArgs = getRunCalculationJobInput();
     const onCancelled = jobCallArgs.onCancelled as () => void;
     act(() => {
       onCancelled();

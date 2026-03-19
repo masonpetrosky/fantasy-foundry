@@ -1,6 +1,7 @@
 import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import type { ComponentProps } from "react";
 import { describe, expect, it, vi, afterEach } from "vitest";
 
 vi.mock("./ui_components", () => ({
@@ -15,6 +16,10 @@ vi.mock("./formatting_utils", () => ({
 }));
 
 import { DynastyCalculatorResults } from "./dynasty_calculator_results";
+
+type ResultsState = ComponentProps<typeof DynastyCalculatorResults>["state"];
+type ResultsActions = ComponentProps<typeof DynastyCalculatorResults>["actions"];
+type ResultsRefs = ComponentProps<typeof DynastyCalculatorResults>["refs"];
 
 function renderToContainer(element: React.ReactElement): { container: HTMLDivElement; cleanup: () => void } {
   const container = document.createElement("div");
@@ -33,7 +38,7 @@ function renderToContainer(element: React.ReactElement): { container: HTMLDivEle
   };
 }
 
-function makeDefaultActions() {
+function makeDefaultActions(): ResultsActions {
   return {
     clearRankCompareRows: vi.fn(),
     clearRankFilters: vi.fn(),
@@ -55,7 +60,7 @@ function makeDefaultActions() {
   };
 }
 
-function makeDefaultState() {
+function makeDefaultState(): ResultsState {
   return {
     activeExplanation: null,
     compareYearCols: [],
@@ -88,7 +93,7 @@ function makeDefaultState() {
   };
 }
 
-function makeDefaultRefs() {
+function makeDefaultRefs(): ResultsRefs {
   return {
     handleRankScroll: vi.fn(),
     rankTableScrollRef: React.createRef<HTMLDivElement>(),
