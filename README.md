@@ -348,6 +348,24 @@ When you update the Excel file, re-run the preprocessing to regenerate the JSON 
 python preprocess.py
 ```
 
+For a full workbook refresh from a local file copy, prefer the helper script instead of manual overwrite plus `git add -A`:
+
+```bash
+python scripts/refresh_projection_workbook.py /mnt/c/path/to/"Dynasty Baseball Projections.xlsx" --stage
+```
+
+The `source_xlsx` argument accepts either a WSL path like `/mnt/c/...` or a Windows drive path like `C:\...`.
+
+If you already replaced `data/Dynasty Baseball Projections.xlsx` manually, you can reuse the in-repo workbook:
+
+```bash
+python scripts/refresh_projection_workbook.py --stage
+```
+
+The helper stages only the expected projection artifacts:
+`data/Dynasty Baseball Projections.xlsx`, `data/bat.json`, `data/pitch.json`, `data/bat_prev.json`,
+`data/pit_prev.json`, `data/meta.json`, and `data/dynasty_lookup.json`.
+
 `preprocess.py` now also builds `data/dynasty_lookup.json` by default so the first projections request does not need to recompute default dynasty values at runtime.
 If cache generation fails, `preprocess.py` exits non-zero so deploys do not silently ship without the precomputed lookup.
 

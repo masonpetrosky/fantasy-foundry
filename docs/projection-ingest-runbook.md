@@ -9,6 +9,16 @@ This process is intentionally manual for player-level updates:
 - Manually set league/roster metadata fields.
 - Regenerate JSON artifacts used by the app.
 
+If you already have a fully updated master workbook and just need to replace the repo copy, use:
+
+```bash
+python scripts/refresh_projection_workbook.py /mnt/c/path/to/"Dynasty Baseball Projections.xlsx" --stage
+```
+
+The helper accepts either a WSL path like `/mnt/c/...` or a Windows drive path like `C:\...`.
+
+That flow is for full-workbook replacement only. The rest of this runbook covers single-player append workflows.
+
 ## Files and Targets
 - Master workbook: `data/Dynasty Baseball Projections.xlsx`
 - Target sheets in master workbook: `Bat`, `Pitch`
