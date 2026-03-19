@@ -2,99 +2,146 @@
 
 from __future__ import annotations
 
-from typing import Dict, List
-
 import numpy as np
 import pandas as pd
 
 
+def _prepare_side_frame(df: pd.DataFrame, *, side: str) -> tuple[pd.DataFrame, list[str]]:
+    sgp_cols = [col for col in df.columns if col.startswith("SGP_")]
+    keep_cols = ["Player", "Year", "YearValue", "BestSlot", "Team", "Age", "Pos", *sgp_cols]
+    existing_cols = [col for col in keep_cols if col in df.columns]
+    frame = df[existing_cols].copy() if existing_cols else pd.DataFrame()
+
+    if "Player" not in frame.columns:
+        frame["Player"] = pd.Series(dtype=object)
+    if "Year" not in frame.columns:
+        frame["Year"] = pd.Series(dtype=object)
+
+    rename_map = {
+        "YearValue": f"YearValue_{side}",
+        "BestSlot": f"BestSlot_{side}",
+        "Team": f"Team_{side}",
+        "Age": f"Age_{side}",
+        "Pos": f"Pos_{side}",
+    }
+    sgp_categories: list[str] = []
+    for col in sgp_cols:
+        category = col[4:]
+        sgp_categories.append(category)
+        rename_map[col] = f"SGP_{side}_{category}"
+
+    return frame.rename(columns=rename_map), sgp_categories
+
+
+def _column_or_default(
+    frame: pd.DataFrame,
+    column: str,
+    *,
+    dtype: str,
+    fill_value: float | None = None,
+) -> pd.Series:
+    if column in frame.columns:
+        return frame[column]
+    if fill_value is None:
+        return pd.Series(index=frame.index, dtype=dtype)
+    return pd.Series(fill_value, index=frame.index, dtype=dtype)
+
+
 def combine_two_way(hit_vals: pd.DataFrame, pit_vals: pd.DataFrame, two_way: str) -> pd.DataFrame:
-    hit_sgp_cols = [c for c in hit_vals.columns if c.startswith("SGP_")]
-    pit_sgp_cols = [c for c in pit_vals.columns if c.startswith("SGP_")]
-    hit_merge_cols = ["Player", "Year", "YearValue", "BestSlot", "Team", "Age", "Pos"] + hit_sgp_cols
-    pit_merge_cols = ["Player", "Year", "YearValue", "BestSlot", "Team", "Age", "Pos"] + pit_sgp_cols
-    merged = pd.merge(
-        hit_vals[[c for c in hit_merge_cols if c in hit_vals.columns]],
-        pit_vals[[c for c in pit_merge_cols if c in pit_vals.columns]],
-        on=["Player", "Year"],
-        how="outer",
-        suffixes=("_hit", "_pit"),
+    hit_frame, hit_sgp_cats = _prepare_side_frame(hit_vals, side="hit")
+    pit_frame, pit_sgp_cats = _prepare_side_frame(pit_vals, side="pit")
+    merged = pd.merge(hit_frame, pit_frame, on=["Player", "Year"], how="outer")
+
+    all_sgp_cats = sorted(set(hit_sgp_cats) | set(pit_sgp_cats))
+
+    hit_values = pd.to_numeric(
+        _column_or_default(merged, "YearValue_hit", dtype="float64"),
+        errors="coerce",
+    )
+    pit_values = pd.to_numeric(
+        _column_or_default(merged, "YearValue_pit", dtype="float64"),
+        errors="coerce",
+    )
+    hit_missing = hit_values.isna()
+    pit_missing = pit_values.isna()
+    both_missing = hit_missing & pit_missing
+
+    hit_slots = _column_or_default(merged, "BestSlot_hit", dtype="object")
+    pit_slots = _column_or_default(merged, "BestSlot_pit", dtype="object")
+    hit_slot_values = hit_slots.to_numpy(dtype=object)
+    pit_slot_values = pit_slots.to_numpy(dtype=object)
+
+    if two_way == "sum":
+        year_values = hit_values.fillna(0.0) + pit_values.fillna(0.0)
+        year_values = year_values.where(~both_missing, np.nan)
+        combined_slots = hit_slots.astype("string").fillna("") + "+" + pit_slots.astype("string").fillna("")
+        best_slots = pd.Series(
+            np.where(
+                hit_missing.to_numpy(),
+                pit_slot_values,
+                np.where(
+                    pit_missing.to_numpy(),
+                    hit_slot_values,
+                    combined_slots.to_numpy(dtype=object),
+                ),
+            ),
+            index=merged.index,
+            dtype=object,
+        )
+    else:
+        choose_hit = pit_missing | ((~hit_missing) & (~pit_missing) & (hit_values >= pit_values))
+        year_values = pd.Series(
+            np.where(
+                hit_missing.to_numpy(),
+                pit_values.to_numpy(),
+                np.where(
+                    pit_missing.to_numpy(),
+                    hit_values.to_numpy(),
+                    np.where(choose_hit.to_numpy(), hit_values.to_numpy(), pit_values.to_numpy()),
+                ),
+            ),
+            index=merged.index,
+            dtype=float,
+        ).where(~both_missing, np.nan)
+        best_slots = pd.Series(
+            np.where(
+                hit_missing.to_numpy(),
+                pit_slot_values,
+                np.where(
+                    pit_missing.to_numpy(),
+                    hit_slot_values,
+                    np.where(choose_hit.to_numpy(), hit_slot_values, pit_slot_values),
+                ),
+            ),
+            index=merged.index,
+            dtype=object,
+        )
+
+    merged["YearValue"] = year_values
+    merged["BestSlot"] = best_slots
+    merged["Team"] = _column_or_default(merged, "Team_hit", dtype="object").combine_first(
+        _column_or_default(merged, "Team_pit", dtype="object")
+    )
+    merged["Pos"] = _column_or_default(merged, "Pos_hit", dtype="object").combine_first(
+        _column_or_default(merged, "Pos_pit", dtype="object")
+    )
+    merged["Age"] = _column_or_default(merged, "Age_hit", dtype="float64").combine_first(
+        _column_or_default(merged, "Age_pit", dtype="float64")
     )
 
-    hit_sgp_cat_set = {c[4:] for c in hit_sgp_cols}
-    pit_sgp_cat_set = {c[4:] for c in pit_sgp_cols}
-    all_sgp_cats = sorted(hit_sgp_cat_set | pit_sgp_cat_set)
-
-    def _get_sgp(r: pd.Series, cat: str, side: str) -> float:
-        """Get SGP value for a category from the merged row, handling suffix logic."""
-        # If the cat exists on both sides, pandas adds _hit/_pit suffixes
-        suffixed = f"SGP_{cat}_{side}"
-        if suffixed in r.index:
-            v = r[suffixed]
-            return float(v) if v is not None and not pd.isna(v) else 0.0
-        # If the cat exists only on one side, pandas keeps it unsuffixed
-        unsuffixed = f"SGP_{cat}"
-        if unsuffixed in r.index:
-            # Only return the value if this cat belongs to the requested side
-            if (side == "hit" and cat in hit_sgp_cat_set) or (side == "pit" and cat in pit_sgp_cat_set):
-                v = r[unsuffixed]
-                return float(v) if v is not None and not pd.isna(v) else 0.0
-        return 0.0
-
-    out_vals: List[float] = []
-    out_slots: List[object] = []
-    out_sgps: Dict[str, List[float]] = {cat: [] for cat in all_sgp_cats}
-
-    for _, r in merged.iterrows():
-        hv = r.get("YearValue_hit")
-        pv = r.get("YearValue_pit")
-
-        if pd.isna(hv) and pd.isna(pv):
-            out_vals.append(np.nan)
-            out_slots.append(None)
-            for cat in all_sgp_cats:
-                out_sgps[cat].append(0.0)
-            continue
-        if pd.isna(hv):
-            out_vals.append(float(pv))
-            out_slots.append(r.get("BestSlot_pit"))
-            for cat in all_sgp_cats:
-                out_sgps[cat].append(_get_sgp(r, cat, "pit"))
-            continue
-        if pd.isna(pv):
-            out_vals.append(float(hv))
-            out_slots.append(r.get("BestSlot_hit"))
-            for cat in all_sgp_cats:
-                out_sgps[cat].append(_get_sgp(r, cat, "hit"))
-            continue
-
-        hv = float(hv)
-        pv = float(pv)
-
+    for category in all_sgp_cats:
+        hit_sgp = pd.to_numeric(
+            _column_or_default(merged, f"SGP_hit_{category}", dtype="float64", fill_value=0.0),
+            errors="coerce",
+        ).fillna(0.0)
+        pit_sgp = pd.to_numeric(
+            _column_or_default(merged, f"SGP_pit_{category}", dtype="float64", fill_value=0.0),
+            errors="coerce",
+        ).fillna(0.0)
         if two_way == "sum":
-            out_vals.append(hv + pv)
-            out_slots.append(f"{r.get('BestSlot_hit')}+{r.get('BestSlot_pit')}")
-            for cat in all_sgp_cats:
-                out_sgps[cat].append(_get_sgp(r, cat, "hit") + _get_sgp(r, cat, "pit"))
-        else:  # "max"
-            if hv >= pv:
-                out_vals.append(hv)
-                out_slots.append(r.get("BestSlot_hit"))
-                for cat in all_sgp_cats:
-                    out_sgps[cat].append(_get_sgp(r, cat, "hit"))
-            else:
-                out_vals.append(pv)
-                out_slots.append(r.get("BestSlot_pit"))
-                for cat in all_sgp_cats:
-                    out_sgps[cat].append(_get_sgp(r, cat, "pit"))
-
-    merged["YearValue"] = out_vals
-    merged["BestSlot"] = out_slots
-    merged["Team"] = merged["Team_hit"].combine_first(merged["Team_pit"])
-    merged["Pos"] = merged["Pos_hit"].combine_first(merged["Pos_pit"])
-    merged["Age"] = merged["Age_hit"].combine_first(merged["Age_pit"])
-    for cat in all_sgp_cats:
-        merged[f"SGP_{cat}"] = out_sgps[cat]
+            merged[f"SGP_{category}"] = hit_sgp + pit_sgp
+        else:
+            merged[f"SGP_{category}"] = np.where(choose_hit.to_numpy(), hit_sgp.to_numpy(), pit_sgp.to_numpy())
 
     base_cols = ["Player", "Year", "YearValue", "BestSlot", "Team", "Pos", "Age"]
-    return merged[base_cols + [f"SGP_{cat}" for cat in all_sgp_cats]]
+    return merged[base_cols + [f"SGP_{category}" for category in all_sgp_cats]]

@@ -24,22 +24,10 @@ except ImportError:
         CommonDynastyRotoSettings,
     )
 
-try:
-    from backend.valuation.team_stats import (
-        common_apply_pitching_bounds,
-        common_hit_category_totals,
-        common_pitch_category_totals,
-    )
-except ImportError:
-    from valuation.team_stats import (  # type: ignore[no-redef]
-        common_apply_pitching_bounds,
-        common_hit_category_totals,
-        common_pitch_category_totals,
-    )
-
-
 COMMON_REVERSED_PITCH_CATS: Set[str] = {"ERA", "WHIP"}
 COMMON_RATE_HIT_CATS: Set[str] = {"AVG", "OBP", "SLG", "OPS"}
+_HIT_COMPONENT_IDX = {col: idx for idx, col in enumerate(HIT_COMPONENT_COLS)}
+_PIT_COMPONENT_IDX = {col: idx for idx, col in enumerate(PIT_COMPONENT_COLS)}
 
 
 def _mean_adjacent_rank_gap(
@@ -90,6 +78,117 @@ def _sgp_denominator_floor(*, lg: CommonDynastyRotoSettings, category: str) -> f
     return float(max(getattr(lg, "sgp_epsilon_counting", 0.15), 0.0))
 
 
+def _slot_component_arrays(
+    assigned: pd.DataFrame,
+    *,
+    slot_counts: dict[str, int],
+    component_cols: list[str],
+) -> dict[str, np.ndarray]:
+    arrays: dict[str, np.ndarray] = {}
+    for slot, count in slot_counts.items():
+        if count <= 0:
+            arrays[slot] = np.empty((0, len(component_cols)), dtype=float)
+            continue
+        slot_rows = assigned.loc[assigned["AssignedSlot"] == slot, component_cols]
+        arrays[slot] = slot_rows.to_numpy(dtype=float, copy=True)
+    return arrays
+
+
+def _hit_category_matrix(totals: np.ndarray, categories: list[str]) -> np.ndarray:
+    if not categories:
+        return np.empty((len(totals), 0), dtype=float)
+
+    ab = totals[:, _HIT_COMPONENT_IDX["AB"]]
+    h = totals[:, _HIT_COMPONENT_IDX["H"]]
+    hr = totals[:, _HIT_COMPONENT_IDX["HR"]]
+    bb = totals[:, _HIT_COMPONENT_IDX["BB"]]
+    hbp = totals[:, _HIT_COMPONENT_IDX["HBP"]]
+    sf = totals[:, _HIT_COMPONENT_IDX["SF"]]
+    b2 = totals[:, _HIT_COMPONENT_IDX["2B"]]
+    b3 = totals[:, _HIT_COMPONENT_IDX["3B"]]
+    tb = h + b2 + (2.0 * b3) + (3.0 * hr)
+    avg = np.divide(h, ab, out=np.zeros_like(h), where=ab > 0.0)
+    obp_den = ab + bb + hbp + sf
+    obp = np.divide(h + bb + hbp, obp_den, out=np.zeros_like(h), where=obp_den > 0.0)
+    slg = np.divide(tb, ab, out=np.zeros_like(tb), where=ab > 0.0)
+
+    values = {
+        "R": totals[:, _HIT_COMPONENT_IDX["R"]],
+        "RBI": totals[:, _HIT_COMPONENT_IDX["RBI"]],
+        "HR": hr,
+        "SB": totals[:, _HIT_COMPONENT_IDX["SB"]],
+        "AVG": avg,
+        "OBP": obp,
+        "SLG": slg,
+        "OPS": obp + slg,
+        "H": h,
+        "BB": bb,
+        "2B": b2,
+        "TB": tb,
+    }
+    return np.column_stack([values[cat] for cat in categories])
+
+
+def _bounded_pitch_category_matrix(
+    totals: np.ndarray,
+    *,
+    lg: CommonDynastyRotoSettings,
+    rep_rates: Optional[Dict[str, float]],
+    categories: list[str],
+) -> np.ndarray:
+    if not categories:
+        return np.empty((len(totals), 0), dtype=float)
+
+    bounded = np.array(totals, dtype=float, copy=True)
+    ip_idx = _PIT_COMPONENT_IDX["IP"]
+    ip = bounded[:, ip_idx]
+
+    if lg.ip_max is not None:
+        ip_cap = float(lg.ip_max)
+        over_cap = (ip > ip_cap) & (ip > 0.0)
+        if np.any(over_cap):
+            factors = np.ones_like(ip)
+            factors[over_cap] = ip_cap / ip[over_cap]
+            bounded[over_cap] *= factors[over_cap, None]
+            ip = bounded[:, ip_idx]
+
+        if rep_rates is not None:
+            under_cap = ip < ip_cap
+            if np.any(under_cap):
+                add = ip_cap - ip[under_cap]
+                bounded[under_cap, ip_idx] = ip_cap
+                for stat_col in ("W", "QS", "QA3", "K", "SV", "SVH", "ER", "H", "BB"):
+                    bounded[under_cap, _PIT_COMPONENT_IDX[stat_col]] += add * float(rep_rates.get(stat_col, 0.0))
+                ip = bounded[:, ip_idx]
+
+    era = np.full(len(bounded), np.nan, dtype=float)
+    whip = np.full(len(bounded), np.nan, dtype=float)
+    valid_ip = ip > 0.0
+    if np.any(valid_ip):
+        era[valid_ip] = 9.0 * bounded[valid_ip, _PIT_COMPONENT_IDX["ER"]] / ip[valid_ip]
+        whip[valid_ip] = (
+            bounded[valid_ip, _PIT_COMPONENT_IDX["H"]] + bounded[valid_ip, _PIT_COMPONENT_IDX["BB"]]
+        ) / ip[valid_ip]
+
+    if lg.ip_min and lg.ip_min > 0:
+        below_min = ip < float(lg.ip_min)
+        if np.any(below_min):
+            era[below_min] = 99.0
+            whip[below_min] = 5.0
+
+    values = {
+        "W": bounded[:, _PIT_COMPONENT_IDX["W"]],
+        "K": bounded[:, _PIT_COMPONENT_IDX["K"]],
+        "SV": bounded[:, _PIT_COMPONENT_IDX["SV"]],
+        "ERA": era,
+        "WHIP": whip,
+        "QS": bounded[:, _PIT_COMPONENT_IDX["QS"]],
+        "QA3": bounded[:, _PIT_COMPONENT_IDX["QA3"]],
+        "SVH": bounded[:, _PIT_COMPONENT_IDX["SVH"]],
+    }
+    return np.column_stack([values[cat] for cat in categories])
+
+
 def simulate_sgp_hit(
     assigned_hit: pd.DataFrame,
     lg: CommonDynastyRotoSettings,
@@ -103,35 +202,29 @@ def simulate_sgp_hit(
         return {}
     robust, winsor_low, winsor_high = _sgp_estimator_options(lg)
     diffs: Dict[str, List[float]] = {c: [] for c in active_categories}
-
-    groups = {slot: assigned_hit[assigned_hit["AssignedSlot"] == slot] for slot in per_team.keys()}
-    component_idx = {col: HIT_COMPONENT_COLS.index(col) for col in HIT_COMPONENT_COLS}
+    slot_arrays = _slot_component_arrays(
+        assigned_hit,
+        slot_counts=per_team,
+        component_cols=HIT_COMPONENT_COLS,
+    )
+    totals = np.zeros((lg.n_teams, len(HIT_COMPONENT_COLS)), dtype=float)
 
     for _ in range(lg.sims_for_sgp):
-        totals = {col: np.zeros(lg.n_teams) for col in HIT_COMPONENT_COLS}
+        totals.fill(0.0)
 
         for slot, cnt in per_team.items():
-            df_slot = groups[slot]
-            idx = rng.permutation(len(df_slot))
-            arr = df_slot.iloc[idx][HIT_COMPONENT_COLS].to_numpy(dtype=float)
-            arr = arr.reshape(lg.n_teams, cnt, len(HIT_COMPONENT_COLS))
-            sums = arr.sum(axis=1)
+            if cnt <= 0:
+                continue
+            slot_array = slot_arrays[slot]
+            idx = rng.permutation(len(slot_array))
+            sums = slot_array[idx].reshape(lg.n_teams, cnt, len(HIT_COMPONENT_COLS)).sum(axis=1)
+            totals += sums
 
-            for col, idx_col in component_idx.items():
-                totals[col] += sums[:, idx_col]
-
-        vals: Dict[str, List[float]] = {c: [] for c in active_categories}
-        for t in range(lg.n_teams):
-            team_totals = {col: float(totals[col][t]) for col in HIT_COMPONENT_COLS}
-            team_cats = common_hit_category_totals(team_totals)
-            for cat in active_categories:
-                vals[cat].append(float(team_cats.get(cat, 0.0)))
-
-        for c in active_categories:
-            x = np.array(vals[c], dtype=float)
-            diffs[c].append(
+        values = _hit_category_matrix(totals, active_categories)
+        for idx, category in enumerate(active_categories):
+            diffs[category].append(
                 _mean_adjacent_rank_gap(
-                    x,
+                    values[:, idx],
                     ascending=False,
                     robust=robust,
                     winsor_low_pct=winsor_low,
@@ -160,39 +253,35 @@ def simulate_sgp_pit(
     robust, winsor_low, winsor_high = _sgp_estimator_options(lg)
     diffs: Dict[str, List[float]] = {c: [] for c in active_categories}
     per_team = lg.pitcher_slots
-    groups = {slot: assigned_pit[assigned_pit["AssignedSlot"] == slot] for slot in per_team.keys()}
-    component_idx = {col: PIT_COMPONENT_COLS.index(col) for col in PIT_COMPONENT_COLS}
+    slot_arrays = _slot_component_arrays(
+        assigned_pit,
+        slot_counts=per_team,
+        component_cols=PIT_COMPONENT_COLS,
+    )
+    totals = np.zeros((lg.n_teams, len(PIT_COMPONENT_COLS)), dtype=float)
 
     for _ in range(lg.sims_for_sgp):
-        totals = {col: np.zeros(lg.n_teams) for col in PIT_COMPONENT_COLS}
+        totals.fill(0.0)
 
         for slot, cnt in per_team.items():
-            df_slot = groups[slot]
-            idx = rng.permutation(len(df_slot))
-            arr = df_slot.iloc[idx][PIT_COMPONENT_COLS].to_numpy(dtype=float)
-            arr = arr.reshape(lg.n_teams, cnt, len(PIT_COMPONENT_COLS))
-            sums = arr.sum(axis=1)
+            if cnt <= 0:
+                continue
+            slot_array = slot_arrays[slot]
+            idx = rng.permutation(len(slot_array))
+            sums = slot_array[idx].reshape(lg.n_teams, cnt, len(PIT_COMPONENT_COLS)).sum(axis=1)
+            totals += sums
 
-            for col, idx_col in component_idx.items():
-                totals[col] += sums[:, idx_col]
-
-        vals: Dict[str, List[float]] = {c: [] for c in active_categories}
-        for t in range(lg.n_teams):
-            bounded = common_apply_pitching_bounds(
-                {col: float(totals[col][t]) for col in PIT_COMPONENT_COLS},
-                lg,
-                rep_rates,
-            )
-            team_cats = common_pitch_category_totals(bounded)
-            for cat in active_categories:
-                vals[cat].append(float(team_cats.get(cat, 0.0)))
-
-        for c in active_categories:
-            x = np.array(vals[c], dtype=float)
-            diffs[c].append(
+        values = _bounded_pitch_category_matrix(
+            totals,
+            lg=lg,
+            rep_rates=rep_rates,
+            categories=active_categories,
+        )
+        for idx, category in enumerate(active_categories):
+            diffs[category].append(
                 _mean_adjacent_rank_gap(
-                    x,
-                    ascending=(c in COMMON_REVERSED_PITCH_CATS),
+                    values[:, idx],
+                    ascending=(category in COMMON_REVERSED_PITCH_CATS),
                     robust=robust,
                     winsor_low_pct=winsor_low,
                     winsor_high_pct=winsor_high,
