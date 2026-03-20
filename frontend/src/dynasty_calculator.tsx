@@ -81,8 +81,13 @@ export function buildQuickStartSettings({
     bench: 6,
     minors: Number.isInteger(defaultMinors) && defaultMinors >= 0 ? defaultMinors : 0,
     ir: Number.isInteger(defaultIr) && defaultIr >= 0 ? defaultIr : 0,
+    keeper_limit: null,
     ip_min: 0,
     ip_max: "",
+    points_valuation_mode: "season_total",
+    weekly_starts_cap: null,
+    allow_same_day_starts_overflow: false,
+    weekly_acquisition_cap: null,
     two_way: "sum",
     sgp_denominator_mode: "classic",
     sgp_winsor_low_pct: 0.1,
@@ -668,8 +673,11 @@ export function DynastyCalculator({
   }, 0), [settings]);
   const benchPerTeam = Number.isFinite(Number(settings.bench)) ? Number(settings.bench) : 0;
   const minorsPerTeam = Number.isFinite(Number(settings.minors)) ? Number(settings.minors) : 0;
-  const reservePerTeam = benchPerTeam + minorsPerTeam;
+  const irPerTeam = Number.isFinite(Number(settings.ir)) ? Number(settings.ir) : 0;
+  const reservePerTeam = benchPerTeam + minorsPerTeam + irPerTeam;
   const totalPlayersPerTeam = hittersPerTeam + pitchersPerTeam + reservePerTeam;
+  const keeperLimitRaw = Number(settings.keeper_limit);
+  const keeperLimit = Number.isInteger(keeperLimitRaw) && keeperLimitRaw > 0 ? keeperLimitRaw : null;
   const pointRulesCount = POINTS_SCORING_FIELDS.length;
   const statusIsError = Boolean(validationError) || String(status || "").startsWith("Error");
   const presetStatusIsError = String(presetStatus || "").startsWith("Error");
@@ -679,6 +687,7 @@ export function DynastyCalculator({
     canSavePreset,
     hittersPerTeam,
     isPointsMode,
+    keeperLimit,
     lastRunTotal,
     loading,
     mainTableOverlayActive: Boolean(mainTableOverlayActive),

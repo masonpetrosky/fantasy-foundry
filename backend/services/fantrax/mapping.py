@@ -103,6 +103,65 @@ _NAME_SUFFIX_RE = re.compile(
     r"\s+(jr\.?|sr\.?|ii|iii|iv|v)$", re.IGNORECASE
 )
 _WHITESPACE_RE = re.compile(r"\s+")
+_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+_HITTER_BENCH_CODES = {"bn", "bench", "res", "reserve"}
+_MINORS_CODES = {"na", "min", "minor", "minors", "prospect"}
+_IL_CODES = {"il", "ir", "dl"}
+
+_HIT_POINTS_DIRECT_MAP: dict[str, str] = {
+    "1b": "pts_hit_1b",
+    "single": "pts_hit_1b",
+    "singles": "pts_hit_1b",
+    "2b": "pts_hit_2b",
+    "double": "pts_hit_2b",
+    "doubles": "pts_hit_2b",
+    "3b": "pts_hit_3b",
+    "triple": "pts_hit_3b",
+    "triples": "pts_hit_3b",
+    "hr": "pts_hit_hr",
+    "homerun": "pts_hit_hr",
+    "homeruns": "pts_hit_hr",
+    "homer": "pts_hit_hr",
+    "homers": "pts_hit_hr",
+    "r": "pts_hit_r",
+    "run": "pts_hit_r",
+    "runs": "pts_hit_r",
+    "rbi": "pts_hit_rbi",
+    "rbis": "pts_hit_rbi",
+    "runsbattedin": "pts_hit_rbi",
+    "sb": "pts_hit_sb",
+    "stolenbase": "pts_hit_sb",
+    "stolenbases": "pts_hit_sb",
+}
+
+_PITCHER_POINTS_DIRECT_MAP: dict[str, str] = {
+    "ip": "pts_pit_ip",
+    "inningpitched": "pts_pit_ip",
+    "inningspitched": "pts_pit_ip",
+    "w": "pts_pit_w",
+    "win": "pts_pit_w",
+    "wins": "pts_pit_w",
+    "l": "pts_pit_l",
+    "loss": "pts_pit_l",
+    "losses": "pts_pit_l",
+    "sv": "pts_pit_sv",
+    "save": "pts_pit_sv",
+    "saves": "pts_pit_sv",
+    "hd": "pts_pit_hld",
+    "hold": "pts_pit_hld",
+    "holds": "pts_pit_hld",
+    "hld": "pts_pit_hld",
+    "er": "pts_pit_er",
+    "earnedrun": "pts_pit_er",
+    "earnedruns": "pts_pit_er",
+}
+
+_TOTAL_BASES_KEYS = {"tb", "totalbase", "totalbases"}
+_SAVE_HOLD_KEYS = {"svh", "svplush", "savehold", "saveholds", "savesholds", "savesplusholds"}
+_HITS_KEYS = {"h", "hit", "hits"}
+_WALKS_KEYS = {"bb", "walk", "walks", "baseonballs", "basesonballs"}
+_STRIKEOUT_KEYS = {"k", "so", "strikeout", "strikeouts"}
+_HBP_KEYS = {"hb", "hbp", "hitbatter", "hitbatters", "hitbatsman", "hitbatsmen"}
 
 
 def _normalize_name(name: str) -> str:
@@ -124,6 +183,25 @@ def _normalize_name_no_suffix(name: str) -> str:
 def _normalize_team(team: str) -> str:
     """Normalize a team abbreviation."""
     return team.strip().upper()
+
+
+def _normalize_token(value: object) -> str:
+    return _NON_ALNUM_RE.sub("", str(value or "").strip().lower())
+
+
+def _normalize_scope(value: object) -> str | None:
+    token = _normalize_token(value)
+    if not token:
+        return None
+    if any(part in token for part in ("hit", "bat", "offens", "hitter")):
+        return "hit"
+    if any(part in token for part in ("pit", "pitch", "relief", "starter")):
+        return "pit"
+    return None
+
+
+def _add_points_rule(target: dict[str, float], key: str, value: float) -> None:
+    target[key] = float(target.get(key, 0.0)) + float(value)
 
 
 def build_player_lookup(
@@ -290,11 +368,148 @@ def map_roster_slots(fantrax_positions: list[str]) -> dict[str, int]:
     return slot_counts
 
 
+def extract_reserve_slot_counts(
+    fantrax_positions: list[str],
+) -> tuple[int | None, int | None, int | None]:
+    """Extract bench/minors/IL counts from Fantrax roster-position codes."""
+    if not fantrax_positions:
+        return None, None, None
+
+    bench = 0
+    minors = 0
+    ir = 0
+    for raw_pos in fantrax_positions:
+        token = _normalize_token(raw_pos)
+        if not token:
+            continue
+        if token in _HITTER_BENCH_CODES:
+            bench += 1
+            continue
+        if token in _MINORS_CODES:
+            minors += 1
+            continue
+        if token in _IL_CODES or token.startswith("il") or token.startswith("ir") or token.startswith("dl"):
+            ir += 1
+
+    return bench, minors, ir
+
+
+def map_points_scoring(
+    fantrax_rule_entries: list[dict[str, object]],
+) -> tuple[dict[str, float], list[str]]:
+    """Map Fantrax points rules to FF points keys.
+
+    Returns a sparse scoring dict plus any import warnings for unsupported rules.
+    """
+    mapped: dict[str, float] = {}
+    warnings: list[str] = []
+    seen_warnings: set[str] = set()
+
+    def warn(raw_name: object, *, scope: object = None) -> None:
+        scope_prefix = ""
+        normalized_scope = _normalize_scope(scope)
+        if normalized_scope == "hit":
+            scope_prefix = "hitting "
+        elif normalized_scope == "pit":
+            scope_prefix = "pitching "
+        message = f"Fantrax {scope_prefix}points rule '{str(raw_name or '').strip()}' could not be mapped automatically."
+        if message not in seen_warnings:
+            seen_warnings.add(message)
+            warnings.append(message)
+
+    for entry in fantrax_rule_entries:
+        raw_name = str(entry.get("name", "")).strip()
+        if not raw_name:
+            continue
+        try:
+            value = float(entry.get("value"))
+        except (TypeError, ValueError):
+            continue
+        scope = _normalize_scope(entry.get("scope"))
+        token = _normalize_token(raw_name)
+        if not token:
+            continue
+
+        if token in _TOTAL_BASES_KEYS:
+            _add_points_rule(mapped, "pts_hit_1b", value)
+            _add_points_rule(mapped, "pts_hit_2b", value * 2.0)
+            _add_points_rule(mapped, "pts_hit_3b", value * 3.0)
+            _add_points_rule(mapped, "pts_hit_hr", value * 4.0)
+            continue
+
+        if token in _SAVE_HOLD_KEYS:
+            _add_points_rule(mapped, "pts_pit_sv", value)
+            _add_points_rule(mapped, "pts_pit_hld", value)
+            continue
+
+        hit_key = _HIT_POINTS_DIRECT_MAP.get(token)
+        if hit_key:
+            _add_points_rule(mapped, hit_key, value)
+            continue
+
+        pit_key = _PITCHER_POINTS_DIRECT_MAP.get(token)
+        if pit_key:
+            _add_points_rule(mapped, pit_key, value)
+            continue
+
+        if token in _HITS_KEYS:
+            if scope == "pit" or value < 0:
+                _add_points_rule(mapped, "pts_pit_h", value)
+            else:
+                warn(raw_name, scope=scope)
+            continue
+
+        if token in _WALKS_KEYS:
+            if scope == "hit" or (scope is None and value > 0):
+                _add_points_rule(mapped, "pts_hit_bb", value)
+            elif scope == "pit" or value < 0:
+                _add_points_rule(mapped, "pts_pit_bb", value)
+            else:
+                warn(raw_name, scope=scope)
+            continue
+
+        if token in _STRIKEOUT_KEYS:
+            if scope == "hit" or (scope is None and value < 0):
+                _add_points_rule(mapped, "pts_hit_so", value)
+            elif scope == "pit" or value > 0:
+                _add_points_rule(mapped, "pts_pit_k", value)
+            else:
+                warn(raw_name, scope=scope)
+            continue
+
+        if token in _HBP_KEYS:
+            if scope == "hit" or (scope is None and value > 0):
+                _add_points_rule(mapped, "pts_hit_hbp", value)
+            elif scope == "pit" or value < 0:
+                _add_points_rule(mapped, "pts_pit_hbp", value)
+            else:
+                warn(raw_name, scope=scope)
+            continue
+
+        warn(raw_name, scope=scope)
+
+    return mapped, warnings
+
+
 def build_suggested_settings(league: LeagueInfo) -> LeagueSuggestedSettings:
     """Build calculator settings from Fantrax league configuration."""
+    reserve_bench, reserve_minors, reserve_ir = extract_reserve_slot_counts(
+        league.roster_positions
+    )
+    import_warnings = list(dict.fromkeys(str(message) for message in league.import_warnings))
     return LeagueSuggestedSettings(
         teams=league.team_count or 12,
         scoring_mode=league.scoring_type or "roto",
         roto_categories=map_scoring_categories(league.scoring_categories),
         roster_slots=map_roster_slots(league.roster_positions),
+        points_scoring=dict(league.points_scoring),
+        bench=league.bench if league.bench is not None else reserve_bench,
+        minors=league.minors if league.minors is not None else reserve_minors,
+        ir=league.ir if league.ir is not None else reserve_ir,
+        keeper_limit=league.keeper_limit,
+        points_valuation_mode=league.points_valuation_mode or "season_total",
+        weekly_starts_cap=league.weekly_starts_cap,
+        allow_same_day_starts_overflow=bool(league.allow_same_day_starts_overflow),
+        weekly_acquisition_cap=league.weekly_acquisition_cap,
+        import_warnings=import_warnings,
     )

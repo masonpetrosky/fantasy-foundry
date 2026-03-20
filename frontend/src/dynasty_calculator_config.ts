@@ -21,13 +21,14 @@ export interface RotoCategoryField {
 export interface PointsResultSummaryField {
   key: string;
   label: string;
-  type: "number" | "slot";
+  type: "number" | "slot" | "boolean";
 }
 
 export interface CalculatorSettings {
   [key: string]: unknown;
   mode: string;
   scoring_mode: string;
+  points_valuation_mode: string;
   teams: number;
   sims: number;
   horizon: number;
@@ -35,8 +36,12 @@ export interface CalculatorSettings {
   bench: number;
   minors: number;
   ir: number;
+  keeper_limit: number | null;
   ip_min: number;
   ip_max: string | number | null;
+  weekly_starts_cap: number | null;
+  allow_same_day_starts_overflow: boolean;
+  weekly_acquisition_cap: number | null;
   two_way: string;
   sgp_denominator_mode: string;
   sgp_winsor_low_pct: number;
@@ -121,16 +126,18 @@ export const POINTS_SCORING_FIELDS: PointsScoringField[] = [
   { key: "pts_hit_rbi", label: "RBI", group: "bat", defaultValue: 1 },
   { key: "pts_hit_sb", label: "SB", group: "bat", defaultValue: 1 },
   { key: "pts_hit_bb", label: "BB", group: "bat", defaultValue: 1 },
+  { key: "pts_hit_hbp", label: "HBP", group: "bat", defaultValue: 0 },
   { key: "pts_hit_so", label: "SO", group: "bat", defaultValue: -1 },
   { key: "pts_pit_ip", label: "IP", group: "pit", defaultValue: 3 },
   { key: "pts_pit_w", label: "W", group: "pit", defaultValue: 5 },
   { key: "pts_pit_l", label: "L", group: "pit", defaultValue: -5 },
   { key: "pts_pit_k", label: "K", group: "pit", defaultValue: 1 },
   { key: "pts_pit_sv", label: "SV", group: "pit", defaultValue: 5 },
-  { key: "pts_pit_svh", label: "SVH", group: "pit", defaultValue: 0 },
+  { key: "pts_pit_hld", label: "Holds", group: "pit", defaultValue: 0 },
   { key: "pts_pit_h", label: "H Allowed", group: "pit", defaultValue: -1 },
   { key: "pts_pit_er", label: "ER", group: "pit", defaultValue: -2 },
   { key: "pts_pit_bb", label: "BB Allowed", group: "pit", defaultValue: -1 },
+  { key: "pts_pit_hbp", label: "HB Allowed", group: "pit", defaultValue: 0 },
 ];
 export const POINTS_BATTING_FIELDS: PointsScoringField[] = POINTS_SCORING_FIELDS.filter(field => field.group === "bat");
 export const POINTS_PITCHING_FIELDS: PointsScoringField[] = POINTS_SCORING_FIELDS.filter(field => field.group === "pit");
@@ -147,6 +154,8 @@ export const POINTS_RESULT_SUMMARY_FIELDS: PointsResultSummaryField[] = [
   { key: "HittingAssignmentValue", label: "Hitting Assignment Value", type: "number" },
   { key: "PitchingAssignmentValue", label: "Pitching Assignment Value", type: "number" },
   { key: "KeepDropValue", label: "Keep/Drop Value", type: "number" },
+  { key: "KeepDropHoldValue", label: "Keep/Drop Hold Value", type: "number" },
+  { key: "KeepDropKeep", label: "Keep/Drop Keep", type: "boolean" },
 ];
 export const POINTS_RESULT_SUMMARY_COLS: string[] = POINTS_RESULT_SUMMARY_FIELDS.map(field => field.key);
 export const POINTS_RESULT_NUMERIC_COLS: Set<string> = new Set(
@@ -154,6 +163,9 @@ export const POINTS_RESULT_NUMERIC_COLS: Set<string> = new Set(
 );
 export const POINTS_RESULT_SLOT_COLS: Set<string> = new Set(
   POINTS_RESULT_SUMMARY_FIELDS.filter(field => field.type === "slot").map(field => field.key)
+);
+export const POINTS_RESULT_BOOLEAN_COLS: Set<string> = new Set(
+  POINTS_RESULT_SUMMARY_FIELDS.filter(field => field.type === "boolean").map(field => field.key)
 );
 export const POINTS_RESULT_COLUMN_LABELS: Record<string, string> = Object.fromEntries(
   POINTS_RESULT_SUMMARY_FIELDS.map(field => [field.key, field.label])
@@ -285,6 +297,35 @@ export function resolvePointsScoringDefaults(meta: CalculatorMeta | null | undef
   );
 }
 
+function parseOptionalIntegerSetting(
+  value: unknown,
+  options: {
+    min: number;
+    max: number;
+    label: string;
+    treatZeroAsBlank?: boolean;
+  },
+): { value: number | null; error?: string } {
+  const {
+    min,
+    max,
+    label,
+    treatZeroAsBlank = false,
+  } = options;
+  const text = String(value ?? "").trim();
+  if (!text || text.toLowerCase() === "none") {
+    return { value: null };
+  }
+  const parsed = Number(text);
+  if (treatZeroAsBlank && parsed === 0) {
+    return { value: null };
+  }
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    return { value: null, error: `${label} must be an integer between ${min} and ${max}, or blank.` };
+  }
+  return { value: parsed };
+}
+
 export function buildDefaultCalculatorSettings(meta: CalculatorMeta | null | undefined): CalculatorSettings {
   const guardrails = meta?.calculator_guardrails || {};
   const defaultIr = Number(guardrails?.default_ir_slots);
@@ -292,6 +333,7 @@ export function buildDefaultCalculatorSettings(meta: CalculatorMeta | null | und
   return {
     mode: "common",
     scoring_mode: "roto",
+    points_valuation_mode: "season_total",
     teams: 12,
     sims: 300,
     horizon: 20,
@@ -300,8 +342,12 @@ export function buildDefaultCalculatorSettings(meta: CalculatorMeta | null | und
     bench: 6,
     minors: Number.isInteger(defaultMinors) && defaultMinors >= 0 ? defaultMinors : 0,
     ir: Number.isInteger(defaultIr) && defaultIr >= 0 ? defaultIr : 0,
+    keeper_limit: null,
     ip_min: 0,
     ip_max: "",
+    weekly_starts_cap: null,
+    allow_same_day_starts_overflow: false,
+    weekly_acquisition_cap: null,
     two_way: "sum",
     sgp_denominator_mode: "classic",
     sgp_winsor_low_pct: 0.1,
@@ -330,6 +376,10 @@ export function buildCalculatorPayload(settings: Record<string, unknown>, availa
   const scoringMode = String(settings.scoring_mode ?? "").trim().toLowerCase() || "roto";
   if (scoringMode !== "roto" && scoringMode !== "points") {
     return { error: "Scoring Mode must be either 'roto' or 'points'." };
+  }
+  const pointsValuationMode = String(settings.points_valuation_mode ?? "").trim().toLowerCase() || "season_total";
+  if (pointsValuationMode !== "season_total" && pointsValuationMode !== "weekly_h2h") {
+    return { error: "Points valuation mode must be either 'season_total' or 'weekly_h2h'." };
   }
 
   const parsedSlots: Record<string, number> = {};
@@ -384,6 +434,32 @@ export function buildCalculatorPayload(settings: Record<string, unknown>, availa
   const ir = Number(settings.ir);
   if (!Number.isInteger(ir) || ir < 0 || ir > 40) {
     return { error: "IR slots must be an integer between 0 and 40." };
+  }
+  const keeperLimitResult = parseOptionalIntegerSetting(settings.keeper_limit, {
+    min: 1,
+    max: 60,
+    label: "Keeper limit",
+    treatZeroAsBlank: true,
+  });
+  if (keeperLimitResult.error) {
+    return { error: keeperLimitResult.error };
+  }
+  const weeklyStartsCapResult = parseOptionalIntegerSetting(settings.weekly_starts_cap, {
+    min: 1,
+    max: 40,
+    label: "Weekly starts cap",
+    treatZeroAsBlank: true,
+  });
+  if (weeklyStartsCapResult.error) {
+    return { error: weeklyStartsCapResult.error };
+  }
+  const weeklyAcquisitionCapResult = parseOptionalIntegerSetting(settings.weekly_acquisition_cap, {
+    min: 0,
+    max: 40,
+    label: "Weekly acquisition cap",
+  });
+  if (weeklyAcquisitionCapResult.error) {
+    return { error: weeklyAcquisitionCapResult.error };
   }
 
   const ipMin = Number(settings.ip_min);
@@ -510,9 +586,14 @@ export function buildCalculatorPayload(settings: Record<string, unknown>, availa
     bench,
     minors,
     ir,
+    keeper_limit: keeperLimitResult.value,
     scoring_mode: scoringMode,
+    points_valuation_mode: pointsValuationMode,
     ip_min: ipMin,
     ip_max: ipMax,
+    weekly_starts_cap: weeklyStartsCapResult.value,
+    allow_same_day_starts_overflow: coerceBooleanSetting(settings.allow_same_day_starts_overflow, false),
+    weekly_acquisition_cap: weeklyAcquisitionCapResult.value,
     two_way: twoWay,
     sgp_denominator_mode: sgpDenominatorMode,
     sgp_winsor_low_pct: sgpWinsorLowPct,

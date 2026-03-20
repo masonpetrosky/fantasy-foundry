@@ -130,16 +130,18 @@ DEFAULT_POINTS_SCORING = {
     "pts_hit_rbi": 1.0,
     "pts_hit_sb": 1.0,
     "pts_hit_bb": 1.0,
+    "pts_hit_hbp": 0.0,
     "pts_hit_so": -1.0,
     "pts_pit_ip": 3.0,
     "pts_pit_w": 5.0,
     "pts_pit_l": -5.0,
     "pts_pit_k": 1.0,
     "pts_pit_sv": 5.0,
-    "pts_pit_svh": 0.0,
+    "pts_pit_hld": 0.0,
     "pts_pit_h": -1.0,
     "pts_pit_er": -2.0,
     "pts_pit_bb": -1.0,
+    "pts_pit_hbp": 0.0,
 }
 COMMON_DEFAULT_IR_SLOTS = 0
 COMMON_DEFAULT_MINOR_SLOTS = 0

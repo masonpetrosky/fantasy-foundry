@@ -316,6 +316,12 @@ function App(): React.ReactElement {
                         calculatorResults={effectiveDynastyPlayers}
                         onClose={() => setKeeperCalculatorOpen(false)}
                         onOpenCalculator={() => { openCalculatorPanel("keeper_calculator"); scrollToCalculator(); }}
+                        keeperLimit={
+                          Number.isInteger(Number(calculatorSettings?.keeper_limit))
+                            && Number(calculatorSettings?.keeper_limit) > 0
+                            ? Number(calculatorSettings?.keeper_limit)
+                            : null
+                        }
                       />
                     </Suspense>
                   </FeatureErrorBoundary>

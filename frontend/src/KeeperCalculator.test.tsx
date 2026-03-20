@@ -111,4 +111,12 @@ describe("KeeperCalculator", () => {
     expect(container.textContent).toContain("Surplus");
     cleanup();
   });
+
+  it("shows keeper-limit recommendation text when a limit is provided", () => {
+    const { container, cleanup } = renderToContainer(
+      <KeeperCalculator calculatorResults={makePlayers(5)} onClose={vi.fn()} keeperLimit={2} />
+    );
+    expect(container.textContent).toContain("Top 2 positive-surplus players are marked as keeps.");
+    cleanup();
+  });
 });

@@ -13,6 +13,7 @@ interface SidebarState {
   canSavePreset: boolean;
   hittersPerTeam: number;
   isPointsMode: boolean;
+  keeperLimit: number | null;
   lastRunTotal: number;
   loading: boolean;
   mainTableOverlayActive: boolean;
@@ -77,6 +78,7 @@ export function DynastyCalculatorSidebar({
     canSavePreset,
     hittersPerTeam,
     isPointsMode,
+    keeperLimit,
     lastRunTotal,
     loading,
     mainTableOverlayActive,
@@ -142,8 +144,8 @@ export function DynastyCalculatorSidebar({
           <strong>{hittersPerTeam} H / {pitchersPerTeam} P</strong>
         </div>
         <div className="calc-summary-chip">
-          <span>Total Keeper Depth</span>
-          <strong>{totalPlayersPerTeam} slots</strong>
+          <span>{keeperLimit != null ? "Keeper Limit" : "In-Season Depth"}</span>
+          <strong>{keeperLimit != null ? `${keeperLimit} players` : `${totalPlayersPerTeam} slots`}</strong>
         </div>
       </div>
 
@@ -493,6 +495,79 @@ export function DynastyCalculatorSidebar({
         />
       )}
 
+      {isPointsMode && (
+        <div className="calc-section">
+          <p className="calc-section-title">Weekly Matchup Rules</p>
+          <p className="calc-note">
+            Weekly H2H uses a calibrated streaming adjustment for starters. Keeper Limit controls the dynasty cutoff for shallow keeper leagues.
+          </p>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="calc-points-valuation-mode">Points Valuation</label>
+              <select
+                id="calc-points-valuation-mode"
+                value={String(settings.points_valuation_mode || "season_total")}
+                onChange={e => update("points_valuation_mode", e.target.value)}
+              >
+                <option value="season_total">Season Total</option>
+                <option value="weekly_h2h">Weekly H2H</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="calc-keeper-limit">
+                Keeper Limit
+                <CalcTooltip label="Keeper Limit">
+                  Limits the dynasty replacement cutoff to the number of players each team can keep year over year.
+                </CalcTooltip>
+              </label>
+              <input
+                id="calc-keeper-limit"
+                type="number"
+                value={settings.keeper_limit ?? ""}
+                onChange={e => update("keeper_limit", e.target.value || null)}
+                placeholder="none"
+                min="1"
+                max="60"
+              />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="calc-weekly-starts-cap">Weekly Starts Cap</label>
+              <input
+                id="calc-weekly-starts-cap"
+                type="number"
+                value={settings.weekly_starts_cap ?? ""}
+                onChange={e => update("weekly_starts_cap", e.target.value || null)}
+                placeholder="none"
+                min="1"
+                max="40"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="calc-weekly-acquisition-cap">Weekly Add Cap</label>
+              <input
+                id="calc-weekly-acquisition-cap"
+                type="number"
+                value={settings.weekly_acquisition_cap ?? ""}
+                onChange={e => update("weekly_acquisition_cap", e.target.value || null)}
+                placeholder="none"
+                min="0"
+                max="40"
+              />
+            </div>
+          </div>
+          <label className="calc-checkbox-option">
+            <input
+              type="checkbox"
+              checked={Boolean(settings.allow_same_day_starts_overflow)}
+              onChange={e => update("allow_same_day_starts_overflow", e.target.checked)}
+            />
+            <span>Allow Same-Day Starts Overflow</span>
+          </label>
+        </div>
+      )}
+
       <div className="calc-section">
         <p className="calc-section-title">Depth And Reset</p>
         <div className="form-row">
@@ -518,7 +593,7 @@ export function DynastyCalculatorSidebar({
             </button>
           </div>
         </div>
-        <p className="calc-note">Reserve depth per team: {reservePerTeam} (bench + minors).</p>
+        <p className="calc-note">Reserve depth per team: {reservePerTeam} (bench + minors + IL).</p>
       </div>
 
       <div className="calc-section">

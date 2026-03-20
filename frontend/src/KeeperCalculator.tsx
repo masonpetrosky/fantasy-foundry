@@ -46,16 +46,21 @@ interface KeeperCalculatorProps {
   calculatorResults: ProjectionRow[];
   onClose: () => void;
   onOpenCalculator?: () => void;
+  keeperLimit?: number | null;
 }
 
 export function KeeperCalculator({
   calculatorResults,
   onClose,
   onOpenCalculator,
+  keeperLimit,
 }: KeeperCalculatorProps): React.ReactElement {
   const [entries, setEntries] = useState<KeeperEntry[]>(loadKeeperRoster);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  const effectiveKeeperLimit = Number.isInteger(keeperLimit) && Number(keeperLimit) > 0
+    ? Number(keeperLimit)
+    : MAX_KEEPERS;
 
   const playerLookup = useMemo(() => {
     const map = new Map<string, ProjectionRow>();
@@ -84,7 +89,7 @@ export function KeeperCalculator({
     (row: ProjectionRow) => {
       const key = stablePlayerKeyFromRow(row);
       setEntries(prev => {
-        if (prev.length >= MAX_KEEPERS) return prev;
+        if (prev.length >= effectiveKeeperLimit) return prev;
         if (prev.some(e => e.playerKey === key)) return prev;
         const next = [
           ...prev,
@@ -102,7 +107,7 @@ export function KeeperCalculator({
       setSearchQuery("");
       setShowSearch(false);
     },
-    [],
+    [effectiveKeeperLimit],
   );
 
   const removePlayer = useCallback((playerKey: string) => {
@@ -138,6 +143,12 @@ export function KeeperCalculator({
       })
       .sort((a, b) => b.surplus - a.surplus);
   }, [entries, playerLookup]);
+  const recommendedKeepers = useMemo(() => new Set(
+    keeperRows
+      .filter(row => row.surplus > 0)
+      .slice(0, effectiveKeeperLimit)
+      .map(row => row.playerKey),
+  ), [effectiveKeeperLimit, keeperRows]);
 
   const hasResults = calculatorResults.length > 0;
 
@@ -164,7 +175,7 @@ export function KeeperCalculator({
           <p className="keeper-note">
             Add keeper-eligible players and their cost (round or dollar amount).
             Surplus = Dynasty Value &minus; Cost. Keep players with the highest
-            surplus.
+            surplus. {effectiveKeeperLimit < MAX_KEEPERS ? `Top ${effectiveKeeperLimit} positive-surplus players are marked as keeps.` : ""}
           </p>
 
           <div className="keeper-add-row">
@@ -173,7 +184,7 @@ export function KeeperCalculator({
                 type="button"
                 className="calc-secondary-btn"
                 onClick={() => setShowSearch(true)}
-                disabled={entries.length >= MAX_KEEPERS}
+                disabled={entries.length >= effectiveKeeperLimit}
               >
                 + Add Player
               </button>
@@ -256,18 +267,19 @@ export function KeeperCalculator({
                 </thead>
                 <tbody>
                   {keeperRows.map(row => {
-                    const recommendation =
-                      row.surplus > 0
-                        ? "Keep"
+                    const recommended = recommendedKeepers.has(row.playerKey);
+                    const recommendation = recommended
+                      ? "Keep"
+                      : row.surplus > 0
+                        ? "Cut"
                         : row.surplus === 0
                           ? "Neutral"
                           : "Cut";
-                    const recClass =
-                      row.surplus > 0
-                        ? "value-positive"
-                        : row.surplus < 0
-                          ? "value-negative"
-                          : "";
+                    const recClass = recommended
+                      ? "value-positive"
+                      : row.surplus < 0
+                        ? "value-negative"
+                        : "";
                     const surplusClass =
                       row.surplus > 0
                         ? "value-positive"

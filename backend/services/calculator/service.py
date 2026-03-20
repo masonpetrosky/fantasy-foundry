@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 class CalculateRequest(BaseModel):
     mode: Literal["common", "league"] = "common"
     scoring_mode: Literal["roto", "points"] = "roto"
+    points_valuation_mode: Literal["season_total", "weekly_h2h"] = "season_total"
     two_way: Literal["sum", "max"] = "sum"
     sgp_denominator_mode: Literal["classic", "robust"] = "classic"
     sgp_winsor_low_pct: float = Field(default=0.10, ge=0.0, le=1.0)
@@ -60,8 +61,12 @@ class CalculateRequest(BaseModel):
     bench: int = Field(default=6, ge=0, le=40)
     minors: int = Field(default=0, ge=0, le=60)
     ir: int = Field(default=0, ge=0, le=40)
+    keeper_limit: Optional[int] = Field(default=None, ge=1, le=60)
     ip_min: float = Field(default=0.0, ge=0.0)
     ip_max: Optional[float] = Field(default=None, ge=0.0)
+    weekly_starts_cap: Optional[int] = Field(default=None, ge=1, le=40)
+    allow_same_day_starts_overflow: bool = False
+    weekly_acquisition_cap: Optional[int] = Field(default=None, ge=0, le=40)
     start_year: int = Field(default=2026, ge=1900)
     auction_budget: Optional[int] = Field(default=None, ge=1, le=9999)
     roto_hit_r: bool = True
@@ -92,16 +97,47 @@ class CalculateRequest(BaseModel):
     pts_hit_rbi: float = Field(default=1.0, ge=-50.0, le=50.0)
     pts_hit_sb: float = Field(default=1.0, ge=-50.0, le=50.0)
     pts_hit_bb: float = Field(default=1.0, ge=-50.0, le=50.0)
+    pts_hit_hbp: float = Field(default=0.0, ge=-50.0, le=50.0)
     pts_hit_so: float = Field(default=-1.0, ge=-50.0, le=50.0)
     pts_pit_ip: float = Field(default=3.0, ge=-50.0, le=50.0)
     pts_pit_w: float = Field(default=5.0, ge=-50.0, le=50.0)
     pts_pit_l: float = Field(default=-5.0, ge=-50.0, le=50.0)
     pts_pit_k: float = Field(default=1.0, ge=-50.0, le=50.0)
     pts_pit_sv: float = Field(default=5.0, ge=-50.0, le=50.0)
-    pts_pit_svh: float = Field(default=0.0, ge=-50.0, le=50.0)
+    pts_pit_hld: float = Field(default=0.0, ge=-50.0, le=50.0)
     pts_pit_h: float = Field(default=-1.0, ge=-50.0, le=50.0)
     pts_pit_er: float = Field(default=-2.0, ge=-50.0, le=50.0)
     pts_pit_bb: float = Field(default=-1.0, ge=-50.0, le=50.0)
+    pts_pit_hbp: float = Field(default=0.0, ge=-50.0, le=50.0)
+    pts_pit_svh: float | None = Field(default=None, ge=-50.0, le=50.0, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_points_svh(cls, raw: Any) -> Any:
+        if not isinstance(raw, dict):
+            return raw
+
+        normalized = dict(raw)
+        if normalized.get("pts_pit_hld") is not None:
+            return normalized
+
+        legacy_svh = normalized.get("pts_pit_svh")
+        if legacy_svh is None:
+            return normalized
+
+        try:
+            legacy_value = float(legacy_svh)
+        except (TypeError, ValueError):
+            return normalized
+
+        try:
+            current_sv = float(normalized.get("pts_pit_sv") or 0.0)
+        except (TypeError, ValueError):
+            current_sv = 0.0
+
+        normalized["pts_pit_sv"] = current_sv + legacy_value
+        normalized["pts_pit_hld"] = legacy_value
+        return normalized
 
     @model_validator(mode="after")
     def validate_ip_bounds(self) -> "CalculateRequest":
@@ -147,16 +183,18 @@ class CalculateRequest(BaseModel):
                     self.pts_hit_rbi,
                     self.pts_hit_sb,
                     self.pts_hit_bb,
+                    self.pts_hit_hbp,
                     self.pts_hit_so,
                     self.pts_pit_ip,
                     self.pts_pit_w,
                     self.pts_pit_l,
                     self.pts_pit_k,
                     self.pts_pit_sv,
-                    self.pts_pit_svh,
+                    self.pts_pit_hld,
                     self.pts_pit_h,
                     self.pts_pit_er,
                     self.pts_pit_bb,
+                    self.pts_pit_hbp,
                 )
             )
             if not has_non_zero_rule:
@@ -330,7 +368,12 @@ class CalculatorService:
                         bench=req.bench,
                         minors=req.minors,
                         ir=req.ir,
+                        keeper_limit=req.keeper_limit,
                         two_way=req.two_way,
+                        points_valuation_mode=req.points_valuation_mode,
+                        weekly_starts_cap=req.weekly_starts_cap,
+                        allow_same_day_starts_overflow=req.allow_same_day_starts_overflow,
+                        weekly_acquisition_cap=req.weekly_acquisition_cap,
                         start_year=req.start_year,
                         pts_hit_1b=req.pts_hit_1b,
                         pts_hit_2b=req.pts_hit_2b,
@@ -340,16 +383,18 @@ class CalculatorService:
                         pts_hit_rbi=req.pts_hit_rbi,
                         pts_hit_sb=req.pts_hit_sb,
                         pts_hit_bb=req.pts_hit_bb,
+                        pts_hit_hbp=req.pts_hit_hbp,
                         pts_hit_so=req.pts_hit_so,
                         pts_pit_ip=req.pts_pit_ip,
                         pts_pit_w=req.pts_pit_w,
                         pts_pit_l=req.pts_pit_l,
                         pts_pit_k=req.pts_pit_k,
                         pts_pit_sv=req.pts_pit_sv,
-                        pts_pit_svh=req.pts_pit_svh,
+                        pts_pit_hld=req.pts_pit_hld,
                         pts_pit_h=req.pts_pit_h,
                         pts_pit_er=req.pts_pit_er,
                         pts_pit_bb=req.pts_pit_bb,
+                        pts_pit_hbp=req.pts_pit_hbp,
                     ).copy(deep=True)
                 else:
                     out = self._ctx.calculate_common_dynasty_frame_cached(

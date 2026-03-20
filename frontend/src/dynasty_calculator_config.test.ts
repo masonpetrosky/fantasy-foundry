@@ -302,6 +302,20 @@ describe("buildCalculatorPayload", () => {
     const result = buildCalculatorPayload(settings, [2026], {});
     expect(result.error).toMatch(/ip max/i);
   });
+
+  it("treats keeper limit zero as blank", () => {
+    const settings = buildValidRotoSettings({ keeper_limit: "0" });
+    const result = buildCalculatorPayload(settings, [2026], {});
+    expect(result.error).toBeUndefined();
+    expect(result.payload?.keeper_limit).toBeNull();
+  });
+
+  it("preserves a zero weekly acquisition cap", () => {
+    const settings = buildValidRotoSettings({ weekly_acquisition_cap: "0" });
+    const result = buildCalculatorPayload(settings, [2026], {});
+    expect(result.error).toBeUndefined();
+    expect(result.payload?.weekly_acquisition_cap).toBe(0);
+  });
 });
 
 describe("buildDefaultCalculatorSettings", () => {

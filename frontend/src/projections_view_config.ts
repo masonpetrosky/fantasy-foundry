@@ -21,6 +21,7 @@ const ALL_TAB_HITTING_STAT_SET = new Set([
   "2B",
   "3B",
   "BB",
+  "HBP",
   "SO",
   "TB",
 ]);
@@ -29,9 +30,11 @@ const ALL_TAB_PITCHING_STAT_SET = new Set([
   "GS",
   "L",
   "PitBB",
+  "HBP",
   "PitH",
   "PitHR",
   "ER",
+  "HLD",
   "SVH",
 ]);
 
@@ -51,16 +54,19 @@ const POINTS_RULE_COLUMN_MAP: Record<string, PointsRuleColumnMapping> = {
   pts_hit_rbi: { bat: "RBI", all_hit: "RBI" },
   pts_hit_sb: { bat: "SB", all_hit: "SB" },
   pts_hit_bb: { bat: "BB", all_hit: "BB" },
+  pts_hit_hbp: { bat: "HBP", all_hit: "HBP" },
   pts_hit_so: { bat: "SO", all_hit: "SO" },
   pts_pit_ip: { pitch: "IP", all_pitch: "IP" },
   pts_pit_w: { pitch: "W", all_pitch: "W" },
   pts_pit_l: { pitch: "L", all_pitch: "L" },
   pts_pit_k: { pitch: "K", all_pitch: "K" },
   pts_pit_sv: { pitch: "SV", all_pitch: "SV" },
+  pts_pit_hld: { pitch: "HLD", all_pitch: "HLD" },
   pts_pit_svh: { pitch: "SVH", all_pitch: "SVH" },
   pts_pit_h: { pitch: "H", all_pitch: "PitH" },
   pts_pit_er: { pitch: "ER", all_pitch: "ER" },
   pts_pit_bb: { pitch: "BB", all_pitch: "PitBB" },
+  pts_pit_hbp: { pitch: "HBP", all_pitch: "HBP" },
 };
 
 type CalculatorSettings = Record<string, unknown> | null | undefined;

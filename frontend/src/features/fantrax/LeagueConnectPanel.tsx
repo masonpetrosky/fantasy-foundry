@@ -130,6 +130,17 @@ export const LeagueConnectPanel = React.memo(function LeagueConnectPanel({
                   Disconnect
                 </button>
               </div>
+              {fantrax.leagueData.scoring_type === "points" && fantrax.suggestedSettings ? (
+                <p className="calc-note fantrax-roster-status">
+                  Weekly H2H points uses a calibrated valuation model, not a day-by-day schedule simulation.
+                  Review imported weekly caps and acquisition rules before running the calculator.
+                </p>
+              ) : null}
+              {fantrax.suggestedSettings?.import_warnings?.length ? (
+                <p className="calc-note fantrax-roster-status">
+                  Import warnings: {fantrax.suggestedSettings.import_warnings.join(" ")}
+                </p>
+              ) : null}
             </div>
           )}
 

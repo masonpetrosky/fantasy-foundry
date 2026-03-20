@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class RosterPlayer(BaseModel):
@@ -30,7 +30,7 @@ class TeamRoster(BaseModel):
 
     team_id: str
     team_name: str
-    players: list[RosterPlayer] = []
+    players: list[RosterPlayer] = Field(default_factory=list)
 
 
 class LeagueInfo(BaseModel):
@@ -38,11 +38,21 @@ class LeagueInfo(BaseModel):
 
     league_id: str
     league_name: str
-    teams: list[TeamRoster] = []
+    teams: list[TeamRoster] = Field(default_factory=list)
     team_count: int = 0
     scoring_type: str = "roto"
-    scoring_categories: list[str] = []
-    roster_positions: list[str] = []
+    scoring_categories: list[str] = Field(default_factory=list)
+    roster_positions: list[str] = Field(default_factory=list)
+    points_scoring: dict[str, float] = Field(default_factory=dict)
+    bench: int | None = None
+    minors: int | None = None
+    ir: int | None = None
+    keeper_limit: int | None = None
+    points_valuation_mode: str = "season_total"
+    weekly_starts_cap: int | None = None
+    allow_same_day_starts_overflow: bool = False
+    weekly_acquisition_cap: int | None = None
+    import_warnings: list[str] = Field(default_factory=list)
 
 
 class MatchedRoster(BaseModel):
@@ -50,7 +60,7 @@ class MatchedRoster(BaseModel):
 
     team_id: str
     team_name: str
-    players: list[MatchedPlayer] = []
+    players: list[MatchedPlayer] = Field(default_factory=list)
     matched_count: int = 0
     total_count: int = 0
 
@@ -60,5 +70,15 @@ class LeagueSuggestedSettings(BaseModel):
 
     teams: int = 12
     scoring_mode: str = "roto"
-    roto_categories: dict[str, bool] = {}
-    roster_slots: dict[str, int] = {}
+    roto_categories: dict[str, bool] = Field(default_factory=dict)
+    roster_slots: dict[str, int] = Field(default_factory=dict)
+    points_scoring: dict[str, float] = Field(default_factory=dict)
+    bench: int | None = None
+    minors: int | None = None
+    ir: int | None = None
+    keeper_limit: int | None = None
+    points_valuation_mode: str = "season_total"
+    weekly_starts_cap: int | None = None
+    allow_same_day_starts_overflow: bool = False
+    weekly_acquisition_cap: int | None = None
+    import_warnings: list[str] = Field(default_factory=list)

@@ -97,7 +97,16 @@ export function MethodologySection(): React.ReactElement {
             Per-year points use a slot-constrained assignment so players compete for finite roster capacity.
           </li>
           <li>
-            Points-mode centering uses active lineup slots only (bench/minors/IL do not change the replacement cutoff).
+            Season-total points mode uses in-season roster depth for replacement, and an optional
+            {" "}
+            <code>keeper_limit</code> can anchor the dynasty cutoff to shallow keeper pools instead of full roster depth.
+          </li>
+          <li>
+            Weekly H2H points mode is a calibrated valuation path, not a day-by-day schedule simulator.
+            It raises pitcher replacement baselines when weekly starts caps and acquisition caps make streamer production fungible.
+          </li>
+          <li>
+            Final-day starts overflow can be modeled explicitly in weekly H2H mode, increasing the effective starts cap by a small calibrated amount.
           </li>
           <li>
             Two-way handling uses your setting: <code>sum</code> adds both sides, <code>max</code> keeps the higher side.

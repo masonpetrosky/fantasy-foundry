@@ -132,6 +132,16 @@ def test_get_league_settings(fantrax_app):
     assert body["scoring_mode"] == "roto"
     assert body["roto_categories"]["roto_hit_r"] is True
     assert "roster_slots" in body
+    assert body["points_scoring"] == {}
+    assert body["bench"] == 0
+    assert body["minors"] == 0
+    assert body["ir"] == 0
+    assert body["keeper_limit"] is None
+    assert body["points_valuation_mode"] == "season_total"
+    assert body["weekly_starts_cap"] is None
+    assert body["allow_same_day_starts_overflow"] is False
+    assert body["weekly_acquisition_cap"] is None
+    assert body["import_warnings"] == []
 
 
 def test_get_league_fetcher_error(fantrax_app):

@@ -40,6 +40,8 @@ CALCULATOR_RESULT_POINTS_EXPORT_ORDER: tuple[str, ...] = (
     "HittingAssignmentValue",
     "PitchingAssignmentValue",
     "KeepDropValue",
+    "KeepDropHoldValue",
+    "KeepDropKeep",
 )
 
 ROTO_HITTER_CATEGORY_FIELDS: tuple[tuple[str, str, bool], ...] = (

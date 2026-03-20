@@ -53,6 +53,9 @@ class _FlowEdge:
     cost: int
 
 
+_SEASON_WEEKS = 26.0
+
+
 def stat_or_zero(row: dict | None, key: str, *, as_float_fn: Callable[[object], float | None]) -> float:
     if not row:
         return 0.0
@@ -113,6 +116,7 @@ def calculate_hitter_points_breakdown(
         "RBI": stat_or_zero_fn(row, "RBI"),
         "SB": stat_or_zero_fn(row, "SB"),
         "BB": stat_or_zero_fn(row, "BB"),
+        "HBP": stat_or_zero_fn(row, "HBP"),
         "SO": stat_or_zero_fn(row, "SO"),
     }
     rule_points = {
@@ -124,6 +128,7 @@ def calculate_hitter_points_breakdown(
         "RBI": inputs["RBI"] * scoring["pts_hit_rbi"],
         "SB": inputs["SB"] * scoring["pts_hit_sb"],
         "BB": inputs["BB"] * scoring["pts_hit_bb"],
+        "HBP": inputs["HBP"] * scoring["pts_hit_hbp"],
         "SO": inputs["SO"] * scoring["pts_hit_so"],
     }
     total_points = float(sum(rule_points.values()))
@@ -146,10 +151,11 @@ def calculate_pitcher_points_breakdown(
         "L": stat_or_zero_fn(row, "L"),
         "K": stat_or_zero_fn(row, "K"),
         "SV": stat_or_zero_fn(row, "SV"),
-        "SVH": stat_or_zero_fn(row, "SVH"),
+        "HLD": stat_or_zero_fn(row, "HLD"),
         "H": stat_or_zero_fn(row, "H"),
         "ER": stat_or_zero_fn(row, "ER"),
         "BB": stat_or_zero_fn(row, "BB"),
+        "HBP": stat_or_zero_fn(row, "HBP"),
     }
     rule_points = {
         "IP": inputs["IP"] * scoring["pts_pit_ip"],
@@ -157,10 +163,11 @@ def calculate_pitcher_points_breakdown(
         "L": inputs["L"] * scoring["pts_pit_l"],
         "K": inputs["K"] * scoring["pts_pit_k"],
         "SV": inputs["SV"] * scoring["pts_pit_sv"],
-        "SVH": inputs["SVH"] * scoring["pts_pit_svh"],
+        "HLD": inputs["HLD"] * scoring["pts_pit_hld"],
         "H": inputs["H"] * scoring["pts_pit_h"],
         "ER": inputs["ER"] * scoring["pts_pit_er"],
         "BB": inputs["BB"] * scoring["pts_pit_bb"],
+        "HBP": inputs["HBP"] * scoring["pts_pit_hbp"],
     }
     total_points = float(sum(rule_points.values()))
     return {
@@ -282,6 +289,165 @@ def points_slot_replacement(
         baselines[slot] = float(sum(selected) / len(selected))
 
     return baselines
+
+
+def _effective_weekly_starts_cap(
+    weekly_starts_cap: int | None,
+    *,
+    allow_same_day_starts_overflow: bool,
+    starter_slot_capacity: int,
+) -> float | None:
+    if weekly_starts_cap is None or int(weekly_starts_cap) <= 0:
+        return None
+
+    effective_cap = float(weekly_starts_cap)
+    if allow_same_day_starts_overflow:
+        overflow_bonus = min(2.0, max(float(starter_slot_capacity), 1.0) * 0.20)
+        effective_cap += max(0.5, overflow_bonus)
+    return effective_cap
+
+
+def _weekly_pitcher_streaming_bonus_by_slot(
+    entries: list[dict[str, object]],
+    *,
+    in_season_rostered_player_ids: set[str],
+    teams: int,
+    starter_slot_capacity: int,
+    total_pitcher_slots: int,
+    weekly_starts_cap: int | None,
+    allow_same_day_starts_overflow: bool,
+    weekly_acquisition_cap: int | None,
+) -> tuple[dict[str, float], dict[str, float | int | None]]:
+    diagnostics: dict[str, float | int | None] = {
+        "season_weeks": _SEASON_WEEKS,
+        "weekly_starts_cap": weekly_starts_cap,
+        "effective_weekly_starts_cap": None,
+        "weekly_acquisition_cap": weekly_acquisition_cap,
+        "held_starts_per_week": None,
+        "streamable_starts_per_week": None,
+        "replacement_points_per_start": None,
+        "streaming_points_per_sp_slot": None,
+        "streaming_points_per_p_slot": None,
+    }
+    if starter_slot_capacity <= 0 or weekly_acquisition_cap is None or weekly_acquisition_cap <= 0:
+        return {}, diagnostics
+
+    effective_weekly_cap = _effective_weekly_starts_cap(
+        weekly_starts_cap,
+        allow_same_day_starts_overflow=allow_same_day_starts_overflow,
+        starter_slot_capacity=starter_slot_capacity,
+    )
+    if effective_weekly_cap is None or effective_weekly_cap <= 0:
+        return {}, diagnostics
+    diagnostics["effective_weekly_starts_cap"] = round(effective_weekly_cap, 4)
+
+    starter_entries: list[dict[str, float | str]] = []
+    for entry in entries:
+        raw_slots = entry.get("slots")
+        if isinstance(raw_slots, set):
+            slots = {str(slot) for slot in raw_slots}
+        elif isinstance(raw_slots, (list, tuple)):
+            slots = {str(slot) for slot in raw_slots}
+        else:
+            continue
+        if "SP" not in slots and "P" not in slots:
+            continue
+
+        player_id = str(entry.get("player_id") or "").strip()
+        if not player_id:
+            continue
+        try:
+            points = float(entry.get("points") or 0.0)
+            gs = float(entry.get("gs") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if gs <= 0 or points <= 0:
+            continue
+        starter_entries.append(
+            {
+                "player_id": player_id,
+                "points": points,
+                "gs": gs,
+                "points_per_start": points / gs,
+            }
+        )
+
+    if not starter_entries:
+        return {}, diagnostics
+
+    active_starter_count = max(int(teams) * max(int(starter_slot_capacity), 1), 1)
+    top_rostered_starters = sorted(
+        starter_entries,
+        key=lambda entry: (
+            -float(entry["points"]),
+            -float(entry["gs"]),
+            str(entry["player_id"]),
+        ),
+    )[:active_starter_count]
+    if not top_rostered_starters:
+        return {}, diagnostics
+
+    avg_rostered_starts = sum(float(entry["gs"]) for entry in top_rostered_starters) / len(top_rostered_starters)
+    held_starts_per_week = (avg_rostered_starts / _SEASON_WEEKS) * float(starter_slot_capacity)
+    diagnostics["held_starts_per_week"] = round(held_starts_per_week, 4)
+
+    streamable_starts_per_week = min(
+        max(effective_weekly_cap - held_starts_per_week, 0.0),
+        float(weekly_acquisition_cap),
+    )
+    diagnostics["streamable_starts_per_week"] = round(streamable_starts_per_week, 4)
+    if streamable_starts_per_week <= 1e-9:
+        return {}, diagnostics
+
+    free_agent_starters = [
+        entry for entry in starter_entries if str(entry["player_id"]) not in in_season_rostered_player_ids
+    ]
+    if not free_agent_starters:
+        free_agent_starters = sorted(
+            starter_entries,
+            key=lambda entry: (
+                -float(entry["points"]),
+                -float(entry["gs"]),
+                str(entry["player_id"]),
+            ),
+        )[active_starter_count:]
+    if not free_agent_starters:
+        return {}, diagnostics
+
+    candidate_pps = sorted(
+        (
+            float(entry["points_per_start"])
+            for entry in free_agent_starters
+            if float(entry["points_per_start"]) > 0
+        ),
+        reverse=True,
+    )
+    if not candidate_pps:
+        return {}, diagnostics
+
+    top_n = candidate_pps[: max(int(teams), 1)]
+    replacement_points_per_start = float(sum(top_n) / len(top_n))
+    diagnostics["replacement_points_per_start"] = round(replacement_points_per_start, 4)
+
+    streaming_points_per_sp_slot = (
+        replacement_points_per_start
+        * (streamable_starts_per_week / float(starter_slot_capacity))
+        * _SEASON_WEEKS
+    )
+    generic_slot_share = min(
+        1.0,
+        float(starter_slot_capacity) / max(float(total_pitcher_slots), 1.0),
+    )
+    streaming_points_per_p_slot = streaming_points_per_sp_slot * generic_slot_share
+    diagnostics["streaming_points_per_sp_slot"] = round(streaming_points_per_sp_slot, 4)
+    diagnostics["streaming_points_per_p_slot"] = round(streaming_points_per_p_slot, 4)
+
+    bonus_by_slot: dict[str, float] = {}
+    if streaming_points_per_sp_slot > 1e-9:
+        bonus_by_slot["SP"] = float(streaming_points_per_sp_slot)
+    if streaming_points_per_p_slot > 1e-9:
+        bonus_by_slot["P"] = float(streaming_points_per_p_slot)
+    return bonus_by_slot, diagnostics
 
 
 def _best_slot_surplus(
@@ -559,7 +725,12 @@ def calculate_points_dynasty_frame(
     bench: int,
     minors: int,
     ir: int,
+    keeper_limit: int | None,
     two_way: str,
+    points_valuation_mode: str,
+    weekly_starts_cap: int | None,
+    allow_same_day_starts_overflow: bool,
+    weekly_acquisition_cap: int | None,
     start_year: int,
     pts_hit_1b: float,
     pts_hit_2b: float,
@@ -569,16 +740,18 @@ def calculate_points_dynasty_frame(
     pts_hit_rbi: float,
     pts_hit_sb: float,
     pts_hit_bb: float,
+    pts_hit_hbp: float,
     pts_hit_so: float,
     pts_pit_ip: float,
     pts_pit_w: float,
     pts_pit_l: float,
     pts_pit_k: float,
     pts_pit_sv: float,
-    pts_pit_svh: float,
+    pts_pit_hld: float,
     pts_pit_h: float,
     pts_pit_er: float,
     pts_pit_bb: float,
+    pts_pit_hbp: float,
 ) -> pd.DataFrame:
     scoring = {
         "pts_hit_1b": float(pts_hit_1b),
@@ -589,16 +762,18 @@ def calculate_points_dynasty_frame(
         "pts_hit_rbi": float(pts_hit_rbi),
         "pts_hit_sb": float(pts_hit_sb),
         "pts_hit_bb": float(pts_hit_bb),
+        "pts_hit_hbp": float(pts_hit_hbp),
         "pts_hit_so": float(pts_hit_so),
         "pts_pit_ip": float(pts_pit_ip),
         "pts_pit_w": float(pts_pit_w),
         "pts_pit_l": float(pts_pit_l),
         "pts_pit_k": float(pts_pit_k),
         "pts_pit_sv": float(pts_pit_sv),
-        "pts_pit_svh": float(pts_pit_svh),
+        "pts_pit_hld": float(pts_pit_hld),
         "pts_pit_h": float(pts_pit_h),
         "pts_pit_er": float(pts_pit_er),
         "pts_pit_bb": float(pts_pit_bb),
+        "pts_pit_hbp": float(pts_pit_hbp),
     }
 
     bat_rows = ctx.bat_data
@@ -645,9 +820,11 @@ def calculate_points_dynasty_frame(
         + pit_sp
         + pit_rp
     )
-    # Points mode values only active lineup slots, so centering must use the
-    # same active-slot roster depth (excluding bench/minors/IL).
-    replacement_rank = max(1, teams * max(1, active_slots_per_team))
+    active_depth_per_team = max(1, active_slots_per_team)
+    in_season_depth_per_team = max(1, active_slots_per_team + bench + minors + ir)
+    replacement_depth_per_team = int(keeper_limit) if keeper_limit is not None else in_season_depth_per_team
+    replacement_rank = max(1, teams * max(replacement_depth_per_team, 1))
+    in_season_replacement_rank = max(1, teams * in_season_depth_per_team)
     hitter_slot_counts = {
         "C": int(hit_c),
         "1B": int(hit_1b),
@@ -666,6 +843,8 @@ def calculate_points_dynasty_frame(
     }
     active_hitter_slots = {slot for slot, count in hitter_slot_counts.items() if count > 0}
     active_pitcher_slots = {slot for slot, count in pitcher_slot_counts.items() if count > 0}
+    starter_slot_capacity = max(int(pit_p) + int(pit_sp), 0)
+    total_pitcher_slots = max(int(pit_p) + int(pit_sp) + int(pit_rp), 0)
     n_replacement = max(int(teams), 1)
     freeze_replacement_baselines = True
 
@@ -733,7 +912,12 @@ def calculate_points_dynasty_frame(
                 )
             if pit_slots:
                 year_pit_entries.setdefault(year, []).append(
-                    {"player_id": player_id, "points": pit_points, "slots": set(pit_slots)}
+                    {
+                        "player_id": player_id,
+                        "points": pit_points,
+                        "slots": set(pit_slots),
+                        "gs": ctx.stat_or_zero(pit_row, "GS"),
+                    }
                 )
 
             selected_raw_points = 0.0
@@ -777,9 +961,13 @@ def calculate_points_dynasty_frame(
         key=lambda item: (-float(item[1]), str(item[0])),
     )
     rostered_player_ids = {player_id for player_id, _score in ranked_players[:replacement_rank]}
+    in_season_rostered_player_ids = {
+        player_id for player_id, _score in ranked_players[:in_season_replacement_rank]
+    }
 
     year_hit_replacement: dict[int, dict[str, float]] = {}
     year_pit_replacement: dict[int, dict[str, float]] = {}
+    weekly_pitching_diagnostics_by_year: dict[int, dict[str, float | int | None]] = {}
     if freeze_replacement_baselines:
         frozen_hit = ctx.points_slot_replacement(
             year_hit_entries.get(start_year, []),
@@ -793,9 +981,26 @@ def calculate_points_dynasty_frame(
             rostered_player_ids=rostered_player_ids,
             n_replacement=n_replacement,
         )
+        frozen_weekly_bonus: dict[str, float] = {}
+        if points_valuation_mode == "weekly_h2h":
+            frozen_weekly_bonus, frozen_weekly_diag = _weekly_pitcher_streaming_bonus_by_slot(
+                year_pit_entries.get(start_year, []),
+                in_season_rostered_player_ids=in_season_rostered_player_ids,
+                teams=teams,
+                starter_slot_capacity=starter_slot_capacity,
+                total_pitcher_slots=total_pitcher_slots,
+                weekly_starts_cap=weekly_starts_cap,
+                allow_same_day_starts_overflow=allow_same_day_starts_overflow,
+                weekly_acquisition_cap=weekly_acquisition_cap,
+            )
+            weekly_pitching_diagnostics_by_year[start_year] = frozen_weekly_diag
+            for slot, bonus in frozen_weekly_bonus.items():
+                frozen_pit[slot] = float(frozen_pit.get(slot, 0.0)) + float(bonus)
         for year in valuation_year_set:
             year_hit_replacement[year] = dict(frozen_hit)
             year_pit_replacement[year] = dict(frozen_pit)
+            if year != start_year and start_year in weekly_pitching_diagnostics_by_year:
+                weekly_pitching_diagnostics_by_year[year] = dict(weekly_pitching_diagnostics_by_year[start_year])
     else:
         for year in valuation_year_set:
             year_hit_replacement[year] = ctx.points_slot_replacement(
@@ -810,6 +1015,20 @@ def calculate_points_dynasty_frame(
                 rostered_player_ids=rostered_player_ids,
                 n_replacement=n_replacement,
             )
+            if points_valuation_mode == "weekly_h2h":
+                weekly_bonus, weekly_diag = _weekly_pitcher_streaming_bonus_by_slot(
+                    year_pit_entries.get(year, []),
+                    in_season_rostered_player_ids=in_season_rostered_player_ids,
+                    teams=teams,
+                    starter_slot_capacity=starter_slot_capacity,
+                    total_pitcher_slots=total_pitcher_slots,
+                    weekly_starts_cap=weekly_starts_cap,
+                    allow_same_day_starts_overflow=allow_same_day_starts_overflow,
+                    weekly_acquisition_cap=weekly_acquisition_cap,
+                )
+                weekly_pitching_diagnostics_by_year[year] = weekly_diag
+                for slot, bonus in weekly_bonus.items():
+                    year_pit_replacement[year][slot] = float(year_pit_replacement[year].get(slot, 0.0)) + float(bonus)
 
     hitter_slot_capacity = _slot_capacity_by_league(hitter_slot_counts, teams=teams)
     pitcher_slot_capacity = _slot_capacity_by_league(pitcher_slot_counts, teams=teams)
@@ -972,6 +1191,8 @@ def calculate_points_dynasty_frame(
             row_out["HittingAssignmentValue"] = start_year_points.get("hitting_assignment_value")
             row_out["PitchingAssignmentValue"] = start_year_points.get("pitching_assignment_value")
             row_out["KeepDropValue"] = start_year_points.get("keep_drop_value")
+            row_out["KeepDropHoldValue"] = start_year_points.get("keep_drop_hold_value")
+            row_out["KeepDropKeep"] = start_year_points.get("keep_drop_keep")
 
         row_out["RawDynastyValue"] = float(keep_drop.raw_total)
         result_rows.append(row_out)
@@ -997,4 +1218,26 @@ def calculate_points_dynasty_frame(
     for row in result_rows:
         row["DynastyValue"] = float(row["RawDynastyValue"]) - replacement_raw
 
-    return pd.DataFrame.from_records(result_rows)
+    out = pd.DataFrame.from_records(result_rows)
+    valuation_diagnostics: dict[str, object] = {
+        "PointsValuationMode": points_valuation_mode,
+        "KeeperLimit": int(keeper_limit) if keeper_limit is not None else None,
+        "ReplacementRank": int(replacement_rank),
+        "InSeasonReplacementRank": int(in_season_replacement_rank),
+        "ActiveDepthPerTeam": int(active_depth_per_team),
+        "InSeasonDepthPerTeam": int(in_season_depth_per_team),
+    }
+    if points_valuation_mode == "weekly_h2h":
+        valuation_diagnostics.update(
+            {
+                "WeeklyStartsCap": weekly_starts_cap,
+                "AllowSameDayStartsOverflow": bool(allow_same_day_starts_overflow),
+                "WeeklyAcquisitionCap": weekly_acquisition_cap,
+                "WeeklyPitchingByYear": {
+                    str(year): diagnostics
+                    for year, diagnostics in sorted(weekly_pitching_diagnostics_by_year.items())
+                },
+            }
+        )
+    out.attrs["valuation_diagnostics"] = valuation_diagnostics
+    return out

@@ -113,6 +113,24 @@ def test_settings_response_schema(contract_client: TestClient) -> None:
     assert isinstance(body["scoring_mode"], str)
     assert isinstance(body["roto_categories"], dict)
     assert isinstance(body["roster_slots"], dict)
+    assert isinstance(body["points_scoring"], dict)
+    assert isinstance(body["allow_same_day_starts_overflow"], bool)
+    assert isinstance(body["import_warnings"], list)
 
-    required_keys = {"teams", "scoring_mode", "roto_categories", "roster_slots"}
+    required_keys = {
+        "teams",
+        "scoring_mode",
+        "roto_categories",
+        "roster_slots",
+        "points_scoring",
+        "bench",
+        "minors",
+        "ir",
+        "keeper_limit",
+        "points_valuation_mode",
+        "weekly_starts_cap",
+        "allow_same_day_starts_overflow",
+        "weekly_acquisition_cap",
+        "import_warnings",
+    }
     assert required_keys <= set(body.keys())

@@ -44,6 +44,16 @@ interface FantraxSettingsResponse {
   scoring_mode: string;
   roto_categories: Record<string, boolean>;
   roster_slots: Record<string, number>;
+  points_scoring: Record<string, number>;
+  bench: number | null;
+  minors: number | null;
+  ir: number | null;
+  keeper_limit: number | null;
+  points_valuation_mode: string;
+  weekly_starts_cap: number | null;
+  allow_same_day_starts_overflow: boolean;
+  weekly_acquisition_cap: number | null;
+  import_warnings: string[];
 }
 
 export interface UseFantraxLeagueResult {
@@ -210,6 +220,26 @@ export function useFantraxLeague(): UseFantraxLeagueResult {
     Object.entries(suggestedSettings.roster_slots).forEach(([key, val]) => {
       update(key, val);
     });
+
+    // Apply explicit points scoring when available.
+    Object.entries(suggestedSettings.points_scoring).forEach(([key, val]) => {
+      update(key, val);
+    });
+
+    if (suggestedSettings.bench != null) update("bench", suggestedSettings.bench);
+    if (suggestedSettings.minors != null) update("minors", suggestedSettings.minors);
+    if (suggestedSettings.ir != null) update("ir", suggestedSettings.ir);
+    update("keeper_limit", suggestedSettings.keeper_limit);
+    update(
+      "points_valuation_mode",
+      suggestedSettings.points_valuation_mode
+        || (suggestedSettings.weekly_starts_cap != null || suggestedSettings.weekly_acquisition_cap != null
+          ? "weekly_h2h"
+          : "season_total")
+    );
+    update("weekly_starts_cap", suggestedSettings.weekly_starts_cap);
+    update("allow_same_day_starts_overflow", suggestedSettings.allow_same_day_starts_overflow);
+    update("weekly_acquisition_cap", suggestedSettings.weekly_acquisition_cap);
   }, [suggestedSettings]);
 
   const stableRosterPlayerKeys = useMemo(() => rosterPlayerKeys, [rosterPlayerKeys]);

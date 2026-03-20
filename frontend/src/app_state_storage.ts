@@ -530,9 +530,10 @@ export function mergeKnownCalculatorSettings(
 ): Record<string, unknown> {
   const merged = { ...baseSettings };
   if (!incomingSettings || typeof incomingSettings !== "object") return merged;
+  const normalizedIncoming = normalizeLegacyCalculatorSettings(incomingSettings);
   Object.keys(baseSettings).forEach(key => {
-    if (Object.prototype.hasOwnProperty.call(incomingSettings, key)) {
-      merged[key] = incomingSettings[key];
+    if (Object.prototype.hasOwnProperty.call(normalizedIncoming, key)) {
+      merged[key] = normalizedIncoming[key];
     }
   });
   // League mode removed — force common for legacy presets/URLs.
@@ -550,7 +551,7 @@ export function encodeCalculatorSettings(settings: Record<string, unknown>): str
 
 /** Known calculator setting keys used for schema validation of decoded presets. */
 const KNOWN_CALCULATOR_KEYS = new Set([
-  "mode", "scoring_mode", "two_way", "sgp_denominator_mode",
+  "mode", "scoring_mode", "points_valuation_mode", "two_way", "sgp_denominator_mode",
   "sgp_winsor_low_pct", "sgp_winsor_high_pct", "sgp_epsilon_counting", "sgp_epsilon_ratio",
   "enable_playing_time_reliability", "enable_age_risk_adjustment",
   "enable_prospect_risk_adjustment", "enable_bench_stash_relief", "bench_negative_penalty",
@@ -558,18 +559,36 @@ const KNOWN_CALCULATOR_KEYS = new Set([
   "enable_replacement_blend", "replacement_blend_alpha",
   "teams", "sims", "horizon", "discount",
   "hit_c", "hit_1b", "hit_2b", "hit_3b", "hit_ss", "hit_ci", "hit_mi", "hit_of", "hit_ut",
-  "pit_p", "pit_sp", "pit_rp", "bench", "minors", "ir",
+  "pit_p", "pit_sp", "pit_rp", "bench", "minors", "ir", "keeper_limit",
   "ip_min", "ip_max", "start_year", "auction_budget",
+  "weekly_starts_cap", "allow_same_day_starts_overflow", "weekly_acquisition_cap",
   "roto_hit_r", "roto_hit_rbi", "roto_hit_hr", "roto_hit_sb", "roto_hit_avg",
   "roto_hit_obp", "roto_hit_slg", "roto_hit_ops", "roto_hit_h", "roto_hit_bb",
   "roto_hit_2b", "roto_hit_tb",
   "roto_pit_w", "roto_pit_k", "roto_pit_sv", "roto_pit_era", "roto_pit_whip",
   "roto_pit_qs", "roto_pit_qa3", "roto_pit_svh",
   "pts_hit_1b", "pts_hit_2b", "pts_hit_3b", "pts_hit_hr", "pts_hit_r",
-  "pts_hit_rbi", "pts_hit_sb", "pts_hit_bb", "pts_hit_so",
+  "pts_hit_rbi", "pts_hit_sb", "pts_hit_bb", "pts_hit_hbp", "pts_hit_so",
   "pts_pit_ip", "pts_pit_w", "pts_pit_l", "pts_pit_k", "pts_pit_sv",
-  "pts_pit_svh", "pts_pit_h", "pts_pit_er", "pts_pit_bb",
+  "pts_pit_svh", "pts_pit_hld", "pts_pit_h", "pts_pit_er", "pts_pit_bb", "pts_pit_hbp",
 ]);
+
+function normalizeLegacyCalculatorSettings(
+  settings: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const source = settings && typeof settings === "object" ? settings : {};
+  const normalized = { ...source };
+  const legacySvh = Number(normalized.pts_pit_svh);
+  if (!Number.isFinite(legacySvh) || Object.prototype.hasOwnProperty.call(normalized, "pts_pit_hld")) {
+    return normalized;
+  }
+
+  const currentSv = Number(normalized.pts_pit_sv);
+  normalized.pts_pit_sv = (Number.isFinite(currentSv) ? currentSv : 0) + legacySvh;
+  normalized.pts_pit_hld = legacySvh;
+  delete normalized.pts_pit_svh;
+  return normalized;
+}
 
 export function decodeCalculatorSettings(encoded: string | null | undefined): Record<string, unknown> | null {
   if (!encoded) return null;
@@ -584,7 +603,8 @@ export function decodeCalculatorSettings(encoded: string | null | undefined): Re
         validated[key] = parsed[key];
       }
     }
-    return Object.keys(validated).length > 0 ? validated : null;
+    const normalized = normalizeLegacyCalculatorSettings(validated);
+    return Object.keys(normalized).length > 0 ? normalized : null;
   } catch {
     return null;
   }

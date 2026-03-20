@@ -6,6 +6,7 @@ import {
   stablePlayerKeyFromRow,
 } from "./app_state_storage";
 import {
+  POINTS_RESULT_BOOLEAN_COLS,
   POINTS_RESULT_NUMERIC_COLS,
   POINTS_RESULT_SLOT_COLS,
   ROTO_COUNTING_STAT_COLS,
@@ -385,6 +386,9 @@ export function DynastyCalculatorResults({ results, state, refs, actions }: Dyna
                       }
                       if (POINTS_RESULT_SLOT_COLS.has(c)) {
                         return <td key={c} className={pinClass}>{(val as string) || "\u2014"}</td>;
+                      }
+                      if (POINTS_RESULT_BOOLEAN_COLS.has(c)) {
+                        return <td key={c} className={pinClass}>{typeof val === "boolean" ? (val ? "Yes" : "No") : "\u2014"}</td>;
                       }
                       if (isRotoStatDynastyCol(c)) {
                         const n = Number(val);

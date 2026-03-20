@@ -119,7 +119,12 @@ def test_runtime_points_frame_cached_delegates(monkeypatch) -> None:
         bench=2,
         minors=0,
         ir=0,
+        keeper_limit=None,
         two_way="sum",
+        points_valuation_mode="season_total",
+        weekly_starts_cap=None,
+        allow_same_day_starts_overflow=False,
+        weekly_acquisition_cap=None,
         start_year=2026,
         pts_hit_1b=1.0,
         pts_hit_2b=2.0,
@@ -129,21 +134,24 @@ def test_runtime_points_frame_cached_delegates(monkeypatch) -> None:
         pts_hit_rbi=1.0,
         pts_hit_sb=1.0,
         pts_hit_bb=1.0,
+        pts_hit_hbp=0.0,
         pts_hit_so=-1.0,
         pts_pit_ip=3.0,
         pts_pit_w=5.0,
         pts_pit_l=-5.0,
         pts_pit_k=1.0,
         pts_pit_sv=5.0,
-        pts_pit_svh=0.0,
+        pts_pit_hld=0.0,
         pts_pit_h=-1.0,
         pts_pit_er=-2.0,
         pts_pit_bb=-1.0,
+        pts_pit_hbp=0.0,
     )
     assert out is sentinel
     assert calls["state"] is runtime
     assert isinstance(calls["kwargs"], dict)
     assert calls["kwargs"]["teams"] == 12
+    assert calls["kwargs"]["points_valuation_mode"] == "season_total"
     assert calls["kwargs"]["pts_pit_bb"] == -1.0
 
 

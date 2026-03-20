@@ -172,6 +172,16 @@ def build_fantrax_router(
                 "scoring_mode": suggested.scoring_mode,
                 "roto_categories": suggested.roto_categories,
                 "roster_slots": suggested.roster_slots,
+                "points_scoring": suggested.points_scoring,
+                "bench": suggested.bench,
+                "minors": suggested.minors,
+                "ir": suggested.ir,
+                "keeper_limit": suggested.keeper_limit,
+                "points_valuation_mode": suggested.points_valuation_mode,
+                "weekly_starts_cap": suggested.weekly_starts_cap,
+                "allow_same_day_starts_overflow": suggested.allow_same_day_starts_overflow,
+                "weekly_acquisition_cap": suggested.weekly_acquisition_cap,
+                "import_warnings": suggested.import_warnings,
             }
         )
 
