@@ -221,10 +221,10 @@ def simulate_sgp_hit(
             totals += sums
 
         values = _hit_category_matrix(totals, active_categories)
-        for idx, category in enumerate(active_categories):
+        for category_idx, category in enumerate(active_categories):
             diffs[category].append(
                 _mean_adjacent_rank_gap(
-                    values[:, idx],
+                    values[:, category_idx],
                     ascending=False,
                     robust=robust,
                     winsor_low_pct=winsor_low,
@@ -277,10 +277,10 @@ def simulate_sgp_pit(
             rep_rates=rep_rates,
             categories=active_categories,
         )
-        for idx, category in enumerate(active_categories):
+        for category_idx, category in enumerate(active_categories):
             diffs[category].append(
                 _mean_adjacent_rank_gap(
-                    values[:, idx],
+                    values[:, category_idx],
                     ascending=(category in COMMON_REVERSED_PITCH_CATS),
                     robust=robust,
                     winsor_low_pct=winsor_low,

@@ -421,9 +421,12 @@ def map_points_scoring(
         raw_name = str(entry.get("name", "")).strip()
         if not raw_name:
             continue
+        raw_value = entry.get("value")
+        if not isinstance(raw_value, (str, int, float)):
+            continue
         try:
-            value = float(entry.get("value"))
-        except (TypeError, ValueError):
+            value = float(raw_value)
+        except ValueError:
             continue
         scope = _normalize_scope(entry.get("scope"))
         token = _normalize_token(raw_name)
