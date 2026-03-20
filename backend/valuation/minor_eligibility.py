@@ -169,7 +169,6 @@ def _select_mlb_roster_with_active_floor(
     if len(floor) > total_mlb_slots:
         floor = floor.head(total_mlb_slots).copy()
 
-    floor_names = set(floor["Player"]) if not floor.empty else set()
     fill_needed = max(total_mlb_slots - len(floor), 0)
     if fill_needed == 0:
         return floor.reset_index(drop=True)
