@@ -238,6 +238,7 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
         ir_negative_penalty: float = 0.20,
         enable_replacement_blend: bool = False,
         replacement_blend_alpha: float = 0.70,
+        hit_dh: int = 0,
         **roto_category_settings: bool,
     ) -> pd.DataFrame:
         return state_module.core_runtime_state_helpers.calculate_common_dynasty_frame_cached(
@@ -254,6 +255,7 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
             hit_ci=hit_ci,
             hit_mi=hit_mi,
             hit_of=hit_of,
+            hit_dh=hit_dh,
             hit_ut=hit_ut,
             pit_p=pit_p,
             pit_sp=pit_sp,
@@ -429,6 +431,7 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
         pts_pit_er: float,
         pts_pit_bb: float,
         pts_pit_hbp: float,
+        hit_dh: int = 0,
     ) -> pd.DataFrame:
         return state_module.core_runtime_state_helpers.calculate_points_dynasty_frame_cached(
             state=state_module,
@@ -443,6 +446,7 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
             hit_ci=hit_ci,
             hit_mi=hit_mi,
             hit_of=hit_of,
+            hit_dh=hit_dh,
             hit_ut=hit_ut,
             pit_p=pit_p,
             pit_sp=pit_sp,

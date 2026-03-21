@@ -111,10 +111,11 @@ def test_map_scoring_categories_long_names():
 
 
 def test_map_roster_slots():
-    positions = ["C", "1B", "2B", "3B", "SS", "OF", "OF", "OF", "UT", "SP", "SP", "SP", "RP", "RP"]
+    positions = ["C", "1B", "2B", "3B", "SS", "OF", "OF", "OF", "DH", "UT", "SP", "SP", "SP", "RP", "RP"]
     result = map_roster_slots(positions)
     assert result["hit_c"] == 1
     assert result["hit_of"] == 3
+    assert result["hit_dh"] == 1
     assert result["hit_ut"] == 1
     assert result["pit_sp"] == 3
     assert result["pit_rp"] == 2
@@ -195,6 +196,8 @@ def test_build_suggested_settings_points_league_carries_weekly_rules():
     settings = build_suggested_settings(league)
     assert settings.scoring_mode == "points"
     assert settings.points_scoring["pts_hit_r"] == 1.0
+    assert settings.roster_slots["hit_dh"] == 1
+    assert settings.roster_slots["hit_ut"] == 1
     assert settings.bench == 2
     assert settings.ir == 1
     assert settings.keeper_limit == 7

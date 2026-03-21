@@ -558,7 +558,7 @@ const KNOWN_CALCULATOR_KEYS = new Set([
   "enable_ir_stash_relief", "ir_negative_penalty",
   "enable_replacement_blend", "replacement_blend_alpha",
   "teams", "sims", "horizon", "discount",
-  "hit_c", "hit_1b", "hit_2b", "hit_3b", "hit_ss", "hit_ci", "hit_mi", "hit_of", "hit_ut",
+  "hit_c", "hit_1b", "hit_2b", "hit_3b", "hit_ss", "hit_ci", "hit_mi", "hit_of", "hit_dh", "hit_ut",
   "pit_p", "pit_sp", "pit_rp", "bench", "minors", "ir", "keeper_limit",
   "ip_min", "ip_max", "start_year", "auction_budget",
   "weekly_starts_cap", "allow_same_day_starts_overflow", "weekly_acquisition_cap",

@@ -128,6 +128,7 @@ export function buildQuickStartSettings({
       hit_ci: 1,
       hit_mi: 1,
       hit_of: 5,
+      hit_dh: 0,
       hit_ut: 2,
       pit_p: 3,
       pit_sp: 3,

@@ -26,6 +26,7 @@ class CommonDynastyRotoSettings:
             "CI": 1,
             "MI": 1,
             "OF": 5,
+            "DH": 0,
             "UT": 1,
         }
     )

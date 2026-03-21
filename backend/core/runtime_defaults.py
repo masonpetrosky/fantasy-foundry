@@ -98,6 +98,7 @@ COMMON_HITTER_SLOT_DEFAULTS = {
     "CI": 1,
     "MI": 1,
     "OF": 5,
+    "DH": 0,
     "UT": 1,
 }
 COMMON_PITCHER_SLOT_DEFAULTS = {
@@ -114,6 +115,7 @@ POINTS_HITTER_SLOT_DEFAULTS = {
     "CI": 0,
     "MI": 0,
     "OF": 3,
+    "DH": 0,
     "UT": 1,
 }
 POINTS_PITCHER_SLOT_DEFAULTS = {

@@ -171,6 +171,7 @@ describe("DynastyCalculatorResults", () => {
     );
     const text = container.textContent || "";
     expect(text).toContain("All");
+    expect(container.textContent).toContain("DH");
     cleanup();
   });
 });

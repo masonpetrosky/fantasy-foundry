@@ -496,6 +496,14 @@ describe("mergeKnownCalculatorSettings", () => {
     expect(merged.mode).toBe("common");
     expect(merged.teams).toBe(14);
   });
+
+  it("retains new slot defaults when older settings omit hit_dh", () => {
+    const base = { hit_dh: 0, teams: 12 };
+    const incoming = { teams: 14 };
+    const merged = mergeKnownCalculatorSettings(base, incoming);
+    expect(merged.hit_dh).toBe(0);
+    expect(merged.teams).toBe(14);
+  });
 });
 
 describe("encodeCalculatorSettings / decodeCalculatorSettings", () => {
@@ -527,6 +535,17 @@ describe("encodeCalculatorSettings / decodeCalculatorSettings", () => {
       btoa: () => { throw new Error("fail"); },
     });
     expect(encodeCalculatorSettings({ x: 1 })).toBe("");
+  });
+
+  it("round-trips hit_dh for calculator share links", () => {
+    vi.stubGlobal("window", {
+      btoa: (s: string) => globalThis.btoa(s),
+      atob: (s: string) => globalThis.atob(s),
+    });
+
+    const settings = { teams: 12, hit_dh: 2, scoring_mode: "roto" };
+    const encoded = encodeCalculatorSettings(settings);
+    expect(decodeCalculatorSettings(encoded)).toEqual(settings);
   });
 });
 

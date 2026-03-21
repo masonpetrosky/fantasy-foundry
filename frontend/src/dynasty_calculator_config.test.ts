@@ -115,6 +115,7 @@ describe("resolveRotoSlotDefaults", () => {
     const slots = resolveRotoSlotDefaults({});
     expect(slots.hit_c).toBe(1);
     expect(slots.hit_of).toBe(5);
+    expect(slots.hit_dh).toBe(0);
     expect(slots.pit_p).toBe(9);
     expect(slots.pit_sp).toBe(0);
     expect(slots.pit_rp).toBe(0);
@@ -171,7 +172,7 @@ function buildValidRotoSettings(overrides: Record<string, unknown> = {}): Record
     sims: 300,
     horizon: 20,
     discount: 0.94,
-    hit_c: 1, hit_1b: 1, hit_2b: 1, hit_3b: 1, hit_ss: 1, hit_ci: 1, hit_mi: 1, hit_of: 5, hit_ut: 1,
+    hit_c: 1, hit_1b: 1, hit_2b: 1, hit_3b: 1, hit_ss: 1, hit_ci: 1, hit_mi: 1, hit_of: 5, hit_dh: 0, hit_ut: 1,
     pit_p: 9, pit_sp: 0, pit_rp: 0,
     bench: 6,
     minors: 0,
@@ -230,7 +231,7 @@ describe("buildCalculatorPayload", () => {
   it("returns error when all hitter slots are zero", () => {
     const settings = buildValidRotoSettings({
       hit_c: 0, hit_1b: 0, hit_2b: 0, hit_3b: 0, hit_ss: 0,
-      hit_ci: 0, hit_mi: 0, hit_of: 0, hit_ut: 0,
+      hit_ci: 0, hit_mi: 0, hit_of: 0, hit_dh: 0, hit_ut: 0,
     });
     const result = buildCalculatorPayload(settings, [2026], {});
     expect(result.error).toMatch(/hitter slot/i);
@@ -327,6 +328,7 @@ describe("buildDefaultCalculatorSettings", () => {
     expect(settings.horizon).toBe(20);
     expect(settings.discount).toBe(0.94);
     expect(settings.bench).toBe(6);
+    expect(settings.hit_dh).toBe(0);
     expect(typeof settings.start_year).toBe("number");
   });
 

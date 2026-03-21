@@ -100,6 +100,7 @@ def calculate_common_dynasty_frame_cached(
     ir_negative_penalty: float = 0.20,
     enable_replacement_blend: bool = False,
     replacement_blend_alpha: float = 0.70,
+    hit_dh: int = 0,
 ) -> pd.DataFrame:
     return state.core_calculate_common_dynasty_frame(
         ensure_backend_module_path_fn=state._ensure_backend_module_path,
@@ -116,6 +117,7 @@ def calculate_common_dynasty_frame_cached(
         hit_ci=hit_ci,
         hit_mi=hit_mi,
         hit_of=hit_of,
+        hit_dh=hit_dh,
         hit_ut=hit_ut,
         pit_p=pit_p,
         pit_sp=pit_sp,
@@ -196,6 +198,7 @@ def calculate_points_dynasty_frame_cached(
     pts_pit_er: float,
     pts_pit_bb: float,
     pts_pit_hbp: float,
+    hit_dh: int = 0,
 ) -> pd.DataFrame:
     return state.core_calculate_points_dynasty_frame(
         ctx=state.PointsCalculatorContext(
@@ -233,6 +236,7 @@ def calculate_points_dynasty_frame_cached(
         hit_ci=hit_ci,
         hit_mi=hit_mi,
         hit_of=hit_of,
+        hit_dh=hit_dh,
         hit_ut=hit_ut,
         pit_p=pit_p,
         pit_sp=pit_sp,
@@ -286,6 +290,7 @@ def _prewarm_roto_config(*, state: RuntimeStateHelpersState, params: dict) -> No
         hit_ci=int(params["hit_ci"]),
         hit_mi=int(params["hit_mi"]),
         hit_of=int(params["hit_of"]),
+        hit_dh=int(params.get("hit_dh", 0)),
         hit_ut=int(params["hit_ut"]),
         pit_p=int(params["pit_p"]),
         pit_sp=int(params["pit_sp"]),
@@ -330,6 +335,7 @@ def _prewarm_points_config(*, state: RuntimeStateHelpersState, params: dict) -> 
         hit_ci=int(params["hit_ci"]),
         hit_mi=int(params["hit_mi"]),
         hit_of=int(params["hit_of"]),
+        hit_dh=int(params.get("hit_dh", 0)),
         hit_ut=int(params["hit_ut"]),
         pit_p=int(params["pit_p"]),
         pit_sp=int(params["pit_sp"]),

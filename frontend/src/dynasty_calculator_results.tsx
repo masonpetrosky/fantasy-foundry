@@ -18,7 +18,7 @@ import {
 import { fmt } from "./formatting_utils";
 import type { TierLimits } from "./premium";
 
-const POSITION_FILTER_OPTIONS = ["C", "1B", "2B", "3B", "SS", "OF", "SP", "RP"] as const;
+const POSITION_FILTER_OPTIONS = ["C", "1B", "2B", "3B", "SS", "OF", "DH", "SP", "RP"] as const;
 
 interface RankRow {
   [key: string]: unknown;

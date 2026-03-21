@@ -71,6 +71,7 @@ def test_common_calculator_delegates_to_valuation_service(monkeypatch):
     settings_kwargs = calls["settings_kwargs"]
     assert isinstance(settings_kwargs, dict)
     assert settings_kwargs["hitter_categories"] == ("HR",)
+    assert settings_kwargs["hitter_slots"]["DH"] == 0
     assert settings_kwargs["pitcher_categories"] == ("K",)
 
     calculate_args = calls["calculate_args"]

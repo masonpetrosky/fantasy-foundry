@@ -3,6 +3,7 @@ import pytest
 from backend.core.points_calculator import (
     dynasty_keep_or_drop_values,
     optimize_points_slot_assignment,
+    points_hitter_eligible_slots,
 )
 
 pytestmark = pytest.mark.valuation
@@ -36,6 +37,15 @@ def test_optimize_points_slot_assignment_skips_non_positive_surplus() -> None:
     )
 
     assert assigned == {}
+
+
+def test_points_hitter_eligible_slots_keeps_dh_distinct() -> None:
+    slots = points_hitter_eligible_slots(
+        "1B/DH",
+        position_tokens_fn=lambda value: set(str(value).split("/")),
+    )
+
+    assert slots == {"1B", "CI", "DH", "UT"}
 
 
 def test_dynasty_keep_or_drop_values_drops_negative_continuation() -> None:

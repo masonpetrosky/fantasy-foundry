@@ -28,7 +28,6 @@ def parse_hit_positions(pos_str: str) -> Set[str]:
         "LF": "OF",
         "CF": "OF",
         "RF": "OF",
-        "DH": "UT",
         "UTIL": "UT",
         "U": "UT",
     }
@@ -58,6 +57,8 @@ def eligible_hit_slots(pos_set: Set[str]) -> Set[str]:
         slots.update({"SS", "MI"})
     if "OF" in pos_set:
         slots.add("OF")
+    if "DH" in pos_set:
+        slots.add("DH")
     if "CI" in pos_set:
         slots.add("CI")
     if "MI" in pos_set:

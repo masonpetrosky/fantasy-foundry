@@ -96,6 +96,7 @@ export const HITTER_SLOT_FIELDS: SlotField[] = [
   { key: "hit_ci", label: "CI", defaultValue: 1 },
   { key: "hit_mi", label: "MI", defaultValue: 1 },
   { key: "hit_of", label: "OF", defaultValue: 5 },
+  { key: "hit_dh", label: "DH", defaultValue: 0 },
   { key: "hit_ut", label: "UT", defaultValue: 1 },
 ];
 export const PITCHER_SLOT_FIELDS: SlotField[] = [
@@ -112,6 +113,7 @@ const POINTS_SETUP_SLOT_DEFAULTS: Record<string, number> = {
   hit_ci: 0,
   hit_mi: 0,
   hit_of: 3,
+  hit_dh: 0,
   hit_ut: 1,
   pit_p: 2,
   pit_sp: 5,

@@ -57,6 +57,7 @@ def default_dynasty_lookup(
             hit_ci=int(params["hit_ci"]),
             hit_mi=int(params["hit_mi"]),
             hit_of=int(params["hit_of"]),
+            hit_dh=int(params.get("hit_dh", 0)),
             hit_ut=int(params["hit_ut"]),
             pit_p=int(params["pit_p"]),
             pit_sp=int(params["pit_sp"]),

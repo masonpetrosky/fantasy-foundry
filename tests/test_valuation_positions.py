@@ -28,8 +28,8 @@ class TestParseHitPositions:
     def test_outfield_aliases_collapse_to_of(self):
         assert parse_hit_positions("LF/CF/RF") == {"OF"}
 
-    def test_dh_aliases_to_ut(self):
-        assert parse_hit_positions("DH") == {"UT"}
+    def test_dh_remains_distinct(self):
+        assert parse_hit_positions("DH") == {"DH"}
 
     def test_util_aliases_to_ut(self):
         assert parse_hit_positions("UTIL") == {"UT"}
@@ -39,7 +39,7 @@ class TestParseHitPositions:
 
     def test_mixed_positions_with_aliases(self):
         result = parse_hit_positions("1B/LF/DH")
-        assert result == {"1B", "OF", "UT"}
+        assert result == {"1B", "OF", "DH"}
 
     def test_lowercase_normalized(self):
         assert parse_hit_positions("ss") == {"SS"}
@@ -105,9 +105,17 @@ class TestEligibleHitSlots:
         result = eligible_hit_slots({"OF"})
         assert result == {"OF", "UT"}
 
+    def test_dh_gets_dh_and_ut(self):
+        result = eligible_hit_slots({"DH"})
+        assert result == {"DH", "UT"}
+
     def test_multi_position_combines_slots(self):
         result = eligible_hit_slots({"1B", "3B"})
         assert result == {"1B", "3B", "CI", "UT"}
+
+    def test_first_base_plus_dh_combines_slots(self):
+        result = eligible_hit_slots({"1B", "DH"})
+        assert result == {"1B", "CI", "DH", "UT"}
 
     def test_corner_plus_middle(self):
         result = eligible_hit_slots({"1B", "SS"})
@@ -168,5 +176,4 @@ class TestEligiblePitSlots:
     def test_sp_rp_gets_all(self):
         result = eligible_pit_slots({"SP", "RP"})
         assert result == {"SP", "RP", "P"}
-
 

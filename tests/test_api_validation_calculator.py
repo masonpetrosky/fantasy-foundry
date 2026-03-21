@@ -385,6 +385,7 @@ class CalculatorValidationTests(unittest.TestCase):
                 json={
                     "hit_c": 2,
                     "hit_of": 3,
+                    "hit_dh": 1,
                     "pit_p": 7,
                     "pit_sp": 1,
                     "pit_rp": 1,
@@ -405,6 +406,7 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(captured_kwargs.get("hitter_slots", {}).get("C"), 2)
         self.assertEqual(captured_kwargs.get("hitter_slots", {}).get("OF"), 3)
+        self.assertEqual(captured_kwargs.get("hitter_slots", {}).get("DH"), 1)
         self.assertEqual(captured_kwargs.get("pitcher_slots", {}).get("P"), 7)
         self.assertEqual(captured_kwargs.get("pitcher_slots", {}).get("SP"), 1)
         self.assertEqual(captured_kwargs.get("pitcher_slots", {}).get("RP"), 1)

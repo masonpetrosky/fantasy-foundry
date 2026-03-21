@@ -206,7 +206,6 @@ def points_hitter_eligible_slots(
         "LF": "OF",
         "CF": "OF",
         "RF": "OF",
-        "DH": "UT",
         "UTIL": "UT",
         "U": "UT",
     }
@@ -225,6 +224,8 @@ def points_hitter_eligible_slots(
         slots.update({"SS", "MI"})
     if "OF" in normalized:
         slots.add("OF")
+    if "DH" in normalized:
+        slots.add("DH")
     if "CI" in normalized:
         slots.add("CI")
     if "MI" in normalized:
@@ -752,6 +753,7 @@ def calculate_points_dynasty_frame(
     pts_pit_er: float,
     pts_pit_bb: float,
     pts_pit_hbp: float,
+    hit_dh: int = 0,
 ) -> pd.DataFrame:
     scoring = {
         "pts_hit_1b": float(pts_hit_1b),
@@ -815,6 +817,7 @@ def calculate_points_dynasty_frame(
         + hit_ci
         + hit_mi
         + hit_of
+        + hit_dh
         + hit_ut
         + pit_p
         + pit_sp
@@ -834,6 +837,7 @@ def calculate_points_dynasty_frame(
         "CI": int(hit_ci),
         "MI": int(hit_mi),
         "OF": int(hit_of),
+        "DH": int(hit_dh),
         "UT": int(hit_ut),
     }
     pitcher_slot_counts = {

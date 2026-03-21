@@ -55,6 +55,7 @@ def calculate_common_dynasty_frame(
     ir_negative_penalty: float = 0.20,
     enable_replacement_blend: bool = False,
     replacement_blend_alpha: float = 0.70,
+    hit_dh: int = 0,
 ) -> pd.DataFrame:
     valuation_service = ValuationService(ensure_backend_module_path_fn=ensure_backend_module_path_fn)
 
@@ -83,6 +84,7 @@ def calculate_common_dynasty_frame(
             "CI": hit_ci,
             "MI": hit_mi,
             "OF": hit_of,
+            "DH": hit_dh,
             "UT": hit_ut,
         },
         pitcher_slots={

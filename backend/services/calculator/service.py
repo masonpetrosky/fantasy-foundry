@@ -54,6 +54,7 @@ class CalculateRequest(BaseModel):
     hit_ci: int = Field(default=1, ge=0, le=15)
     hit_mi: int = Field(default=1, ge=0, le=15)
     hit_of: int = Field(default=5, ge=0, le=15)
+    hit_dh: int = Field(default=0, ge=0, le=15)
     hit_ut: int = Field(default=1, ge=0, le=15)
     pit_p: int = Field(default=9, ge=0, le=15)
     pit_sp: int = Field(default=0, ge=0, le=15)
@@ -154,6 +155,7 @@ class CalculateRequest(BaseModel):
             + self.hit_ci
             + self.hit_mi
             + self.hit_of
+            + self.hit_dh
             + self.hit_ut
         )
         total_pitcher_slots = self.pit_p + self.pit_sp + self.pit_rp
@@ -361,6 +363,7 @@ class CalculatorService:
                         hit_ci=req.hit_ci,
                         hit_mi=req.hit_mi,
                         hit_of=req.hit_of,
+                        hit_dh=req.hit_dh,
                         hit_ut=req.hit_ut,
                         pit_p=req.pit_p,
                         pit_sp=req.pit_sp,
@@ -410,6 +413,7 @@ class CalculatorService:
                         hit_ci=req.hit_ci,
                         hit_mi=req.hit_mi,
                         hit_of=req.hit_of,
+                        hit_dh=req.hit_dh,
                         hit_ut=req.hit_ut,
                         pit_p=req.pit_p,
                         pit_sp=req.pit_sp,

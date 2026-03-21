@@ -20,6 +20,7 @@ const baseSettings = {
   weekly_acquisition_cap: null as number | null,
   two_way: "max",
   start_year: 2027,
+  hit_dh: 0,
   sgp_denominator_mode: "classic",
   sgp_winsor_low_pct: 0.1,
   sgp_winsor_high_pct: 0.9,
@@ -50,9 +51,9 @@ describe("buildQuickStartSettings", () => {
           default_minors_slots: 3,
         },
       },
-      rotoSlotDefaults: { hit_of: 5, pit_p: 8 },
+      rotoSlotDefaults: { hit_of: 5, hit_dh: 0, pit_p: 8 },
       rotoCategoryDefaults: { roto_hit_hr: true },
-      pointsSlotDefaults: { hit_of: 3, pit_p: 2, pit_sp: 5, pit_rp: 2 },
+      pointsSlotDefaults: { hit_of: 3, hit_dh: 0, pit_p: 2, pit_sp: 5, pit_rp: 2 },
       pointsScoringDefaults: { pts_hit_hr: 4, pts_pit_w: 5 },
     });
 
@@ -81,6 +82,7 @@ describe("buildQuickStartSettings", () => {
     expect(settings.sims).toBe(300);
     expect(settings.start_year).toBe(2027);
     expect(settings["hit_of"]).toBe(3);
+    expect(settings["hit_dh"]).toBe(0);
     expect(settings["pit_sp"]).toBe(5);
     expect(settings["pts_hit_hr"]).toBe(4);
   });
@@ -96,15 +98,16 @@ describe("buildQuickStartSettings", () => {
       meta: {
         years: [2026, 2027],
       },
-      rotoSlotDefaults: { hit_of: 5, pit_p: 9 },
+      rotoSlotDefaults: { hit_of: 5, hit_dh: 0, pit_p: 9 },
       rotoCategoryDefaults: { roto_hit_hr: true, roto_pit_k: true },
-      pointsSlotDefaults: { hit_of: 3, pit_p: 2 },
+      pointsSlotDefaults: { hit_of: 3, hit_dh: 0, pit_p: 2 },
       pointsScoringDefaults: { pts_hit_hr: 4 },
     });
 
     expect(settings.scoring_mode).toBe("roto");
     expect(settings.start_year).toBe(2026);
     expect(settings["hit_of"]).toBe(5);
+    expect(settings["hit_dh"]).toBe(0);
     expect(settings["pit_p"]).toBe(9);
     expect(settings["roto_hit_hr"]).toBe(true);
     expect(settings["roto_pit_k"]).toBe(true);
@@ -118,15 +121,16 @@ describe("buildQuickStartSettings", () => {
       meta: {
         years: [2026, 2027],
       },
-      rotoSlotDefaults: { hit_of: 5, pit_p: 9 },
+      rotoSlotDefaults: { hit_of: 5, hit_dh: 0, pit_p: 9 },
       rotoCategoryDefaults: { roto_hit_hr: true, roto_pit_k: true },
-      pointsSlotDefaults: { hit_of: 3, pit_p: 2 },
+      pointsSlotDefaults: { hit_of: 3, hit_dh: 0, pit_p: 2 },
       pointsScoringDefaults: { pts_hit_hr: 4 },
     });
 
     expect(settings.scoring_mode).toBe("roto");
     expect(settings.teams).toBe(12);
     expect(settings["hit_c"]).toBe(2);
+    expect(settings["hit_dh"]).toBe(0);
     expect(settings["hit_ut"]).toBe(2);
     expect(settings["pit_p"]).toBe(3);
     expect(settings.bench).toBe(14);
