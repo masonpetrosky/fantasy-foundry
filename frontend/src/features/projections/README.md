@@ -10,7 +10,7 @@ The projections UI consumes rows from `/api/projections/*` and treats each row a
 ## Stability Rules
 - Keep request query semantics unchanged for filters, sorting, and exports.
 - Preserve local storage keys used by layout and column visibility preferences.
-- Keep `container.jsx` focused on orchestration/rendering; place stateful logic in hooks under `hooks/`.
+- Keep `container.tsx` focused on orchestration/rendering; place stateful logic in hooks under `hooks/`.
 - Keep reusable presentation blocks under `components/` to avoid re-growing the container module.
 
 ## Hook Ownership

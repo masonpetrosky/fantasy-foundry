@@ -52,13 +52,13 @@ dynasty-site/
 ├── frontend/
 │   ├── index.html                      # Vite entry HTML (with inline styles)
 │   ├── src/                            # React source modules
-│   │   ├── main.jsx                    # App composition root + primary screens
-│   │   ├── hooks/useProjectionsData.js # Projections query/filter/cache hook
+│   │   ├── main.tsx                    # App composition root + primary screens
+│   │   ├── hooks/useProjectionsData.ts # Projections query/filter/cache hook
 │   │   ├── features/projections/       # Projections explorer feature container/modules
-│   │   ├── app_state_storage.js        # Local/cloud preference persistence helpers
-│   │   ├── request_helpers.js          # API error/response/debounce helper utilities
-│   │   ├── account_panel.jsx           # Account sync/auth UI
-│   │   └── methodology_section.jsx     # Methodology + glossary + FAQ content block
+│   │   ├── app_state_storage.ts        # Local/cloud preference persistence helpers
+│   │   ├── request_helpers.ts          # API error/response/debounce helper utilities
+│   │   ├── account_panel.tsx           # Account sync/auth UI
+│   │   └── methodology_section.tsx     # Methodology + glossary + FAQ content block
 │   ├── dist/                           # Built frontend assets (served by backend)
 │   └── package.json                    # Frontend build scripts/deps
 ├── data/

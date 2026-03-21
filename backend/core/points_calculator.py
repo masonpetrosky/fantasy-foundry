@@ -2,13 +2,40 @@
 
 from __future__ import annotations
 
-import heapq
 from dataclasses import dataclass
 from typing import Callable
 
 import pandas as pd
 
 try:
+    from backend.core.points_assignment import (
+        _SEASON_WEEKS,
+        _best_slot_surplus,
+        _effective_weekly_starts_cap,
+        _slot_capacity_by_league,
+        optimize_points_slot_assignment,
+    )
+    from backend.core.points_utils import (
+        _scale_points_breakdown,
+        calculate_hitter_points_breakdown,
+        calculate_pitcher_points_breakdown,
+        coerce_minor_eligible,
+        points_hitter_eligible_slots,
+        points_pitcher_eligible_slots,
+        points_player_identity,
+        points_slot_replacement,
+        projection_identity_key,
+        stat_or_zero,
+        valuation_years,
+    )
+    from backend.core.points_value import (
+        KeepDropResult,
+        _apply_negative_value_stash_rules,
+        _is_near_zero_playing_time,
+        _negative_fallback_value,
+        _prospect_risk_multiplier,
+        dynasty_keep_or_drop_values,
+    )
     from backend.valuation.active_volume import (
         SYNTHETIC_PERIOD_DAYS,
         SYNTHETIC_SEASON_DAYS,
@@ -23,6 +50,34 @@ try:
     from backend.valuation.minor_eligibility import _resolve_minor_eligibility_by_year
     from backend.valuation.models import CommonDynastyRotoSettings
 except ImportError:  # pragma: no cover - direct script execution fallback
+    from points_assignment import (  # type: ignore[no-redef]
+        _SEASON_WEEKS,
+        _best_slot_surplus,
+        _effective_weekly_starts_cap,
+        _slot_capacity_by_league,
+        optimize_points_slot_assignment,
+    )
+    from points_utils import (  # type: ignore[no-redef]
+        _scale_points_breakdown,
+        calculate_hitter_points_breakdown,
+        calculate_pitcher_points_breakdown,
+        coerce_minor_eligible,
+        points_hitter_eligible_slots,
+        points_pitcher_eligible_slots,
+        points_player_identity,
+        points_slot_replacement,
+        projection_identity_key,
+        stat_or_zero,
+        valuation_years,
+    )
+    from points_value import (  # type: ignore[no-redef]
+        KeepDropResult,
+        _apply_negative_value_stash_rules,
+        _is_near_zero_playing_time,
+        _negative_fallback_value,
+        _prospect_risk_multiplier,
+        dynasty_keep_or_drop_values,
+    )
     from valuation.active_volume import (  # type: ignore[no-redef]
         SYNTHETIC_PERIOD_DAYS,
         SYNTHETIC_SEASON_DAYS,
@@ -64,776 +119,23 @@ class PointsCalculatorContext:
     points_slot_replacement: Callable[..., dict[str, float]]
 
 
-@dataclass(slots=True)
-class KeepDropResult:
-    raw_total: float
-    continuation_values: list[float]
-    hold_values: list[float]
-    keep_flags: list[bool]
-    discount_factors: list[float]
-    discounted_contributions: list[float]
-
-
-@dataclass(slots=True)
-class _FlowEdge:
-    to: int
-    rev: int
-    capacity: int
-    cost: int
-
-
-_SEASON_WEEKS = 26.0
-
-
-def _prospect_risk_multiplier(
-    *,
-    year: int,
-    start_year: int,
-    profile: str,
-    minor_eligible: bool,
-    enabled: bool,
-) -> float:
-    if not enabled or not minor_eligible:
-        return 1.0
-
-    year_offset = max(int(year) - int(start_year), 0)
-    if profile == "pitcher":
-        return float(max(0.45, 0.88 ** year_offset))
-    return float(max(0.60, 0.92 ** year_offset))
-
-
-def _is_near_zero_playing_time(
-    player_id: str,
-    year: int,
-    *,
-    hitter_ab_by_player_year: dict[tuple[str, int], float],
-    pitcher_ip_by_player_year: dict[tuple[str, int], float],
-    hitter_ab_threshold: float = 60.0,
-    pitcher_ip_threshold: float = 15.0,
-) -> bool:
-    hit_ab = float(hitter_ab_by_player_year.get((player_id, int(year)), 0.0))
-    pit_ip = float(pitcher_ip_by_player_year.get((player_id, int(year)), 0.0))
-    return hit_ab <= float(hitter_ab_threshold) and pit_ip <= float(pitcher_ip_threshold)
-
-
-def _apply_negative_value_stash_rules(
-    value: float,
-    *,
-    can_minor_stash: bool,
-    can_ir_stash: bool,
-    ir_negative_penalty: float,
-    can_bench_stash: bool,
-    bench_negative_penalty: float,
-) -> float:
-    if value >= 0.0:
-        return float(value)
-    if can_minor_stash:
-        return 0.0
-    if can_ir_stash:
-        return float(value) * float(min(max(ir_negative_penalty, 0.0), 1.0))
-    if can_bench_stash:
-        return float(value) * float(min(max(bench_negative_penalty, 0.0), 1.0))
-    return float(value)
-
-
-def _negative_fallback_value(
-    *,
-    best_value: float | None,
-    assigned_slot: str | None,
-    assigned_value: float,
-) -> float:
-    if assigned_slot is not None:
-        return float(assigned_value)
-    if best_value is None:
-        return 0.0
-    return min(float(best_value), 0.0)
-
-
-def stat_or_zero(row: dict | None, key: str, *, as_float_fn: Callable[[object], float | None]) -> float:
-    if not row:
-        return 0.0
-    value = as_float_fn(row.get(key))
-    return value if value is not None else 0.0
-
-
-def coerce_minor_eligible(value: object) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return value > 0
-    text = str(value or "").strip().lower()
-    return text in {"1", "true", "yes", "y"}
-
-
-def projection_identity_key(
-    row: dict | pd.Series,
-    *,
-    player_entity_key_col: str,
-    player_key_col: str,
-    normalize_player_key_fn: Callable[[object], str],
-) -> str:
-    entity_key = str(row.get(player_entity_key_col) or "").strip()
-    if entity_key:
-        return entity_key
-    player_key = str(row.get(player_key_col) or "").strip()
-    if player_key:
-        return player_key
-    return normalize_player_key_fn(row.get("Player"))
-
-
-def valuation_years(start_year: int, horizon: int, valid_years: list[int]) -> list[int]:
-    max_year = int(start_year) + max(int(horizon), 1) - 1
-    years = [year for year in valid_years if start_year <= year <= max_year]
-    if years:
-        return years
-    return [start_year + offset for offset in range(max(int(horizon), 1))]
-
-
-def calculate_hitter_points_breakdown(
-    row: dict | None,
-    scoring: dict[str, float],
-    *,
-    stat_or_zero_fn: Callable[[dict | None, str], float],
-) -> dict:
-    hits = stat_or_zero_fn(row, "H")
-    doubles = stat_or_zero_fn(row, "2B")
-    triples = stat_or_zero_fn(row, "3B")
-    hr = stat_or_zero_fn(row, "HR")
-    singles = max(0.0, hits - doubles - triples - hr)
-    inputs = {
-        "1B": singles,
-        "2B": doubles,
-        "3B": triples,
-        "HR": hr,
-        "R": stat_or_zero_fn(row, "R"),
-        "RBI": stat_or_zero_fn(row, "RBI"),
-        "SB": stat_or_zero_fn(row, "SB"),
-        "BB": stat_or_zero_fn(row, "BB"),
-        "HBP": stat_or_zero_fn(row, "HBP"),
-        "SO": stat_or_zero_fn(row, "SO"),
-    }
-    rule_points = {
-        "1B": inputs["1B"] * scoring["pts_hit_1b"],
-        "2B": inputs["2B"] * scoring["pts_hit_2b"],
-        "3B": inputs["3B"] * scoring["pts_hit_3b"],
-        "HR": inputs["HR"] * scoring["pts_hit_hr"],
-        "R": inputs["R"] * scoring["pts_hit_r"],
-        "RBI": inputs["RBI"] * scoring["pts_hit_rbi"],
-        "SB": inputs["SB"] * scoring["pts_hit_sb"],
-        "BB": inputs["BB"] * scoring["pts_hit_bb"],
-        "HBP": inputs["HBP"] * scoring["pts_hit_hbp"],
-        "SO": inputs["SO"] * scoring["pts_hit_so"],
-    }
-    total_points = float(sum(rule_points.values()))
-    return {
-        "stats": {key: round(float(value), 4) for key, value in inputs.items()},
-        "rule_points": {key: round(float(value), 4) for key, value in rule_points.items()},
-        "total_points": round(total_points, 4),
-    }
-
-
-def calculate_pitcher_points_breakdown(
-    row: dict | None,
-    scoring: dict[str, float],
-    *,
-    stat_or_zero_fn: Callable[[dict | None, str], float],
-) -> dict:
-    inputs = {
-        "IP": stat_or_zero_fn(row, "IP"),
-        "W": stat_or_zero_fn(row, "W"),
-        "L": stat_or_zero_fn(row, "L"),
-        "K": stat_or_zero_fn(row, "K"),
-        "SV": stat_or_zero_fn(row, "SV"),
-        "HLD": stat_or_zero_fn(row, "HLD"),
-        "H": stat_or_zero_fn(row, "H"),
-        "ER": stat_or_zero_fn(row, "ER"),
-        "BB": stat_or_zero_fn(row, "BB"),
-        "HBP": stat_or_zero_fn(row, "HBP"),
-    }
-    rule_points = {
-        "IP": inputs["IP"] * scoring["pts_pit_ip"],
-        "W": inputs["W"] * scoring["pts_pit_w"],
-        "L": inputs["L"] * scoring["pts_pit_l"],
-        "K": inputs["K"] * scoring["pts_pit_k"],
-        "SV": inputs["SV"] * scoring["pts_pit_sv"],
-        "HLD": inputs["HLD"] * scoring["pts_pit_hld"],
-        "H": inputs["H"] * scoring["pts_pit_h"],
-        "ER": inputs["ER"] * scoring["pts_pit_er"],
-        "BB": inputs["BB"] * scoring["pts_pit_bb"],
-        "HBP": inputs["HBP"] * scoring["pts_pit_hbp"],
-    }
-    total_points = float(sum(rule_points.values()))
-    return {
-        "stats": {key: round(float(value), 4) for key, value in inputs.items()},
-        "rule_points": {key: round(float(value), 4) for key, value in rule_points.items()},
-        "total_points": round(total_points, 4),
-    }
-
-
-def _scale_points_breakdown(breakdown: dict, share: float) -> dict:
-    scaled_share = min(max(float(share), 0.0), 1.0)
-    stats = breakdown.get("stats") if isinstance(breakdown.get("stats"), dict) else {}
-    rule_points = breakdown.get("rule_points") if isinstance(breakdown.get("rule_points"), dict) else {}
-    return {
-        "stats": {
-            str(key): round(float(value) * scaled_share, 4)
-            for key, value in stats.items()
-        },
-        "rule_points": {
-            str(key): round(float(value) * scaled_share, 4)
-            for key, value in rule_points.items()
-        },
-        "total_points": round(float(breakdown.get("total_points", 0.0)) * scaled_share, 4),
-    }
-
-
-def points_player_identity(
-    row: dict,
-    *,
-    player_entity_key_col: str,
-    player_key_col: str,
-    normalize_player_key_fn: Callable[[object], str],
-) -> str:
-    entity_key = str(row.get(player_entity_key_col) or "").strip()
-    if entity_key:
-        return entity_key
-    player_key = str(row.get(player_key_col) or "").strip()
-    if player_key:
-        return player_key
-    return normalize_player_key_fn(row.get("Player"))
-
-
-def points_hitter_eligible_slots(
-    pos_value: object,
-    *,
-    position_tokens_fn: Callable[[object], set[str]],
-) -> set[str]:
-    tokens = position_tokens_fn(pos_value)
-    if not tokens:
-        return set()
-
-    aliases = {
-        "LF": "OF",
-        "CF": "OF",
-        "RF": "OF",
-        "UTIL": "UT",
-        "U": "UT",
-    }
-    normalized = {aliases.get(token, token) for token in tokens}
-
-    slots: set[str] = {"UT"}
-    if "C" in normalized:
-        slots.add("C")
-    if "1B" in normalized:
-        slots.update({"1B", "CI"})
-    if "3B" in normalized:
-        slots.update({"3B", "CI"})
-    if "2B" in normalized:
-        slots.update({"2B", "MI"})
-    if "SS" in normalized:
-        slots.update({"SS", "MI"})
-    if "OF" in normalized:
-        slots.add("OF")
-    if "DH" in normalized:
-        slots.add("DH")
-    if "CI" in normalized:
-        slots.add("CI")
-    if "MI" in normalized:
-        slots.add("MI")
-    return slots
-
-
-def points_pitcher_eligible_slots(
-    pos_value: object,
-    *,
-    position_tokens_fn: Callable[[object], set[str]],
-) -> set[str]:
-    tokens = position_tokens_fn(pos_value)
-    if not tokens:
-        return set()
-
-    aliases = {
-        "RHP": "SP",
-        "LHP": "SP",
-    }
-    normalized = {aliases.get(token, token) for token in tokens}
-
-    slots: set[str] = {"P"}
-    if "SP" in normalized:
-        slots.add("SP")
-    if "RP" in normalized:
-        slots.add("RP")
-    return slots
-
-
-def points_slot_replacement(
-    entries: list[dict[str, object]],
-    *,
-    active_slots: set[str],
-    rostered_player_ids: set[str],
-    n_replacement: int,
-    as_float_fn: Callable[[object], float | None],
-) -> dict[str, float]:
-    baselines: dict[str, float] = {}
-    top_n = max(int(n_replacement), 1)
-
-    for slot in sorted(active_slots):
-        candidate_points: list[float] = []
-        for entry in entries:
-            player_id = str(entry.get("player_id") or "")
-            if not player_id or player_id in rostered_player_ids:
-                continue
-            slots = entry.get("slots")
-            if not isinstance(slots, set) or slot not in slots:
-                continue
-            points = as_float_fn(entry.get("points"))
-            if points is None:
-                continue
-            candidate_points.append(points)
-
-        if not candidate_points:
-            baselines[slot] = 0.0
-            continue
-
-        candidate_points.sort(reverse=True)
-        selected = candidate_points[:top_n]
-        baselines[slot] = float(sum(selected) / len(selected))
-
-    return baselines
-
-
-def _effective_weekly_starts_cap(
-    weekly_starts_cap: int | None,
-    *,
-    allow_same_day_starts_overflow: bool,
-    starter_slot_capacity: int,
-) -> float | None:
-    if weekly_starts_cap is None or int(weekly_starts_cap) <= 0:
-        return None
-
-    effective_cap = float(weekly_starts_cap)
-    if allow_same_day_starts_overflow:
-        overflow_bonus = min(2.0, max(float(starter_slot_capacity), 1.0) * 0.20)
-        effective_cap += max(0.5, overflow_bonus)
-    return effective_cap
-
-
-def _weekly_pitcher_streaming_bonus_by_slot(
-    entries: list[dict[str, object]],
-    *,
-    in_season_rostered_player_ids: set[str],
-    teams: int,
-    starter_slot_capacity: int,
-    total_pitcher_slots: int,
-    weekly_starts_cap: int | None,
-    allow_same_day_starts_overflow: bool,
-    weekly_acquisition_cap: int | None,
-) -> tuple[dict[str, float], dict[str, float | int | None]]:
-    diagnostics: dict[str, float | int | None] = {
-        "season_weeks": _SEASON_WEEKS,
-        "weekly_starts_cap": weekly_starts_cap,
-        "effective_weekly_starts_cap": None,
-        "weekly_acquisition_cap": weekly_acquisition_cap,
-        "held_starts_per_week": None,
-        "theoretical_streamable_starts_per_week": None,
-        "streamable_starts_per_week": None,
-        "streaming_realization_factor": None,
-        "replacement_points_per_start": None,
-        "streaming_points_per_sp_slot": None,
-        "streaming_points_per_p_slot": None,
-    }
-    if starter_slot_capacity <= 0 or weekly_acquisition_cap is None or weekly_acquisition_cap <= 0:
-        return {}, diagnostics
-
-    effective_weekly_cap = _effective_weekly_starts_cap(
-        weekly_starts_cap,
-        allow_same_day_starts_overflow=allow_same_day_starts_overflow,
-        starter_slot_capacity=starter_slot_capacity,
-    )
-    if effective_weekly_cap is None or effective_weekly_cap <= 0:
-        return {}, diagnostics
-    diagnostics["effective_weekly_starts_cap"] = round(effective_weekly_cap, 4)
-
-    starter_entries: list[dict[str, float | str]] = []
-    for entry in entries:
-        raw_slots = entry.get("slots")
-        if not isinstance(raw_slots, (set, list, tuple)):
-            continue
-
-        player_id = str(entry.get("player_id") or "").strip()
-        if not player_id:
-            continue
-        try:
-            points = float(entry.get("points") or 0.0)
-            gs = float(entry.get("gs") or 0.0)
-        except (TypeError, ValueError):
-            continue
-        # Weekly starts caps apply to meaningful starters, not RP rows with a
-        # few fractional projected starts. Using a GS floor keeps P-only leagues
-        # calibratable without letting relievers dominate points-per-start.
-        if gs < 5.0:
-            continue
-        if gs <= 0 or points <= 0:
-            continue
-        starter_entries.append(
-            {
-                "player_id": player_id,
-                "points": points,
-                "gs": gs,
-                "points_per_start": points / gs,
-            }
-        )
-
-    if not starter_entries:
-        return {}, diagnostics
-
-    active_starter_count = max(int(teams) * max(int(starter_slot_capacity), 1), 1)
-    top_rostered_starters = sorted(
-        starter_entries,
-        key=lambda entry: (
-            -float(entry["points"]),
-            -float(entry["gs"]),
-            str(entry["player_id"]),
-        ),
-    )[:active_starter_count]
-    if not top_rostered_starters:
-        return {}, diagnostics
-
-    avg_rostered_starts = sum(float(entry["gs"]) for entry in top_rostered_starters) / len(top_rostered_starters)
-    held_starts_per_week = (avg_rostered_starts / _SEASON_WEEKS) * float(starter_slot_capacity)
-    diagnostics["held_starts_per_week"] = round(held_starts_per_week, 4)
-
-    streamable_starts_per_week = min(
-        max(effective_weekly_cap - held_starts_per_week, 0.0),
-        float(weekly_acquisition_cap),
-    )
-    diagnostics["theoretical_streamable_starts_per_week"] = round(streamable_starts_per_week, 4)
-    diagnostics["streamable_starts_per_week"] = round(streamable_starts_per_week, 4)
-    # Generic P baselines already reflect held-start production from a managed
-    # season-long staff. Scale the additive weekly uplift by the streamable
-    # share of the combined held-start plus capped-start environment so we do
-    # not spread the full theoretical cap surplus across every P slot.
-    streaming_realization_factor = min(
-        max(
-            streamable_starts_per_week / max(effective_weekly_cap + held_starts_per_week, 1e-9),
-            0.0,
-        ),
-        1.0,
-    )
-    diagnostics["streaming_realization_factor"] = round(streaming_realization_factor, 4)
-    if streamable_starts_per_week <= 1e-9:
-        return {}, diagnostics
-
-    free_agent_starters = [
-        entry for entry in starter_entries if str(entry["player_id"]) not in in_season_rostered_player_ids
-    ]
-    if not free_agent_starters:
-        free_agent_starters = sorted(
-            starter_entries,
-            key=lambda entry: (
-                -float(entry["points"]),
-                -float(entry["gs"]),
-                str(entry["player_id"]),
-            ),
-        )[active_starter_count:]
-    if not free_agent_starters:
-        return {}, diagnostics
-
-    candidate_pps = sorted(
-        (
-            float(entry["points_per_start"])
-            for entry in free_agent_starters
-            if float(entry["points_per_start"]) > 0
-        ),
-        reverse=True,
-    )
-    if not candidate_pps:
-        return {}, diagnostics
-
-    top_n = candidate_pps[: max(int(teams), 1)]
-    replacement_points_per_start = float(sum(top_n) / len(top_n))
-    diagnostics["replacement_points_per_start"] = round(replacement_points_per_start, 4)
-
-    streaming_points_per_sp_slot = (
-        replacement_points_per_start
-        * (streamable_starts_per_week / float(starter_slot_capacity))
-        * _SEASON_WEEKS
-    )
-    generic_slot_share = min(
-        1.0,
-        float(starter_slot_capacity) / max(float(total_pitcher_slots), 1.0),
-    )
-    # Generic P baselines already capture the held-start portion of a managed
-    # staff, so only the realized stream-derived share should be layered onto
-    # P slots.
-    streaming_points_per_p_slot = (
-        streaming_points_per_sp_slot
-        * streaming_realization_factor
-        * generic_slot_share
-    )
-    diagnostics["streaming_points_per_sp_slot"] = round(streaming_points_per_sp_slot, 4)
-    diagnostics["streaming_points_per_p_slot"] = round(streaming_points_per_p_slot, 4)
-
-    bonus_by_slot: dict[str, float] = {}
-    if streaming_points_per_sp_slot > 1e-9:
-        bonus_by_slot["SP"] = float(streaming_points_per_sp_slot)
-    if streaming_points_per_p_slot > 1e-9:
-        bonus_by_slot["P"] = float(streaming_points_per_p_slot)
-    return bonus_by_slot, diagnostics
-
-
-def _best_slot_surplus(
-    *,
-    points: float,
-    eligible_slots: set[str],
-    replacement_by_slot: dict[str, float],
-) -> tuple[float | None, str | None, float | None]:
-    best_value: float | None = None
-    best_slot: str | None = None
-    best_replacement: float | None = None
-    for slot in sorted(eligible_slots):
-        replacement_points = float(replacement_by_slot.get(slot, 0.0))
-        value = float(points - replacement_points)
-        if best_value is None or value > best_value:
-            best_value = value
-            best_slot = slot
-            best_replacement = replacement_points
-    return best_value, best_slot, best_replacement
-
-
-def _slot_capacity_by_league(slot_counts: dict[str, int], *, teams: int) -> dict[str, int]:
-    league_teams = max(int(teams), 1)
-    return {
-        slot: league_teams * max(int(count), 0)
-        for slot, count in sorted(slot_counts.items())
-        if int(count) > 0
-    }
-
-
-def optimize_points_slot_assignment(
-    entries: list[dict[str, object]],
-    *,
-    replacement_by_slot: dict[str, float],
-    slot_capacity: dict[str, int],
-) -> dict[str, dict[str, float | str]]:
-    normalized_slot_capacity = {
-        str(slot): max(int(capacity), 0)
-        for slot, capacity in slot_capacity.items()
-        if int(capacity) > 0
-    }
-    if not normalized_slot_capacity:
-        return {}
-
-    player_rows: dict[str, dict[str, object]] = {}
-    for entry in entries:
-        player_id = str(entry.get("player_id") or "").strip()
-        if not player_id:
-            continue
-        try:
-            points = float(entry.get("points") or 0.0)
-        except (TypeError, ValueError):
-            continue
-        raw_slots = entry.get("slots")
-        if isinstance(raw_slots, set):
-            slots = {str(slot) for slot in raw_slots}
-        elif isinstance(raw_slots, (list, tuple)):
-            slots = {str(slot) for slot in raw_slots}
-        else:
-            continue
-        eligible_slots = {
-            slot
-            for slot in slots
-            if slot in normalized_slot_capacity and normalized_slot_capacity[slot] > 0
-        }
-        if not eligible_slots:
-            continue
-
-        existing = player_rows.get(player_id)
-        if existing is None or float(existing.get("points") or 0.0) < points:
-            player_rows[player_id] = {"points": points, "slots": eligible_slots}
-
-    if not player_rows:
-        return {}
-
-    player_ids = sorted(player_rows.keys())
-    slot_names = sorted(normalized_slot_capacity.keys())
-    source = 0
-    first_player_node = 1
-    first_slot_node = first_player_node + len(player_ids)
-    sink = first_slot_node + len(slot_names)
-    node_count = sink + 1
-    graph: list[list[_FlowEdge]] = [[] for _ in range(node_count)]
-
-    def add_edge(from_node: int, to_node: int, capacity: int, cost: int) -> None:
-        forward = _FlowEdge(to=to_node, rev=len(graph[to_node]), capacity=capacity, cost=cost)
-        backward = _FlowEdge(to=from_node, rev=len(graph[from_node]), capacity=0, cost=-cost)
-        graph[from_node].append(forward)
-        graph[to_node].append(backward)
-
-    slot_node_by_name = {
-        slot: first_slot_node + idx
-        for idx, slot in enumerate(slot_names)
-    }
-    player_node_by_id = {
-        player_id: first_player_node + idx
-        for idx, player_id in enumerate(player_ids)
-    }
-
-    for slot in slot_names:
-        add_edge(slot_node_by_name[slot], sink, normalized_slot_capacity[slot], 0)
-    for player_id in player_ids:
-        player_node = player_node_by_id[player_id]
-        add_edge(source, player_node, 1, 0)
-
-    player_edges: dict[str, list[tuple[str, int, int]]] = {}
-    scale = 1000.0
-
-    for player_id in player_ids:
-        player_node = player_node_by_id[player_id]
-        row = player_rows[player_id]
-        points = float(row["points"])
-        slots = set(row["slots"]) if isinstance(row["slots"], set) else set()
-        for slot in sorted(slots):
-            replacement_points = float(replacement_by_slot.get(slot, 0.0))
-            surplus = points - replacement_points
-            if surplus <= 1e-9:
-                continue
-            scaled_surplus = int(round(surplus * scale))
-            if scaled_surplus <= 0:
-                continue
-            edge_idx = len(graph[player_node])
-            add_edge(player_node, slot_node_by_name[slot], 1, -scaled_surplus)
-            player_edges.setdefault(player_id, []).append((slot, edge_idx, player_node))
-
-    if not player_edges:
-        return {}
-
-    inf = 10**18
-    potentials = [0] * node_count
-
-    while True:
-        dist = [inf] * node_count
-        parent_node = [-1] * node_count
-        parent_edge_idx = [-1] * node_count
-        dist[source] = 0
-        pq: list[tuple[int, int]] = [(0, source)]
-
-        while pq:
-            cur_dist, node = heapq.heappop(pq)
-            if cur_dist != dist[node]:
-                continue
-            for edge_idx, edge in enumerate(graph[node]):
-                if edge.capacity <= 0:
-                    continue
-                next_node = edge.to
-                next_dist = cur_dist + edge.cost + potentials[node] - potentials[next_node]
-                if next_dist < dist[next_node]:
-                    dist[next_node] = next_dist
-                    parent_node[next_node] = node
-                    parent_edge_idx[next_node] = edge_idx
-                    heapq.heappush(pq, (next_dist, next_node))
-
-        if dist[sink] == inf:
-            break
-
-        path_cost = dist[sink] + potentials[sink] - potentials[source]
-        if path_cost >= 0:
-            break
-
-        for node_idx, node_dist in enumerate(dist):
-            if node_dist < inf:
-                potentials[node_idx] += node_dist
-
-        cursor = sink
-        while cursor != source:
-            prev = parent_node[cursor]
-            if prev < 0:
-                break
-            edge_idx = parent_edge_idx[cursor]
-            edge = graph[prev][edge_idx]
-            edge.capacity -= 1
-            reverse = graph[cursor][edge.rev]
-            reverse.capacity += 1
-            cursor = prev
-
-    assignments: dict[str, dict[str, float | str]] = {}
-    for player_id in player_ids:
-        edges = player_edges.get(player_id, [])
-        if not edges:
-            continue
-        points = float(player_rows[player_id]["points"])
-        for slot, edge_idx, player_node in edges:
-            edge = graph[player_node][edge_idx]
-            if edge.capacity != 0:
-                continue
-            replacement_points = float(replacement_by_slot.get(slot, 0.0))
-            assignments[player_id] = {
-                "slot": slot,
-                "points": points,
-                "replacement": replacement_points,
-                "value": points - replacement_points,
-            }
-            break
-
-    return assignments
-
-
-def dynasty_keep_or_drop_values(values: list[float], years: list[int], *, discount: float) -> KeepDropResult:
-    if len(values) != len(years):
-        raise ValueError("values and years must have the same length.")
-    if not values:
-        return KeepDropResult(
-            raw_total=0.0,
-            continuation_values=[],
-            hold_values=[],
-            keep_flags=[],
-            discount_factors=[],
-            discounted_contributions=[],
-        )
-
-    annual_discount = float(discount)
-    count = len(values)
-    continuation_values = [0.0] * count
-    hold_values = [0.0] * count
-    keep_flags = [False] * count
-
-    for idx in range(count - 1, -1, -1):
-        future = 0.0
-        if idx < count - 1:
-            gap = max(1, int(years[idx + 1]) - int(years[idx]))
-            future = (annual_discount ** gap) * continuation_values[idx + 1]
-        candidate = float(values[idx]) + future
-        hold_values[idx] = float(candidate)
-        if candidate > 0:
-            continuation_values[idx] = float(candidate)
-            keep_flags[idx] = True
-
-    discount_factors = [1.0] * count
-    for idx in range(1, count):
-        gap = max(1, int(years[idx]) - int(years[idx - 1]))
-        discount_factors[idx] = discount_factors[idx - 1] * (annual_discount ** gap)
-
-    discounted_contributions = [0.0] * count
-    active = bool(keep_flags[0])
-    if active:
-        discounted_contributions[0] = float(values[0]) * discount_factors[0]
-    for idx in range(1, count):
-        if not active:
-            break
-        if keep_flags[idx]:
-            discounted_contributions[idx] = float(values[idx]) * discount_factors[idx]
-        else:
-            active = False
-
-    raw_total = float(continuation_values[0]) if keep_flags[0] else 0.0
-    return KeepDropResult(
-        raw_total=raw_total,
-        continuation_values=continuation_values,
-        hold_values=hold_values,
-        keep_flags=keep_flags,
-        discount_factors=discount_factors,
-        discounted_contributions=discounted_contributions,
-    )
+__all__ = [
+    "KeepDropResult",
+    "PointsCalculatorContext",
+    "calculate_hitter_points_breakdown",
+    "calculate_pitcher_points_breakdown",
+    "calculate_points_dynasty_frame",
+    "coerce_minor_eligible",
+    "dynasty_keep_or_drop_values",
+    "optimize_points_slot_assignment",
+    "points_hitter_eligible_slots",
+    "points_pitcher_eligible_slots",
+    "points_player_identity",
+    "points_slot_replacement",
+    "projection_identity_key",
+    "stat_or_zero",
+    "valuation_years",
+]
 
 
 def calculate_points_dynasty_frame(

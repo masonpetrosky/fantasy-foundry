@@ -4,7 +4,7 @@ Status: Active
 Owner: Frontend
 
 ## Objective
-Continue reducing `frontend/src/features/projections/container.jsx` to orchestration/render composition while preserving current behavior.
+Continue reducing `frontend/src/features/projections/container.tsx` to orchestration/render composition while preserving current behavior.
 
 ## Guardrails
 - Keep endpoint URLs and query parameter semantics unchanged.
@@ -12,7 +12,7 @@ Continue reducing `frontend/src/features/projections/container.jsx` to orchestra
 - Keep current UX controls, defaults, and copy unchanged unless explicitly scoped.
 
 ## Milestone Checklist
-- [x] Core view state moved to `frontend/src/features/projections/view_state.js`.
+- [x] Core view state moved to `frontend/src/features/projections/view_state.ts`.
 - [x] Hook module surface established under `frontend/src/features/projections/hooks/`.
 - [x] Component module surface established under `frontend/src/features/projections/components/`.
 - [x] Extract remaining export pipeline state/actions into hook-only module.

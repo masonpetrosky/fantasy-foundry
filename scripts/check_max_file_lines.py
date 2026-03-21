@@ -19,11 +19,9 @@ MAX_LINES_BY_PREFIX = (
 )
 SOURCE_ROOTS = (
     ("backend", {".py"}),
-    ("frontend/src", {".js", ".jsx"}),
+    ("frontend/src", {".js", ".jsx", ".ts", ".tsx"}),
 )
-EXEMPT_LEGACY_FILES = {
-    Path("frontend/src/main.jsx"),
-}
+EXEMPT_LEGACY_FILES: set[Path] = set()
 SKIP_PARTS = {".git", ".venv", "node_modules", "dist", "__pycache__"}
 
 

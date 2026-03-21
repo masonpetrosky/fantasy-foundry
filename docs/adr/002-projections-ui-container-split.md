@@ -7,12 +7,12 @@ Accepted
 2026-02-21
 
 ## Context
-`frontend/src/features/projections/container.jsx` has accumulated state management, async export logic, column visibility persistence, and rendering logic in one module. The file is hard to reason about and risky to modify.
+`frontend/src/features/projections/container.tsx` has accumulated state management, async export logic, column visibility persistence, and rendering logic in one module. The file is hard to reason about and risky to modify.
 
 ## Decision
 Refactor the projections feature into hook-based modules while preserving behavior:
 - Extract stateful concerns into dedicated hooks under `frontend/src/features/projections/hooks/`.
-- Keep `container.jsx` as orchestration + render composition.
+- Keep `container.tsx` as orchestration + render composition.
 - Preserve existing props, query params, and export behavior.
 
 ## Scope
