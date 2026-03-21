@@ -49,6 +49,7 @@ def test_wrapper_common_apply_pitching_bounds_delegates() -> None:
             lg,
             rates,
             fill_to_ip_max=False,
+            fill_to_ip_min=True,
             enforce_ip_min=False,
         )
     mocked.assert_called_once_with(
@@ -56,6 +57,7 @@ def test_wrapper_common_apply_pitching_bounds_delegates() -> None:
         lg,
         rates,
         fill_to_ip_max=False,
+        fill_to_ip_min=True,
         enforce_ip_min=False,
     )
     assert result is sentinel

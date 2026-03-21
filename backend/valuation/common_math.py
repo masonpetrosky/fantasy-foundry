@@ -580,6 +580,7 @@ def compute_year_context(
         {col: float(base_pit_tot[col]) for col in PIT_COMPONENT_COLS},
         lg,
         rep_rates,
+        fill_to_ip_min=True,
     )
 
     # SGP denominators by simulation
@@ -716,6 +717,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> tupl
                 {col: float(new_tot[col]) for col in PIT_COMPONENT_COLS},
                 lg,
                 rep_rates,
+                fill_to_ip_min=True,
             )
 
             new_pit_cats = common_pitch_category_totals(new_tot_bounded)

@@ -111,6 +111,7 @@ def common_apply_pitching_bounds(
     rep_rates: Optional[Dict[str, float]],
     *,
     fill_to_ip_max: bool = False,
+    fill_to_ip_min: bool = False,
     enforce_ip_min: bool = True,
 ) -> Dict[str, float]:
     """Apply optional IP cap and IP-min qualification to common-mode pitching totals."""
@@ -126,6 +127,13 @@ def common_apply_pitching_bounds(
             for col in PIT_COMPONENT_COLS:
                 out[col] = float(out[col]) * factor
             ip = ip_cap
+
+    if fill_to_ip_min and rep_rates is not None and lg.ip_min and lg.ip_min > 0 and ip < float(lg.ip_min):
+        add = float(lg.ip_min) - ip
+        out["IP"] = float(out["IP"]) + add
+        for stat_col in ("W", "QS", "QA3", "K", "SV", "SVH", "ER", "H", "BB"):
+            out[stat_col] = float(out[stat_col]) + (add * float(rep_rates.get(stat_col, 0.0)))
+        ip = float(out["IP"])
 
     out["ERA"] = _team_era(out["ER"], ip)
     out["WHIP"] = _team_whip(out["H"], out["BB"], ip)

@@ -219,6 +219,72 @@ class CommonPitcherBoundsRegressionTests(unittest.TestCase):
         lopez_value = float(rows.loc["reynaldo-lopez", "DynastyValue"])
         self.assertLessEqual(kollar_value, lopez_value)
 
+    @pytest.mark.full_regression
+    def test_exact_realism_config_does_not_create_2033_pitcher_value_cliff(self) -> None:
+        _calculate_common_dynasty_frame_cached.cache_clear()
+        settings = {
+            "roto_hit_r": True,
+            "roto_hit_rbi": True,
+            "roto_hit_hr": True,
+            "roto_hit_sb": True,
+            "roto_hit_avg": True,
+            "roto_hit_obp": False,
+            "roto_hit_slg": False,
+            "roto_hit_ops": True,
+            "roto_hit_h": False,
+            "roto_hit_bb": False,
+            "roto_hit_2b": False,
+            "roto_hit_tb": False,
+            "roto_pit_w": True,
+            "roto_pit_k": True,
+            "roto_pit_sv": False,
+            "roto_pit_era": True,
+            "roto_pit_whip": True,
+            "roto_pit_qs": False,
+            "roto_pit_qa3": True,
+            "roto_pit_svh": True,
+        }
+        out = _calculate_common_dynasty_frame_cached(
+            teams=12,
+            sims=300,
+            horizon=20,
+            discount=0.94,
+            hit_c=2,
+            hit_1b=1,
+            hit_2b=1,
+            hit_3b=1,
+            hit_ss=1,
+            hit_ci=1,
+            hit_mi=1,
+            hit_of=5,
+            hit_ut=2,
+            pit_p=3,
+            pit_sp=3,
+            pit_rp=3,
+            bench=14,
+            minors=20,
+            ir=8,
+            ip_min=1000.0,
+            ip_max=1500.0,
+            two_way="sum",
+            start_year=2026,
+            enable_prospect_risk_adjustment=True,
+            enable_bench_stash_relief=True,
+            bench_negative_penalty=0.55,
+            enable_ir_stash_relief=True,
+            ir_negative_penalty=0.20,
+            **settings,
+        )
+        rows = out.set_index("PlayerEntityKey")
+
+        for player_key in ("paul-skenes", "cade-horton", "jacob-misiorowski"):
+            year_2032 = float(rows.loc[player_key, "Value_2032"])
+            year_2033 = float(rows.loc[player_key, "Value_2033"])
+            year_2034 = float(rows.loc[player_key, "Value_2034"])
+
+            self.assertLess(year_2033, 200.0)
+            self.assertLess(year_2033, 5.0 * max(year_2032, year_2034, 1.0))
+
 
 if __name__ == "__main__":
     unittest.main()

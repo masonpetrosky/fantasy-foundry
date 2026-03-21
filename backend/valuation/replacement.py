@@ -277,11 +277,13 @@ def compute_year_player_values_vs_replacement(
                 new_raw,
                 lg,
                 rep_rates,
+                fill_to_ip_min=True,
             )
             base_bounded = common_apply_pitching_bounds(
                 base_raw,
                 lg,
                 rep_rates,
+                fill_to_ip_min=True,
             )
 
             base_pit_cats = common_pitch_category_totals(base_bounded)

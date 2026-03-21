@@ -97,6 +97,48 @@ def test_common_apply_pitching_bounds_enforces_ip_min_when_requested() -> None:
     assert not_enforced["WHIP"] != 5.0
 
 
+def test_common_apply_pitching_bounds_can_fill_to_ip_min_with_replacement_rates() -> None:
+    lg = CommonDynastyRotoSettings(ip_min=100.0, ip_max=None)
+    totals = {col: 0.0 for col in PIT_COMPONENT_COLS}
+    totals.update({"IP": 80.0, "W": 8.0, "K": 80.0, "ER": 24.0, "H": 70.0, "BB": 30.0, "QA3": 10.0, "SVH": 4.0})
+    rep_rates = {
+        "W": 0.1,
+        "QS": 0.05,
+        "QA3": 0.08,
+        "K": 1.0,
+        "SV": 0.02,
+        "SVH": 0.07,
+        "ER": 0.4,
+        "H": 0.8,
+        "BB": 0.3,
+    }
+
+    filled = common_math.common_apply_pitching_bounds(
+        totals,
+        lg,
+        rep_rates=rep_rates,
+        fill_to_ip_min=True,
+        enforce_ip_min=True,
+    )
+    unfilled = common_math.common_apply_pitching_bounds(
+        totals,
+        lg,
+        rep_rates=rep_rates,
+        fill_to_ip_min=False,
+        enforce_ip_min=True,
+    )
+
+    assert filled["IP"] == 100.0
+    assert math.isclose(filled["W"], 10.0)
+    assert math.isclose(filled["K"], 100.0)
+    assert math.isclose(filled["QA3"], 11.6)
+    assert math.isclose(filled["SVH"], 5.4)
+    assert math.isclose(filled["ERA"], 2.88)
+    assert math.isclose(filled["WHIP"], 1.22)
+    assert unfilled["ERA"] == 99.0
+    assert unfilled["WHIP"] == 5.0
+
+
 def test_simulate_sgp_hit_and_pit_return_expected_categories() -> None:
     lg = CommonDynastyRotoSettings(
         n_teams=1,

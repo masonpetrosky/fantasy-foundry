@@ -485,6 +485,7 @@ def common_apply_pitching_bounds(
     rep_rates: Optional[Dict[str, float]],
     *,
     fill_to_ip_max: bool = True,
+    fill_to_ip_min: bool = False,
     enforce_ip_min: bool = True,
 ) -> Dict[str, float]:
     return _common_math.common_apply_pitching_bounds(
@@ -492,6 +493,7 @@ def common_apply_pitching_bounds(
         lg,
         rep_rates,
         fill_to_ip_max=fill_to_ip_max,
+        fill_to_ip_min=fill_to_ip_min,
         enforce_ip_min=enforce_ip_min,
     )
 
