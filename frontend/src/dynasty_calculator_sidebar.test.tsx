@@ -347,6 +347,57 @@ describe("DynastyCalculatorSidebar", () => {
     cleanup();
   });
 
+  it("keeps IP Max enabled in points mode while IP Min stays disabled", () => {
+    const props = makeDefaultProps();
+    props.state.isPointsMode = true;
+    props.settings.scoring_mode = "points";
+    const { container, cleanup } = renderToContainer(
+      <DynastyCalculatorSidebar {...props} />
+    );
+    const ipMinInput = container.querySelector("#calc-ip-min") as HTMLInputElement;
+    const ipMaxInput = container.querySelector("#calc-ip-max") as HTMLInputElement;
+    expect(ipMinInput.disabled).toBe(true);
+    expect(ipMaxInput.disabled).toBe(false);
+    expect(container.textContent).toContain("IP Max applies in roto and points");
+    cleanup();
+  });
+
+  it("disables weekly-only controls in season-total points mode", () => {
+    const props = makeDefaultProps();
+    props.state.isPointsMode = true;
+    props.settings.scoring_mode = "points";
+    props.settings.points_valuation_mode = "season_total";
+    const { container, cleanup } = renderToContainer(
+      <DynastyCalculatorSidebar {...props} />
+    );
+    const startsInput = container.querySelector("#calc-weekly-starts-cap") as HTMLInputElement;
+    const addsInput = container.querySelector("#calc-weekly-acquisition-cap") as HTMLInputElement;
+    const overflowInput = container.querySelector("#calc-allow-same-day-starts-overflow") as HTMLInputElement;
+    expect(startsInput.disabled).toBe(true);
+    expect(addsInput.disabled).toBe(true);
+    expect(overflowInput.disabled).toBe(true);
+    expect(container.textContent).toContain("Weekly starts, adds, and same-day overflow only apply");
+    cleanup();
+  });
+
+  it("enables weekly-only controls in daily h2h points mode", () => {
+    const props = makeDefaultProps();
+    props.state.isPointsMode = true;
+    props.settings.scoring_mode = "points";
+    props.settings.points_valuation_mode = "daily_h2h";
+    const { container, cleanup } = renderToContainer(
+      <DynastyCalculatorSidebar {...props} />
+    );
+    const startsInput = container.querySelector("#calc-weekly-starts-cap") as HTMLInputElement;
+    const addsInput = container.querySelector("#calc-weekly-acquisition-cap") as HTMLInputElement;
+    const overflowInput = container.querySelector("#calc-allow-same-day-starts-overflow") as HTMLInputElement;
+    expect(startsInput.disabled).toBe(false);
+    expect(addsInput.disabled).toBe(false);
+    expect(overflowInput.disabled).toBe(false);
+    expect(container.textContent).toContain("Daily H2H uses the day-aware roster management model");
+    cleanup();
+  });
+
   it("hides fantrax panel when fantrax is null", () => {
     const props = makeDefaultProps();
     const { container, cleanup } = renderToContainer(

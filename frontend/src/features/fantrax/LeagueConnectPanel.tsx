@@ -34,6 +34,12 @@ export const LeagueConnectPanel = React.memo(function LeagueConnectPanel({
     },
     [fantrax]
   );
+  const importedPointsMode = String(fantrax.suggestedSettings?.points_valuation_mode || "").trim().toLowerCase();
+  const importedPointsGuidance = importedPointsMode === "weekly_h2h"
+    ? "Weekly H2H points uses a calibrated valuation model, not a day-by-day schedule simulation. Review imported weekly caps and acquisition rules before running the calculator."
+    : importedPointsMode === "daily_h2h"
+      ? "Daily H2H points uses the day-aware roster management model. Review imported weekly caps and acquisition rules before running the calculator."
+      : "";
 
   return (
     <div className="calc-section fantrax-league-section">
@@ -130,10 +136,9 @@ export const LeagueConnectPanel = React.memo(function LeagueConnectPanel({
                   Disconnect
                 </button>
               </div>
-              {fantrax.leagueData.scoring_type === "points" && fantrax.suggestedSettings ? (
+              {fantrax.leagueData.scoring_type === "points" && importedPointsGuidance ? (
                 <p className="calc-note fantrax-roster-status">
-                  Weekly H2H points uses a calibrated valuation model, not a day-by-day schedule simulation.
-                  Review imported weekly caps and acquisition rules before running the calculator.
+                  {importedPointsGuidance}
                 </p>
               ) : null}
               {fantrax.suggestedSettings?.import_warnings?.length ? (

@@ -122,6 +122,7 @@ def test_runtime_points_frame_cached_delegates(monkeypatch) -> None:
         keeper_limit=None,
         two_way="sum",
         points_valuation_mode="season_total",
+        ip_max=None,
         weekly_starts_cap=None,
         allow_same_day_starts_overflow=False,
         weekly_acquisition_cap=None,

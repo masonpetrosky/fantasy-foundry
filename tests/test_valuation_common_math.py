@@ -62,7 +62,7 @@ def _sample_common_frames() -> tuple[pd.DataFrame, pd.DataFrame]:
     return bat, pit
 
 
-def test_common_apply_pitching_bounds_scales_over_cap_and_fills_under_cap() -> None:
+def test_common_apply_pitching_bounds_scales_over_cap_without_filling_under_cap() -> None:
     lg = CommonDynastyRotoSettings(ip_min=0.0, ip_max=100.0)
 
     over_totals = {col: 0.0 for col in PIT_COMPONENT_COLS}
@@ -78,9 +78,9 @@ def test_common_apply_pitching_bounds_scales_over_cap_and_fills_under_cap() -> N
     rates = {"W": 0.1, "QS": 0.1, "QA3": 0.1, "K": 1.0, "SV": 0.05, "SVH": 0.1, "ER": 0.4, "H": 0.8, "BB": 0.3}
     under = common_math.common_apply_pitching_bounds(under_totals, lg, rep_rates=rates)
 
-    assert under["IP"] == 100.0
-    assert under["W"] == 10.0
-    assert under["K"] == 100.0
+    assert under["IP"] == 80.0
+    assert under["W"] == 8.0
+    assert under["K"] == 80.0
 
 
 def test_common_apply_pitching_bounds_enforces_ip_min_when_requested() -> None:
@@ -790,3 +790,262 @@ def test_build_calculation_explanations_include_residual_minor_slot_metadata() -
     assert math.isclose(ex["centering"]["minor_slot_cost_value"], -0.138)
     assert ex["centering"]["minor_eta_offset"] == 1
     assert math.isclose(ex["centering"]["minor_projected_volume_score"], 10.0)
+
+
+def test_common_active_volume_squeezes_identical_hitter_congestion() -> None:
+    bat = pd.DataFrame(
+        [
+            {
+                "Player": "OF A",
+                "Year": 2026,
+                "Team": "AAA",
+                "Age": 27,
+                "Pos": "OF",
+                "G": 162.0,
+                "AB": 600.0,
+                "H": 180.0,
+                "R": 90.0,
+                "HR": 25.0,
+                "RBI": 90.0,
+                "SB": 10.0,
+                "BB": 60.0,
+                "HBP": 3.0,
+                "SF": 4.0,
+                "2B": 30.0,
+                "3B": 2.0,
+            },
+            {
+                "Player": "OF B",
+                "Year": 2026,
+                "Team": "AAA",
+                "Age": 27,
+                "Pos": "OF",
+                "G": 162.0,
+                "AB": 600.0,
+                "H": 180.0,
+                "R": 90.0,
+                "HR": 25.0,
+                "RBI": 90.0,
+                "SB": 10.0,
+                "BB": 60.0,
+                "HBP": 3.0,
+                "SF": 4.0,
+                "2B": 30.0,
+                "3B": 2.0,
+            },
+        ]
+    )
+    pit = pd.DataFrame(
+        [
+            {
+                "Player": "Pitcher One",
+                "Year": 2026,
+                "Team": "AAA",
+                "Age": 29,
+                "Pos": "SP",
+                "G": 30.0,
+                "GS": 30.0,
+                "IP": 170.0,
+                "W": 12.0,
+                "QS": 18.0,
+                "QA3": 18.0,
+                "K": 185.0,
+                "SV": 0.0,
+                "SVH": 0.0,
+                "ER": 64.0,
+                "H": 152.0,
+                "BB": 50.0,
+                "ERA": 3.39,
+                "WHIP": 1.19,
+            }
+        ]
+    )
+    lg = CommonDynastyRotoSettings(
+        n_teams=1,
+        sims_for_sgp=2,
+        hitter_slots={"OF": 1},
+        pitcher_slots={"P": 1},
+        bench_slots=0,
+        minor_slots=0,
+        ir_slots=0,
+    )
+
+    ctx = common_math.compute_year_context(2026, bat, pit, lg, rng_seed=19)
+    usage_shares = sorted(float(value) for value in ctx["bat_y"]["_UsageShare"].tolist())
+
+    assert math.isclose(float(usage_shares[0]), 6.0 / 162.0)
+    assert math.isclose(float(usage_shares[1]), 1.0)
+    assert math.isclose(float(ctx["hitter_usage_diagnostics"]["assigned_hitter_games"]), 168.0)
+    assert int(ctx["hitter_usage_diagnostics"]["synthetic_season_days"]) == 182
+
+
+def test_common_active_volume_prefers_multi_position_hitter() -> None:
+    bat = pd.DataFrame(
+        [
+            {
+                "Player": "Corner Lock",
+                "Year": 2026,
+                "Team": "AAA",
+                "Age": 28,
+                "Pos": "1B",
+                "G": 162.0,
+                "AB": 620.0,
+                "H": 190.0,
+                "R": 95.0,
+                "HR": 30.0,
+                "RBI": 105.0,
+                "SB": 5.0,
+                "BB": 65.0,
+                "HBP": 4.0,
+                "SF": 5.0,
+                "2B": 32.0,
+                "3B": 2.0,
+            },
+            {
+                "Player": "Versatile Bat",
+                "Year": 2026,
+                "Team": "AAA",
+                "Age": 26,
+                "Pos": "1B/3B",
+                "G": 162.0,
+                "AB": 580.0,
+                "H": 170.0,
+                "R": 85.0,
+                "HR": 24.0,
+                "RBI": 90.0,
+                "SB": 6.0,
+                "BB": 58.0,
+                "HBP": 3.0,
+                "SF": 4.0,
+                "2B": 28.0,
+                "3B": 2.0,
+            },
+            {
+                "Player": "First Base Bench",
+                "Year": 2026,
+                "Team": "AAA",
+                "Age": 26,
+                "Pos": "1B",
+                "G": 162.0,
+                "AB": 580.0,
+                "H": 170.0,
+                "R": 85.0,
+                "HR": 24.0,
+                "RBI": 90.0,
+                "SB": 6.0,
+                "BB": 58.0,
+                "HBP": 3.0,
+                "SF": 4.0,
+                "2B": 28.0,
+                "3B": 2.0,
+            },
+        ]
+    )
+    pit = pd.DataFrame(
+        [
+            {
+                "Player": "Pitcher One",
+                "Year": 2026,
+                "Team": "AAA",
+                "Age": 29,
+                "Pos": "SP",
+                "G": 30.0,
+                "GS": 30.0,
+                "IP": 170.0,
+                "W": 12.0,
+                "QS": 18.0,
+                "QA3": 18.0,
+                "K": 185.0,
+                "SV": 0.0,
+                "SVH": 0.0,
+                "ER": 64.0,
+                "H": 152.0,
+                "BB": 50.0,
+                "ERA": 3.39,
+                "WHIP": 1.19,
+            }
+        ]
+    )
+    lg = CommonDynastyRotoSettings(
+        n_teams=1,
+        sims_for_sgp=2,
+        hitter_slots={"1B": 1, "3B": 1},
+        pitcher_slots={"P": 1},
+        bench_slots=0,
+        minor_slots=0,
+        ir_slots=0,
+    )
+
+    ctx = common_math.compute_year_context(2026, bat, pit, lg, rng_seed=23)
+    bat_y = ctx["bat_y"].set_index("Player")
+
+    assert math.isclose(float(bat_y.loc["Corner Lock", "_UsageShare"]), 1.0)
+    assert math.isclose(float(bat_y.loc["Versatile Bat", "_UsageShare"]), 1.0)
+    assert math.isclose(float(bat_y.loc["First Base Bench", "_UsageShare"]), 20.0 / 162.0)
+    assert float(bat_y.loc["Versatile Bat", "_UsageShare"]) > float(bat_y.loc["First Base Bench", "_UsageShare"])
+
+
+def test_common_active_volume_missing_games_falls_back_to_full_utilization() -> None:
+    bat = pd.DataFrame(
+        [
+            {
+                "Player": "Fallback Bat",
+                "Year": 2026,
+                "Team": "AAA",
+                "Age": 25,
+                "Pos": "UT",
+                "AB": 500.0,
+                "H": 150.0,
+                "R": 80.0,
+                "HR": 20.0,
+                "RBI": 85.0,
+                "SB": 8.0,
+                "BB": 55.0,
+                "HBP": 2.0,
+                "SF": 4.0,
+                "2B": 25.0,
+                "3B": 1.0,
+            }
+        ]
+    )
+    pit = pd.DataFrame(
+        [
+            {
+                "Player": "Pitcher One",
+                "Year": 2026,
+                "Team": "AAA",
+                "Age": 29,
+                "Pos": "SP",
+                "G": 30.0,
+                "GS": 30.0,
+                "IP": 170.0,
+                "W": 12.0,
+                "QS": 18.0,
+                "QA3": 18.0,
+                "K": 185.0,
+                "SV": 0.0,
+                "SVH": 0.0,
+                "ER": 64.0,
+                "H": 152.0,
+                "BB": 50.0,
+                "ERA": 3.39,
+                "WHIP": 1.19,
+            }
+        ]
+    )
+    lg = CommonDynastyRotoSettings(
+        n_teams=1,
+        sims_for_sgp=2,
+        hitter_slots={"UT": 1},
+        pitcher_slots={"P": 1},
+        bench_slots=0,
+        minor_slots=0,
+        ir_slots=0,
+    )
+
+    ctx = common_math.compute_year_context(2026, bat, pit, lg, rng_seed=29)
+    row = ctx["bat_y"].iloc[0]
+
+    assert math.isclose(float(row["_UsageShare"]), 1.0)
+    assert math.isclose(float(row["AB"]), 500.0)
+    assert int(ctx["hitter_usage_diagnostics"]["fallback_hitter_count"]) == 1

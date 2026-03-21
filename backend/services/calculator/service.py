@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class CalculateRequest(BaseModel):
     mode: Literal["common", "league"] = "common"
     scoring_mode: Literal["roto", "points"] = "roto"
-    points_valuation_mode: Literal["season_total", "weekly_h2h"] = "season_total"
+    points_valuation_mode: Literal["season_total", "weekly_h2h", "daily_h2h"] = "season_total"
     two_way: Literal["sum", "max"] = "sum"
     sgp_denominator_mode: Literal["classic", "robust"] = "classic"
     sgp_winsor_low_pct: float = Field(default=0.10, ge=0.0, le=1.0)
@@ -374,9 +374,15 @@ class CalculatorService:
                         keeper_limit=req.keeper_limit,
                         two_way=req.two_way,
                         points_valuation_mode=req.points_valuation_mode,
+                        ip_max=req.ip_max,
                         weekly_starts_cap=req.weekly_starts_cap,
                         allow_same_day_starts_overflow=req.allow_same_day_starts_overflow,
                         weekly_acquisition_cap=req.weekly_acquisition_cap,
+                        enable_prospect_risk_adjustment=req.enable_prospect_risk_adjustment,
+                        enable_bench_stash_relief=req.enable_bench_stash_relief,
+                        bench_negative_penalty=req.bench_negative_penalty,
+                        enable_ir_stash_relief=req.enable_ir_stash_relief,
+                        ir_negative_penalty=req.ir_negative_penalty,
                         start_year=req.start_year,
                         pts_hit_1b=req.pts_hit_1b,
                         pts_hit_2b=req.pts_hit_2b,

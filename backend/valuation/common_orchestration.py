@@ -1195,6 +1195,14 @@ def calculate_common_dynasty_values(
         hitter_ab_by_player_year=hitter_ab_by_player_year,
         pitcher_ip_by_player_year=pitcher_ip_by_player_year,
     )
+    valuation_diagnostics["HitterUsageByYear"] = {
+        str(year): dict(year_contexts.get(year, {}).get("hitter_usage_diagnostics", {}))
+        for year in years
+    }
+    valuation_diagnostics["PitcherUsageByYear"] = {
+        str(year): dict(year_contexts.get(year, {}).get("pitcher_usage_diagnostics", {}))
+        for year in years
+    }
 
     # Proportional per-stat dynasty attribution.
     # Only include SGPs from years where the player is above replacement

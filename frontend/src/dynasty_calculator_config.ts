@@ -380,8 +380,8 @@ export function buildCalculatorPayload(settings: Record<string, unknown>, availa
     return { error: "Scoring Mode must be either 'roto' or 'points'." };
   }
   const pointsValuationMode = String(settings.points_valuation_mode ?? "").trim().toLowerCase() || "season_total";
-  if (pointsValuationMode !== "season_total" && pointsValuationMode !== "weekly_h2h") {
-    return { error: "Points valuation mode must be either 'season_total' or 'weekly_h2h'." };
+  if (pointsValuationMode !== "season_total" && pointsValuationMode !== "weekly_h2h" && pointsValuationMode !== "daily_h2h") {
+    return { error: "Points valuation mode must be 'season_total', 'weekly_h2h', or 'daily_h2h'." };
   }
 
   const parsedSlots: Record<string, number> = {};

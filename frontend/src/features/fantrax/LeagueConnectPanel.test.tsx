@@ -197,4 +197,81 @@ describe("LeagueConnectPanel", () => {
     expect(container.textContent).toContain("Review imported weekly caps and acquisition rules");
     cleanup();
   });
+
+  it("shows daily h2h guidance for Fantrax daily points imports", () => {
+    const fantrax = baseFanTrax({
+      leagueId: "abc123",
+      leagueData: {
+        league_id: "abc123",
+        league_name: "Test League",
+        team_count: 12,
+        scoring_type: "points",
+        scoring_categories: [] as string[],
+        roster_positions: [] as string[],
+        teams: [{ team_id: "t1", team_name: "Team A", player_count: 25 }],
+      },
+      suggestedSettings: {
+        teams: 12,
+        scoring_mode: "points",
+        roto_categories: {},
+        roster_slots: {},
+        points_scoring: {},
+        bench: 10,
+        minors: 0,
+        ir: 4,
+        keeper_limit: 7,
+        points_valuation_mode: "daily_h2h",
+        weekly_starts_cap: 12,
+        allow_same_day_starts_overflow: true,
+        weekly_acquisition_cap: 7,
+        import_warnings: [],
+      },
+    });
+    const { container, cleanup } = renderToContainer(
+      React.createElement(LeagueConnectPanel, { fantrax, onApplySettings: vi.fn() })
+    );
+    const toggleBtn = container.querySelector(".fantrax-toggle-btn") as HTMLButtonElement;
+    act(() => { toggleBtn.click(); });
+    expect(container.textContent).toContain("Daily H2H points uses the day-aware roster management model");
+    cleanup();
+  });
+
+  it("does not show head-to-head guidance for season-total points imports", () => {
+    const fantrax = baseFanTrax({
+      leagueId: "abc123",
+      leagueData: {
+        league_id: "abc123",
+        league_name: "Test League",
+        team_count: 12,
+        scoring_type: "points",
+        scoring_categories: [] as string[],
+        roster_positions: [] as string[],
+        teams: [{ team_id: "t1", team_name: "Team A", player_count: 25 }],
+      },
+      suggestedSettings: {
+        teams: 12,
+        scoring_mode: "points",
+        roto_categories: {},
+        roster_slots: {},
+        points_scoring: {},
+        bench: 10,
+        minors: 0,
+        ir: 4,
+        keeper_limit: 7,
+        points_valuation_mode: "season_total",
+        weekly_starts_cap: null,
+        allow_same_day_starts_overflow: false,
+        weekly_acquisition_cap: null,
+        import_warnings: [],
+      },
+    });
+    const { container, cleanup } = renderToContainer(
+      React.createElement(LeagueConnectPanel, { fantrax, onApplySettings: vi.fn() })
+    );
+    const toggleBtn = container.querySelector(".fantrax-toggle-btn") as HTMLButtonElement;
+    act(() => { toggleBtn.click(); });
+    expect(container.textContent).not.toContain("Weekly H2H points uses a calibrated valuation model");
+    expect(container.textContent).not.toContain("Daily H2H points uses the day-aware roster management model");
+    cleanup();
+  });
 });

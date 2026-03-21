@@ -115,6 +115,8 @@ export function DynastyCalculatorSidebar({
     update,
   } = actions;
   const runActionLabel = hasSuccessfulRun ? "Apply To Main Table" : "Run Dynasty Rankings";
+  const pointsValuationMode = String(settings.points_valuation_mode || "season_total").trim().toLowerCase();
+  const usesHeadToHeadPoints = isPointsMode && (pointsValuationMode === "daily_h2h" || pointsValuationMode === "weekly_h2h");
 
   return (
     <div className="calc-sidebar">
@@ -314,11 +316,10 @@ export function DynastyCalculatorSidebar({
               value={settings.ip_max ?? ""}
               onChange={e => update("ip_max", e.target.value)}
               placeholder="none"
-              disabled={isPointsMode}
             />
           </div>
         </div>
-        {isPointsMode && <p className="calc-note">IP min/max constraints only apply in roto mode.</p>}
+        {isPointsMode && <p className="calc-note">IP Max applies in roto and points. IP Min only applies in roto mode.</p>}
       </div>
 
       <div className="calc-section">
@@ -497,9 +498,11 @@ export function DynastyCalculatorSidebar({
 
       {isPointsMode && (
         <div className="calc-section">
-          <p className="calc-section-title">Weekly Matchup Rules</p>
+          <p className="calc-section-title">Points Valuation</p>
           <p className="calc-note">
-            Weekly H2H uses a calibrated streaming adjustment for starters. Keeper Limit controls the dynasty cutoff for shallow keeper leagues.
+            {usesHeadToHeadPoints
+              ? "Daily H2H uses the day-aware roster management model, while Weekly H2H keeps the legacy capped-start heuristic. Keeper Limit controls the dynasty cutoff for shallow keeper leagues."
+              : "Keeper Limit controls the dynasty cutoff for shallow keeper leagues. Weekly starts, adds, and same-day overflow only apply in Daily H2H or Weekly H2H points modes."}
           </p>
           <div className="form-row">
             <div className="form-group">
@@ -510,6 +513,7 @@ export function DynastyCalculatorSidebar({
                 onChange={e => update("points_valuation_mode", e.target.value)}
               >
                 <option value="season_total">Season Total</option>
+                <option value="daily_h2h">Daily H2H</option>
                 <option value="weekly_h2h">Weekly H2H</option>
               </select>
             </div>
@@ -542,6 +546,7 @@ export function DynastyCalculatorSidebar({
                 placeholder="none"
                 min="1"
                 max="40"
+                disabled={!usesHeadToHeadPoints}
               />
             </div>
             <div className="form-group">
@@ -554,14 +559,17 @@ export function DynastyCalculatorSidebar({
                 placeholder="none"
                 min="0"
                 max="40"
+                disabled={!usesHeadToHeadPoints}
               />
             </div>
           </div>
           <label className="calc-checkbox-option">
             <input
+              id="calc-allow-same-day-starts-overflow"
               type="checkbox"
               checked={Boolean(settings.allow_same_day_starts_overflow)}
               onChange={e => update("allow_same_day_starts_overflow", e.target.checked)}
+              disabled={!usesHeadToHeadPoints}
             />
             <span>Allow Same-Day Starts Overflow</span>
           </label>

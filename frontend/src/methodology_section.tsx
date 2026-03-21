@@ -66,8 +66,8 @@ export function MethodologySection(): React.ReactElement {
             <code>Value_y = sum(delta_cat / SGP_denom(cat))</code> (ERA/WHIP deltas are sign-reversed).
           </li>
           <li>
-            Pitching totals apply innings rules before category deltas: <code>ip_max</code> scales/fills totals
-            and <code>ip_min</code> can force qualification penalties.
+            Pitching totals apply innings rules before category deltas: <code>ip_max</code> is a hard cap on
+            credited innings and <code>ip_min</code> can force qualification penalties.
           </li>
           <li>
             Multi-year value uses keep/drop optimization with stash rules:
@@ -117,7 +117,8 @@ export function MethodologySection(): React.ReactElement {
             <code>F[i] = max(0, Value_i + discount ** gap * F[i+1])</code>.
           </li>
           <li>
-            Points mode is deterministic and does not use Monte Carlo simulation or <code>ip_min</code>/<code>ip_max</code> rules.
+            Points mode is deterministic and does not use Monte Carlo simulation. When set, <code>ip_max</code>
+            applies as a hard annual innings budget; <code>ip_min</code> is not used in points mode.
           </li>
         </ul>
         <p className="methodology-note" style={{ marginBottom: 0 }}>

@@ -214,6 +214,20 @@ describe("buildCalculatorPayload", () => {
     expect(result.payload!.ir_negative_penalty).toBe(0.2);
   });
 
+  it("accepts daily_h2h as a valid points valuation mode", () => {
+    const settings = buildValidRotoSettings({
+      scoring_mode: "points",
+      points_valuation_mode: "daily_h2h",
+      hit_of: 1,
+      pit_p: 1,
+      pts_hit_1b: 1,
+    });
+    const result = buildCalculatorPayload(settings, [2026, 2027], {});
+
+    expect(result.error).toBeUndefined();
+    expect(result.payload?.points_valuation_mode).toBe("daily_h2h");
+  });
+
   it("returns error for invalid scoring mode", () => {
     const settings = buildValidRotoSettings({ scoring_mode: "invalid" });
     const result = buildCalculatorPayload(settings, [2026], {});
@@ -296,6 +310,20 @@ describe("buildCalculatorPayload", () => {
     const result = buildCalculatorPayload(settings, [2026], {});
     expect(result.error).toBeUndefined();
     expect(result.payload?.ip_max).toBe(200);
+  });
+
+  it("keeps ip_max in points payloads", () => {
+    const settings = buildValidRotoSettings({
+      scoring_mode: "points",
+      ip_max: "1500",
+      hit_of: 1,
+      pit_p: 1,
+      pts_hit_1b: 1,
+    });
+    const result = buildCalculatorPayload(settings, [2026], {});
+    expect(result.error).toBeUndefined();
+    expect(result.payload?.scoring_mode).toBe("points");
+    expect(result.payload?.ip_max).toBe(1500);
   });
 
   it("returns error when ip_max is less than ip_min", () => {

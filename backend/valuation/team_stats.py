@@ -110,10 +110,10 @@ def common_apply_pitching_bounds(
     lg: CommonDynastyRotoSettings,
     rep_rates: Optional[Dict[str, float]],
     *,
-    fill_to_ip_max: bool = True,
+    fill_to_ip_max: bool = False,
     enforce_ip_min: bool = True,
 ) -> Dict[str, float]:
-    """Apply optional IP cap/fill and IP-min qualification to common-mode pitching totals."""
+    """Apply optional IP cap and IP-min qualification to common-mode pitching totals."""
     out = {k: float(totals.get(k, 0.0)) for k in PIT_COMPONENT_COLS}
     ip = float(out["IP"])
 
@@ -125,14 +125,6 @@ def common_apply_pitching_bounds(
             factor = ip_cap / ip
             for col in PIT_COMPONENT_COLS:
                 out[col] = float(out[col]) * factor
-            ip = ip_cap
-
-        # If under cap, assume streamable replacement innings.
-        if fill_to_ip_max and ip < ip_cap and rep_rates is not None:
-            add = ip_cap - ip
-            out["IP"] = ip_cap
-            for col in ["W", "QS", "QA3", "K", "SV", "SVH", "ER", "H", "BB"]:
-                out[col] = float(out[col]) + add * float(rep_rates.get(col, 0.0))
             ip = ip_cap
 
     out["ERA"] = _team_era(out["ER"], ip)

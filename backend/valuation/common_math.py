@@ -6,6 +6,14 @@ import numpy as np
 import pandas as pd
 
 try:
+    from backend.valuation.active_volume import (
+        SYNTHETIC_SEASON_DAYS,
+        VolumeEntry,
+        allocate_hitter_usage_daily,
+        allocate_pitcher_innings_budget,
+        allocate_pitcher_usage_daily,
+        annual_slot_capacity,
+    )
     from backend.valuation.assignment import (
         assign_players_to_slots_with_vacancy_fill,
         build_team_slot_template,
@@ -98,6 +106,14 @@ try:
         _initial_pitcher_weight as _initial_pitcher_weight,
     )
 except ImportError:
+    from valuation.active_volume import (  # type: ignore[no-redef]
+        SYNTHETIC_SEASON_DAYS,
+        VolumeEntry,
+        allocate_hitter_usage_daily,
+        allocate_pitcher_innings_budget,
+        allocate_pitcher_usage_daily,
+        annual_slot_capacity,
+    )
     from valuation.assignment import (  # type: ignore[no-redef]
         assign_players_to_slots_with_vacancy_fill,
         build_team_slot_template,
@@ -193,6 +209,7 @@ except ImportError:
 
 COMMON_REVERSED_PITCH_CATS: set[str] = {"ERA", "WHIP"}
 COMMON_RATE_HIT_CATS: set[str] = {"AVG", "OBP", "SLG", "OPS"}
+_USAGE_EPSILON = 1e-9
 
 
 def _zscore(s: pd.Series) -> pd.Series:
@@ -202,6 +219,255 @@ def _zscore(s: pd.Series) -> pd.Series:
     if sd == 0.0 or np.isnan(sd):
         return x * 0.0
     return (x - mu) / sd
+
+
+def _coerce_usage_share(value: float) -> float:
+    return float(min(max(value, 0.0), 1.0))
+
+
+def _common_active_volume_context(
+    year: int,
+    bat_y: pd.DataFrame,
+    pit_y: pd.DataFrame,
+    lg: CommonDynastyRotoSettings,
+    *,
+    hit_categories: list[str],
+    pit_categories: list[str],
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, float | int | None], dict[str, float | int | None]]:
+    bat_adj = bat_y.copy()
+    pit_adj = pit_y.copy()
+
+    hitter_slot_capacity = annual_slot_capacity(
+        lg.hitter_slots,
+        teams=lg.n_teams,
+        season_capacity_per_slot=float(SYNTHETIC_SEASON_DAYS),
+    )
+    pitcher_slot_capacity = annual_slot_capacity(
+        lg.pitcher_slots,
+        teams=lg.n_teams,
+        season_capacity_per_slot=float(SYNTHETIC_SEASON_DAYS),
+    )
+
+    bat_quality = pd.Series(0.0, index=bat_adj.index, dtype="float64")
+    if "G" in bat_adj.columns:
+        bat_g = pd.to_numeric(bat_adj["G"], errors="coerce")
+        bat_weights = _initial_hitter_weight(bat_adj, categories=hit_categories)
+        bat_quality = bat_weights.divide(bat_g.where(bat_g > 0.0), fill_value=0.0).replace([np.inf, -np.inf], 0.0).fillna(0.0)
+
+    hitter_entries: list[VolumeEntry] = []
+    fallback_hitter_ids: set[str] = set()
+    hitter_assigned_games: dict[str, float] = {}
+    hitter_usage_share: dict[str, float] = {}
+    hitter_requested_games = 0.0
+    for idx, row in bat_adj.iterrows():
+        player = str(row.get("Player") or "").strip()
+        if not player:
+            continue
+        ab = _coerce_non_negative_float(row.get("AB", 0.0))
+        if ab <= 0.0:
+            hitter_usage_share[player] = 0.0
+            hitter_assigned_games[player] = 0.0
+            continue
+        slots = eligible_hit_slots(parse_hit_positions(row.get("Pos", ""))) & set(hitter_slot_capacity.keys())
+        if not slots:
+            hitter_usage_share[player] = 0.0
+            hitter_assigned_games[player] = 0.0
+            continue
+        projected_games = _coerce_non_negative_float(row.get("G", 0.0))
+        if projected_games <= 0.0:
+            fallback_hitter_ids.add(player)
+            hitter_usage_share[player] = 1.0
+            hitter_assigned_games[player] = 0.0
+            continue
+        hitter_requested_games += projected_games
+        hitter_entries.append(
+            VolumeEntry(
+                player_id=player,
+                projected_volume=projected_games,
+                quality=float(bat_quality.loc[idx]),
+                slots=set(slots),
+                year=year,
+            )
+        )
+
+    hitter_usage = allocate_hitter_usage_daily(
+        hitter_entries,
+        slot_capacity=hitter_slot_capacity,
+    )
+    hitter_assigned_games.update(hitter_usage.assigned_volume_by_player)
+    hitter_usage_share.update(hitter_usage.usage_share_by_player)
+
+    for idx, row in bat_adj.iterrows():
+        player = str(row.get("Player") or "").strip()
+        if not player:
+            continue
+        share = 1.0 if player in fallback_hitter_ids else _coerce_usage_share(float(hitter_usage_share.get(player, 0.0)))
+        bat_adj.at[idx, "_UsageShare"] = share
+        bat_adj.at[idx, "_AssignedGames"] = float(hitter_assigned_games.get(player, 0.0))
+        bat_adj.at[idx, "_ProjectedGames"] = _coerce_non_negative_float(row.get("G", 0.0))
+        for col in HIT_COMPONENT_COLS:
+            bat_adj.at[idx, col] = float(bat_adj.at[idx, col]) * share
+
+    pit_quality = pd.Series(0.0, index=pit_adj.index, dtype="float64")
+    if "G" in pit_adj.columns:
+        pit_g = pd.to_numeric(pit_adj["G"], errors="coerce")
+        pit_weights = _initial_pitcher_weight(pit_adj, categories=pit_categories)
+        pit_quality = pit_weights.divide(pit_g.where(pit_g > 0.0), fill_value=0.0).replace([np.inf, -np.inf], 0.0).fillna(0.0)
+
+    pitcher_entries: list[VolumeEntry] = []
+    pitcher_start_volume: dict[str, float] = {}
+    fallback_pitcher_ids: set[str] = set()
+    pitcher_usage_share: dict[str, float] = {}
+    pitcher_assigned_starts: dict[str, float] = {}
+    pitcher_assigned_non_starts: dict[str, float] = {}
+    pitcher_assigned_appearances: dict[str, float] = {}
+
+    for idx, row in pit_adj.iterrows():
+        player = str(row.get("Player") or "").strip()
+        if not player:
+            continue
+        ip = _coerce_non_negative_float(row.get("IP", 0.0))
+        if ip <= 0.0:
+            pitcher_usage_share[player] = 0.0
+            pitcher_assigned_starts[player] = 0.0
+            pitcher_assigned_non_starts[player] = 0.0
+            pitcher_assigned_appearances[player] = 0.0
+            continue
+        slots = eligible_pit_slots(parse_pit_positions(row.get("Pos", ""))) & set(pitcher_slot_capacity.keys())
+        if not slots:
+            pitcher_usage_share[player] = 0.0
+            pitcher_assigned_starts[player] = 0.0
+            pitcher_assigned_non_starts[player] = 0.0
+            pitcher_assigned_appearances[player] = 0.0
+            continue
+        projected_appearances = _coerce_non_negative_float(row.get("G", 0.0))
+        if projected_appearances <= 0.0:
+            fallback_pitcher_ids.add(player)
+            pitcher_usage_share[player] = 1.0
+            pitcher_assigned_starts[player] = 0.0
+            pitcher_assigned_non_starts[player] = 0.0
+            pitcher_assigned_appearances[player] = 0.0
+            continue
+        projected_starts = min(_coerce_non_negative_float(row.get("GS", 0.0)), projected_appearances)
+        if projected_starts < 1.0:
+            projected_starts = 0.0
+        pitcher_start_volume[player] = projected_starts
+        pitcher_entries.append(
+            VolumeEntry(
+                player_id=player,
+                projected_volume=projected_appearances,
+                quality=float(pit_quality.loc[idx]),
+                slots=set(slots),
+                year=year,
+            )
+        )
+
+    pitcher_usage = allocate_pitcher_usage_daily(
+        pitcher_entries,
+        start_volume_by_player=pitcher_start_volume,
+        slot_capacity=pitcher_slot_capacity,
+        capped_start_budget=None,
+    )
+    pitcher_usage_share.update(pitcher_usage.usage_share_by_player)
+    pitcher_assigned_starts.update(pitcher_usage.assigned_starts_by_player)
+    pitcher_assigned_non_starts.update(pitcher_usage.assigned_non_start_appearances_by_player)
+    pitcher_assigned_appearances.update(pitcher_usage.assigned_appearances_by_player)
+
+    for idx, row in pit_adj.iterrows():
+        player = str(row.get("Player") or "").strip()
+        if not player:
+            continue
+        share = 1.0 if player in fallback_pitcher_ids else _coerce_usage_share(float(pitcher_usage_share.get(player, 0.0)))
+        pit_adj.at[idx, "_UsageShare"] = share
+        pit_adj.at[idx, "_AssignedStarts"] = float(pitcher_assigned_starts.get(player, 0.0))
+        pit_adj.at[idx, "_AssignedNonStartAppearances"] = float(pitcher_assigned_non_starts.get(player, 0.0))
+        pit_adj.at[idx, "_AssignedAppearances"] = float(pitcher_assigned_appearances.get(player, 0.0))
+        pit_adj.at[idx, "_ProjectedAppearances"] = _coerce_non_negative_float(row.get("G", 0.0))
+        pit_adj.at[idx, "_ProjectedStarts"] = _coerce_non_negative_float(row.get("GS", 0.0))
+        for col in PIT_COMPONENT_COLS:
+            pit_adj.at[idx, col] = float(pit_adj.at[idx, col]) * share
+
+    ip_budget = float(lg.ip_max) * max(int(lg.n_teams), 1) if lg.ip_max is not None else None
+    pitcher_ip_usage_share: dict[str, float] = {}
+    pitcher_assigned_ip: dict[str, float] = {}
+    pitcher_ip_allocation = None
+    if ip_budget is not None:
+        pit_ip_quality = _initial_pitcher_weight(pit_adj, categories=pit_categories)
+        ip_entries = [
+            VolumeEntry(
+                player_id=str(row.get("Player") or "").strip(),
+                projected_volume=_coerce_non_negative_float(row.get("IP", 0.0)),
+                quality=float(pit_ip_quality.loc[idx]) / max(_coerce_non_negative_float(row.get("IP", 0.0)), _USAGE_EPSILON),
+                slots={"IP_CAP"},
+                year=year,
+            )
+            for idx, row in pit_adj.iterrows()
+            if str(row.get("Player") or "").strip() and _coerce_non_negative_float(row.get("IP", 0.0)) > 0.0
+        ]
+        pitcher_ip_allocation = allocate_pitcher_innings_budget(
+            ip_entries,
+            ip_budget=ip_budget,
+        )
+        pitcher_ip_usage_share.update(pitcher_ip_allocation.ip_usage_share_by_player)
+        pitcher_assigned_ip.update(pitcher_ip_allocation.assigned_ip_by_player)
+
+        for idx, row in pit_adj.iterrows():
+            player = str(row.get("Player") or "").strip()
+            if not player:
+                continue
+            ip_share = _coerce_usage_share(float(pitcher_ip_usage_share.get(player, 0.0)))
+            if _coerce_non_negative_float(row.get("IP", 0.0)) <= 0.0:
+                ip_share = 0.0
+            pit_adj.at[idx, "_AppearanceUsageShare"] = float(pit_adj.at[idx, "_UsageShare"])
+            pit_adj.at[idx, "_IpUsageShare"] = ip_share
+            pit_adj.at[idx, "_AssignedIP"] = float(pitcher_assigned_ip.get(player, 0.0))
+            pit_adj.at[idx, "_ProjectedIP"] = _coerce_non_negative_float(row.get("IP", 0.0))
+            pit_adj.at[idx, "_UsageShare"] = float(pit_adj.at[idx, "_UsageShare"]) * ip_share
+            for col in PIT_COMPONENT_COLS:
+                pit_adj.at[idx, col] = float(pit_adj.at[idx, col]) * ip_share
+    else:
+        for idx, row in pit_adj.iterrows():
+            player = str(row.get("Player") or "").strip()
+            if not player:
+                continue
+            pit_adj.at[idx, "_AppearanceUsageShare"] = float(pit_adj.at[idx, "_UsageShare"])
+            pit_adj.at[idx, "_IpUsageShare"] = 1.0 if _coerce_non_negative_float(row.get("IP", 0.0)) > 0.0 else 0.0
+            pit_adj.at[idx, "_AssignedIP"] = _coerce_non_negative_float(row.get("IP", 0.0))
+            pit_adj.at[idx, "_ProjectedIP"] = _coerce_non_negative_float(row.get("IP", 0.0))
+
+    hitter_diagnostics: dict[str, float | int | None] = {
+        "slot_game_capacity": round(float(sum(hitter_slot_capacity.values())), 4),
+        "assigned_hitter_games": round(float(hitter_usage.total_assigned_volume), 4),
+        "unused_hitter_games": round(max(float(hitter_requested_games) - float(hitter_usage.total_assigned_volume), 0.0), 4),
+        "fallback_hitter_count": int(len(fallback_hitter_ids)),
+        "synthetic_season_days": int(SYNTHETIC_SEASON_DAYS),
+    }
+    pitcher_diagnostics: dict[str, float | int | None] = {
+        "slot_appearance_capacity": round(float(sum(pitcher_slot_capacity.values())), 4),
+        "assigned_starts": round(float(pitcher_usage.total_assigned_starts), 4),
+        "assigned_non_start_appearances": round(float(pitcher_usage.total_assigned_non_start_appearances), 4),
+        "capped_start_budget": None,
+        "fallback_pitcher_count": int(len(fallback_pitcher_ids)),
+        "synthetic_season_days": int(SYNTHETIC_SEASON_DAYS),
+        "ip_cap_budget": round(float(ip_budget), 4) if ip_budget is not None else None,
+        "requested_pitcher_ip_pre_cap": round(
+            float(pitcher_ip_allocation.total_requested_ip) if pitcher_ip_allocation is not None else float(pit_adj["IP"].sum()),
+            4,
+        ),
+        "assigned_pitcher_ip": round(
+            float(pitcher_ip_allocation.total_assigned_ip) if pitcher_ip_allocation is not None else float(pit_adj["IP"].sum()),
+            4,
+        ),
+        "unused_pitcher_ip": round(float(pitcher_ip_allocation.unused_ip), 4)
+        if pitcher_ip_allocation is not None and pitcher_ip_allocation.unused_ip is not None
+        else None,
+        "trimmed_pitcher_ip": round(float(pitcher_ip_allocation.trimmed_ip), 4)
+        if pitcher_ip_allocation is not None
+        else 0.0,
+        "ip_cap_binding": bool(pitcher_ip_allocation.ip_cap_binding) if pitcher_ip_allocation is not None else False,
+    }
+
+    return bat_adj, pit_adj, hitter_diagnostics, pitcher_diagnostics
 
 
 def _active_common_hit_categories(lg: CommonDynastyRotoSettings) -> list[str]:
@@ -249,6 +515,15 @@ def compute_year_context(
         if c not in pit_y.columns:
             pit_y[c] = 0.0
         pit_y[c] = pit_y[c].fillna(0.0)
+
+    bat_y, pit_y, hitter_usage_diagnostics, pitcher_usage_diagnostics = _common_active_volume_context(
+        year,
+        bat_y,
+        pit_y,
+        lg,
+        hit_categories=hit_categories,
+        pit_categories=pit_categories,
+    )
 
     # Starter-pool candidates (must have playing time)
     bat_play = bat_y[bat_y["AB"] > 0].copy()
@@ -331,6 +606,8 @@ def compute_year_context(
         "sgp_pit": sgp_pit,
         "hit_categories": hit_categories,
         "pit_categories": pit_categories,
+        "hitter_usage_diagnostics": hitter_usage_diagnostics,
+        "pitcher_usage_diagnostics": pitcher_usage_diagnostics,
     }
 
 

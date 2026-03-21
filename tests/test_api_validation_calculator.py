@@ -197,6 +197,198 @@ class CalculatorValidationTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422)
 
+    def test_points_mode_forwards_weekly_and_stash_settings(self) -> None:
+        fake_out = pd.DataFrame(
+            [
+                {
+                    "Player": "Jane Roe",
+                    "PlayerKey": "jane-roe",
+                    "PlayerEntityKey": "jane-roe",
+                    "Team": "SEA",
+                    "Pos": "OF",
+                    "Age": 26,
+                    "DynastyValue": 5.0,
+                    "RawDynastyValue": 5.0,
+                    "minor_eligible": False,
+                    "Value_2026": 5.0,
+                }
+            ]
+        )
+        fake_out.attrs["valuation_diagnostics"] = {}
+        captured_kwargs: dict[str, object] = {}
+
+        class _PointsCache:
+            def __call__(self, **kwargs):
+                captured_kwargs.update(kwargs)
+                return fake_out
+
+            def cache_info(self):
+                return types.SimpleNamespace(hits=0, misses=0)
+
+        with patch.object(app_module, "_refresh_data_if_needed", return_value=None), patch.object(
+            app_module,
+            "_coerce_meta_years",
+            return_value=[2026],
+        ), patch.object(
+            app_module,
+            "META",
+            {"years": [2026]},
+        ), patch.object(
+            app_module,
+            "_calc_result_cache_key",
+            return_value="points-forwarding-test",
+        ), patch.object(
+            app_module,
+            "_result_cache_get",
+            return_value=None,
+        ), patch.object(
+            app_module,
+            "_result_cache_set",
+            return_value=None,
+        ), patch.object(
+            app_module,
+            "_calculate_points_dynasty_frame_cached",
+            new=_PointsCache(),
+        ), patch.object(
+            app_module,
+            "_player_identity_by_name",
+            return_value={},
+        ), patch.object(
+            app_module,
+            "_build_calculation_explanations",
+            return_value={},
+        ), patch.object(
+            app_module,
+            "_clean_records_for_json",
+            side_effect=lambda records: records,
+        ):
+            response = self.client.post(
+                "/api/calculate",
+                json={
+                    "scoring_mode": "points",
+                    "teams": 12,
+                    "start_year": 2026,
+                    "horizon": 1,
+                    "discount": 0.94,
+                    "two_way": "sum",
+                    "points_valuation_mode": "weekly_h2h",
+                    "ip_max": 1400,
+                    "weekly_starts_cap": 12,
+                    "weekly_acquisition_cap": 7,
+                    "allow_same_day_starts_overflow": True,
+                    "enable_prospect_risk_adjustment": True,
+                    "enable_bench_stash_relief": True,
+                    "bench_negative_penalty": 0.45,
+                    "enable_ir_stash_relief": True,
+                    "ir_negative_penalty": 0.15,
+                    "hit_of": 1,
+                    "pit_p": 1,
+                    "pts_hit_1b": 1,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(captured_kwargs.get("points_valuation_mode"), "weekly_h2h")
+        self.assertEqual(captured_kwargs.get("ip_max"), 1400)
+        self.assertEqual(captured_kwargs.get("weekly_starts_cap"), 12)
+        self.assertEqual(captured_kwargs.get("weekly_acquisition_cap"), 7)
+        self.assertTrue(captured_kwargs.get("allow_same_day_starts_overflow"))
+        self.assertTrue(captured_kwargs.get("enable_prospect_risk_adjustment"))
+        self.assertTrue(captured_kwargs.get("enable_bench_stash_relief"))
+        self.assertEqual(captured_kwargs.get("bench_negative_penalty"), 0.45)
+        self.assertTrue(captured_kwargs.get("enable_ir_stash_relief"))
+        self.assertEqual(captured_kwargs.get("ir_negative_penalty"), 0.15)
+
+    def test_points_request_accepts_daily_h2h_mode(self) -> None:
+        fake_out = pd.DataFrame(
+            [
+                {
+                    "Player": "Pitcher A",
+                    "Team": "SEA",
+                    "Pos": "SP",
+                    "Age": 27,
+                    "DynastyValue": 1.0,
+                    "RawDynastyValue": 1.0,
+                    "minor_eligible": False,
+                    "Value_2026": 1.0,
+                }
+            ]
+        )
+        fake_out.attrs["valuation_diagnostics"] = {"PointsValuationMode": "daily_h2h"}
+        captured_kwargs: dict[str, object] = {}
+
+        class _PointsCache:
+            def __call__(self, **kwargs):
+                captured_kwargs.update(kwargs)
+                return fake_out
+
+            def cache_info(self):
+                return types.SimpleNamespace(hits=0, misses=0)
+
+        with patch.object(app_module, "_refresh_data_if_needed", return_value=None), patch.object(
+            app_module,
+            "_coerce_meta_years",
+            return_value=[2026],
+        ), patch.object(
+            app_module,
+            "META",
+            {"years": [2026]},
+        ), patch.object(
+            app_module,
+            "_calc_result_cache_key",
+            return_value="points-daily-forwarding-test",
+        ), patch.object(
+            app_module,
+            "_result_cache_get",
+            return_value=None,
+        ), patch.object(
+            app_module,
+            "_result_cache_set",
+            return_value=None,
+        ), patch.object(
+            app_module,
+            "_calculate_points_dynasty_frame_cached",
+            new=_PointsCache(),
+        ), patch.object(
+            app_module,
+            "_player_identity_by_name",
+            return_value={},
+        ), patch.object(
+            app_module,
+            "_build_calculation_explanations",
+            return_value={},
+        ), patch.object(
+            app_module,
+            "_clean_records_for_json",
+            side_effect=lambda records: records,
+        ):
+            response = self.client.post(
+                "/api/calculate",
+                json={
+                    "scoring_mode": "points",
+                    "teams": 12,
+                    "start_year": 2026,
+                    "horizon": 1,
+                    "discount": 0.94,
+                    "two_way": "sum",
+                    "points_valuation_mode": "daily_h2h",
+                    "ip_max": 1250,
+                    "weekly_starts_cap": 12,
+                    "weekly_acquisition_cap": 7,
+                    "allow_same_day_starts_overflow": True,
+                    "hit_of": 1,
+                    "pit_p": 1,
+                    "pts_hit_1b": 1,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(captured_kwargs.get("points_valuation_mode"), "daily_h2h")
+        self.assertEqual(captured_kwargs.get("ip_max"), 1250)
+        self.assertEqual(captured_kwargs.get("weekly_starts_cap"), 12)
+        self.assertEqual(captured_kwargs.get("weekly_acquisition_cap"), 7)
+        self.assertTrue(captured_kwargs.get("allow_same_day_starts_overflow"))
+
     def test_calculate_response_includes_identity_fields(self) -> None:
         fake_out = pd.DataFrame(
             [

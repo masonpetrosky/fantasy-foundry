@@ -8,6 +8,35 @@ from typing import Callable
 
 import pandas as pd
 
+try:
+    from backend.valuation.active_volume import (
+        SYNTHETIC_PERIOD_DAYS,
+        SYNTHETIC_SEASON_DAYS,
+        VolumeEntry,
+        allocate_hitter_usage,
+        allocate_hitter_usage_daily,
+        allocate_pitcher_innings_budget,
+        allocate_pitcher_usage,
+        allocate_pitcher_usage_daily,
+        annual_slot_capacity,
+    )
+    from backend.valuation.minor_eligibility import _resolve_minor_eligibility_by_year
+    from backend.valuation.models import CommonDynastyRotoSettings
+except ImportError:  # pragma: no cover - direct script execution fallback
+    from valuation.active_volume import (  # type: ignore[no-redef]
+        SYNTHETIC_PERIOD_DAYS,
+        SYNTHETIC_SEASON_DAYS,
+        VolumeEntry,
+        allocate_hitter_usage,
+        allocate_hitter_usage_daily,
+        allocate_pitcher_innings_budget,
+        allocate_pitcher_usage,
+        allocate_pitcher_usage_daily,
+        annual_slot_capacity,
+    )
+    from valuation.minor_eligibility import _resolve_minor_eligibility_by_year  # type: ignore[no-redef]
+    from valuation.models import CommonDynastyRotoSettings  # type: ignore[no-redef]
+
 
 @dataclass(slots=True)
 class PointsCalculatorContext:
@@ -54,6 +83,70 @@ class _FlowEdge:
 
 
 _SEASON_WEEKS = 26.0
+
+
+def _prospect_risk_multiplier(
+    *,
+    year: int,
+    start_year: int,
+    profile: str,
+    minor_eligible: bool,
+    enabled: bool,
+) -> float:
+    if not enabled or not minor_eligible:
+        return 1.0
+
+    year_offset = max(int(year) - int(start_year), 0)
+    if profile == "pitcher":
+        return float(max(0.45, 0.88 ** year_offset))
+    return float(max(0.60, 0.92 ** year_offset))
+
+
+def _is_near_zero_playing_time(
+    player_id: str,
+    year: int,
+    *,
+    hitter_ab_by_player_year: dict[tuple[str, int], float],
+    pitcher_ip_by_player_year: dict[tuple[str, int], float],
+    hitter_ab_threshold: float = 60.0,
+    pitcher_ip_threshold: float = 15.0,
+) -> bool:
+    hit_ab = float(hitter_ab_by_player_year.get((player_id, int(year)), 0.0))
+    pit_ip = float(pitcher_ip_by_player_year.get((player_id, int(year)), 0.0))
+    return hit_ab <= float(hitter_ab_threshold) and pit_ip <= float(pitcher_ip_threshold)
+
+
+def _apply_negative_value_stash_rules(
+    value: float,
+    *,
+    can_minor_stash: bool,
+    can_ir_stash: bool,
+    ir_negative_penalty: float,
+    can_bench_stash: bool,
+    bench_negative_penalty: float,
+) -> float:
+    if value >= 0.0:
+        return float(value)
+    if can_minor_stash:
+        return 0.0
+    if can_ir_stash:
+        return float(value) * float(min(max(ir_negative_penalty, 0.0), 1.0))
+    if can_bench_stash:
+        return float(value) * float(min(max(bench_negative_penalty, 0.0), 1.0))
+    return float(value)
+
+
+def _negative_fallback_value(
+    *,
+    best_value: float | None,
+    assigned_slot: str | None,
+    assigned_value: float,
+) -> float:
+    if assigned_slot is not None:
+        return float(assigned_value)
+    if best_value is None:
+        return 0.0
+    return min(float(best_value), 0.0)
 
 
 def stat_or_zero(row: dict | None, key: str, *, as_float_fn: Callable[[object], float | None]) -> float:
@@ -174,6 +267,23 @@ def calculate_pitcher_points_breakdown(
         "stats": {key: round(float(value), 4) for key, value in inputs.items()},
         "rule_points": {key: round(float(value), 4) for key, value in rule_points.items()},
         "total_points": round(total_points, 4),
+    }
+
+
+def _scale_points_breakdown(breakdown: dict, share: float) -> dict:
+    scaled_share = min(max(float(share), 0.0), 1.0)
+    stats = breakdown.get("stats") if isinstance(breakdown.get("stats"), dict) else {}
+    rule_points = breakdown.get("rule_points") if isinstance(breakdown.get("rule_points"), dict) else {}
+    return {
+        "stats": {
+            str(key): round(float(value) * scaled_share, 4)
+            for key, value in stats.items()
+        },
+        "rule_points": {
+            str(key): round(float(value) * scaled_share, 4)
+            for key, value in rule_points.items()
+        },
+        "total_points": round(float(breakdown.get("total_points", 0.0)) * scaled_share, 4),
     }
 
 
@@ -325,7 +435,9 @@ def _weekly_pitcher_streaming_bonus_by_slot(
         "effective_weekly_starts_cap": None,
         "weekly_acquisition_cap": weekly_acquisition_cap,
         "held_starts_per_week": None,
+        "theoretical_streamable_starts_per_week": None,
         "streamable_starts_per_week": None,
+        "streaming_realization_factor": None,
         "replacement_points_per_start": None,
         "streaming_points_per_sp_slot": None,
         "streaming_points_per_p_slot": None,
@@ -345,13 +457,7 @@ def _weekly_pitcher_streaming_bonus_by_slot(
     starter_entries: list[dict[str, float | str]] = []
     for entry in entries:
         raw_slots = entry.get("slots")
-        if isinstance(raw_slots, set):
-            slots = {str(slot) for slot in raw_slots}
-        elif isinstance(raw_slots, (list, tuple)):
-            slots = {str(slot) for slot in raw_slots}
-        else:
-            continue
-        if "SP" not in slots and "P" not in slots:
+        if not isinstance(raw_slots, (set, list, tuple)):
             continue
 
         player_id = str(entry.get("player_id") or "").strip()
@@ -361,6 +467,11 @@ def _weekly_pitcher_streaming_bonus_by_slot(
             points = float(entry.get("points") or 0.0)
             gs = float(entry.get("gs") or 0.0)
         except (TypeError, ValueError):
+            continue
+        # Weekly starts caps apply to meaningful starters, not RP rows with a
+        # few fractional projected starts. Using a GS floor keeps P-only leagues
+        # calibratable without letting relievers dominate points-per-start.
+        if gs < 5.0:
             continue
         if gs <= 0 or points <= 0:
             continue
@@ -396,7 +507,20 @@ def _weekly_pitcher_streaming_bonus_by_slot(
         max(effective_weekly_cap - held_starts_per_week, 0.0),
         float(weekly_acquisition_cap),
     )
+    diagnostics["theoretical_streamable_starts_per_week"] = round(streamable_starts_per_week, 4)
     diagnostics["streamable_starts_per_week"] = round(streamable_starts_per_week, 4)
+    # Generic P baselines already reflect held-start production from a managed
+    # season-long staff. Scale the additive weekly uplift by the streamable
+    # share of the combined held-start plus capped-start environment so we do
+    # not spread the full theoretical cap surplus across every P slot.
+    streaming_realization_factor = min(
+        max(
+            streamable_starts_per_week / max(effective_weekly_cap + held_starts_per_week, 1e-9),
+            0.0,
+        ),
+        1.0,
+    )
+    diagnostics["streaming_realization_factor"] = round(streaming_realization_factor, 4)
     if streamable_starts_per_week <= 1e-9:
         return {}, diagnostics
 
@@ -439,7 +563,14 @@ def _weekly_pitcher_streaming_bonus_by_slot(
         1.0,
         float(starter_slot_capacity) / max(float(total_pitcher_slots), 1.0),
     )
-    streaming_points_per_p_slot = streaming_points_per_sp_slot * generic_slot_share
+    # Generic P baselines already capture the held-start portion of a managed
+    # staff, so only the realized stream-derived share should be layered onto
+    # P slots.
+    streaming_points_per_p_slot = (
+        streaming_points_per_sp_slot
+        * streaming_realization_factor
+        * generic_slot_share
+    )
     diagnostics["streaming_points_per_sp_slot"] = round(streaming_points_per_sp_slot, 4)
     diagnostics["streaming_points_per_p_slot"] = round(streaming_points_per_p_slot, 4)
 
@@ -753,6 +884,12 @@ def calculate_points_dynasty_frame(
     pts_pit_er: float,
     pts_pit_bb: float,
     pts_pit_hbp: float,
+    ip_max: float | None = None,
+    enable_prospect_risk_adjustment: bool = False,
+    enable_bench_stash_relief: bool = False,
+    bench_negative_penalty: float = 0.55,
+    enable_ir_stash_relief: bool = False,
+    ir_negative_penalty: float = 0.20,
     hit_dh: int = 0,
 ) -> pd.DataFrame:
     scoring = {
@@ -788,13 +925,33 @@ def calculate_points_dynasty_frame(
     if not valuation_year_set:
         raise ValueError("No valuation years available for selected start_year and horizon.")
 
+    minor_defaults = CommonDynastyRotoSettings()
+    bat_minor_rows = [{**row, "Player": ctx.points_player_identity(row)} for row in bat_rows]
+    pit_minor_rows = [{**row, "Player": ctx.points_player_identity(row)} for row in pit_rows]
+    minor_eligibility_frame = _resolve_minor_eligibility_by_year(
+        pd.DataFrame.from_records(bat_minor_rows),
+        pd.DataFrame.from_records(pit_minor_rows),
+        years=valuation_year_set,
+        hitter_usage_max=minor_defaults.minor_ab_max,
+        pitcher_usage_max=minor_defaults.minor_ip_max,
+        hitter_age_max=minor_defaults.minor_age_max_hit,
+        pitcher_age_max=minor_defaults.minor_age_max_pit,
+    )
+    minor_eligibility_by_year = {
+        (str(row["Player"]), int(row["Year"])): bool(row["minor_eligible"])
+        for row in minor_eligibility_frame.to_dict(orient="records")
+    }
+
     rows_by_player: dict[str, dict[int, dict[str, dict | None]]] = {}
+    hitter_ab_by_player_year: dict[tuple[str, int], float] = {}
+    pitcher_ip_by_player_year: dict[tuple[str, int], float] = {}
 
     for row in bat_rows:
         year = ctx.coerce_record_year(row.get("Year"))
         if year is None or year not in year_set:
             continue
         player_id = ctx.points_player_identity(row)
+        hitter_ab_by_player_year[(player_id, year)] = ctx.stat_or_zero(row, "AB")
         bucket = rows_by_player.setdefault(player_id, {})
         pair = bucket.setdefault(year, {"hit": None, "pit": None})
         pair["hit"] = row
@@ -804,6 +961,7 @@ def calculate_points_dynasty_frame(
         if year is None or year not in year_set:
             continue
         player_id = ctx.points_player_identity(row)
+        pitcher_ip_by_player_year[(player_id, year)] = ctx.stat_or_zero(row, "IP")
         bucket = rows_by_player.setdefault(player_id, {})
         pair = bucket.setdefault(year, {"hit": None, "pit": None})
         pair["pit"] = row
@@ -848,17 +1006,30 @@ def calculate_points_dynasty_frame(
     active_hitter_slots = {slot for slot, count in hitter_slot_counts.items() if count > 0}
     active_pitcher_slots = {slot for slot, count in pitcher_slot_counts.items() if count > 0}
     starter_slot_capacity = max(int(pit_p) + int(pit_sp), 0)
-    total_pitcher_slots = max(int(pit_p) + int(pit_sp) + int(pit_rp), 0)
     n_replacement = max(int(teams), 1)
     freeze_replacement_baselines = True
 
     player_meta: dict[str, dict[str, object]] = {}
     per_player_year: dict[str, dict[int, dict[str, object]]] = {}
-    year_hit_entries: dict[int, list[dict[str, object]]] = {}
-    year_pit_entries: dict[int, list[dict[str, object]]] = {}
+    year_hit_entries: dict[int, list[dict[str, object]]] = {year: [] for year in valuation_year_set}
+    year_pit_entries: dict[int, list[dict[str, object]]] = {year: [] for year in valuation_year_set}
     player_raw_totals: dict[str, float] = {}
+    player_profile: dict[str, str] = {}
+    hitter_usage_diagnostics_by_year: dict[int, dict[str, float | int | None]] = {}
+    pitcher_usage_diagnostics_by_year: dict[int, dict[str, float | int | None]] = {}
     empty_hit_breakdown = ctx.calculate_hitter_points_breakdown(None, scoring)
     empty_pit_breakdown = ctx.calculate_pitcher_points_breakdown(None, scoring)
+    use_daily_volume = points_valuation_mode in {"season_total", "daily_h2h"}
+    annual_hitter_slot_capacity = annual_slot_capacity(
+        hitter_slot_counts,
+        teams=teams,
+        season_capacity_per_slot=float(SYNTHETIC_SEASON_DAYS) if use_daily_volume else 162.0,
+    )
+    annual_pitcher_slot_capacity = annual_slot_capacity(
+        pitcher_slot_counts,
+        teams=teams,
+        season_capacity_per_slot=float(SYNTHETIC_SEASON_DAYS) if use_daily_volume else 162.0,
+    )
 
     for player_id, per_year in rows_by_player.items():
         if not per_year:
@@ -889,19 +1060,19 @@ def calculate_points_dynasty_frame(
             ctx.player_key_col: player_key,
             ctx.player_entity_key_col: entity_key,
         }
+        player_profile[player_id] = "pitcher" if meta_pit and not meta_hit else "hitter"
 
         year_map: dict[int, dict[str, object]] = {}
-        raw_total = 0.0
 
-        for year_offset, year in enumerate(valuation_year_set):
+        for year in valuation_year_set:
             pair = per_year.get(year) or {"hit": None, "pit": None}
             hit_row = pair.get("hit")
             pit_row = pair.get("pit")
 
-            hit_breakdown = ctx.calculate_hitter_points_breakdown(hit_row, scoring)
-            pit_breakdown = ctx.calculate_pitcher_points_breakdown(pit_row, scoring)
-            hit_points = float(hit_breakdown["total_points"])
-            pit_points = float(pit_breakdown["total_points"])
+            raw_hit_breakdown = ctx.calculate_hitter_points_breakdown(hit_row, scoring)
+            raw_pit_breakdown = ctx.calculate_pitcher_points_breakdown(pit_row, scoring)
+            raw_hit_points = float(raw_hit_breakdown["total_points"])
+            raw_pit_points = float(raw_pit_breakdown["total_points"])
 
             hit_slots = set()
             if isinstance(hit_row, dict) and ctx.stat_or_zero(hit_row, "AB") > 0:
@@ -910,19 +1081,310 @@ def calculate_points_dynasty_frame(
             if isinstance(pit_row, dict) and ctx.stat_or_zero(pit_row, "IP") > 0:
                 pit_slots = ctx.points_pitcher_eligible_slots(pit_row.get("Pos")) & active_pitcher_slots
 
+            projected_hit_games = ctx.stat_or_zero(hit_row, "G")
+            projected_pit_appearances = ctx.stat_or_zero(pit_row, "G")
+            projected_pit_starts = min(ctx.stat_or_zero(pit_row, "GS"), projected_pit_appearances) if projected_pit_appearances > 0.0 else 0.0
+            projected_pit_ip = ctx.stat_or_zero(pit_row, "IP")
+
+            year_map[year] = {
+                "raw_hit_breakdown": raw_hit_breakdown,
+                "raw_pit_breakdown": raw_pit_breakdown,
+                "raw_hit_points": raw_hit_points,
+                "raw_pit_points": raw_pit_points,
+                "hit_slots": set(hit_slots),
+                "pit_slots": set(pit_slots),
+                "hit_has_volume": bool(hit_slots),
+                "pit_has_volume": bool(pit_slots),
+                "projected_hit_games": float(projected_hit_games),
+                "projected_pit_appearances": float(projected_pit_appearances),
+                "projected_pit_starts": float(projected_pit_starts),
+                "projected_pit_ip": float(projected_pit_ip),
+            }
+
+        per_player_year[player_id] = year_map
+
+    for year in valuation_year_set:
+        hitter_entries: list[VolumeEntry] = []
+        pitcher_entries: list[VolumeEntry] = []
+        pitcher_start_volume: dict[str, float] = {}
+        fallback_hitter_ids: set[str] = set()
+        fallback_pitcher_ids: set[str] = set()
+        requested_hitter_games = 0.0
+
+        for player_id, year_map in per_player_year.items():
+            info = year_map.get(year, {})
+            hit_slots = set(info.get("hit_slots", set()))
+            projected_hit_games = float(info.get("projected_hit_games", 0.0))
+            raw_hit_points = float(info.get("raw_hit_points", 0.0))
             if hit_slots:
-                year_hit_entries.setdefault(year, []).append(
+                if projected_hit_games > 0.0:
+                    requested_hitter_games += projected_hit_games
+                    hitter_entries.append(
+                        VolumeEntry(
+                            player_id=player_id,
+                            projected_volume=projected_hit_games,
+                            quality=raw_hit_points / projected_hit_games,
+                            slots=set(hit_slots),
+                            year=year,
+                        )
+                    )
+                else:
+                    fallback_hitter_ids.add(player_id)
+
+            pit_slots = set(info.get("pit_slots", set()))
+            projected_pit_appearances = float(info.get("projected_pit_appearances", 0.0))
+            raw_pit_points = float(info.get("raw_pit_points", 0.0))
+            if pit_slots:
+                if projected_pit_appearances > 0.0:
+                    pitcher_entries.append(
+                        VolumeEntry(
+                            player_id=player_id,
+                            projected_volume=projected_pit_appearances,
+                            quality=raw_pit_points / projected_pit_appearances,
+                            slots=set(pit_slots),
+                            year=year,
+                        )
+                    )
+                    projected_start_volume = min(
+                        float(info.get("projected_pit_starts", 0.0)),
+                        projected_pit_appearances,
+                    )
+                    pitcher_start_volume[player_id] = projected_start_volume if projected_start_volume >= 1.0 else 0.0
+                else:
+                    fallback_pitcher_ids.add(player_id)
+
+        if points_valuation_mode == "weekly_h2h":
+            hitter_usage = allocate_hitter_usage(
+                hitter_entries,
+                slot_capacity=annual_hitter_slot_capacity,
+            )
+        else:
+            hitter_usage = allocate_hitter_usage_daily(
+                hitter_entries,
+                slot_capacity=annual_hitter_slot_capacity,
+            )
+
+        effective_weekly_cap: float | None = None
+        capped_start_budget: float | None = None
+        held_pitcher_ids: set[str] | None = None
+        streaming_adds_per_period: int | None = None
+        if points_valuation_mode in {"weekly_h2h", "daily_h2h"}:
+            effective_weekly_cap = _effective_weekly_starts_cap(
+                weekly_starts_cap,
+                allow_same_day_starts_overflow=allow_same_day_starts_overflow,
+                starter_slot_capacity=starter_slot_capacity,
+            )
+            if effective_weekly_cap is not None and effective_weekly_cap > 0.0:
+                capped_start_budget = float(effective_weekly_cap) * _SEASON_WEEKS * max(int(teams), 1)
+        if points_valuation_mode == "daily_h2h":
+            held_pitcher_budget = max(int(teams), 1) * max(int(starter_slot_capacity), 0)
+            held_pitcher_ids = {
+                entry.player_id
+                for entry in sorted(
+                    (
+                        entry
+                        for entry in pitcher_entries
+                        if float(pitcher_start_volume.get(entry.player_id, 0.0)) >= 1.0
+                    ),
+                    key=lambda entry: (-float(entry.quality), str(entry.player_id)),
+                )[:held_pitcher_budget]
+            }
+            if weekly_acquisition_cap is not None:
+                streaming_adds_per_period = max(int(weekly_acquisition_cap), 0) * max(int(teams), 1)
+
+        if points_valuation_mode == "weekly_h2h":
+            pitcher_usage = allocate_pitcher_usage(
+                pitcher_entries,
+                start_volume_by_player=pitcher_start_volume,
+                slot_capacity=annual_pitcher_slot_capacity,
+                capped_start_budget=capped_start_budget,
+            )
+        else:
+            pitcher_usage = allocate_pitcher_usage_daily(
+                pitcher_entries,
+                start_volume_by_player=pitcher_start_volume,
+                slot_capacity=annual_pitcher_slot_capacity,
+                capped_start_budget=capped_start_budget,
+                held_player_ids=held_pitcher_ids,
+                streaming_adds_per_period=streaming_adds_per_period,
+                total_days=SYNTHETIC_SEASON_DAYS,
+                period_days=SYNTHETIC_PERIOD_DAYS,
+            )
+
+        ip_budget = float(ip_max) * max(int(teams), 1) if ip_max is not None else None
+        pitcher_appearance_usage_share: dict[str, float] = {}
+        pitcher_ip_usage_share: dict[str, float] = {}
+        pitcher_requested_ip_pre_cap: dict[str, float] = {}
+        pitcher_assigned_ip: dict[str, float] = {}
+        requested_pitcher_ip_pre_cap = 0.0
+        ip_entries: list[VolumeEntry] = []
+
+        for player_id, year_map in per_player_year.items():
+            info = year_map.get(year, {})
+            pit_slots = set(info.get("pit_slots", set()))
+            if not pit_slots:
+                continue
+            projected_pit_ip = float(info.get("projected_pit_ip", 0.0))
+            if projected_pit_ip <= 0.0:
+                pitcher_appearance_usage_share[player_id] = 0.0
+                pitcher_ip_usage_share[player_id] = 0.0
+                pitcher_requested_ip_pre_cap[player_id] = 0.0
+                pitcher_assigned_ip[player_id] = 0.0
+                continue
+            appearance_share = (
+                1.0 if player_id in fallback_pitcher_ids else float(pitcher_usage.usage_share_by_player.get(player_id, 0.0))
+            )
+            appearance_share = float(min(max(appearance_share, 0.0), 1.0))
+            requested_ip = projected_pit_ip * appearance_share
+            pitcher_appearance_usage_share[player_id] = appearance_share
+            pitcher_requested_ip_pre_cap[player_id] = requested_ip
+            requested_pitcher_ip_pre_cap += requested_ip
+            if requested_ip > 0.0:
+                raw_pit_points = float(info.get("raw_pit_points", 0.0))
+                requested_points = raw_pit_points * appearance_share
+                ip_entries.append(
+                    VolumeEntry(
+                        player_id=player_id,
+                        projected_volume=requested_ip,
+                        quality=requested_points / requested_ip,
+                        slots={"IP_CAP"},
+                        year=year,
+                    )
+                )
+
+        pitcher_ip_allocation = allocate_pitcher_innings_budget(ip_entries, ip_budget=ip_budget)
+        pitcher_ip_usage_share.update(pitcher_ip_allocation.ip_usage_share_by_player)
+        pitcher_assigned_ip.update(pitcher_ip_allocation.assigned_ip_by_player)
+
+        hitter_usage_diagnostics_by_year[year] = {
+            "slot_game_capacity": round(float(sum(annual_hitter_slot_capacity.values())), 4),
+            "assigned_hitter_games": round(float(hitter_usage.total_assigned_volume), 4),
+            "unused_hitter_games": round(
+                max(float(requested_hitter_games) - float(hitter_usage.total_assigned_volume), 0.0),
+                4,
+            ),
+            "fallback_hitter_count": int(len(fallback_hitter_ids)),
+            "synthetic_season_days": int(SYNTHETIC_SEASON_DAYS) if use_daily_volume else None,
+        }
+        pitcher_diag: dict[str, float | int | None] = {
+            "slot_appearance_capacity": round(float(sum(annual_pitcher_slot_capacity.values())), 4),
+            "assigned_starts": round(float(pitcher_usage.total_assigned_starts), 4),
+            "assigned_non_start_appearances": round(float(pitcher_usage.total_assigned_non_start_appearances), 4),
+            "capped_start_budget": round(float(capped_start_budget), 4) if capped_start_budget is not None else None,
+            "fallback_pitcher_count": int(len(fallback_pitcher_ids)),
+            "synthetic_season_days": int(SYNTHETIC_SEASON_DAYS) if use_daily_volume else None,
+            "selected_held_starts": round(float(pitcher_usage.selected_held_starts), 4)
+            if pitcher_usage.selected_held_starts is not None
+            else None,
+            "selected_streamed_starts": round(float(pitcher_usage.selected_streamed_starts), 4)
+            if pitcher_usage.selected_streamed_starts is not None
+            else None,
+            "streaming_adds_per_period": pitcher_usage.streaming_adds_per_period,
+            "ip_cap_budget": round(float(ip_budget), 4) if ip_budget is not None else None,
+            "requested_pitcher_ip_pre_cap": round(float(requested_pitcher_ip_pre_cap), 4),
+            "assigned_pitcher_ip": round(float(pitcher_ip_allocation.total_assigned_ip), 4),
+            "unused_pitcher_ip": round(float(pitcher_ip_allocation.unused_ip), 4)
+            if pitcher_ip_allocation.unused_ip is not None
+            else None,
+            "trimmed_pitcher_ip": round(float(pitcher_ip_allocation.trimmed_ip), 4),
+            "ip_cap_binding": bool(pitcher_ip_allocation.ip_cap_binding),
+        }
+        if points_valuation_mode == "weekly_h2h":
+            pitcher_diag.update(
+                {
+                    "season_weeks": _SEASON_WEEKS,
+                    "weekly_starts_cap": weekly_starts_cap,
+                    "effective_weekly_starts_cap": round(float(effective_weekly_cap), 4)
+                    if effective_weekly_cap is not None
+                    else None,
+                    "weekly_acquisition_cap": weekly_acquisition_cap,
+                }
+            )
+        if points_valuation_mode == "daily_h2h":
+            pitcher_diag.update(
+                {
+                    "season_weeks": _SEASON_WEEKS,
+                    "weekly_starts_cap": weekly_starts_cap,
+                    "effective_weekly_starts_cap": round(float(effective_weekly_cap), 4)
+                    if effective_weekly_cap is not None
+                    else None,
+                    "weekly_acquisition_cap": weekly_acquisition_cap,
+                    "synthetic_period_days": int(SYNTHETIC_PERIOD_DAYS),
+                }
+            )
+        pitcher_usage_diagnostics_by_year[year] = pitcher_diag
+
+        for player_id, year_map in per_player_year.items():
+            info = year_map.get(year, {})
+            hit_slots = set(info.get("hit_slots", set()))
+            pit_slots = set(info.get("pit_slots", set()))
+            raw_hit_points = float(info.get("raw_hit_points", 0.0))
+            raw_pit_points = float(info.get("raw_pit_points", 0.0))
+
+            hit_share = 0.0
+            if hit_slots:
+                hit_share = 1.0 if player_id in fallback_hitter_ids else float(hitter_usage.usage_share_by_player.get(player_id, 0.0))
+            pit_appearance_share = 0.0
+            pit_ip_share = 0.0
+            pit_share = 0.0
+            if pit_slots:
+                pit_appearance_share = float(pitcher_appearance_usage_share.get(player_id, 0.0))
+                pit_ip_share = float(pitcher_ip_usage_share.get(player_id, 0.0))
+                pit_share = float(min(max(pit_appearance_share * pit_ip_share, 0.0), 1.0))
+
+            hit_breakdown = _scale_points_breakdown(
+                info.get("raw_hit_breakdown") if isinstance(info.get("raw_hit_breakdown"), dict) else empty_hit_breakdown,
+                hit_share,
+            )
+            pit_breakdown = _scale_points_breakdown(
+                info.get("raw_pit_breakdown") if isinstance(info.get("raw_pit_breakdown"), dict) else empty_pit_breakdown,
+                pit_share,
+            )
+            hit_points = float(raw_hit_points * hit_share)
+            pit_points = float(raw_pit_points * pit_share)
+
+            info.update(
+                {
+                    "hit_breakdown": hit_breakdown,
+                    "pit_breakdown": pit_breakdown,
+                    "hit_points": hit_points,
+                    "pit_points": pit_points,
+                    "hit_usage_share": float(min(max(hit_share, 0.0), 1.0)),
+                    "pit_usage_share": float(min(max(pit_share, 0.0), 1.0)),
+                    "pit_appearance_usage_share": float(min(max(pit_appearance_share, 0.0), 1.0)),
+                    "pit_ip_usage_share": float(min(max(pit_ip_share, 0.0), 1.0)),
+                    "hit_assigned_games": None
+                    if player_id in fallback_hitter_ids
+                    else float(hitter_usage.assigned_volume_by_player.get(player_id, 0.0)),
+                    "pit_assigned_appearances": None
+                    if player_id in fallback_pitcher_ids
+                    else float(pitcher_usage.assigned_appearances_by_player.get(player_id, 0.0)),
+                    "pit_assigned_starts": None
+                    if player_id in fallback_pitcher_ids
+                    else float(pitcher_usage.assigned_starts_by_player.get(player_id, 0.0)),
+                    "pit_assigned_non_start_appearances": None
+                    if player_id in fallback_pitcher_ids
+                    else float(pitcher_usage.assigned_non_start_appearances_by_player.get(player_id, 0.0)),
+                    "pit_assigned_ip": float(pitcher_assigned_ip.get(player_id, 0.0)) if pit_slots else None,
+                }
+            )
+            if hit_slots:
+                year_hit_entries[year].append(
                     {"player_id": player_id, "points": hit_points, "slots": set(hit_slots)}
                 )
             if pit_slots:
-                year_pit_entries.setdefault(year, []).append(
-                    {
-                        "player_id": player_id,
-                        "points": pit_points,
-                        "slots": set(pit_slots),
-                        "gs": ctx.stat_or_zero(pit_row, "GS"),
-                    }
+                year_pit_entries[year].append(
+                    {"player_id": player_id, "points": pit_points, "slots": set(pit_slots)}
                 )
+
+    for player_id, year_map in per_player_year.items():
+        raw_total = 0.0
+        for year_offset, year in enumerate(valuation_year_set):
+            info = year_map.get(year, {})
+            hit_points = float(info.get("hit_points", 0.0))
+            pit_points = float(info.get("pit_points", 0.0))
+            hit_slots = set(info.get("hit_slots", set()))
+            pit_slots = set(info.get("pit_slots", set()))
 
             selected_raw_points = 0.0
             if hit_slots and pit_slots:
@@ -933,17 +1395,6 @@ def calculate_points_dynasty_frame(
                 selected_raw_points = pit_points
 
             raw_total += selected_raw_points * (float(discount) ** year_offset)
-
-            year_map[year] = {
-                "hit_breakdown": hit_breakdown,
-                "pit_breakdown": pit_breakdown,
-                "hit_points": hit_points,
-                "pit_points": pit_points,
-                "hit_slots": set(hit_slots),
-                "pit_slots": set(pit_slots),
-            }
-
-        per_player_year[player_id] = year_map
         player_raw_totals[player_id] = float(raw_total)
 
     if not player_meta:
@@ -971,7 +1422,6 @@ def calculate_points_dynasty_frame(
 
     year_hit_replacement: dict[int, dict[str, float]] = {}
     year_pit_replacement: dict[int, dict[str, float]] = {}
-    weekly_pitching_diagnostics_by_year: dict[int, dict[str, float | int | None]] = {}
     if freeze_replacement_baselines:
         frozen_hit = ctx.points_slot_replacement(
             year_hit_entries.get(start_year, []),
@@ -985,26 +1435,9 @@ def calculate_points_dynasty_frame(
             rostered_player_ids=rostered_player_ids,
             n_replacement=n_replacement,
         )
-        frozen_weekly_bonus: dict[str, float] = {}
-        if points_valuation_mode == "weekly_h2h":
-            frozen_weekly_bonus, frozen_weekly_diag = _weekly_pitcher_streaming_bonus_by_slot(
-                year_pit_entries.get(start_year, []),
-                in_season_rostered_player_ids=in_season_rostered_player_ids,
-                teams=teams,
-                starter_slot_capacity=starter_slot_capacity,
-                total_pitcher_slots=total_pitcher_slots,
-                weekly_starts_cap=weekly_starts_cap,
-                allow_same_day_starts_overflow=allow_same_day_starts_overflow,
-                weekly_acquisition_cap=weekly_acquisition_cap,
-            )
-            weekly_pitching_diagnostics_by_year[start_year] = frozen_weekly_diag
-            for slot, bonus in frozen_weekly_bonus.items():
-                frozen_pit[slot] = float(frozen_pit.get(slot, 0.0)) + float(bonus)
         for year in valuation_year_set:
             year_hit_replacement[year] = dict(frozen_hit)
             year_pit_replacement[year] = dict(frozen_pit)
-            if year != start_year and start_year in weekly_pitching_diagnostics_by_year:
-                weekly_pitching_diagnostics_by_year[year] = dict(weekly_pitching_diagnostics_by_year[start_year])
     else:
         for year in valuation_year_set:
             year_hit_replacement[year] = ctx.points_slot_replacement(
@@ -1019,20 +1452,6 @@ def calculate_points_dynasty_frame(
                 rostered_player_ids=rostered_player_ids,
                 n_replacement=n_replacement,
             )
-            if points_valuation_mode == "weekly_h2h":
-                weekly_bonus, weekly_diag = _weekly_pitcher_streaming_bonus_by_slot(
-                    year_pit_entries.get(year, []),
-                    in_season_rostered_player_ids=in_season_rostered_player_ids,
-                    teams=teams,
-                    starter_slot_capacity=starter_slot_capacity,
-                    total_pitcher_slots=total_pitcher_slots,
-                    weekly_starts_cap=weekly_starts_cap,
-                    allow_same_day_starts_overflow=allow_same_day_starts_overflow,
-                    weekly_acquisition_cap=weekly_acquisition_cap,
-                )
-                weekly_pitching_diagnostics_by_year[year] = weekly_diag
-                for slot, bonus in weekly_bonus.items():
-                    year_pit_replacement[year][slot] = float(year_pit_replacement[year].get(slot, 0.0)) + float(bonus)
 
     hitter_slot_capacity = _slot_capacity_by_league(hitter_slot_counts, teams=teams)
     pitcher_slot_capacity = _slot_capacity_by_league(pitcher_slot_counts, teams=teams)
@@ -1053,16 +1472,20 @@ def calculate_points_dynasty_frame(
         for year in valuation_year_set
     }
 
-    result_rows: list[dict] = []
+    player_year_details: dict[str, list[dict[str, object]]] = {}
+    stash_scores_by_player: dict[str, float] = {}
+    negative_year_players: set[str] = set()
+    ir_candidate_players: set[str] = set()
+
     for player_id, meta_row in player_meta.items():
-        row_out: dict[str, object] = dict(meta_row)
-        row_out["_ExplainPointsByYear"] = {}
         year_details: list[dict[str, object]] = []
 
         for year in valuation_year_set:
             info = per_player_year.get(player_id, {}).get(year, {})
             hit_points = float(info.get("hit_points", 0.0))
             pit_points = float(info.get("pit_points", 0.0))
+            raw_hit_points = float(info.get("raw_hit_points", 0.0))
+            raw_pit_points = float(info.get("raw_pit_points", 0.0))
             hit_slots = set(info.get("hit_slots", set()))
             pit_slots = set(info.get("pit_slots", set()))
             hit_breakdown = info.get("hit_breakdown") if isinstance(info.get("hit_breakdown"), dict) else empty_hit_breakdown
@@ -1091,26 +1514,48 @@ def calculate_points_dynasty_frame(
             pit_assigned_points = float(pit_assignment.get("points", 0.0)) if isinstance(pit_assignment, dict) else 0.0
             hit_assigned_replacement = float(hit_assignment.get("replacement", 0.0)) if isinstance(hit_assignment, dict) else 0.0
             pit_assigned_replacement = float(pit_assignment.get("replacement", 0.0)) if isinstance(pit_assignment, dict) else 0.0
+            hit_selected_value = _negative_fallback_value(
+                best_value=hit_best_value,
+                assigned_slot=hit_assigned_slot,
+                assigned_value=hit_assigned_value,
+            )
+            pit_selected_value = _negative_fallback_value(
+                best_value=pit_best_value,
+                assigned_slot=pit_assigned_slot,
+                assigned_value=pit_assigned_value,
+            )
+            hit_selected_raw_points = (
+                hit_assigned_points
+                if hit_assigned_slot is not None
+                else hit_points if hit_selected_value < 0.0 else 0.0
+            )
+            pit_selected_raw_points = (
+                pit_assigned_points
+                if pit_assigned_slot is not None
+                else pit_points if pit_selected_value < 0.0 else 0.0
+            )
 
             selected_side = "none"
             if two_way == "sum":
-                year_points = hit_assigned_value + pit_assigned_value
-                selected_raw_points = hit_assigned_points + pit_assigned_points
+                year_points = hit_selected_value + pit_selected_value
+                selected_raw_points = hit_selected_raw_points + pit_selected_raw_points
                 if year_points > 0:
                     selected_side = "sum"
+                elif year_points < 0:
+                    selected_side = "sum_negative"
             else:
-                if hit_assigned_value > pit_assigned_value:
-                    year_points = hit_assigned_value
-                    selected_raw_points = hit_assigned_points
-                    selected_side = "hitting"
-                elif pit_assigned_value > hit_assigned_value:
-                    year_points = pit_assigned_value
-                    selected_raw_points = pit_assigned_points
-                    selected_side = "pitching"
-                elif hit_assigned_value > 0:
-                    year_points = hit_assigned_value
-                    selected_raw_points = hit_assigned_points
-                    selected_side = "hitting"
+                if hit_selected_value > pit_selected_value:
+                    year_points = hit_selected_value
+                    selected_raw_points = hit_selected_raw_points
+                    selected_side = "hitting" if hit_assigned_slot is not None else "hitting_negative"
+                elif pit_selected_value > hit_selected_value:
+                    year_points = pit_selected_value
+                    selected_raw_points = pit_selected_raw_points
+                    selected_side = "pitching" if pit_assigned_slot is not None else "pitching_negative"
+                elif hit_selected_value != 0.0:
+                    year_points = hit_selected_value
+                    selected_raw_points = hit_selected_raw_points
+                    selected_side = "hitting" if hit_assigned_slot is not None else "hitting_negative"
                 else:
                     year_points = 0.0
                     selected_raw_points = 0.0
@@ -1118,8 +1563,23 @@ def calculate_points_dynasty_frame(
             year_details.append(
                 {
                     "year": year,
-                    "hitting_points": hit_points,
-                    "pitching_points": pit_points,
+                    "hitting_points": raw_hit_points if not hit_slots else hit_points,
+                    "pitching_points": raw_pit_points if not pit_slots else pit_points,
+                    "hitting_raw_points": raw_hit_points,
+                    "pitching_raw_points": raw_pit_points,
+                    "hitting_usage_share": float(info.get("hit_usage_share", 0.0)),
+                    "pitching_usage_share": float(info.get("pit_usage_share", 0.0)),
+                    "pitching_appearance_usage_share": float(info.get("pit_appearance_usage_share", 0.0)),
+                    "pitching_ip_usage_share": float(info.get("pit_ip_usage_share", 0.0)),
+                    "hitting_assigned_games": info.get("hit_assigned_games"),
+                    "pitching_assigned_appearances": info.get("pit_assigned_appearances"),
+                    "pitching_assigned_starts": info.get("pit_assigned_starts"),
+                    "pitching_assigned_non_start_appearances": info.get("pit_assigned_non_start_appearances"),
+                    "pitching_assigned_ip": info.get("pit_assigned_ip"),
+                    "hitting_projected_games": float(info.get("projected_hit_games", 0.0)),
+                    "pitching_projected_appearances": float(info.get("projected_pit_appearances", 0.0)),
+                    "pitching_projected_starts": float(info.get("projected_pit_starts", 0.0)),
+                    "pitching_projected_ip": float(info.get("projected_pit_ip", 0.0)),
                     "hitting_replacement": hit_best_replacement,
                     "pitching_replacement": pit_best_replacement,
                     "hitting_best_slot": hit_best_slot,
@@ -1134,21 +1594,153 @@ def calculate_points_dynasty_frame(
                     "pitching_assignment_replacement": pit_assigned_replacement,
                     "selected_side": selected_side,
                     "selected_raw_points": float(selected_raw_points),
-                    "selected_points": float(year_points),
+                    "selected_points_unadjusted": float(year_points),
                     "hitting": hit_breakdown,
                     "pitching": pit_breakdown,
                 }
             )
 
-        selected_values = [float(detail["selected_points"]) for detail in year_details]
-        keep_drop = dynasty_keep_or_drop_values(selected_values, valuation_year_set, discount=float(discount))
+        ranking_values: list[float] = []
+        has_negative_year = False
+        has_ir_candidate_year = False
+        for detail in year_details:
+            year = int(detail["year"])
+            raw_value = float(detail["selected_points_unadjusted"])
+            if raw_value < 0.0:
+                has_negative_year = True
+                if _is_near_zero_playing_time(
+                    player_id,
+                    year,
+                    hitter_ab_by_player_year=hitter_ab_by_player_year,
+                    pitcher_ip_by_player_year=pitcher_ip_by_player_year,
+                ):
+                    has_ir_candidate_year = True
+            ranking_values.append(
+                raw_value
+                * _prospect_risk_multiplier(
+                    year=year,
+                    start_year=start_year,
+                    profile=player_profile.get(player_id, "hitter"),
+                    minor_eligible=bool(minor_eligibility_by_year.get((player_id, year), False)),
+                    enabled=enable_prospect_risk_adjustment,
+                )
+            )
+
+        player_year_details[player_id] = year_details
+        stash_scores_by_player[player_id] = dynasty_keep_or_drop_values(
+            ranking_values,
+            valuation_year_set,
+            discount=float(discount),
+        ).raw_total
+        if has_negative_year:
+            negative_year_players.add(player_id)
+        if has_ir_candidate_year:
+            ir_candidate_players.add(player_id)
+
+    reserve_ranked_player_ids = [
+        player_id
+        for player_id, _score in sorted(
+            stash_scores_by_player.items(),
+            key=lambda item: (-float(item[1]), str(item[0])),
+        )
+        if player_id in in_season_rostered_player_ids
+    ]
+    used_reserve_players: set[str] = set()
+
+    def _select_reserve_group(limit: int, candidates: set[str]) -> set[str]:
+        selected: set[str] = set()
+        for player_id in reserve_ranked_player_ids:
+            if len(selected) >= max(int(limit), 0):
+                break
+            if player_id in used_reserve_players or player_id not in candidates:
+                continue
+            selected.add(player_id)
+            used_reserve_players.add(player_id)
+        return selected
+
+    minor_candidate_players = {
+        player_id
+        for player_id in reserve_ranked_player_ids
+        if any(bool(minor_eligibility_by_year.get((player_id, year), False)) for year in valuation_year_set)
+    }
+    minor_stash_players = _select_reserve_group(int(teams) * int(minors), minor_candidate_players)
+    ir_stash_players = _select_reserve_group(int(teams) * int(ir), set(reserve_ranked_player_ids) & ir_candidate_players)
+    bench_stash_players = _select_reserve_group(
+        int(teams) * int(bench),
+        set(reserve_ranked_player_ids) & negative_year_players,
+    )
+
+    result_rows: list[dict] = []
+    for player_id, meta_row in player_meta.items():
+        row_out: dict[str, object] = dict(meta_row)
+        row_out["minor_eligible"] = bool(
+            row_out.get("minor_eligible")
+            or minor_eligibility_by_year.get((player_id, int(start_year)), False)
+        )
+        row_out["_ExplainPointsByYear"] = {}
+        year_details = player_year_details.get(player_id, [])
+        adjusted_values: list[float] = []
+
+        for detail in year_details:
+            year = int(detail["year"])
+            adjusted_value = float(detail["selected_points_unadjusted"])
+            adjusted_value *= _prospect_risk_multiplier(
+                year=year,
+                start_year=start_year,
+                profile=player_profile.get(player_id, "hitter"),
+                minor_eligible=bool(minor_eligibility_by_year.get((player_id, year), False)),
+                enabled=enable_prospect_risk_adjustment,
+            )
+            adjusted_value = _apply_negative_value_stash_rules(
+                adjusted_value,
+                can_minor_stash=player_id in minor_stash_players and bool(minor_eligibility_by_year.get((player_id, year), False)),
+                can_ir_stash=enable_ir_stash_relief
+                and player_id in ir_stash_players
+                and _is_near_zero_playing_time(
+                    player_id,
+                    year,
+                    hitter_ab_by_player_year=hitter_ab_by_player_year,
+                    pitcher_ip_by_player_year=pitcher_ip_by_player_year,
+                ),
+                ir_negative_penalty=ir_negative_penalty,
+                can_bench_stash=enable_bench_stash_relief and player_id in bench_stash_players,
+                bench_negative_penalty=bench_negative_penalty,
+            )
+            adjusted_values.append(adjusted_value)
+
+        keep_drop = dynasty_keep_or_drop_values(adjusted_values, valuation_year_set, discount=float(discount))
 
         for idx, detail in enumerate(year_details):
             year = int(detail["year"])
-            row_out[f"Value_{year}"] = float(detail["selected_points"])
+            row_out[f"Value_{year}"] = float(adjusted_values[idx])
             row_out["_ExplainPointsByYear"][str(year)] = {
                 "hitting_points": round(float(detail["hitting_points"]), 4),
                 "pitching_points": round(float(detail["pitching_points"]), 4),
+                "hitting_raw_points": round(float(detail["hitting_raw_points"]), 4),
+                "pitching_raw_points": round(float(detail["pitching_raw_points"]), 4),
+                "hitting_usage_share": round(float(detail["hitting_usage_share"]), 6),
+                "pitching_usage_share": round(float(detail["pitching_usage_share"]), 6),
+                "pitching_appearance_usage_share": round(float(detail["pitching_appearance_usage_share"]), 6),
+                "pitching_ip_usage_share": round(float(detail["pitching_ip_usage_share"]), 6),
+                "hitting_assigned_games": round(float(detail["hitting_assigned_games"]), 4)
+                if detail["hitting_assigned_games"] is not None
+                else None,
+                "pitching_assigned_appearances": round(float(detail["pitching_assigned_appearances"]), 4)
+                if detail["pitching_assigned_appearances"] is not None
+                else None,
+                "pitching_assigned_starts": round(float(detail["pitching_assigned_starts"]), 4)
+                if detail["pitching_assigned_starts"] is not None
+                else None,
+                "pitching_assigned_non_start_appearances": round(float(detail["pitching_assigned_non_start_appearances"]), 4)
+                if detail["pitching_assigned_non_start_appearances"] is not None
+                else None,
+                "pitching_assigned_ip": round(float(detail["pitching_assigned_ip"]), 4)
+                if detail["pitching_assigned_ip"] is not None
+                else None,
+                "hitting_projected_games": round(float(detail["hitting_projected_games"]), 4),
+                "pitching_projected_appearances": round(float(detail["pitching_projected_appearances"]), 4),
+                "pitching_projected_starts": round(float(detail["pitching_projected_starts"]), 4),
+                "pitching_projected_ip": round(float(detail["pitching_projected_ip"]), 4),
                 "hitting_replacement": round(float(detail["hitting_replacement"]), 4)
                 if detail["hitting_replacement"] is not None
                 else None,
@@ -1171,7 +1763,8 @@ def calculate_points_dynasty_frame(
                 else None,
                 "selected_side": detail["selected_side"],
                 "selected_raw_points": round(float(detail["selected_raw_points"]), 4),
-                "selected_points": round(float(detail["selected_points"]), 4),
+                "selected_points_unadjusted": round(float(detail["selected_points_unadjusted"]), 4),
+                "selected_points": round(float(adjusted_values[idx]), 4),
                 "discount_factor": round(float(keep_drop.discount_factors[idx]), 6),
                 "discounted_contribution": round(float(keep_drop.discounted_contributions[idx]), 4),
                 "keep_drop_value": round(float(keep_drop.continuation_values[idx]), 4),
@@ -1230,6 +1823,14 @@ def calculate_points_dynasty_frame(
         "InSeasonReplacementRank": int(in_season_replacement_rank),
         "ActiveDepthPerTeam": int(active_depth_per_team),
         "InSeasonDepthPerTeam": int(in_season_depth_per_team),
+        "HitterUsageByYear": {
+            str(year): diagnostics
+            for year, diagnostics in sorted(hitter_usage_diagnostics_by_year.items())
+        },
+        "PitcherUsageByYear": {
+            str(year): diagnostics
+            for year, diagnostics in sorted(pitcher_usage_diagnostics_by_year.items())
+        },
     }
     if points_valuation_mode == "weekly_h2h":
         valuation_diagnostics.update(
@@ -1239,7 +1840,21 @@ def calculate_points_dynasty_frame(
                 "WeeklyAcquisitionCap": weekly_acquisition_cap,
                 "WeeklyPitchingByYear": {
                     str(year): diagnostics
-                    for year, diagnostics in sorted(weekly_pitching_diagnostics_by_year.items())
+                    for year, diagnostics in sorted(pitcher_usage_diagnostics_by_year.items())
+                },
+            }
+        )
+    if points_valuation_mode == "daily_h2h":
+        valuation_diagnostics.update(
+            {
+                "WeeklyStartsCap": weekly_starts_cap,
+                "AllowSameDayStartsOverflow": bool(allow_same_day_starts_overflow),
+                "WeeklyAcquisitionCap": weekly_acquisition_cap,
+                "SyntheticSeasonDays": int(SYNTHETIC_SEASON_DAYS),
+                "SyntheticPeriodDays": int(SYNTHETIC_PERIOD_DAYS),
+                "DailyPitchingByYear": {
+                    str(year): diagnostics
+                    for year, diagnostics in sorted(pitcher_usage_diagnostics_by_year.items())
                 },
             }
         )
