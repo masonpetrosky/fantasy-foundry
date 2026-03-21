@@ -33,6 +33,7 @@ def _points_player_row(
     pos: str,
     dynasty_value: float,
     selected_points: float,
+    raw_dynasty_value: float | None = None,
     pitching_usage_share: float | None = None,
     pitching_assigned_starts: float | None = None,
     pitching_assigned_ip: float | None = None,
@@ -46,7 +47,7 @@ def _points_player_row(
         "Team": "SEA",
         "Pos": pos,
         "DynastyValue": dynasty_value,
-        "RawDynastyValue": dynasty_value,
+        "RawDynastyValue": dynasty_value if raw_dynasty_value is None else raw_dynasty_value,
         "SelectedPoints": selected_points,
         "minor_eligible": minor_eligible,
     }
@@ -143,31 +144,54 @@ def test_review_points_audit_uses_replacement_rank_for_depth_scenarios() -> None
     hitter_a = _points_player_row(player="Hitter A", pos="OF", dynasty_value=10.0, selected_points=10.0)
     hitter_b = _points_player_row(player="Hitter B", pos="OF", dynasty_value=8.0, selected_points=8.0)
     hitter_c = _points_player_row(player="Hitter C", pos="OF", dynasty_value=6.0, selected_points=6.0)
+    hitter_d_control = _points_player_row(
+        player="Hitter D",
+        pos="OF",
+        dynasty_value=0.92,
+        raw_dynasty_value=0.92,
+        selected_points=0.0,
+    )
+    hitter_d_keeper = _points_player_row(
+        player="Hitter D",
+        pos="OF",
+        dynasty_value=1.84,
+        raw_dynasty_value=0.92,
+        selected_points=0.0,
+    )
 
     scenario_snapshots = {
         "season_total_shallow_base": _scenario_snapshot(
-            rows_with_explanations=[hitter_a, hitter_b, hitter_c],
+            rows_with_explanations=[hitter_a, hitter_b, hitter_c, hitter_d_control],
             mode="season_total",
             replacement_rank=1,
             in_season_replacement_rank=1,
             fingerprint="shallow123",
         ),
         "season_total_deep_replacement_depth": _scenario_snapshot(
-            rows_with_explanations=[hitter_a, hitter_b, hitter_c],
+            rows_with_explanations=[hitter_a, hitter_b, hitter_c, hitter_d_control],
             mode="season_total",
             replacement_rank=27,
             in_season_replacement_rank=27,
             fingerprint="deep123",
             settings_snapshot={"points_valuation_mode": "season_total", "bench": 8, "minors": 12, "ir": 6},
         ),
-        "season_total_keeper_limit_override": _scenario_snapshot(
-            rows_with_explanations=[hitter_a, hitter_b, hitter_c],
+        "season_total_keeper_limit_control": _scenario_snapshot(
+            rows_with_explanations=[hitter_a, hitter_b, hitter_c, hitter_d_control],
             mode="season_total",
-            replacement_rank=1,
-            in_season_replacement_rank=27,
+            replacement_rank=3,
+            in_season_replacement_rank=3,
+            fingerprint="keeper-control123",
+            settings_snapshot={"points_valuation_mode": "season_total", "bench": 2, "horizon": 2},
+        ),
+        "season_total_keeper_limit_override": _scenario_snapshot(
+            rows_with_explanations=[hitter_a, hitter_b, hitter_c, hitter_d_keeper],
+            mode="season_total",
+            replacement_rank=3,
+            in_season_replacement_rank=3,
             keeper_limit=1,
             fingerprint="keeper123",
-            settings_snapshot={"points_valuation_mode": "season_total", "keeper_limit": 1},
+            extra_diagnostics={"KeeperContinuationRank": 1, "KeeperContinuationBaselineValue": 0.92},
+            settings_snapshot={"points_valuation_mode": "season_total", "keeper_limit": 1, "horizon": 2},
         ),
     }
 
@@ -182,7 +206,14 @@ def test_review_points_audit_uses_replacement_rank_for_depth_scenarios() -> None
     assert results["season_total_deep_replacement_depth"]["status"] == "expected_mechanism"
     assert results["season_total_keeper_limit_override"]["status"] == "expected_mechanism"
     assert results["season_total_deep_replacement_depth"]["pool_recenter_metrics"]["replacement_rank_change"] == 26
-    assert results["season_total_keeper_limit_override"]["pool_recenter_metrics"]["replacement_rank_change"] == -26
+    assert results["season_total_keeper_limit_override"]["pool_recenter_metrics"]["replacement_rank_change"] == 0
+    assert results["season_total_keeper_limit_override"]["pool_recenter_metrics"]["variant_keeper_continuation_rank"] == 1
+    assert (
+        results["season_total_keeper_limit_override"]["pool_recenter_metrics"][
+            "variant_keeper_continuation_baseline_value"
+        ]
+        == 0.92
+    )
     assert review["recommendation"] == "recommend_no_points_change_yet"
 
 

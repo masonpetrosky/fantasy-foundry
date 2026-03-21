@@ -43,4 +43,14 @@ describe("MethodologySection", () => {
     expect(section).not.toBeNull();
     cleanup();
   });
+
+  it("describes keeper limit as future scarcity in points mode", () => {
+    const { container, cleanup } = renderToContainer(
+      React.createElement(MethodologySection)
+    );
+    expect(container.textContent).toContain("Season-total points mode uses full in-season roster depth for replacement");
+    expect(container.textContent).toContain("keeper_limit");
+    expect(container.textContent).toContain("only adjusts future continuation to reflect keeper scarcity");
+    cleanup();
+  });
 });

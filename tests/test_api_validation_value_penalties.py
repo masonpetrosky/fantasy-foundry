@@ -310,7 +310,7 @@ class DynastyValuePenaltyRemovalTests(unittest.TestCase):
         self.assertLess(float(crowded_explain["hitting_usage_share"]), 1.0)
         self.assertAlmostEqual(float(open_explain["hitting_usage_share"]), 1.0, places=6)
 
-    def test_points_depth_uses_in_season_roster_size_unless_keeper_limit_is_set(self) -> None:
+    def test_points_keeper_limit_preserves_full_in_season_depth_cutoff(self) -> None:
         bat_rows = [
             {
                 "Player": "Hitter A",
@@ -447,9 +447,252 @@ class DynastyValuePenaltyRemovalTests(unittest.TestCase):
             str(row["Player"]): float(row["DynastyValue"]) for _, row in keeper_limited.iterrows()
         }
         self.assertNotEqual(shallow_values, deep_values)
-        self.assertEqual(shallow_values, keeper_limited_values)
+        self.assertEqual(deep_values, keeper_limited_values)
         self.assertEqual(deep.attrs["valuation_diagnostics"]["ReplacementRank"], 27)
-        self.assertEqual(keeper_limited.attrs["valuation_diagnostics"]["ReplacementRank"], 1)
+        self.assertEqual(deep.attrs["valuation_diagnostics"]["InSeasonReplacementRank"], 27)
+        self.assertEqual(keeper_limited.attrs["valuation_diagnostics"]["ReplacementRank"], 27)
+        self.assertEqual(keeper_limited.attrs["valuation_diagnostics"]["InSeasonReplacementRank"], 27)
+        self.assertEqual(keeper_limited.attrs["valuation_diagnostics"]["KeeperContinuationRank"], 1)
+        self.assertEqual(keeper_limited.attrs["valuation_diagnostics"]["KeeperContinuationBaselineValue"], 0.0)
+
+    def test_points_keeper_limit_adjusts_future_continuation_without_shrinking_cutoff(self) -> None:
+        bat_rows = [
+            {
+                "Player": "Hitter A",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "Age": 24,
+                "AB": 50,
+                "H": 0,
+                "2B": 0,
+                "3B": 0,
+                "HR": 0,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "PlayerKey": "hitter-a",
+                "PlayerEntityKey": "hitter-a",
+            },
+            {
+                "Player": "Hitter B",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "Age": 25,
+                "AB": 50,
+                "H": 0,
+                "2B": 0,
+                "3B": 0,
+                "HR": 0,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "PlayerKey": "hitter-b",
+                "PlayerEntityKey": "hitter-b",
+            },
+            {
+                "Player": "Hitter C",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "Age": 26,
+                "AB": 50,
+                "H": 0,
+                "2B": 0,
+                "3B": 0,
+                "HR": 0,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "PlayerKey": "hitter-c",
+                "PlayerEntityKey": "hitter-c",
+            },
+            {
+                "Player": "Hitter D",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "Age": 27,
+                "AB": 50,
+                "H": 0,
+                "2B": 0,
+                "3B": 0,
+                "HR": 0,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "PlayerKey": "hitter-d",
+                "PlayerEntityKey": "hitter-d",
+            },
+            {
+                "Player": "Hitter A",
+                "Team": "SEA",
+                "Year": 2027,
+                "Pos": "OF",
+                "Age": 25,
+                "AB": 50,
+                "H": 0,
+                "2B": 0,
+                "3B": 0,
+                "HR": 0,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "PlayerKey": "hitter-a",
+                "PlayerEntityKey": "hitter-a",
+            },
+            {
+                "Player": "Hitter B",
+                "Team": "SEA",
+                "Year": 2027,
+                "Pos": "OF",
+                "Age": 26,
+                "AB": 50,
+                "H": 0,
+                "2B": 0,
+                "3B": 0,
+                "HR": 0,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "PlayerKey": "hitter-b",
+                "PlayerEntityKey": "hitter-b",
+            },
+            {
+                "Player": "Hitter C",
+                "Team": "SEA",
+                "Year": 2027,
+                "Pos": "OF",
+                "Age": 27,
+                "AB": 50,
+                "H": 0,
+                "2B": 0,
+                "3B": 0,
+                "HR": 0,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "PlayerKey": "hitter-c",
+                "PlayerEntityKey": "hitter-c",
+            },
+            {
+                "Player": "Hitter D",
+                "Team": "SEA",
+                "Year": 2027,
+                "Pos": "OF",
+                "Age": 28,
+                "AB": 50,
+                "H": 1,
+                "2B": 0,
+                "3B": 0,
+                "HR": 0,
+                "R": 0,
+                "RBI": 0,
+                "SB": 0,
+                "BB": 0,
+                "SO": 0,
+                "PlayerKey": "hitter-d",
+                "PlayerEntityKey": "hitter-d",
+            },
+        ]
+
+        calc_kwargs = {
+            "teams": 1,
+            "horizon": 2,
+            "discount": 0.92,
+            "hit_c": 0,
+            "hit_1b": 0,
+            "hit_2b": 0,
+            "hit_3b": 0,
+            "hit_ss": 0,
+            "hit_ci": 0,
+            "hit_mi": 0,
+            "hit_of": 1,
+            "hit_ut": 0,
+            "pit_p": 0,
+            "pit_sp": 0,
+            "pit_rp": 0,
+            "bench": 2,
+            "minors": 0,
+            "ir": 0,
+            "two_way": "sum",
+            "points_valuation_mode": "season_total",
+            "weekly_starts_cap": None,
+            "allow_same_day_starts_overflow": False,
+            "weekly_acquisition_cap": None,
+            "start_year": 2026,
+            "pts_hit_1b": 1.0,
+            "pts_hit_2b": 0.0,
+            "pts_hit_3b": 0.0,
+            "pts_hit_hr": 0.0,
+            "pts_hit_r": 0.0,
+            "pts_hit_rbi": 0.0,
+            "pts_hit_sb": 0.0,
+            "pts_hit_bb": 0.0,
+            "pts_hit_hbp": 0.0,
+            "pts_hit_so": 0.0,
+            "pts_pit_ip": 0.0,
+            "pts_pit_w": 0.0,
+            "pts_pit_l": 0.0,
+            "pts_pit_k": 0.0,
+            "pts_pit_sv": 0.0,
+            "pts_pit_hld": 0.0,
+            "pts_pit_h": 0.0,
+            "pts_pit_er": 0.0,
+            "pts_pit_bb": 0.0,
+            "pts_pit_hbp": 0.0,
+        }
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(app_module, "PIT_DATA", []), patch.object(
+            app_module,
+            "META",
+            {"years": [2026, 2027]},
+        ):
+            deep = app_module._calculate_points_dynasty_frame_cached(
+                **calc_kwargs,
+                keeper_limit=None,
+            )
+            keeper_limited = app_module._calculate_points_dynasty_frame_cached(
+                **calc_kwargs,
+                keeper_limit=1,
+            )
+
+        deep_diagnostics = deep.attrs["valuation_diagnostics"]
+        keeper_diagnostics = keeper_limited.attrs["valuation_diagnostics"]
+        deep_values = {str(row["Player"]): float(row["DynastyValue"]) for _, row in deep.iterrows()}
+        keeper_values = {str(row["Player"]): float(row["DynastyValue"]) for _, row in keeper_limited.iterrows()}
+        deep_raw_values = {str(row["Player"]): float(row["RawDynastyValue"]) for _, row in deep.iterrows()}
+        keeper_raw_values = {str(row["Player"]): float(row["RawDynastyValue"]) for _, row in keeper_limited.iterrows()}
+
+        self.assertEqual(deep_diagnostics["ReplacementRank"], 3)
+        self.assertEqual(deep_diagnostics["InSeasonReplacementRank"], 3)
+        self.assertEqual(keeper_diagnostics["ReplacementRank"], 3)
+        self.assertEqual(keeper_diagnostics["InSeasonReplacementRank"], 3)
+        self.assertIsNone(deep_diagnostics["KeeperContinuationRank"])
+        self.assertEqual(keeper_diagnostics["KeeperContinuationRank"], 1)
+        self.assertGreater(float(keeper_diagnostics["KeeperContinuationBaselineValue"]), 0.0)
+        self.assertEqual(deep_diagnostics["CenteringMode"], "forced_roster")
+        self.assertEqual(keeper_diagnostics["CenteringMode"], "forced_roster")
+        self.assertTrue(bool(keeper_diagnostics["ForcedRosterFallbackApplied"]))
+        self.assertEqual(deep_raw_values, keeper_raw_values)
+        self.assertGreater(keeper_values["Hitter D"], deep_values["Hitter D"])
+        hitter_a_keeper = keeper_limited[keeper_limited["Player"] == "Hitter A"].iloc[0]
+        self.assertLess(float(hitter_a_keeper["ForcedRosterValue"]), 0.0)
 
     def test_points_scoring_uses_explicit_hbp_and_holds_rules(self) -> None:
         bat_rows = [

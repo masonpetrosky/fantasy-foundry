@@ -51,10 +51,10 @@ POINTS_AUDIT_SCENARIOS: tuple[dict[str, Any], ...] = (
         "id": "season_total_keeper_limit_override",
         "mode": "season_total",
         "bucket": "replacement_depth_keeper_limit_effect",
-        "control_snapshot_id": "season_total_deep_replacement_depth",
+        "control_snapshot_id": "season_total_keeper_limit_control",
         "variant_snapshot_id": "season_total_keeper_limit_override",
-        "affected_players": ("Hitter A", "Hitter B", "Hitter C"),
-        "cohort_label": "replacement fringe hitters",
+        "affected_players": ("Hitter D",),
+        "cohort_label": "keeper-aware future continuation cohort",
         "evaluator": "keeper_limit",
     },
     {
@@ -398,6 +398,18 @@ def _pool_recenter_metrics(
             int(_coerce_int(variant_diagnostics.get("InSeasonReplacementRank")) or 0)
             - int(_coerce_int(control_diagnostics.get("InSeasonReplacementRank")) or 0)
         ),
+        "control_keeper_continuation_rank": _coerce_int(control_diagnostics.get("KeeperContinuationRank")),
+        "variant_keeper_continuation_rank": _coerce_int(variant_diagnostics.get("KeeperContinuationRank")),
+        "keeper_continuation_rank_change": (
+            int(_coerce_int(variant_diagnostics.get("KeeperContinuationRank")) or 0)
+            - int(_coerce_int(control_diagnostics.get("KeeperContinuationRank")) or 0)
+        ),
+        "control_keeper_continuation_baseline_value": _coerce_float(
+            control_diagnostics.get("KeeperContinuationBaselineValue")
+        ),
+        "variant_keeper_continuation_baseline_value": _coerce_float(
+            variant_diagnostics.get("KeeperContinuationBaselineValue")
+        ),
         "unaffected_top_movers": unaffected_top_movers,
         "unaffected_top_mover_count": len(unaffected_top_movers),
     }
@@ -456,12 +468,24 @@ def _evaluate_points_scenario(
     elif evaluator == "keeper_limit":
         variant_keeper_limit = _coerce_int(variant_diagnostics.get("KeeperLimit"))
         replacement_rank = _coerce_int(variant_diagnostics.get("ReplacementRank"))
-        direct_expected = (
-            int(pool_recenter_metrics.get("replacement_rank_change") or 0) < 0
-            and variant_keeper_limit is not None
-            and replacement_rank == int(variant_keeper_limit)
+        in_season_replacement_rank = _coerce_int(variant_diagnostics.get("InSeasonReplacementRank"))
+        keeper_continuation_rank = _coerce_int(variant_diagnostics.get("KeeperContinuationRank"))
+        keeper_continuation_baseline_value = _coerce_float(
+            variant_diagnostics.get("KeeperContinuationBaselineValue")
         )
-        reason = "keeper-limit override should pull the replacement rank shallower and match the keeper limit"
+        dynasty_shift = _coerce_float(direct_metrics.get("mean_dynasty_value_delta"))
+        direct_expected = (
+            int(pool_recenter_metrics.get("replacement_rank_change") or 0) == 0
+            and int(pool_recenter_metrics.get("in_season_replacement_rank_change") or 0) == 0
+            and variant_keeper_limit is not None
+            and replacement_rank is not None
+            and in_season_replacement_rank is not None
+            and replacement_rank == in_season_replacement_rank
+            and keeper_continuation_rank is not None
+            and keeper_continuation_baseline_value is not None
+            and abs(float(dynasty_shift or 0.0)) > 1e-6
+        )
+        reason = "keeper-limit inputs should preserve full in-season replacement depth while shifting future keeper scarcity"
     elif evaluator == "weekly_streaming_suppression":
         direct_expected = (
             (
@@ -692,6 +716,12 @@ def _format_pool_recenter_metrics(metrics: object) -> str:
         f"replacement_rank_delta={int(metrics.get('replacement_rank_change') or 0):+d}",
         f"in_season_replacement_rank_delta={int(metrics.get('in_season_replacement_rank_change') or 0):+d}",
     ]
+    keeper_continuation_rank = _coerce_int(metrics.get("variant_keeper_continuation_rank"))
+    if keeper_continuation_rank is not None:
+        parts.append(f"keeper_continuation_rank={keeper_continuation_rank}")
+    keeper_continuation_baseline_value = _coerce_float(metrics.get("variant_keeper_continuation_baseline_value"))
+    if keeper_continuation_baseline_value is not None:
+        parts.append(f"keeper_continuation_baseline={keeper_continuation_baseline_value:.4f}")
     unaffected_count = int(metrics.get("unaffected_top_mover_count") or 0)
     parts.append(f"unaffected_top_movers={unaffected_count}")
     if unaffected_count > 0:

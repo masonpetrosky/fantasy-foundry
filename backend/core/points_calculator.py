@@ -138,6 +138,55 @@ __all__ = [
 ]
 
 
+_POINTS_CENTERING_ZERO_EPSILON = 1e-12
+_POINTS_DEEP_ROSTER_ZERO_CLUSTER_MIN_SHARE = 0.10
+
+
+def _points_row_sort_frame(
+    frame: pd.DataFrame,
+    *,
+    score_col: str,
+    player_entity_key_col: str,
+    player_key_col: str,
+) -> pd.DataFrame:
+    sortable = frame.copy()
+    sortable["_points_sort_score"] = pd.to_numeric(sortable.get(score_col), errors="coerce").fillna(0.0)
+    sortable["_points_sort_entity"] = sortable.get(player_entity_key_col, "").astype(str)
+    sortable["_points_sort_player_key"] = sortable.get(player_key_col, "").astype(str)
+    sortable["_points_sort_player"] = sortable.get("Player", "").astype(str)
+    return sortable.sort_values(
+        ["_points_sort_score", "_points_sort_entity", "_points_sort_player_key", "_points_sort_player"],
+        ascending=[False, True, True, True],
+        kind="mergesort",
+    ).reset_index(drop=True)
+
+
+def _points_centering_baseline(
+    frame: pd.DataFrame,
+    *,
+    score_col: str,
+    replacement_rank: int,
+    player_entity_key_col: str,
+    player_key_col: str,
+) -> float:
+    if frame.empty:
+        return 0.0
+    sorted_frame = _points_row_sort_frame(
+        frame,
+        score_col=score_col,
+        player_entity_key_col=player_entity_key_col,
+        player_key_col=player_key_col,
+    )
+    cutoff_idx = min(max(int(replacement_rank), 1) - 1, len(sorted_frame) - 1)
+    return float(sorted_frame.iloc[cutoff_idx]["_points_sort_score"])
+
+
+def _future_continuation_value(keep_drop: KeepDropResult) -> float:
+    if len(keep_drop.continuation_values) <= 1:
+        return 0.0
+    return float(keep_drop.continuation_values[1])
+
+
 def calculate_points_dynasty_frame(
     *,
     ctx: PointsCalculatorContext,
@@ -285,9 +334,13 @@ def calculate_points_dynasty_frame(
     )
     active_depth_per_team = max(1, active_slots_per_team)
     in_season_depth_per_team = max(1, active_slots_per_team + bench + minors + ir)
-    replacement_depth_per_team = int(keeper_limit) if keeper_limit is not None else in_season_depth_per_team
-    replacement_rank = max(1, teams * max(replacement_depth_per_team, 1))
+    replacement_rank = max(1, teams * in_season_depth_per_team)
     in_season_replacement_rank = max(1, teams * in_season_depth_per_team)
+    keeper_continuation_rank = (
+        max(1, teams * min(int(keeper_limit), in_season_depth_per_team))
+        if keeper_limit is not None
+        else None
+    )
     hitter_slot_counts = {
         "C": int(hit_c),
         "1B": int(hit_1b),
@@ -1093,7 +1146,17 @@ def calculate_points_dynasty_frame(
             row_out["KeepDropHoldValue"] = start_year_points.get("keep_drop_hold_value")
             row_out["KeepDropKeep"] = start_year_points.get("keep_drop_keep")
 
+        first_year_gap = (
+            max(int(valuation_year_set[1]) - int(valuation_year_set[0]), 0)
+            if len(valuation_year_set) > 1
+            else 0
+        )
+        start_year_value = float(adjusted_values[0]) if adjusted_values else 0.0
+        future_continuation_value = _future_continuation_value(keep_drop)
         row_out["RawDynastyValue"] = float(keep_drop.raw_total)
+        row_out["StartYearValue"] = start_year_value
+        row_out["FutureContinuationValue"] = future_continuation_value
+        row_out["FutureContinuationDiscountGap"] = int(first_year_gap)
         result_rows.append(row_out)
 
     if not result_rows:
@@ -1104,27 +1167,120 @@ def calculate_points_dynasty_frame(
             "Age",
             "DynastyValue",
             "RawDynastyValue",
+            "StartYearValue",
+            "FutureContinuationValue",
+            "FutureContinuationDiscountGap",
+            "KeeperAdjustedFutureContinuationValue",
+            "ForcedRosterValue",
+            "CenteringScore",
+            "CenteringMode",
+            "ForcedRosterFallbackApplied",
+            "CenteringBaselineValue",
+            "CenteringScoreBaselineValue",
             "minor_eligible",
             ctx.player_key_col,
             ctx.player_entity_key_col,
         ] + [f"Value_{year}" for year in valuation_year_set]
         return pd.DataFrame(columns=empty_columns)
 
-    sorted_raw_values = sorted((float(row["RawDynastyValue"]) for row in result_rows), reverse=True)
-    cutoff_idx = min(replacement_rank - 1, len(sorted_raw_values) - 1)
-    replacement_raw = sorted_raw_values[cutoff_idx]
-
-    for row in result_rows:
-        row["DynastyValue"] = float(row["RawDynastyValue"]) - replacement_raw
-
     out = pd.DataFrame.from_records(result_rows)
+    raw_series = pd.to_numeric(out["RawDynastyValue"], errors="coerce").fillna(0.0)
+    raw_baseline_value = _points_centering_baseline(
+        out,
+        score_col="RawDynastyValue",
+        replacement_rank=replacement_rank,
+        player_entity_key_col=ctx.player_entity_key_col,
+        player_key_col=ctx.player_key_col,
+    )
+    future_continuation_baseline_value: float | None = None
+    if keeper_continuation_rank is not None:
+        future_continuation_baseline_value = _points_centering_baseline(
+            out,
+            score_col="FutureContinuationValue",
+            replacement_rank=keeper_continuation_rank,
+            player_entity_key_col=ctx.player_entity_key_col,
+            player_key_col=ctx.player_key_col,
+        )
+
+    keeper_adjusted_future_continuation = pd.to_numeric(
+        out["FutureContinuationValue"],
+        errors="coerce",
+    ).fillna(0.0)
+    if future_continuation_baseline_value is not None:
+        keeper_adjusted_future_continuation = keeper_adjusted_future_continuation - float(
+            future_continuation_baseline_value
+        )
+    out["KeeperAdjustedFutureContinuationValue"] = keeper_adjusted_future_continuation.astype(float)
+    out["ForcedRosterValue"] = (
+        pd.to_numeric(out["StartYearValue"], errors="coerce").fillna(0.0)
+        + pd.to_numeric(out["FutureContinuationDiscountGap"], errors="coerce").fillna(0.0).map(
+            lambda gap: float(discount) ** int(max(gap, 0))
+        )
+        * keeper_adjusted_future_continuation
+    )
+    out["CenteringScore"] = raw_series.astype(float)
+
+    raw_zero_mask = raw_series.abs() <= float(_POINTS_CENTERING_ZERO_EPSILON)
+    raw_zero_value_count = int(raw_zero_mask.sum())
+    raw_zero_share = (float(raw_zero_value_count) / float(len(out))) if len(out) else 0.0
+    deep_roster_zero_baseline_warning = bool(
+        abs(float(raw_baseline_value)) <= float(_POINTS_CENTERING_ZERO_EPSILON)
+        and len(out) > 0
+        and raw_zero_share >= float(_POINTS_DEEP_ROSTER_ZERO_CLUSTER_MIN_SHARE)
+    )
+
+    centering_mode = "standard"
+    forced_roster_fallback_applied = False
+    centering_score_baseline_value = float(raw_baseline_value)
+    if deep_roster_zero_baseline_warning:
+        out.loc[raw_zero_mask, "CenteringScore"] = pd.to_numeric(
+            out.loc[raw_zero_mask, "ForcedRosterValue"],
+            errors="coerce",
+        ).fillna(0.0)
+        centering_score_baseline_value = _points_centering_baseline(
+            out,
+            score_col="CenteringScore",
+            replacement_rank=replacement_rank,
+            player_entity_key_col=ctx.player_entity_key_col,
+            player_key_col=ctx.player_key_col,
+        )
+        centering_mode = "forced_roster"
+        forced_roster_fallback_applied = True
+
+    out["DynastyValue"] = pd.to_numeric(out["CenteringScore"], errors="coerce").fillna(0.0) - float(
+        centering_score_baseline_value
+    )
+    out["CenteringMode"] = centering_mode
+    out["ForcedRosterFallbackApplied"] = forced_roster_fallback_applied
+    out["CenteringBaselineValue"] = float(raw_baseline_value)
+    out["CenteringScoreBaselineValue"] = float(centering_score_baseline_value)
+
+    centering_score_series = pd.to_numeric(out["CenteringScore"], errors="coerce").fillna(0.0)
+    dynasty_series = pd.to_numeric(out["DynastyValue"], errors="coerce").fillna(0.0)
     valuation_diagnostics: dict[str, object] = {
         "PointsValuationMode": points_valuation_mode,
         "KeeperLimit": int(keeper_limit) if keeper_limit is not None else None,
+        "KeeperContinuationRank": int(keeper_continuation_rank) if keeper_continuation_rank is not None else None,
+        "KeeperContinuationBaselineValue": (
+            float(future_continuation_baseline_value)
+            if future_continuation_baseline_value is not None
+            else None
+        ),
         "ReplacementRank": int(replacement_rank),
         "InSeasonReplacementRank": int(in_season_replacement_rank),
         "ActiveDepthPerTeam": int(active_depth_per_team),
         "InSeasonDepthPerTeam": int(in_season_depth_per_team),
+        "CenteringMode": centering_mode,
+        "ForcedRosterFallbackApplied": forced_roster_fallback_applied,
+        "CenteringBaselineValue": float(raw_baseline_value),
+        "CenteringScoreBaselineValue": float(centering_score_baseline_value),
+        "RawZeroValuePlayerCount": int(raw_zero_value_count),
+        "CenteringScoreZeroPlayerCount": int(
+            (centering_score_series.abs() <= float(_POINTS_CENTERING_ZERO_EPSILON)).sum()
+        ),
+        "DynastyZeroValuePlayerCount": int((dynasty_series.abs() <= float(_POINTS_CENTERING_ZERO_EPSILON)).sum()),
+        "PositiveValuePlayerCount": int((dynasty_series > float(_POINTS_CENTERING_ZERO_EPSILON)).sum()),
+        "deep_roster_zero_baseline_warning": deep_roster_zero_baseline_warning,
         "HitterUsageByYear": {
             str(year): diagnostics
             for year, diagnostics in sorted(hitter_usage_diagnostics_by_year.items())

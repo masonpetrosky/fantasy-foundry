@@ -146,9 +146,15 @@ export function DynastyCalculatorSidebar({
           <strong>{hittersPerTeam} H / {pitchersPerTeam} P</strong>
         </div>
         <div className="calc-summary-chip">
-          <span>{keeperLimit != null ? "Keeper Limit" : "In-Season Depth"}</span>
-          <strong>{keeperLimit != null ? `${keeperLimit} players` : `${totalPlayersPerTeam} slots`}</strong>
+          <span>In-Season Depth</span>
+          <strong>{totalPlayersPerTeam} slots</strong>
         </div>
+        {isPointsMode && keeperLimit != null && (
+          <div className="calc-summary-chip">
+            <span>Keeper Limit</span>
+            <strong>{keeperLimit} players</strong>
+          </div>
+        )}
       </div>
 
       <div className="calc-section">
@@ -501,8 +507,8 @@ export function DynastyCalculatorSidebar({
           <p className="calc-section-title">Points Valuation</p>
           <p className="calc-note">
             {usesHeadToHeadPoints
-              ? "Daily H2H uses the day-aware roster management model, while Weekly H2H keeps the legacy capped-start heuristic. Keeper Limit controls the dynasty cutoff for shallow keeper leagues."
-              : "Keeper Limit controls the dynasty cutoff for shallow keeper leagues. Weekly starts, adds, and same-day overflow only apply in Daily H2H or Weekly H2H points modes."}
+              ? "Daily H2H uses the day-aware roster management model, while Weekly H2H keeps the legacy capped-start heuristic. Keeper Limit keeps the full in-season dynasty cutoff and only adjusts future keeper scarcity."
+              : "Keeper Limit keeps the full in-season dynasty cutoff and only adjusts future keeper scarcity. Weekly starts, adds, and same-day overflow only apply in Daily H2H or Weekly H2H points modes."}
           </p>
           <div className="form-row">
             <div className="form-group">
@@ -521,7 +527,7 @@ export function DynastyCalculatorSidebar({
               <label htmlFor="calc-keeper-limit">
                 Keeper Limit
                 <CalcTooltip label="Keeper Limit">
-                  Limits the dynasty replacement cutoff to the number of players each team can keep year over year.
+                  Adjusts future continuation to the number of players each team can keep year over year. It does not reduce the full in-season dynasty cutoff in points mode.
                 </CalcTooltip>
               </label>
               <input

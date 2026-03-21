@@ -98,9 +98,9 @@ export function MethodologySection(): React.ReactElement {
             Per-year points use a slot-constrained assignment so players compete for finite roster capacity.
           </li>
           <li>
-            Season-total points mode uses in-season roster depth for replacement, and an optional
+            Season-total points mode uses full in-season roster depth for replacement, and an optional
             {" "}
-            <code>keeper_limit</code> can anchor the dynasty cutoff to shallow keeper pools instead of full roster depth.
+            <code>keeper_limit</code> only adjusts future continuation to reflect keeper scarcity. It does not shrink the startup-style dynasty cutoff.
           </li>
           <li>
             Weekly H2H points mode is a calibrated valuation path, not a day-by-day schedule simulator.

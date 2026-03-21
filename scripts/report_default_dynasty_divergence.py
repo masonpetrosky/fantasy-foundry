@@ -732,6 +732,17 @@ def _points_profile_snapshots() -> tuple[dict[str, dict[str, Any]], dict[str, di
         _points_hitter_row(player="Hitter A", player_key="hitter-a", year=2026, age=24, ab=50.0, hits=10.0),
         _points_hitter_row(player="Hitter B", player_key="hitter-b", year=2026, age=25, ab=50.0, hits=8.0),
         _points_hitter_row(player="Hitter C", player_key="hitter-c", year=2026, age=26, ab=50.0, hits=6.0),
+        _points_hitter_row(player="Hitter D", player_key="hitter-d", year=2026, age=27, ab=50.0, hits=0.0),
+    ]
+    keeper_limit_bat_rows = [
+        _points_hitter_row(player="Hitter A", player_key="hitter-a", year=2026, age=24, ab=50.0, hits=0.0),
+        _points_hitter_row(player="Hitter B", player_key="hitter-b", year=2026, age=25, ab=50.0, hits=0.0),
+        _points_hitter_row(player="Hitter C", player_key="hitter-c", year=2026, age=26, ab=50.0, hits=0.0),
+        _points_hitter_row(player="Hitter D", player_key="hitter-d", year=2026, age=27, ab=50.0, hits=0.0),
+        _points_hitter_row(player="Hitter A", player_key="hitter-a", year=2027, age=25, ab=50.0, hits=0.0),
+        _points_hitter_row(player="Hitter B", player_key="hitter-b", year=2027, age=26, ab=50.0, hits=0.0),
+        _points_hitter_row(player="Hitter C", player_key="hitter-c", year=2027, age=27, ab=50.0, hits=0.0),
+        _points_hitter_row(player="Hitter D", player_key="hitter-d", year=2027, age=28, ab=50.0, hits=1.0),
     ]
     weekly_stream_pit_rows = [
         _points_pitcher_row(player="Ace A", player_key="ace-a", year=2026, age=28, g=26.0, ip=180.0, gs=26.0),
@@ -889,12 +900,15 @@ def _points_profile_snapshots() -> tuple[dict[str, dict[str, Any]], dict[str, di
             pit_rows=[],
             params=_synthetic_points_params(overrides={"hit_of": 1, "bench": 8, "minors": 12, "ir": 6}),
         ),
-        "season_total_keeper_limit_override": _run_synthetic_points_snapshot(
-            bat_rows=[dict(row) for row in depth_bat_rows],
+        "season_total_keeper_limit_control": _run_synthetic_points_snapshot(
+            bat_rows=[dict(row) for row in keeper_limit_bat_rows],
             pit_rows=[],
-            params=_synthetic_points_params(
-                overrides={"hit_of": 1, "bench": 8, "minors": 12, "ir": 6, "keeper_limit": 1}
-            ),
+            params=_synthetic_points_params(overrides={"hit_of": 1, "bench": 2, "horizon": 2}),
+        ),
+        "season_total_keeper_limit_override": _run_synthetic_points_snapshot(
+            bat_rows=[dict(row) for row in keeper_limit_bat_rows],
+            pit_rows=[],
+            params=_synthetic_points_params(overrides={"hit_of": 1, "bench": 2, "horizon": 2, "keeper_limit": 1}),
         ),
         "weekly_streaming_control_season_total": _run_synthetic_points_snapshot(
             bat_rows=[dict(row) for row in weekly_stream_bat_rows],

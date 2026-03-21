@@ -295,6 +295,23 @@ describe("DynastyCalculatorSidebar", () => {
     cleanup();
   });
 
+  it("shows both in-season depth and keeper limit in points mode", () => {
+    const props = makeDefaultProps();
+    props.state.isPointsMode = true;
+    props.settings.scoring_mode = "points";
+    props.settings.keeper_limit = 7;
+    props.state.keeperLimit = 7;
+    const { container, cleanup } = renderToContainer(
+      <DynastyCalculatorSidebar {...props} />
+    );
+    const text = container.textContent || "";
+    expect(text).toContain("In-Season Depth");
+    expect(text).toContain("27 slots");
+    expect(text).toContain("Keeper Limit");
+    expect(text).toContain("7 players");
+    cleanup();
+  });
+
   it("renders preset section", () => {
     const props = makeDefaultProps();
     const { container, cleanup } = renderToContainer(
