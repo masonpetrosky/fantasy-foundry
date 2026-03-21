@@ -89,6 +89,7 @@ Useful pytest markers from `pytest.ini`:
 
 - Do not hand-edit `frontend/dist/`; rebuild it from `frontend/` when the task requires updated built assets.
 - Do not hand-edit projection data files under `data/` unless the task is explicitly about data refresh or validation.
+- When default dynasty-calculation behavior changes, regenerate `data/dynasty_lookup.json`; data-version checks alone do not invalidate that cache for code-only valuation changes.
 - Coverage outputs and caches must remain untracked, including `.coverage`, `coverage.xml`, `htmlcov/`, `frontend/coverage/`, `__pycache__/`, `.pytest_cache/`, `.mypy_cache/`, and `.ruff_cache/`.
 - Repo-wide searches should rely on `.rgignore` defaults unless you intentionally need `rg --no-ignore`.
 

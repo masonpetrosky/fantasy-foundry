@@ -18,6 +18,7 @@ def default_dynasty_lookup(
     *,
     inspect_precomputed_default_dynasty_lookup: Callable[[], Any],
     require_precomputed_dynasty_lookup: bool,
+    prefer_precomputed: bool = True,
     required_lookup_error_factory: Callable[[str], Exception],
     default_calculation_cache_params: Callable[[], dict[str, Any]],
     calculate_common_dynasty_frame_cached: Callable[..., Any],
@@ -30,11 +31,11 @@ def default_dynasty_lookup(
     player_key_col: str,
     player_entity_key_col: str,
 ) -> DynastyLookup:
-    inspection = inspect_precomputed_default_dynasty_lookup()
-    if inspection.status == "ready" and inspection.lookup is not None:
+    inspection = inspect_precomputed_default_dynasty_lookup() if prefer_precomputed else None
+    if inspection is not None and inspection.status == "ready" and inspection.lookup is not None:
         return inspection.lookup
 
-    if require_precomputed_dynasty_lookup and inspection.status != "disabled":
+    if inspection is not None and require_precomputed_dynasty_lookup and inspection.status != "disabled":
         found_version = inspection.found_version or "missing"
         raise required_lookup_error_factory(
             "Precomputed dynasty lookup cache is not ready "

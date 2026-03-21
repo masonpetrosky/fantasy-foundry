@@ -1,4 +1,8 @@
+import json
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import Mock, patch
 
 import pandas as pd
 
@@ -197,6 +201,54 @@ class BuildMetaTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "Bat sheet contains 1 row\\(s\\) with non-integer Year values"):
             preprocess.validate_projection_workbook_frames(bat, pit, min_year=2026, max_year=2027)
+
+
+class DynastyLookupCacheBuildTests(unittest.TestCase):
+    def test_build_dynasty_lookup_cache_bypasses_ready_precomputed_lookup(self) -> None:
+        import backend.app as backend_app
+
+        lookup = (
+            {"entity-a": {"DynastyValue": 4.2}},
+            {"player-a": {"DynastyValue": 4.2}},
+            {"ambiguous-player"},
+            ["Value_2026"],
+        )
+        get_lookup = Mock(return_value=lookup)
+        get_lookup.cache_clear = Mock()
+
+        with TemporaryDirectory() as tmpdir:
+            cache_path = Path(tmpdir) / "dynasty_lookup.json"
+            with patch.object(preprocess, "DYNASTY_LOOKUP_CACHE_PATH", cache_path), patch.object(
+                backend_app,
+                "_refresh_data_if_needed",
+                return_value=None,
+            ), patch.object(
+                backend_app,
+                "_current_data_version",
+                return_value="fresh-version",
+            ), patch.object(
+                backend_app,
+                "_get_default_dynasty_lookup",
+                get_lookup,
+            ), patch.object(
+                backend_app,
+                "REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP",
+                True,
+            ):
+                entity_count, player_key_count = preprocess._build_dynasty_lookup_cache()
+                self.assertTrue(backend_app.REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP)
+
+            payload = json.loads(cache_path.read_text(encoding="utf-8"))
+
+        get_lookup.cache_clear.assert_called_once_with()
+        get_lookup.assert_called_once_with(prefer_precomputed=False)
+        self.assertEqual(entity_count, 1)
+        self.assertEqual(player_key_count, 1)
+        self.assertEqual(payload["cache_data_version"], "fresh-version")
+        self.assertEqual(payload["lookup_by_entity"], {"entity-a": {"DynastyValue": 4.2}})
+        self.assertEqual(payload["lookup_by_player_key"], {"player-a": {"DynastyValue": 4.2}})
+        self.assertEqual(payload["ambiguous_player_keys"], ["ambiguous-player"])
+        self.assertEqual(payload["year_cols"], ["Value_2026"])
 
 
 if __name__ == "__main__":

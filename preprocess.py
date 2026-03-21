@@ -419,7 +419,10 @@ def _build_dynasty_lookup_cache() -> tuple[int, int]:
     strict_required = bool(getattr(backend_app, "REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP", False))
     setattr(backend_app, "REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP", False)
     try:
-        lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, year_cols = backend_app._get_default_dynasty_lookup()
+        # Rebuild from current valuation logic even if an older cache still matches the data version.
+        lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, year_cols = backend_app._get_default_dynasty_lookup(
+            prefer_precomputed=False,
+        )
     finally:
         setattr(backend_app, "REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP", strict_required)
     cache_data_version = backend_app._current_data_version()

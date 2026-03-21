@@ -635,11 +635,14 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
     def _prewarm_default_calculation_caches() -> None:
         state_module.core_runtime_state_helpers.prewarm_default_calculation_caches(state=state_module)
 
-    @lru_cache(maxsize=1)
-    def _get_default_dynasty_lookup() -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]]:
+    @lru_cache(maxsize=2)
+    def _get_default_dynasty_lookup(
+        *, prefer_precomputed: bool = True,
+    ) -> tuple[dict[str, dict], dict[str, dict], set[str], list[str]]:
         return state_module.core_default_dynasty_lookup(
             inspect_precomputed_default_dynasty_lookup=state_module._inspect_precomputed_default_dynasty_lookup,
             require_precomputed_dynasty_lookup=state_module.REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP,
+            prefer_precomputed=prefer_precomputed,
             required_lookup_error_factory=state_module.PrecomputedDynastyLookupRequiredError,
             default_calculation_cache_params=state_module._default_calculation_cache_params,
             calculate_common_dynasty_frame_cached=state_module._calculate_common_dynasty_frame_cached,

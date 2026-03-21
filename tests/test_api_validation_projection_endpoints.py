@@ -1022,6 +1022,67 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(actual, precomputed)
         calculate_mock.assert_not_called()
 
+    @pytest.mark.slow
+    def test_default_career_totals_projections_match_default_calculator_run(self) -> None:
+        default_params = app_module._default_calculation_cache_params()
+        req = app_module.CALCULATOR_SERVICE.calculate_request_model(
+            mode="common",
+            scoring_mode="roto",
+            points_valuation_mode="season_total",
+            keeper_limit=None,
+            weekly_starts_cap=None,
+            allow_same_day_starts_overflow=False,
+            weekly_acquisition_cap=None,
+            auction_budget=None,
+            **default_params,
+        )
+
+        app_module._get_default_dynasty_lookup.cache_clear()
+        try:
+            calculator_result = app_module.CALCULATOR_SERVICE._run_calculate_request(req, source="alignment_test")
+            calculator_by_key = {
+                str(row.get(app_module.PLAYER_ENTITY_KEY_COL) or row.get(app_module.PLAYER_KEY_COL) or ""): row
+                for row in calculator_result.get("data", [])
+                if str(row.get(app_module.PLAYER_ENTITY_KEY_COL) or row.get(app_module.PLAYER_KEY_COL) or "")
+            }
+            projections = app_module.PROJECTION_SERVICE.projection_response(
+                "all",
+                player=None,
+                team=None,
+                player_keys=None,
+                year=None,
+                years=None,
+                pos=None,
+                dynasty_years=None,
+                career_totals=True,
+                include_dynasty=True,
+                calculator_job_id=None,
+                sort_col="DynastyValue",
+                sort_dir="desc",
+                limit=25,
+                offset=0,
+            )
+        finally:
+            app_module._get_default_dynasty_lookup.cache_clear()
+
+        mismatches: list[tuple[str, float | None, float | None]] = []
+        for row in projections.get("data", []):
+            key = str(row.get(app_module.PLAYER_ENTITY_KEY_COL) or row.get(app_module.PLAYER_KEY_COL) or "")
+            calc_row = calculator_by_key.get(key)
+            projection_value = row.get("DynastyValue")
+            calculator_value = calc_row.get("DynastyValue") if calc_row else None
+            if calc_row is None:
+                mismatches.append((str(row.get("Player") or ""), projection_value, calculator_value))
+                continue
+            if projection_value is None or calculator_value is None:
+                if projection_value != calculator_value:
+                    mismatches.append((str(row.get("Player") or ""), projection_value, calculator_value))
+                continue
+            if abs(float(projection_value) - float(calculator_value)) > 1e-6:
+                mismatches.append((str(row.get("Player") or ""), projection_value, calculator_value))
+
+        self.assertEqual(mismatches, [])
+
     def test_load_precomputed_dynasty_lookup_cache_validates_data_version(self) -> None:
         payload = {
             "data_version": "stale-version",
@@ -1416,5 +1477,4 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(row["PitBB"], 87.0)
         self.assertEqual(row["K"], 350.0)
         self.assertEqual(row["OldestProjectionDate"], "2025-12-30")
-
 
