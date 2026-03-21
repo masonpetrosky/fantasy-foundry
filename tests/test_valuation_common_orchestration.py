@@ -477,15 +477,15 @@ class TestApplyDynastyCentering:
         assert diagnostics["ResidualZeroMinorCandidateCount"] == 2
         assert diagnostics["CenteringBaselineValue"] == pytest.approx(0.0)
         assert diagnostics["CenteringScoreBaselineValue"] == pytest.approx(
-            float(by_player.loc["Later Prospect", "MinorSlotCostValue"])
+            float(by_player.loc["Vet Tail", "CenteringScore"])
         )
         assert diagnostics["CenteringScoreBaselineValue"] < 0.0
         assert diagnostics["CenteringScoreZeroPlayerCount"] == 0
         assert by_player.loc["Soon Prospect", "MinorEtaOffset"] == pytest.approx(1.0)
         assert by_player.loc["Soon Prospect", "MinorProjectedVolumeScore"] == pytest.approx(10.0)
         assert by_player.loc["Soon Prospect", "MinorSlotCostValue"] > by_player.loc["Later Prospect", "MinorSlotCostValue"]
-        assert by_player.loc["Soon Prospect", "DynastyValue"] > 0.0
-        assert by_player.loc["Later Prospect", "DynastyValue"] == pytest.approx(0.0)
+        assert by_player.loc["Soon Prospect", "DynastyValue"] < by_player.loc["Vet Edge", "DynastyValue"]
+        assert by_player.loc["Vet Tail", "DynastyValue"] == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------

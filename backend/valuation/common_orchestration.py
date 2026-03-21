@@ -417,8 +417,11 @@ def _apply_residual_minor_slot_cost(
 
     negative_forced = pd.to_numeric(centered.loc[raw_zero_mask, "ForcedRosterValue"], errors="coerce").fillna(0.0)
     negative_forced = negative_forced[negative_forced < -float(zero_epsilon)]
-    reference_cost = abs(float(negative_forced.max())) if not negative_forced.empty else 0.03
-    slot_cost_unit = float(min(max(reference_cost, 0.03), 0.12))
+    # Anchor the residual minors-slot penalty to the stronger end of the
+    # negative forced-roster spectrum so "free stash" ties do not outrank
+    # real MLB fringe values in deep zero clusters.
+    reference_cost = abs(float(negative_forced.min())) if not negative_forced.empty else 0.03
+    slot_cost_unit = float(min(max(reference_cost, 0.03), 12.0))
     teams_count = max(int(n_teams), 1)
 
     eta_offsets: List[int] = []

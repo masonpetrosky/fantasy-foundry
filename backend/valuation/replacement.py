@@ -142,7 +142,8 @@ def compute_replacement_baselines(
 
     repl_hit_rows: List[dict] = []
     for slot in baseline_hit_avg.index:
-        cand = fa_hit[fa_hit["elig"].apply(lambda s: slot in s)].sort_values("weight", ascending=False).head(n_repl)
+        hit_slot_mask = fa_hit["elig"].apply(lambda s: slot in s).astype(bool)
+        cand = fa_hit.loc[hit_slot_mask].sort_values("weight", ascending=False).head(n_repl)
         repl = baseline_hit_avg.loc[slot] if len(cand) == 0 else cand[HIT_COMPONENT_COLS].mean()
         row = {c: float(repl.get(c, 0.0)) for c in HIT_COMPONENT_COLS}
         row["AssignedSlot"] = slot
@@ -152,7 +153,8 @@ def compute_replacement_baselines(
 
     repl_pit_rows: List[dict] = []
     for slot in baseline_pit_avg.index:
-        cand = fa_pit[fa_pit["elig"].apply(lambda s: slot in s)].sort_values("weight", ascending=False).head(n_repl)
+        pit_slot_mask = fa_pit["elig"].apply(lambda s: slot in s).astype(bool)
+        cand = fa_pit.loc[pit_slot_mask].sort_values("weight", ascending=False).head(n_repl)
         repl = baseline_pit_avg.loc[slot] if len(cand) == 0 else cand[PIT_COMPONENT_COLS].mean()
         row = {c: float(repl.get(c, 0.0)) for c in PIT_COMPONENT_COLS}
         row["AssignedSlot"] = slot

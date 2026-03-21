@@ -339,6 +339,34 @@ def test_replacement_and_vs_replacement_paths_smoke() -> None:
     assert len(pit_vals) == 1
 
 
+def test_compute_replacement_baselines_falls_back_when_unrostered_pool_is_empty() -> None:
+    bat, pit = _sample_common_frames()
+    lg = CommonDynastyRotoSettings(
+        n_teams=1,
+        sims_for_sgp=2,
+        hitter_slots={"UT": 1},
+        pitcher_slots={"P": 1},
+        bench_slots=0,
+        minor_slots=0,
+        ir_slots=0,
+        ip_min=0.0,
+        ip_max=180.0,
+    )
+
+    ctx = common_math.compute_year_context(2026, bat, pit, lg, rng_seed=11)
+    repl_hit, repl_pit = common_math.compute_replacement_baselines(
+        ctx,
+        lg,
+        rostered_players={"Hitter One", "Pitcher One"},
+        n_repl=1,
+    )
+
+    assert list(repl_hit.index) == ["UT"]
+    assert list(repl_pit.index) == ["P"]
+    assert math.isclose(float(repl_hit.loc["UT", "AB"]), float(ctx["baseline_hit"].loc["UT", "AB"]))
+    assert math.isclose(float(repl_pit.loc["P", "IP"]), float(ctx["baseline_pit"].loc["P", "IP"]))
+
+
 def test_compute_year_player_values_applies_hitter_reliability_guard_once(monkeypatch) -> None:
     bat, pit = _sample_common_frames()
     lg = CommonDynastyRotoSettings(
