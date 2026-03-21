@@ -357,6 +357,7 @@ describe("buildDefaultCalculatorSettings", () => {
     expect(settings.discount).toBe(0.94);
     expect(settings.bench).toBe(6);
     expect(settings.hit_dh).toBe(0);
+    expect(settings.enable_prospect_risk_adjustment).toBe(true);
     expect(typeof settings.start_year).toBe("number");
   });
 

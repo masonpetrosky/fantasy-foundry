@@ -358,7 +358,7 @@ export function buildDefaultCalculatorSettings(meta: CalculatorMeta | null | und
     sgp_epsilon_ratio: 0.0015,
     enable_playing_time_reliability: false,
     enable_age_risk_adjustment: false,
-    enable_prospect_risk_adjustment: false,
+    enable_prospect_risk_adjustment: true,
     enable_bench_stash_relief: false,
     bench_negative_penalty: 0.55,
     enable_ir_stash_relief: false,
@@ -520,7 +520,7 @@ export function buildCalculatorPayload(settings: Record<string, unknown>, availa
   }
   const enablePlayingTimeReliability = coerceBooleanSetting(settings.enable_playing_time_reliability, false);
   const enableAgeRiskAdjustment = coerceBooleanSetting(settings.enable_age_risk_adjustment, false);
-  const enableProspectRiskAdjustment = coerceBooleanSetting(settings.enable_prospect_risk_adjustment, false);
+  const enableProspectRiskAdjustment = coerceBooleanSetting(settings.enable_prospect_risk_adjustment, true);
   const enableBenchStashRelief = coerceBooleanSetting(settings.enable_bench_stash_relief, false);
   const benchNegativePenalty = Number(settings.bench_negative_penalty);
   if (!Number.isFinite(benchNegativePenalty) || benchNegativePenalty < 0 || benchNegativePenalty > 1) {

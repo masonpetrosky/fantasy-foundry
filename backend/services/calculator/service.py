@@ -35,7 +35,7 @@ class CalculateRequest(BaseModel):
     sgp_epsilon_ratio: float = Field(default=0.0015, ge=0.0, le=1000.0)
     enable_playing_time_reliability: bool = False
     enable_age_risk_adjustment: bool = False
-    enable_prospect_risk_adjustment: bool = False
+    enable_prospect_risk_adjustment: bool = True
     enable_bench_stash_relief: bool = False
     bench_negative_penalty: float = Field(default=0.55, ge=0.0, le=1.0)
     enable_ir_stash_relief: bool = False

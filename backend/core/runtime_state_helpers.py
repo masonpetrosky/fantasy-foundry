@@ -321,7 +321,7 @@ def _prewarm_roto_config(*, state: RuntimeStateHelpersState, params: dict) -> No
         sgp_epsilon_ratio=float(params.get("sgp_epsilon_ratio", 0.0015)),
         enable_playing_time_reliability=bool(params.get("enable_playing_time_reliability", False)),
         enable_age_risk_adjustment=bool(params.get("enable_age_risk_adjustment", False)),
-        enable_prospect_risk_adjustment=bool(params.get("enable_prospect_risk_adjustment", False)),
+        enable_prospect_risk_adjustment=bool(params.get("enable_prospect_risk_adjustment", True)),
         enable_bench_stash_relief=bool(params.get("enable_bench_stash_relief", False)),
         bench_negative_penalty=float(params.get("bench_negative_penalty", 0.55)),
         enable_ir_stash_relief=bool(params.get("enable_ir_stash_relief", False)),

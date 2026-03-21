@@ -115,7 +115,7 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(req.sgp_denominator_mode, "classic")
         self.assertFalse(req.enable_playing_time_reliability)
         self.assertFalse(req.enable_age_risk_adjustment)
-        self.assertFalse(req.enable_prospect_risk_adjustment)
+        self.assertTrue(req.enable_prospect_risk_adjustment)
         self.assertFalse(req.enable_bench_stash_relief)
         self.assertEqual(req.bench_negative_penalty, 0.55)
         self.assertFalse(req.enable_ir_stash_relief)

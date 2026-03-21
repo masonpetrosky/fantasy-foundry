@@ -72,7 +72,7 @@ describe("buildQuickStartSettings", () => {
     expect(settings.sgp_winsor_high_pct).toBe(0.9);
     expect(settings.enable_playing_time_reliability).toBe(false);
     expect(settings.enable_age_risk_adjustment).toBe(false);
-    expect(settings.enable_prospect_risk_adjustment).toBe(false);
+    expect(settings.enable_prospect_risk_adjustment).toBe(true);
     expect(settings.enable_bench_stash_relief).toBe(false);
     expect(settings.bench_negative_penalty).toBe(0.55);
     expect(settings.enable_ir_stash_relief).toBe(false);
@@ -109,6 +109,7 @@ describe("buildQuickStartSettings", () => {
     expect(settings["hit_of"]).toBe(5);
     expect(settings["hit_dh"]).toBe(0);
     expect(settings["pit_p"]).toBe(9);
+    expect(settings.enable_prospect_risk_adjustment).toBe(true);
     expect(settings["roto_hit_hr"]).toBe(true);
     expect(settings["roto_pit_k"]).toBe(true);
   });

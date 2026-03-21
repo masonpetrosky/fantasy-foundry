@@ -96,7 +96,7 @@ export function buildQuickStartSettings({
     sgp_epsilon_ratio: 0.0015,
     enable_playing_time_reliability: false,
     enable_age_risk_adjustment: false,
-    enable_prospect_risk_adjustment: false,
+    enable_prospect_risk_adjustment: true,
     enable_bench_stash_relief: false,
     bench_negative_penalty: 0.55,
     enable_ir_stash_relief: false,
