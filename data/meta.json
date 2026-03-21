@@ -87,7 +87,9 @@
     "OF/1B",
     "OF/3B",
     "OF/DH",
-    "SS"
+    "SS",
+    "SS/2B",
+    "SS/DH"
   ],
   "pit_positions": [
     "DH/SP",
