@@ -34,6 +34,7 @@ def inspect_precomputed_default_dynasty_lookup(*, state: RuntimeStateHelpersStat
     e2e_enabled = str(state.os.getenv("FF_RUN_E2E", "")).strip().lower() in {"1", "true", "yes", "on"}
     inspection = state.core_inspect_precomputed_default_dynasty_lookup(
         current_data_version=state._current_data_version(),
+        current_methodology_fingerprint=state._default_dynasty_methodology_fingerprint(),
         dynasty_lookup_cache_path=state.DYNASTY_LOOKUP_CACHE_PATH,
         pytest_current_test=pytest_current_test and not e2e_enabled,
         value_col_sort_key=state._value_col_sort_key,
@@ -42,6 +43,8 @@ def inspect_precomputed_default_dynasty_lookup(*, state: RuntimeStateHelpersStat
         status=inspection.status,
         expected_version=inspection.expected_version,
         found_version=inspection.found_version,
+        expected_methodology_fingerprint=inspection.expected_methodology_fingerprint,
+        found_methodology_fingerprint=inspection.found_methodology_fingerprint,
         lookup=inspection.lookup,
         error=inspection.error,
     )
@@ -93,13 +96,16 @@ def calculate_common_dynasty_frame_cached(
     sgp_epsilon_ratio: float = 0.0015,
     enable_playing_time_reliability: bool = False,
     enable_age_risk_adjustment: bool = False,
-    enable_prospect_risk_adjustment: bool = False,
+    enable_prospect_risk_adjustment: bool = True,
     enable_bench_stash_relief: bool = False,
     bench_negative_penalty: float = 0.55,
     enable_ir_stash_relief: bool = False,
     ir_negative_penalty: float = 0.20,
-    enable_replacement_blend: bool = False,
-    replacement_blend_alpha: float = 0.70,
+    enable_replacement_blend: bool = True,
+    replacement_blend_alpha: float = 0.40,
+    replacement_depth_mode: str = "blended_depth",
+    replacement_depth_blend_alpha: float = 0.33,
+    replacement_depth_blend_alpha_by_slot_json: str = "",
     hit_dh: int = 0,
 ) -> pd.DataFrame:
     return state.core_calculate_common_dynasty_frame(
@@ -143,6 +149,9 @@ def calculate_common_dynasty_frame_cached(
         ir_negative_penalty=ir_negative_penalty,
         enable_replacement_blend=enable_replacement_blend,
         replacement_blend_alpha=replacement_blend_alpha,
+        replacement_depth_mode=replacement_depth_mode,
+        replacement_depth_blend_alpha=replacement_depth_blend_alpha,
+        replacement_depth_blend_alpha_by_slot_json=replacement_depth_blend_alpha_by_slot_json,
         roto_category_settings=roto_category_settings,
         roto_hitter_fields=state.ROTO_HITTER_CATEGORY_FIELDS,
         roto_pitcher_fields=state.ROTO_PITCHER_CATEGORY_FIELDS,
@@ -199,7 +208,7 @@ def calculate_points_dynasty_frame_cached(
     pts_pit_bb: float,
     pts_pit_hbp: float,
     ip_max: float | None = None,
-    enable_prospect_risk_adjustment: bool = False,
+    enable_prospect_risk_adjustment: bool = True,
     enable_bench_stash_relief: bool = False,
     bench_negative_penalty: float = 0.55,
     enable_ir_stash_relief: bool = False,
@@ -326,8 +335,10 @@ def _prewarm_roto_config(*, state: RuntimeStateHelpersState, params: dict) -> No
         bench_negative_penalty=float(params.get("bench_negative_penalty", 0.55)),
         enable_ir_stash_relief=bool(params.get("enable_ir_stash_relief", False)),
         ir_negative_penalty=float(params.get("ir_negative_penalty", 0.20)),
-        enable_replacement_blend=bool(params.get("enable_replacement_blend", False)),
-        replacement_blend_alpha=float(params.get("replacement_blend_alpha", 0.70)),
+        enable_replacement_blend=bool(params.get("enable_replacement_blend", True)),
+        replacement_blend_alpha=float(params.get("replacement_blend_alpha", 0.40)),
+        replacement_depth_mode=str(params.get("replacement_depth_mode", "blended_depth")),
+        replacement_depth_blend_alpha=float(params.get("replacement_depth_blend_alpha", 0.33)),
         **state._roto_category_settings_from_dict(params),
     )
 
@@ -539,11 +550,13 @@ def calculator_service_from_globals(*, state: RuntimeStateHelpersState) -> Any:
 def log_precomputed_dynasty_lookup_cache_status(*, state: RuntimeStateHelpersState) -> None:
     inspection = state._inspect_precomputed_default_dynasty_lookup()
     state.CALC_LOGGER.info(
-        "dynasty lookup cache status=%s require_precomputed=%s expected=%s found=%s",
+        "dynasty lookup cache status=%s require_precomputed=%s expected=%s found=%s methodology_expected=%s methodology_found=%s",
         inspection.status,
         state.REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP,
         inspection.expected_version,
         inspection.found_version or "missing",
+        inspection.expected_methodology_fingerprint or "n/a",
+        inspection.found_methodology_fingerprint or "missing",
     )
     if inspection.error:
         state.CALC_LOGGER.warning("dynasty lookup cache error: %s", inspection.error)

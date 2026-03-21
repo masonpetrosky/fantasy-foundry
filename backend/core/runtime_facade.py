@@ -59,6 +59,7 @@ REQUIRED_RUNTIME_FACADE_ALIAS_KEYS = frozenset(
         "_tabular_export_response",
         "_playable_pool_counts_by_year",
         "_default_calculation_cache_params",
+        "_default_dynasty_methodology_fingerprint",
         "_calculator_guardrails_payload",
         "_iso_now",
         "_mark_job_cancelled_locked",
@@ -231,13 +232,16 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
         sgp_epsilon_ratio: float = 0.0015,
         enable_playing_time_reliability: bool = False,
         enable_age_risk_adjustment: bool = False,
-        enable_prospect_risk_adjustment: bool = False,
+        enable_prospect_risk_adjustment: bool = True,
         enable_bench_stash_relief: bool = False,
         bench_negative_penalty: float = 0.55,
         enable_ir_stash_relief: bool = False,
         ir_negative_penalty: float = 0.20,
-        enable_replacement_blend: bool = False,
-        replacement_blend_alpha: float = 0.70,
+        enable_replacement_blend: bool = True,
+        replacement_blend_alpha: float = 0.40,
+        replacement_depth_mode: str = "blended_depth",
+        replacement_depth_blend_alpha: float = 0.33,
+        replacement_depth_blend_alpha_by_slot_json: str = "",
         hit_dh: int = 0,
         **roto_category_settings: bool,
     ) -> pd.DataFrame:
@@ -281,6 +285,9 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
             ir_negative_penalty=ir_negative_penalty,
             enable_replacement_blend=enable_replacement_blend,
             replacement_blend_alpha=replacement_blend_alpha,
+            replacement_depth_mode=replacement_depth_mode,
+            replacement_depth_blend_alpha=replacement_depth_blend_alpha,
+            replacement_depth_blend_alpha_by_slot_json=replacement_depth_blend_alpha_by_slot_json,
             roto_category_settings=roto_category_settings,
         )
 
@@ -432,7 +439,7 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
         pts_pit_bb: float,
         pts_pit_hbp: float,
         ip_max: float | None = None,
-        enable_prospect_risk_adjustment: bool = False,
+        enable_prospect_risk_adjustment: bool = True,
         enable_bench_stash_relief: bool = False,
         bench_negative_penalty: float = 0.55,
         enable_ir_stash_relief: bool = False,
@@ -572,6 +579,11 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
             common_default_minor_slots=state_module.COMMON_DEFAULT_MINOR_SLOTS,
             common_default_ir_slots=state_module.COMMON_DEFAULT_IR_SLOTS,
             roto_category_field_defaults=state_module.ROTO_CATEGORY_FIELD_DEFAULTS,
+        )
+
+    def _default_dynasty_methodology_fingerprint() -> str:
+        return state_module.core_default_dynasty_methodology_fingerprint(
+            default_params=_default_calculation_cache_params(),
         )
 
     def _calculator_guardrails_payload() -> dict:
@@ -778,6 +790,7 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
         "_tabular_export_response": _tabular_export_response,
         "_playable_pool_counts_by_year": _playable_pool_counts_by_year,
         "_default_calculation_cache_params": _default_calculation_cache_params,
+        "_default_dynasty_methodology_fingerprint": _default_dynasty_methodology_fingerprint,
         "_calculator_guardrails_payload": _calculator_guardrails_payload,
         "_iso_now": _iso_now,
         "_mark_job_cancelled_locked": _mark_job_cancelled_locked,

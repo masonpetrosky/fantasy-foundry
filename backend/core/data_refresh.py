@@ -95,11 +95,18 @@ def dynasty_lookup_payload_version(payload: dict[str, object]) -> str | None:
     return legacy_data_version or None
 
 
+def dynasty_lookup_methodology_fingerprint(payload: dict[str, object]) -> str | None:
+    fingerprint = str(payload.get("default_methodology_fingerprint") or "").strip()
+    return fingerprint or None
+
+
 @dataclass(frozen=True)
 class LookupInspectionResult:
     status: str
     expected_version: str
     found_version: str | None = None
+    expected_methodology_fingerprint: str | None = None
+    found_methodology_fingerprint: str | None = None
     lookup: tuple[dict[str, dict], dict[str, dict], set[str], list[str]] | None = None
     error: str | None = None
 
@@ -107,6 +114,7 @@ class LookupInspectionResult:
 def inspect_precomputed_default_dynasty_lookup(
     *,
     current_data_version: str,
+    current_methodology_fingerprint: str | None = None,
     dynasty_lookup_cache_path: Path,
     pytest_current_test: bool,
     value_col_sort_key: Callable[[str], tuple[int, int | str]],
@@ -139,6 +147,18 @@ def inspect_precomputed_default_dynasty_lookup(
             status="stale",
             expected_version=expected_version,
             found_version=payload_version,
+            expected_methodology_fingerprint=current_methodology_fingerprint,
+            found_methodology_fingerprint=dynasty_lookup_methodology_fingerprint(payload),
+        )
+    payload_methodology_fingerprint = dynasty_lookup_methodology_fingerprint(payload)
+    expected_methodology_fingerprint = str(current_methodology_fingerprint or "").strip() or None
+    if expected_methodology_fingerprint and payload_methodology_fingerprint != expected_methodology_fingerprint:
+        return LookupInspectionResult(
+            status="stale",
+            expected_version=expected_version,
+            found_version=payload_version,
+            expected_methodology_fingerprint=expected_methodology_fingerprint,
+            found_methodology_fingerprint=payload_methodology_fingerprint,
         )
 
     lookup_by_entity = coerce_serialized_dynasty_lookup_map(payload.get("lookup_by_entity"))
@@ -148,6 +168,8 @@ def inspect_precomputed_default_dynasty_lookup(
             status="invalid",
             expected_version=expected_version,
             found_version=payload_version,
+            expected_methodology_fingerprint=expected_methodology_fingerprint,
+            found_methodology_fingerprint=payload_methodology_fingerprint,
             error=f"{dynasty_lookup_cache_path.name} contains no usable lookup maps.",
         )
 
@@ -172,6 +194,8 @@ def inspect_precomputed_default_dynasty_lookup(
         status="ready",
         expected_version=expected_version,
         found_version=payload_version,
+        expected_methodology_fingerprint=expected_methodology_fingerprint,
+        found_methodology_fingerprint=payload_methodology_fingerprint,
         lookup=(lookup_by_entity, lookup_by_player_key, ambiguous_player_keys, year_cols),
     )
 

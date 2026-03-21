@@ -51,23 +51,27 @@ class CommonDynastyRotoSettings:
     ip_max: Optional[float] = None
 
     # Monte Carlo settings for SGP denominators
-    sims_for_sgp: int = 200
+    sims_for_sgp: int = 300
     replacement_pitchers_n: int = 100
 
     # Dynasty parameters
     discount: float = 0.94
-    horizon_years: int = 10
+    horizon_years: int = 20
     # If True, compute replacement baselines from start_year once and reuse
     # for all future valuation years. This avoids late-horizon value inflation
     # caused by an increasingly thin projected replacement pool.
     freeze_replacement_baselines: bool = True
     # Optional blend between frozen and in-year replacement baselines.
-    enable_replacement_blend: bool = False
-    replacement_blend_alpha: float = 0.70
+    enable_replacement_blend: bool = True
+    replacement_blend_alpha: float = 0.40
+    # Internal replacement-pool depth calibration for broad shared slots.
+    replacement_depth_mode: str = "blended_depth"
+    replacement_depth_blend_alpha: float = 0.33
+    replacement_depth_blend_alpha_by_slot: Dict[str, float] = field(default_factory=dict)
 
-    # Two-way players: "max" = choose best of hitter/pitcher per year
-    # (Most leagues effectively work like this for valuation purposes)
-    two_way: str = "max"
+    # Two-way players: "sum" = credit both hitter and pitcher value together.
+    # Use "max" for leagues that effectively value only the player's best side.
+    two_way: str = "sum"
 
     # Active roto categories (common mode defaults to standard 5x5).
     hitter_categories: tuple[str, ...] = tuple(HIT_CATS)
@@ -81,7 +85,7 @@ class CommonDynastyRotoSettings:
     # Optional predictive modifiers.
     enable_playing_time_reliability: bool = False
     enable_age_risk_adjustment: bool = False
-    enable_prospect_risk_adjustment: bool = False
+    enable_prospect_risk_adjustment: bool = True
     enable_bench_stash_relief: bool = False
     bench_negative_penalty: float = 0.55
     enable_ir_stash_relief: bool = False

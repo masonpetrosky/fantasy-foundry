@@ -62,6 +62,9 @@ from backend.core.calculator_helpers import (
     default_calculation_cache_params as core_default_calculation_cache_params,
 )
 from backend.core.calculator_helpers import (
+    default_dynasty_methodology_fingerprint as core_default_dynasty_methodology_fingerprint,
+)
+from backend.core.calculator_helpers import (
     is_user_fixable_calculation_error as core_is_user_fixable_calculation_error,
 )
 from backend.core.calculator_helpers import (
@@ -507,6 +510,8 @@ class DynastyLookupCacheInspection:
     status: Literal["ready", "missing", "stale", "invalid", "disabled"]
     expected_version: str
     found_version: str | None = None
+    expected_methodology_fingerprint: str | None = None
+    found_methodology_fingerprint: str | None = None
     lookup: tuple[dict[str, dict], dict[str, dict], set[str], list[str]] | None = None
     error: str | None = None
 

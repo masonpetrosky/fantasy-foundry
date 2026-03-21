@@ -2,6 +2,7 @@
 
 from backend.services.projections.delta import (
     _aggregate_player_stats,
+    compute_projection_delta_detail_map,
     compute_projection_deltas,
     empty_delta_response,
 )
@@ -100,6 +101,22 @@ def test_delta_map_contains_composite():
     result = compute_projection_deltas(curr_bat, [], prev_bat, [])
     assert "player-a" in result["delta_map"]
     assert "composite_delta" in result["delta_map"]["player-a"]
+
+
+def test_compute_projection_delta_detail_map_keeps_stat_level_deltas_for_internal_audits():
+    curr_bat = _make_bat_rows("Player A", "Team", "OF", {
+        2026: {"HR": 30, "R": 80, "RBI": 90, "SB": 14, "AVG": 0.280, "OPS": 0.860, "AB": 500},
+    })
+    prev_bat = _make_bat_rows("Player A", "Team", "OF", {
+        2026: {"HR": 25, "R": 75, "RBI": 85, "SB": 10, "AVG": 0.270, "OPS": 0.840, "AB": 500},
+    })
+
+    detail_map = compute_projection_delta_detail_map(curr_bat, [], prev_bat, [])
+
+    assert detail_map["player-a"]["player"] == "Player A"
+    assert detail_map["player-a"]["composite_delta"] > 0
+    assert detail_map["player-a"]["deltas"]["HR"] == 5.0
+    assert detail_map["player-a"]["deltas"]["SB"] == 4.0
 
 
 def test_aggregate_player_stats_rate_weighted():

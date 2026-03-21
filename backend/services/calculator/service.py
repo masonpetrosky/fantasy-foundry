@@ -40,8 +40,8 @@ class CalculateRequest(BaseModel):
     bench_negative_penalty: float = Field(default=0.55, ge=0.0, le=1.0)
     enable_ir_stash_relief: bool = False
     ir_negative_penalty: float = Field(default=0.20, ge=0.0, le=1.0)
-    enable_replacement_blend: bool = False
-    replacement_blend_alpha: float = Field(default=0.70, ge=0.0, le=1.0)
+    enable_replacement_blend: bool = True
+    replacement_blend_alpha: float = Field(default=0.40, ge=0.0, le=1.0)
     teams: int = Field(default=12, ge=2, le=30)
     sims: int = Field(default=300, ge=1, le=5000)
     horizon: int = Field(default=20, ge=1, le=20)

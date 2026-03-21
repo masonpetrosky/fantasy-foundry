@@ -106,6 +106,16 @@ def test_dynasty_lookup_payload_version_prefers_cache_data_version() -> None:
     assert data_refresh.dynasty_lookup_payload_version({"data_version": "  "}) is None
 
 
+def test_dynasty_lookup_methodology_fingerprint_reads_optional_payload_field() -> None:
+    assert (
+        data_refresh.dynasty_lookup_methodology_fingerprint(
+            {"default_methodology_fingerprint": "abc123"}
+        )
+        == "abc123"
+    )
+    assert data_refresh.dynasty_lookup_methodology_fingerprint({}) is None
+
+
 def test_inspect_precomputed_default_dynasty_lookup_reports_disabled_for_pytest_mode(tmp_path: Path) -> None:
     result = data_refresh.inspect_precomputed_default_dynasty_lookup(
         current_data_version="v1",
@@ -175,6 +185,34 @@ def test_inspect_precomputed_default_dynasty_lookup_reports_stale_versions(tmp_p
     assert result.found_version == "old-version"
 
 
+def test_inspect_precomputed_default_dynasty_lookup_reports_stale_methodology_fingerprint(tmp_path: Path) -> None:
+    cache_path = tmp_path / "dynasty_lookup.json"
+    cache_path.write_text(
+        json.dumps(
+            {
+                "cache_data_version": "v1",
+                "default_methodology_fingerprint": "old-fingerprint",
+                "lookup_by_entity": {"entity-a": {"DynastyValue": 1.0}},
+                "lookup_by_player_key": {"player-a": {"DynastyValue": 1.0}},
+                "ambiguous_player_keys": [],
+                "year_cols": ["Value_2026"],
+            }
+        )
+    )
+
+    result = data_refresh.inspect_precomputed_default_dynasty_lookup(
+        current_data_version="v1",
+        current_methodology_fingerprint="new-fingerprint",
+        dynasty_lookup_cache_path=cache_path,
+        pytest_current_test=False,
+        value_col_sort_key=_value_col_sort_key,
+    )
+
+    assert result.status == "stale"
+    assert result.expected_methodology_fingerprint == "new-fingerprint"
+    assert result.found_methodology_fingerprint == "old-fingerprint"
+
+
 def test_inspect_precomputed_default_dynasty_lookup_requires_non_empty_lookup_maps(tmp_path: Path) -> None:
     cache_path = tmp_path / "dynasty_lookup.json"
     cache_path.write_text(json.dumps({"cache_data_version": "v1"}))
@@ -196,6 +234,7 @@ def test_inspect_precomputed_default_dynasty_lookup_returns_ready_payload(tmp_pa
         json.dumps(
             {
                 "cache_data_version": "v1",
+                "default_methodology_fingerprint": "fp-v1",
                 "lookup_by_entity": {" entity-a ": {"Value_2027": 1.2}},
                 "lookup_by_player_key": {" player-a ": {"Value_2026": 2.3}},
                 "ambiguous_player_keys": ["player-a", "", None, " player-b "],
@@ -206,6 +245,7 @@ def test_inspect_precomputed_default_dynasty_lookup_returns_ready_payload(tmp_pa
 
     result = data_refresh.inspect_precomputed_default_dynasty_lookup(
         current_data_version="v1",
+        current_methodology_fingerprint="fp-v1",
         dynasty_lookup_cache_path=cache_path,
         pytest_current_test=False,
         value_col_sort_key=_value_col_sort_key,
@@ -213,6 +253,7 @@ def test_inspect_precomputed_default_dynasty_lookup_returns_ready_payload(tmp_pa
 
     assert result.status == "ready"
     assert result.found_version == "v1"
+    assert result.found_methodology_fingerprint == "fp-v1"
     assert result.lookup is not None
     by_entity, by_player_key, ambiguous, year_cols = result.lookup
     assert set(by_entity) == {"entity-a"}

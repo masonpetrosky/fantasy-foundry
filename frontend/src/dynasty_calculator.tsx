@@ -101,8 +101,8 @@ export function buildQuickStartSettings({
     bench_negative_penalty: 0.55,
     enable_ir_stash_relief: false,
     ir_negative_penalty: 0.2,
-    enable_replacement_blend: false,
-    replacement_blend_alpha: 0.7,
+    enable_replacement_blend: true,
+    replacement_blend_alpha: 0.4,
     start_year: startYear,
     sims: 300,
   };

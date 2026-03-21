@@ -2,9 +2,30 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+import hashlib
+import json
+from typing import Any, Callable, Mapping
 
 import pandas as pd
+
+
+DEFAULT_DYNASTY_METHODOLOGY_VERSION = "2026-03-21"
+
+
+def default_dynasty_methodology_fingerprint(
+    *,
+    default_params: Mapping[str, Any],
+    methodology_version: str = DEFAULT_DYNASTY_METHODOLOGY_VERSION,
+) -> str:
+    payload = {
+        "methodology_version": str(methodology_version).strip(),
+        "default_params": {
+            str(key): default_params[key]
+            for key in sorted(default_params.keys(), key=str)
+        },
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:12]
 
 
 def coerce_bool(value: object, *, default: bool = False) -> bool:
@@ -105,6 +126,30 @@ def numeric_or_zero(value: object, *, as_float_fn: Callable[[object], float | No
     return float(parsed) if parsed is not None else 0.0
 
 
+def _round_numeric_mapping(
+    value: object,
+    *,
+    numeric_or_zero_fn: Callable[[object], float],
+    decimals: int = 4,
+) -> dict[str, float]:
+    if not isinstance(value, dict):
+        return {}
+    out: dict[str, float] = {}
+    for key, raw in value.items():
+        out[str(key)] = round(numeric_or_zero_fn(raw), decimals)
+    return out
+
+
+def _top_category_entries(category_sgp: dict[str, float], *, positive: bool, limit: int = 3) -> list[dict[str, float | str]]:
+    filtered = [
+        (str(category), float(value))
+        for category, value in category_sgp.items()
+        if (float(value) > 0.0 if positive else float(value) < 0.0)
+    ]
+    sorted_items = sorted(filtered, key=lambda item: item[1], reverse=positive)[:limit]
+    return [{"category": category, "value": round(value, 4)} for category, value in sorted_items]
+
+
 def build_calculation_explanations(
     out: pd.DataFrame,
     *,
@@ -131,14 +176,26 @@ def build_calculation_explanations(
         explain_key = entity_key or player_key
         points_by_year = row_data.get("_ExplainPointsByYear")
         points_by_year = points_by_year if isinstance(points_by_year, dict) else {}
+        roto_by_year = row_data.get("_ExplainRotoByYear")
+        roto_by_year = roto_by_year if isinstance(roto_by_year, dict) else {}
+
+        def _rounded_detail(detail: dict[str, Any], key: str, decimals: int = 4) -> float | None:
+            if key not in detail:
+                return None
+            raw_value = detail.get(key)
+            if raw_value is None:
+                return None
+            return round(numeric_or_zero_fn(raw_value), decimals)
 
         per_year: list[dict] = []
+        start_year_fields: dict[str, Any] = {}
         for idx, year_col in enumerate(year_cols):
             suffix = year_col.split("_", 1)[1] if "_" in year_col else year_col
             year_token: int | str = int(suffix) if str(suffix).isdigit() else suffix
             year_value = numeric_or_zero_fn(row_data.get(year_col))
             discount_factor = float(discount) ** idx
             discounted = year_value * discount_factor
+            roto_detail = roto_by_year.get(str(year_token)) if scoring_mode == "roto" else None
             if scoring_mode == "points":
                 points_detail = points_by_year.get(str(year_token))
                 if isinstance(points_detail, dict):
@@ -148,6 +205,13 @@ def build_calculation_explanations(
                     detail_discounted = points_detail.get("discounted_contribution")
                     if detail_discounted is not None:
                         discounted = numeric_or_zero_fn(detail_discounted)
+            elif isinstance(roto_detail, dict):
+                detail_discount_factor = roto_detail.get("discount_factor")
+                if detail_discount_factor is not None:
+                    discount_factor = numeric_or_zero_fn(detail_discount_factor)
+                detail_discounted = roto_detail.get("discounted_contribution")
+                if detail_discounted is not None:
+                    discounted = numeric_or_zero_fn(detail_discounted)
 
             year_entry: dict[str, Any] = {
                 "year": year_token,
@@ -159,6 +223,213 @@ def build_calculation_explanations(
                 points_detail = points_by_year.get(str(year_token))
                 if isinstance(points_detail, dict):
                     year_entry["points"] = points_detail
+            elif isinstance(roto_detail, dict):
+                adjusted_year_value = _rounded_detail(roto_detail, "adjusted_year_value")
+                if adjusted_year_value is not None:
+                    year_entry["adjusted_year_value_before_discount"] = adjusted_year_value
+                raw_year_value = _rounded_detail(roto_detail, "raw_year_value")
+                if raw_year_value is not None:
+                    year_entry["raw_year_value"] = raw_year_value
+                after_risk_value = _rounded_detail(roto_detail, "after_risk_value")
+                if after_risk_value is not None:
+                    year_entry["after_risk_value"] = after_risk_value
+                age_risk_multiplier = _rounded_detail(roto_detail, "age_risk_multiplier", 6)
+                if age_risk_multiplier is not None:
+                    year_entry["age_risk_multiplier"] = age_risk_multiplier
+                prospect_risk_multiplier = _rounded_detail(roto_detail, "prospect_risk_multiplier", 6)
+                if prospect_risk_multiplier is not None:
+                    year_entry["prospect_risk_multiplier"] = prospect_risk_multiplier
+                keep_drop_value = _rounded_detail(roto_detail, "keep_drop_value")
+                if keep_drop_value is not None:
+                    year_entry["keep_drop_value"] = keep_drop_value
+                keep_drop_hold_value = _rounded_detail(roto_detail, "keep_drop_hold_value")
+                if keep_drop_hold_value is not None:
+                    year_entry["keep_drop_hold_value"] = keep_drop_hold_value
+                if "keep_drop_keep" in roto_detail:
+                    year_entry["keep_drop_keep"] = bool(roto_detail.get("keep_drop_keep"))
+                for bool_key in (
+                    "minor_eligible",
+                    "near_zero_playing_time",
+                    "can_minor_stash",
+                    "can_ir_stash",
+                    "can_bench_stash",
+                    "stash_adjustment_applied",
+                ):
+                    if bool_key in roto_detail:
+                        year_entry[bool_key] = bool(roto_detail.get(bool_key))
+                projected_ab = _rounded_detail(roto_detail, "projected_ab")
+                if projected_ab is not None:
+                    year_entry["projected_ab"] = projected_ab
+                projected_ip = _rounded_detail(roto_detail, "projected_ip")
+                if projected_ip is not None:
+                    year_entry["projected_ip"] = projected_ip
+                ir_negative_penalty = _rounded_detail(roto_detail, "ir_negative_penalty", 6)
+                if ir_negative_penalty is not None:
+                    year_entry["ir_negative_penalty"] = ir_negative_penalty
+                bench_negative_penalty = _rounded_detail(roto_detail, "bench_negative_penalty", 6)
+                if bench_negative_penalty is not None:
+                    year_entry["bench_negative_penalty"] = bench_negative_penalty
+                stash_mode = str(roto_detail.get("stash_mode") or "").strip()
+                if stash_mode:
+                    year_entry["stash_mode"] = stash_mode
+                best_slot = str(roto_detail.get("best_slot") or "").strip()
+                if best_slot:
+                    year_entry["best_slot"] = best_slot
+                replacement_value_diagnostics = roto_detail.get("replacement_value_diagnostics")
+                if isinstance(replacement_value_diagnostics, dict):
+                    category_sgp = _round_numeric_mapping(
+                        replacement_value_diagnostics.get("category_sgp"),
+                        numeric_or_zero_fn=numeric_or_zero_fn,
+                    )
+                    if category_sgp:
+                        year_entry["category_sgp"] = category_sgp
+                    slot_baseline_reference = replacement_value_diagnostics.get("slot_baseline_reference")
+                    if isinstance(slot_baseline_reference, dict):
+                        year_entry["slot_baseline_reference"] = {
+                            **{
+                                key: value
+                                for key, value in slot_baseline_reference.items()
+                                if key not in {"volume", "components"}
+                            },
+                            "volume": _round_numeric_mapping(
+                                slot_baseline_reference.get("volume"),
+                                numeric_or_zero_fn=numeric_or_zero_fn,
+                            ),
+                            "components": _round_numeric_mapping(
+                                slot_baseline_reference.get("components"),
+                                numeric_or_zero_fn=numeric_or_zero_fn,
+                            ),
+                        }
+                    replacement_reference = replacement_value_diagnostics.get("replacement_reference")
+                    if isinstance(replacement_reference, dict):
+                        year_entry["replacement_reference"] = {
+                            **{
+                                key: value
+                                for key, value in replacement_reference.items()
+                                if key not in {"volume", "components"}
+                            },
+                            "volume": _round_numeric_mapping(
+                                replacement_reference.get("volume"),
+                                numeric_or_zero_fn=numeric_or_zero_fn,
+                            ),
+                            "components": _round_numeric_mapping(
+                                replacement_reference.get("components"),
+                                numeric_or_zero_fn=numeric_or_zero_fn,
+                            ),
+                        }
+                        pool_depth = replacement_reference.get("replacement_pool_depth")
+                        if pool_depth is not None:
+                            try:
+                                year_entry["replacement_pool_depth"] = int(pool_depth)
+                            except (TypeError, ValueError):
+                                pass
+                        depth_mode = str(replacement_reference.get("replacement_depth_mode") or "").strip()
+                        if depth_mode:
+                            year_entry["replacement_depth_mode"] = depth_mode
+                        depth_blend_alpha = replacement_reference.get("replacement_depth_blend_alpha")
+                        if depth_blend_alpha is not None:
+                            rounded_blend_alpha = _rounded_detail(
+                                {"value": depth_blend_alpha},
+                                "value",
+                                4,
+                            )
+                            if rounded_blend_alpha is not None:
+                                year_entry["replacement_depth_blend_alpha"] = rounded_blend_alpha
+                        slot_count_per_team = replacement_reference.get("slot_count_per_team")
+                        if slot_count_per_team is not None:
+                            try:
+                                year_entry["slot_count_per_team"] = int(slot_count_per_team)
+                            except (TypeError, ValueError):
+                                pass
+                        slot_capacity_league = replacement_reference.get("slot_capacity_league")
+                        if slot_capacity_league is not None:
+                            try:
+                                year_entry["slot_capacity_league"] = int(slot_capacity_league)
+                            except (TypeError, ValueError):
+                                pass
+                    guard_summary = replacement_value_diagnostics.get("guard")
+                    if isinstance(guard_summary, dict):
+                        year_entry["guard"] = {
+                            "mode": str(guard_summary.get("mode") or "").strip() or "none",
+                            "player_volume": _rounded_detail({"value": guard_summary.get("player_volume")}, "value"),
+                            "slot_volume_reference": _rounded_detail(
+                                {"value": guard_summary.get("slot_volume_reference")},
+                                "value",
+                            ),
+                            "workload_share": _rounded_detail(
+                                {"value": guard_summary.get("workload_share")},
+                                "value",
+                                6,
+                            ),
+                            "positive_credit_scale": _rounded_detail(
+                                {"value": guard_summary.get("positive_credit_scale")},
+                                "value",
+                                6,
+                            ),
+                            "pre_guard_category_delta": _round_numeric_mapping(
+                                guard_summary.get("pre_guard_category_delta"),
+                                numeric_or_zero_fn=numeric_or_zero_fn,
+                            ),
+                            "post_guard_category_delta": _round_numeric_mapping(
+                                guard_summary.get("post_guard_category_delta"),
+                                numeric_or_zero_fn=numeric_or_zero_fn,
+                            ),
+                        }
+                    bounds_summary = replacement_value_diagnostics.get("bounds")
+                    if isinstance(bounds_summary, dict):
+                        year_entry["bounds"] = {
+                            "applied": bool(bounds_summary.get("applied")),
+                            "base_ip_min_fill_applied": bool(bounds_summary.get("base_ip_min_fill_applied")),
+                            "base_ip_max_trim_applied": bool(bounds_summary.get("base_ip_max_trim_applied")),
+                            "player_ip_min_fill_applied": bool(bounds_summary.get("player_ip_min_fill_applied")),
+                            "player_ip_max_trim_applied": bool(bounds_summary.get("player_ip_max_trim_applied")),
+                            "base_raw_totals": _round_numeric_mapping(
+                                bounds_summary.get("base_raw_totals"),
+                                numeric_or_zero_fn=numeric_or_zero_fn,
+                            ),
+                            "base_bounded_totals": _round_numeric_mapping(
+                                bounds_summary.get("base_bounded_totals"),
+                                numeric_or_zero_fn=numeric_or_zero_fn,
+                            ),
+                            "player_raw_totals": _round_numeric_mapping(
+                                bounds_summary.get("player_raw_totals"),
+                                numeric_or_zero_fn=numeric_or_zero_fn,
+                            ),
+                            "player_bounded_totals": _round_numeric_mapping(
+                                bounds_summary.get("player_bounded_totals"),
+                                numeric_or_zero_fn=numeric_or_zero_fn,
+                            ),
+                        }
+                    if idx == 0:
+                        if best_slot:
+                            start_year_fields["start_year_best_slot"] = best_slot
+                        if category_sgp:
+                            start_year_fields["start_year_category_sgp"] = category_sgp
+                            start_year_fields["start_year_top_positive_categories"] = _top_category_entries(
+                                category_sgp,
+                                positive=True,
+                            )
+                            start_year_fields["start_year_top_negative_categories"] = _top_category_entries(
+                                category_sgp,
+                                positive=False,
+                            )
+                        if "slot_baseline_reference" in year_entry:
+                            start_year_fields["start_year_slot_baseline_reference"] = year_entry["slot_baseline_reference"]
+                        if "replacement_reference" in year_entry:
+                            start_year_fields["start_year_replacement_reference"] = year_entry["replacement_reference"]
+                        for field_name in (
+                            "replacement_pool_depth",
+                            "replacement_depth_mode",
+                            "replacement_depth_blend_alpha",
+                            "slot_count_per_team",
+                            "slot_capacity_league",
+                        ):
+                            if field_name in year_entry:
+                                start_year_fields[f"start_year_{field_name}"] = year_entry[field_name]
+                        if "guard" in year_entry:
+                            start_year_fields["start_year_guard_summary"] = year_entry["guard"]
+                        if "bounds" in year_entry:
+                            start_year_fields["start_year_bounds_summary"] = year_entry["bounds"]
             per_year.append(year_entry)
 
         explanation_entry: dict[str, Any] = {
@@ -170,6 +441,22 @@ def build_calculation_explanations(
             "raw_dynasty_value": round(numeric_or_zero_fn(row_data.get("RawDynastyValue")), 4),
             "per_year": per_year,
         }
+        profile = str(row_data.get("_ExplainPlayerProfile") or "").strip()
+        if profile:
+            explanation_entry["profile"] = profile
+        current_year_volume = row_data.get("_ExplainCurrentYearVolume")
+        if isinstance(current_year_volume, dict):
+            explanation_entry["current_year_volume"] = {
+                "ab": round(numeric_or_zero_fn(current_year_volume.get("ab")), 4),
+                "ip": round(numeric_or_zero_fn(current_year_volume.get("ip")), 4),
+            }
+        risk_flags = row_data.get("_ExplainRiskFlags")
+        if isinstance(risk_flags, dict):
+            explanation_entry["risk_flags"] = {
+                str(key): bool(value)
+                for key, value in risk_flags.items()
+                if str(key).strip()
+            }
         centering_fields_present = any(
             key in row_data
             for key in (
@@ -221,6 +508,7 @@ def build_calculation_explanations(
             }
             if stat_dynasty:
                 explanation_entry["stat_dynasty_contributions"] = stat_dynasty
+        explanation_entry.update(start_year_fields)
         explanations[explain_key] = explanation_entry
 
     return explanations
@@ -308,8 +596,10 @@ def default_calculation_cache_params(
         "bench_negative_penalty": 0.55,
         "enable_ir_stash_relief": False,
         "ir_negative_penalty": 0.20,
-        "enable_replacement_blend": False,
-        "replacement_blend_alpha": 0.70,
+        "enable_replacement_blend": True,
+        "replacement_blend_alpha": 0.40,
+        "replacement_depth_mode": "blended_depth",
+        "replacement_depth_blend_alpha": 0.33,
     }
     params.update(roto_category_field_defaults)
     return params

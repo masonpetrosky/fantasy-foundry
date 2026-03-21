@@ -8,7 +8,7 @@ import pytest
 
 from backend.valuation import common_math
 from backend.valuation import replacement as replacement_math
-from backend.valuation.models import PIT_COMPONENT_COLS, CommonDynastyRotoSettings
+from backend.valuation.models import HIT_COMPONENT_COLS, PIT_COMPONENT_COLS, CommonDynastyRotoSettings
 
 pytestmark = pytest.mark.valuation
 
@@ -409,6 +409,221 @@ def test_compute_replacement_baselines_falls_back_when_unrostered_pool_is_empty(
     assert math.isclose(float(repl_pit.loc["P", "IP"]), float(ctx["baseline_pit"].loc["P", "IP"]))
 
 
+def test_compute_replacement_baselines_can_use_depth_aware_of_and_p_pools() -> None:
+    def _hit_row(player: str, pos: str, *, ab: float, r: float) -> dict[str, float | str]:
+        row: dict[str, float | str] = {col: 0.0 for col in HIT_COMPONENT_COLS}
+        row.update({"Player": player, "Pos": pos, "AB": ab, "H": ab * 0.28, "R": r})
+        return row
+
+    def _pit_row(player: str, pos: str, *, ip: float, w: float) -> dict[str, float | str]:
+        row: dict[str, float | str] = {col: 0.0 for col in PIT_COMPONENT_COLS}
+        row.update({"Player": player, "Pos": pos, "IP": ip, "W": w})
+        return row
+
+    ctx = {
+        "bat_y": pd.DataFrame(
+            [
+                _hit_row(f"OF {idx}", "OF", ab=500.0 - idx, r=100.0 - idx * 5.0)
+                for idx in range(8)
+            ]
+            + [
+                _hit_row("C 1", "C", ab=430.0, r=55.0),
+                _hit_row("C 2", "C", ab=410.0, r=45.0),
+            ]
+        ),
+        "pit_y": pd.DataFrame(
+            [
+                _pit_row(f"P {idx}", "SP", ip=175.0 - idx * 3.0, w=14.0 - idx)
+                for idx in range(7)
+            ]
+        ),
+        "baseline_hit": pd.DataFrame(
+            [
+                {"AssignedSlot": "OF", **{col: 0.0 for col in HIT_COMPONENT_COLS}},
+                {"AssignedSlot": "C", **{col: 0.0 for col in HIT_COMPONENT_COLS}},
+            ]
+        ).set_index("AssignedSlot"),
+        "baseline_pit": pd.DataFrame(
+            [
+                {"AssignedSlot": "P", **{col: 0.0 for col in PIT_COMPONENT_COLS}},
+            ]
+        ).set_index("AssignedSlot"),
+        "hit_categories": ["R"],
+        "pit_categories": ["W"],
+    }
+
+    flat_lg = CommonDynastyRotoSettings(
+        n_teams=2,
+        hitter_slots={"OF": 5, "C": 1},
+        pitcher_slots={"P": 4},
+        replacement_depth_mode="flat",
+    )
+    full_lg = CommonDynastyRotoSettings(
+        n_teams=2,
+        hitter_slots={"OF": 5, "C": 1},
+        pitcher_slots={"P": 4},
+        replacement_depth_mode="full_depth",
+    )
+
+    flat_hit, flat_pit = common_math.compute_replacement_baselines(ctx, flat_lg, rostered_players=set(), n_repl=2)
+    full_hit, full_pit = common_math.compute_replacement_baselines(ctx, full_lg, rostered_players=set(), n_repl=2)
+
+    assert int(flat_hit.loc["OF", "ReplacementPoolDepth"]) == 2
+    assert int(full_hit.loc["OF", "ReplacementPoolDepth"]) == 8
+    assert str(full_hit.loc["OF", "ReplacementDepthMode"]) == "full_depth"
+    assert int(full_hit.loc["OF", "SlotCountPerTeam"]) == 5
+    assert int(full_hit.loc["OF", "SlotCapacityLeague"]) == 10
+    assert float(full_hit.loc["OF", "R"]) < float(flat_hit.loc["OF", "R"])
+
+    assert int(flat_pit.loc["P", "ReplacementPoolDepth"]) == 2
+    assert int(full_pit.loc["P", "ReplacementPoolDepth"]) == 7
+    assert str(full_pit.loc["P", "ReplacementDepthMode"]) == "full_depth"
+    assert int(full_pit.loc["P", "SlotCountPerTeam"]) == 4
+    assert int(full_pit.loc["P", "SlotCapacityLeague"]) == 8
+    assert float(full_pit.loc["P", "W"]) < float(flat_pit.loc["P", "W"])
+
+    assert int(full_hit.loc["C", "ReplacementPoolDepth"]) == 2
+    assert str(full_hit.loc["C", "ReplacementDepthMode"]) == "flat"
+
+
+def test_compute_replacement_baselines_blended_depth_uses_internal_alpha() -> None:
+    def _hit_row(player: str, pos: str, *, ab: float, r: float) -> dict[str, float | str]:
+        row: dict[str, float | str] = {col: 0.0 for col in HIT_COMPONENT_COLS}
+        row.update({"Player": player, "Pos": pos, "AB": ab, "H": ab * 0.28, "R": r})
+        return row
+
+    ctx = {
+        "bat_y": pd.DataFrame(
+            [_hit_row(f"OF {idx}", "OF", ab=500.0 - idx * 10.0, r=100.0 - idx * 10.0) for idx in range(10)]
+        ),
+        "pit_y": pd.DataFrame(
+            [
+                {
+                    "Player": "Dummy Pitcher",
+                    "Pos": "SP",
+                    **{col: 0.0 for col in PIT_COMPONENT_COLS},
+                }
+            ]
+        ),
+        "baseline_hit": pd.DataFrame(
+            [{"AssignedSlot": "OF", **{col: 0.0 for col in HIT_COMPONENT_COLS}}]
+        ).set_index("AssignedSlot"),
+        "baseline_pit": pd.DataFrame(
+            [{"AssignedSlot": "P", **{col: 0.0 for col in PIT_COMPONENT_COLS}}]
+        ).set_index("AssignedSlot"),
+        "hit_categories": ["R"],
+        "pit_categories": ["W"],
+    }
+
+    flat_lg = CommonDynastyRotoSettings(
+        n_teams=2,
+        hitter_slots={"OF": 5},
+        pitcher_slots={"P": 1},
+        replacement_depth_mode="flat",
+    )
+    blended_lg = CommonDynastyRotoSettings(
+        n_teams=2,
+        hitter_slots={"OF": 5},
+        pitcher_slots={"P": 1},
+        replacement_depth_mode="blended_depth",
+        replacement_depth_blend_alpha=0.25,
+    )
+    full_lg = CommonDynastyRotoSettings(
+        n_teams=2,
+        hitter_slots={"OF": 5},
+        pitcher_slots={"P": 1},
+        replacement_depth_mode="full_depth",
+    )
+
+    flat_hit, _ = common_math.compute_replacement_baselines(ctx, flat_lg, rostered_players=set(), n_repl=2)
+    blended_hit, _ = common_math.compute_replacement_baselines(ctx, blended_lg, rostered_players=set(), n_repl=2)
+    full_hit, _ = common_math.compute_replacement_baselines(ctx, full_lg, rostered_players=set(), n_repl=2)
+
+    assert str(blended_hit.loc["OF", "ReplacementDepthMode"]) == "blended_depth"
+    assert math.isclose(float(blended_hit.loc["OF", "ReplacementDepthBlendAlpha"]), 0.25)
+    assert int(blended_hit.loc["OF", "ReplacementPoolDepth"]) == 4
+    assert float(flat_hit.loc["OF", "R"]) > float(blended_hit.loc["OF", "R"]) > float(full_hit.loc["OF", "R"])
+
+
+def _depth_aware_replacement_context() -> dict[str, pd.DataFrame | list[str]]:
+    def _hit_row(player: str, pos: str, *, ab: float, r: float) -> dict[str, float | str]:
+        row: dict[str, float | str] = {col: 0.0 for col in HIT_COMPONENT_COLS}
+        row.update({"Player": player, "Pos": pos, "AB": ab, "H": ab * 0.28, "R": r})
+        return row
+
+    def _pit_row(player: str, pos: str, *, ip: float, k: float) -> dict[str, float | str]:
+        row: dict[str, float | str] = {col: 0.0 for col in PIT_COMPONENT_COLS}
+        row.update({"Player": player, "Pos": pos, "IP": ip, "K": k})
+        return row
+
+    return {
+        "bat_y": pd.DataFrame(
+            [_hit_row(f"OF {idx}", "OF", ab=500.0 - idx * 10.0, r=100.0 - idx * 10.0) for idx in range(10)]
+        ),
+        "pit_y": pd.DataFrame(
+            [_pit_row(f"SP {idx}", "SP", ip=180.0 - idx * 5.0, k=210.0 - idx * 8.0) for idx in range(10)]
+        ),
+        "baseline_hit": pd.DataFrame(
+            [{"AssignedSlot": "OF", **{col: 0.0 for col in HIT_COMPONENT_COLS}}]
+        ).set_index("AssignedSlot"),
+        "baseline_pit": pd.DataFrame(
+            [{"AssignedSlot": "P", **{col: 0.0 for col in PIT_COMPONENT_COLS}}]
+        ).set_index("AssignedSlot"),
+        "hit_categories": ["R"],
+        "pit_categories": ["K"],
+    }
+
+
+def test_compute_replacement_baselines_blended_depth_without_slot_override_preserves_shared_alpha() -> None:
+    ctx = _depth_aware_replacement_context()
+    lg = CommonDynastyRotoSettings(
+        n_teams=2,
+        hitter_slots={"OF": 5},
+        pitcher_slots={"P": 4},
+        replacement_depth_mode="blended_depth",
+        replacement_depth_blend_alpha=0.33,
+    )
+
+    repl_hit, repl_pit = common_math.compute_replacement_baselines(ctx, lg, rostered_players=set(), n_repl=2)
+
+    assert math.isclose(float(repl_hit.loc["OF", "ReplacementDepthBlendAlpha"]), 0.33)
+    assert math.isclose(float(repl_pit.loc["P", "ReplacementDepthBlendAlpha"]), 0.33)
+
+
+def test_compute_replacement_baselines_blended_depth_of_override_changes_only_of() -> None:
+    ctx = _depth_aware_replacement_context()
+    lg = CommonDynastyRotoSettings(
+        n_teams=2,
+        hitter_slots={"OF": 5},
+        pitcher_slots={"P": 4},
+        replacement_depth_mode="blended_depth",
+        replacement_depth_blend_alpha=0.33,
+        replacement_depth_blend_alpha_by_slot={"OF": 0.20},
+    )
+
+    repl_hit, repl_pit = common_math.compute_replacement_baselines(ctx, lg, rostered_players=set(), n_repl=2)
+
+    assert math.isclose(float(repl_hit.loc["OF", "ReplacementDepthBlendAlpha"]), 0.20)
+    assert math.isclose(float(repl_pit.loc["P", "ReplacementDepthBlendAlpha"]), 0.33)
+
+
+def test_compute_replacement_baselines_blended_depth_p_override_changes_only_generic_p() -> None:
+    ctx = _depth_aware_replacement_context()
+    lg = CommonDynastyRotoSettings(
+        n_teams=2,
+        hitter_slots={"OF": 5},
+        pitcher_slots={"P": 4},
+        replacement_depth_mode="blended_depth",
+        replacement_depth_blend_alpha=0.33,
+        replacement_depth_blend_alpha_by_slot={"P": 0.25},
+    )
+
+    repl_hit, repl_pit = common_math.compute_replacement_baselines(ctx, lg, rostered_players=set(), n_repl=2)
+
+    assert math.isclose(float(repl_hit.loc["OF", "ReplacementDepthBlendAlpha"]), 0.33)
+    assert math.isclose(float(repl_pit.loc["P", "ReplacementDepthBlendAlpha"]), 0.25)
+
+
 def test_compute_year_player_values_applies_hitter_reliability_guard_once(monkeypatch) -> None:
     bat, pit = _sample_common_frames()
     lg = CommonDynastyRotoSettings(
@@ -681,6 +896,39 @@ def test_compute_year_player_values_vs_replacement_returns_sgp_columns() -> None
         assert math.isclose(sgp_sum, float(row["YearValue"]), abs_tol=1e-10)
 
 
+def test_compute_year_player_values_vs_replacement_includes_replacement_diagnostics() -> None:
+    bat, pit = _sample_common_frames()
+    lg = CommonDynastyRotoSettings(
+        n_teams=1,
+        sims_for_sgp=2,
+        hitter_slots={"UT": 1},
+        pitcher_slots={"P": 1},
+        bench_slots=0,
+        minor_slots=0,
+        ir_slots=0,
+        ip_min=0.0,
+        ip_max=180.0,
+    )
+    ctx = common_math.compute_year_context(2026, bat, pit, lg, rng_seed=11)
+    repl_hit, repl_pit = common_math.compute_replacement_baselines(ctx, lg, rostered_players={"Nobody"}, n_repl=1)
+    hit_vals, pit_vals = common_math.compute_year_player_values_vs_replacement(ctx, lg, repl_hit, repl_pit)
+
+    hit_diag = hit_vals.iloc[0]["ReplacementDiagnostics"]
+    assert hit_diag["side"] == "hit"
+    assert isinstance(hit_diag["best_slot"], str)
+    assert isinstance(hit_diag["category_sgp"], dict)
+    assert "slot_baseline_reference" in hit_diag
+    assert "replacement_reference" in hit_diag
+    assert "guard" in hit_diag
+
+    pit_diag = pit_vals.iloc[0]["ReplacementDiagnostics"]
+    assert pit_diag["side"] == "pit"
+    assert isinstance(pit_diag["best_slot"], str)
+    assert isinstance(pit_diag["category_sgp"], dict)
+    assert "bounds" in pit_diag
+    assert "player_raw_totals" in pit_diag["bounds"]
+
+
 def test_combine_two_way_preserves_sgp_columns() -> None:
     hit_vals = pd.DataFrame([
         {"Player": "TwoWay", "Year": 2026, "YearValue": 5.0, "BestSlot": "UT", "Team": "AAA", "Age": 25, "Pos": "1B", "SGP_R": 2.0, "SGP_HR": 3.0},
@@ -714,6 +962,46 @@ def test_combine_two_way_preserves_sgp_columns() -> None:
     assert math.isclose(float(oh["SGP_R"]), 1.5)
     op = max_mode[max_mode["Player"] == "OnlyPit"].iloc[0]
     assert math.isclose(float(op["SGP_W"]), 2.5)
+
+
+def test_combine_two_way_preserves_replacement_diagnostics() -> None:
+    hit_vals = pd.DataFrame([
+        {
+            "Player": "TwoWay",
+            "Year": 2026,
+            "YearValue": 5.0,
+            "BestSlot": "UT",
+            "Team": "AAA",
+            "Age": 25,
+            "Pos": "1B",
+            "ReplacementDiagnostics": {"side": "hit", "best_slot": "UT", "category_sgp": {"R": 2.0}},
+        },
+    ])
+    pit_vals = pd.DataFrame([
+        {
+            "Player": "TwoWay",
+            "Year": 2026,
+            "YearValue": 6.0,
+            "BestSlot": "P",
+            "Team": "AAA",
+            "Age": 25,
+            "Pos": "SP",
+            "ReplacementDiagnostics": {"side": "pit", "best_slot": "P", "category_sgp": {"W": 4.0}},
+        },
+    ])
+
+    sum_mode = common_math.combine_two_way(hit_vals, pit_vals, two_way="sum")
+    sum_diag = sum_mode.iloc[0]["ReplacementDiagnostics"]
+    assert sum_diag["two_way_mode"] == "sum"
+    assert sum_diag["best_slot"] == "UT+P"
+    assert math.isclose(float(sum_diag["category_sgp"]["R"]), 2.0)
+    assert math.isclose(float(sum_diag["category_sgp"]["W"]), 4.0)
+
+    max_mode = common_math.combine_two_way(hit_vals, pit_vals, two_way="max")
+    max_diag = max_mode.iloc[0]["ReplacementDiagnostics"]
+    assert max_diag["two_way_mode"] == "max"
+    assert max_diag["selected_side"] == "pit"
+    assert max_diag["best_slot"] == "P"
 
 
 def test_build_calculation_explanations_includes_stat_dynasty_contributions() -> None:
@@ -819,6 +1107,111 @@ def test_build_calculation_explanations_include_centering_metadata() -> None:
     assert math.isclose(ex["centering"]["baseline_value"], -2.0)
     assert math.isclose(ex["centering"]["raw_baseline_value"], 0.0)
     assert math.isclose(ex["centering"]["forced_roster_value"], -0.2)
+
+
+def test_build_calculation_explanations_include_roto_adjustment_diagnostics() -> None:
+    from backend.core.calculator_helpers import build_calculation_explanations
+
+    out = pd.DataFrame([{
+        "Player": "Corbin Carroll",
+        "PlayerKey": "corbin-carroll",
+        "EntityKey": "corbin-carroll",
+        "Team": "ARI",
+        "Pos": "OF",
+        "DynastyValue": 4.0,
+        "RawDynastyValue": 4.0,
+        "Value_2026": 5.0,
+        "_ExplainPlayerProfile": "hitter",
+        "_ExplainCurrentYearVolume": {"ab": 510.0, "ip": 0.0},
+        "_ExplainRiskFlags": {
+            "playing_time_reliability_enabled": False,
+            "age_risk_enabled": False,
+            "prospect_risk_enabled": True,
+        },
+        "_ExplainRotoByYear": {
+            "2026": {
+                "raw_year_value": 5.0,
+                "adjusted_year_value": 4.0,
+                "after_risk_value": 4.0,
+                "age_risk_multiplier": 1.0,
+                "prospect_risk_multiplier": 0.8,
+                "minor_eligible": True,
+                "near_zero_playing_time": False,
+                "can_minor_stash": False,
+                "can_ir_stash": False,
+                "can_bench_stash": False,
+                "stash_adjustment_applied": False,
+                "projected_ab": 510.0,
+                "projected_ip": 0.0,
+                "discount_factor": 1.0,
+                "discounted_contribution": 4.0,
+                "keep_drop_value": 4.0,
+                "keep_drop_hold_value": 4.0,
+                "keep_drop_keep": True,
+                "best_slot": "OF",
+                "replacement_value_diagnostics": {
+                    "best_slot": "OF",
+                    "category_sgp": {"R": 1.5, "SB": 1.0, "AVG": -0.25},
+                    "slot_baseline_reference": {
+                        "slot": "OF",
+                        "volume": {"ab": 600.0, "ip": 0.0},
+                        "components": {"AB": 600.0, "H": 160.0},
+                    },
+                    "replacement_reference": {
+                        "slot": "OF",
+                        "replacement_pool_depth": 36,
+                        "replacement_depth_mode": "blended_depth",
+                        "slot_count_per_team": 5,
+                        "slot_capacity_league": 60,
+                        "volume": {"ab": 520.0, "ip": 0.0},
+                        "components": {"AB": 520.0, "H": 132.0},
+                    },
+                    "guard": {
+                        "mode": "none",
+                        "player_volume": 510.0,
+                        "slot_volume_reference": 600.0,
+                        "workload_share": 0.85,
+                        "positive_credit_scale": 1.0,
+                        "pre_guard_category_delta": {"R": 1.5, "SB": 1.0, "AVG": -0.25},
+                        "post_guard_category_delta": {"R": 1.5, "SB": 1.0, "AVG": -0.25},
+                    },
+                },
+            },
+        },
+    }])
+
+    explanations = build_calculation_explanations(
+        out,
+        settings={"scoring_mode": "roto", "discount": 0.94},
+        player_key_col="PlayerKey",
+        player_entity_key_col="EntityKey",
+        normalize_player_key_fn=lambda x: str(x).lower().replace(" ", "-"),
+        numeric_or_zero_fn=lambda v: float(v) if v is not None and not pd.isna(v) else 0.0,
+        value_col_sort_key_fn=lambda col: (0, int(col.split("_")[1]) if "_" in col else 0),
+    )
+
+    ex = explanations["corbin-carroll"]
+    assert ex["profile"] == "hitter"
+    assert math.isclose(ex["current_year_volume"]["ab"], 510.0)
+    assert ex["risk_flags"]["prospect_risk_enabled"] is True
+    year = ex["per_year"][0]
+    assert math.isclose(year["raw_year_value"], 5.0)
+    assert math.isclose(year["adjusted_year_value_before_discount"], 4.0)
+    assert math.isclose(year["prospect_risk_multiplier"], 0.8)
+    assert math.isclose(year["discounted_contribution"], 4.0)
+    assert year["keep_drop_keep"] is True
+    assert year["minor_eligible"] is True
+    assert year["best_slot"] == "OF"
+    assert math.isclose(year["category_sgp"]["R"], 1.5)
+    assert ex["start_year_best_slot"] == "OF"
+    assert ex["start_year_top_positive_categories"][0]["category"] == "R"
+    assert ex["start_year_top_negative_categories"][0]["category"] == "AVG"
+    assert math.isclose(ex["start_year_guard_summary"]["workload_share"], 0.85)
+    assert ex["start_year_replacement_pool_depth"] == 36
+    assert ex["start_year_replacement_depth_mode"] == "blended_depth"
+    assert ex["start_year_slot_count_per_team"] == 5
+    assert ex["start_year_slot_capacity_league"] == 60
+    assert ex["start_year_replacement_reference"]["replacement_pool_depth"] == 36
 
 
 def test_build_calculation_explanations_include_residual_minor_slot_metadata() -> None:

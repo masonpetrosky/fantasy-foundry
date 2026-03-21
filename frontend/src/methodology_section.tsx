@@ -77,6 +77,7 @@ export function MethodologySection(): React.ReactElement {
           <li>
             Optional predictive controls (advanced settings) can switch SGP denominators to robust winsorized gaps,
             apply playing-time reliability scaling, age-risk adjustment, and blended replacement baselines.
+            The shipped default also uses an internal softened depth blend for broad shared slots like <code>OF</code> and <code>P</code>.
           </li>
         </ul>
         <p><strong>Points mode math:</strong></p>
@@ -125,7 +126,12 @@ export function MethodologySection(): React.ReactElement {
           Final values come directly from the valuation pipeline after projection averaging and league settings.
           Use the <strong>Dynasty Calculator</strong> section in Projections to run your exact league settings.
           {" "}
-          Site baseline rankings default to 12-team 5x5 roto with 22 starters, 6 bench, 0 MiLB, and 0 IL.
+          Site baseline rankings default to 12-team 5x5 roto with 22 starters, 6 bench, 0 MiLB, 0 IL, a 20-year horizon,
+          <code>two_way=sum</code>, prospect risk adjustment enabled, replacement blending on at <code>alpha=0.40</code>,
+          and an internal OF/P replacement-depth blend at <code>alpha=0.33</code>.
+          The default list is model-derived and
+          benchmark-reviewed against external consensus to surface missing assumptions, but consensus is not used
+          directly as a ranking input.
         </p>
       </article>
 

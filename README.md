@@ -532,7 +532,7 @@ Identity fields are included end-to-end:
 - **Replacement level**: The expected production from the best readily available unrostered players at each slot.
 - **Monte Carlo simulation**: Repeated randomized league outcomes used to estimate SGP/stat denominators and stabilize valuation.
 - **Roto mode**: Category-based valuation (e.g., AVG/HR/RBI for hitters; ERA/WHIP/K for pitchers).
-- **Points mode**: Rules-based deterministic valuation where each event is weighted by custom points settings (no Monte Carlo or IP min/max constraints).
+- **Points mode**: Rules-based deterministic valuation where each event is weighted by custom points settings (no Monte Carlo; `ip_max` can still cap pitcher value while `ip_min` is unused).
 - **IP cap**: Maximum innings for pitching value calculations; extra innings above the cap do not add value.
 - **PlayerKey**: Normalized player identifier derived from name (can collide for same-name players).
 - **PlayerEntityKey**: Disambiguated player identifier (used to separate same-name players by context such as team).

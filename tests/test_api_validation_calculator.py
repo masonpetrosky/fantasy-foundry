@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
 import backend.app as app_module
+from backend.valuation.models import CommonDynastyRotoSettings
 
 pytestmark = pytest.mark.integration
 
@@ -120,7 +121,31 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(req.bench_negative_penalty, 0.55)
         self.assertFalse(req.enable_ir_stash_relief)
         self.assertEqual(req.ir_negative_penalty, 0.20)
-        self.assertFalse(req.enable_replacement_blend)
+        self.assertTrue(req.enable_replacement_blend)
+        self.assertEqual(req.replacement_blend_alpha, 0.40)
+
+    def test_runtime_and_model_default_settings_stay_aligned(self) -> None:
+        req = app_module.CalculateRequest()
+        cache_params = app_module._default_calculation_cache_params()
+        model_defaults = CommonDynastyRotoSettings()
+
+        self.assertEqual(req.sims, cache_params["sims"])
+        self.assertEqual(req.sims, model_defaults.sims_for_sgp)
+        self.assertEqual(req.horizon, cache_params["horizon"])
+        self.assertEqual(req.horizon, model_defaults.horizon_years)
+        self.assertEqual(req.two_way, cache_params["two_way"])
+        self.assertEqual(req.two_way, model_defaults.two_way)
+        self.assertEqual(req.enable_prospect_risk_adjustment, cache_params["enable_prospect_risk_adjustment"])
+        self.assertEqual(req.enable_prospect_risk_adjustment, model_defaults.enable_prospect_risk_adjustment)
+        self.assertEqual(req.enable_replacement_blend, cache_params["enable_replacement_blend"])
+        self.assertEqual(req.enable_replacement_blend, model_defaults.enable_replacement_blend)
+        self.assertEqual(req.replacement_blend_alpha, cache_params["replacement_blend_alpha"])
+        self.assertEqual(req.replacement_blend_alpha, model_defaults.replacement_blend_alpha)
+        self.assertEqual(cache_params["replacement_depth_mode"], model_defaults.replacement_depth_mode)
+        self.assertEqual(
+            cache_params["replacement_depth_blend_alpha"],
+            model_defaults.replacement_depth_blend_alpha,
+        )
 
     def test_mode_must_be_common_or_league(self) -> None:
         response = self.client.post("/api/calculate", json={"mode": "invalid"})
@@ -401,6 +426,37 @@ class CalculatorValidationTests(unittest.TestCase):
                     "RawDynastyValue": 6.0,
                     "minor_eligible": False,
                     "Value_2026": 5.0,
+                    "_ExplainPlayerProfile": "hitter",
+                    "_ExplainCurrentYearVolume": {"ab": 540.0, "ip": 0.0},
+                    "_ExplainRotoByYear": {
+                        "2026": {
+                            "raw_year_value": 5.0,
+                            "adjusted_year_value": 5.0,
+                            "best_slot": "OF",
+                            "replacement_value_diagnostics": {
+                                "best_slot": "OF",
+                                "category_sgp": {"R": 1.2, "SB": 0.8},
+                                "replacement_reference": {
+                                    "slot": "OF",
+                                    "replacement_pool_depth": 36,
+                                    "replacement_depth_mode": "blended_depth",
+                                    "slot_count_per_team": 5,
+                                    "slot_capacity_league": 60,
+                                    "volume": {"ab": 422.6, "ip": 0.0},
+                                    "components": {"AB": 422.6, "H": 118.0},
+                                },
+                                "guard": {
+                                    "mode": "none",
+                                    "player_volume": 540.0,
+                                    "slot_volume_reference": 600.0,
+                                    "workload_share": 0.9,
+                                    "positive_credit_scale": 1.0,
+                                    "pre_guard_category_delta": {"R": 1.2, "SB": 0.8},
+                                    "post_guard_category_delta": {"R": 1.2, "SB": 0.8},
+                                },
+                            },
+                        }
+                    },
                 }
             ]
         )
@@ -539,6 +595,37 @@ class CalculatorValidationTests(unittest.TestCase):
                     "RawDynastyValue": 6.0,
                     "minor_eligible": False,
                     "Value_2026": 5.0,
+                    "_ExplainPlayerProfile": "hitter",
+                    "_ExplainCurrentYearVolume": {"ab": 540.0, "ip": 0.0},
+                    "_ExplainRotoByYear": {
+                        "2026": {
+                            "raw_year_value": 5.0,
+                            "adjusted_year_value": 5.0,
+                            "best_slot": "OF",
+                            "replacement_value_diagnostics": {
+                                "best_slot": "OF",
+                                "category_sgp": {"R": 1.2, "SB": 0.8},
+                                "replacement_reference": {
+                                    "slot": "OF",
+                                    "replacement_pool_depth": 36,
+                                    "replacement_depth_mode": "blended_depth",
+                                    "slot_count_per_team": 5,
+                                    "slot_capacity_league": 60,
+                                    "volume": {"ab": 422.6, "ip": 0.0},
+                                    "components": {"AB": 422.6, "H": 118.0},
+                                },
+                                "guard": {
+                                    "mode": "none",
+                                    "player_volume": 540.0,
+                                    "slot_volume_reference": 600.0,
+                                    "workload_share": 0.9,
+                                    "positive_credit_scale": 1.0,
+                                    "pre_guard_category_delta": {"R": 1.2, "SB": 0.8},
+                                    "post_guard_category_delta": {"R": 1.2, "SB": 0.8},
+                                },
+                            },
+                        }
+                    },
                 }
             ]
         )
@@ -906,6 +993,37 @@ class CalculatorValidationTests(unittest.TestCase):
                     "RawDynastyValue": 6.0,
                     "minor_eligible": False,
                     "Value_2026": 5.0,
+                    "_ExplainPlayerProfile": "hitter",
+                    "_ExplainCurrentYearVolume": {"ab": 540.0, "ip": 0.0},
+                    "_ExplainRotoByYear": {
+                        "2026": {
+                            "raw_year_value": 5.0,
+                            "adjusted_year_value": 5.0,
+                            "best_slot": "OF",
+                            "replacement_value_diagnostics": {
+                                "best_slot": "OF",
+                                "category_sgp": {"R": 1.2, "SB": 0.8},
+                                "replacement_reference": {
+                                    "slot": "OF",
+                                    "replacement_pool_depth": 36,
+                                    "replacement_depth_mode": "blended_depth",
+                                    "slot_count_per_team": 5,
+                                    "slot_capacity_league": 60,
+                                    "volume": {"ab": 422.6, "ip": 0.0},
+                                    "components": {"AB": 422.6, "H": 118.0},
+                                },
+                                "guard": {
+                                    "mode": "none",
+                                    "player_volume": 540.0,
+                                    "slot_volume_reference": 600.0,
+                                    "workload_share": 0.9,
+                                    "positive_credit_scale": 1.0,
+                                    "pre_guard_category_delta": {"R": 1.2, "SB": 0.8},
+                                    "post_guard_category_delta": {"R": 1.2, "SB": 0.8},
+                                },
+                            },
+                        }
+                    },
                 }
             ]
         )
@@ -943,6 +1061,9 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(explanation["player"], "Jane Roe")
         self.assertEqual(explanation["mode"], "roto")
         self.assertEqual(explanation["per_year"][0]["year"], 2026)
+        self.assertEqual(explanation["start_year_best_slot"], "OF")
+        self.assertEqual(explanation["start_year_replacement_pool_depth"], 36)
+        self.assertEqual(explanation["start_year_replacement_depth_mode"], "blended_depth")
 
     def test_projection_export_csv_endpoint(self) -> None:
         sample_rows = [{"Player": "Jane Roe", "Team": "SEA", "Year": 2026, "Pos": "OF"}]

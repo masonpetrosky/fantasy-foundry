@@ -426,11 +426,13 @@ def _build_dynasty_lookup_cache() -> tuple[int, int]:
     finally:
         setattr(backend_app, "REQUIRE_PRECOMPUTED_DYNASTY_LOOKUP", strict_required)
     cache_data_version = backend_app._current_data_version()
+    default_methodology_fingerprint = backend_app._default_dynasty_methodology_fingerprint()
     payload = {
-        "format_version": 1,
+        "format_version": 2,
         "cache_data_version": cache_data_version,
         # Legacy compatibility key: retained for older deployments/tests.
         "data_version": cache_data_version,
+        "default_methodology_fingerprint": default_methodology_fingerprint,
         "lookup_by_entity": lookup_by_entity,
         "lookup_by_player_key": lookup_by_player_key,
         "ambiguous_player_keys": sorted(str(key) for key in ambiguous_player_keys if str(key).strip()),

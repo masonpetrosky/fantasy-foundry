@@ -187,7 +187,7 @@ def calculate_points_dynasty_frame(
     pts_pit_bb: float,
     pts_pit_hbp: float,
     ip_max: float | None = None,
-    enable_prospect_risk_adjustment: bool = False,
+    enable_prospect_risk_adjustment: bool = True,
     enable_bench_stash_relief: bool = False,
     bench_negative_penalty: float = 0.55,
     enable_ir_stash_relief: bool = False,

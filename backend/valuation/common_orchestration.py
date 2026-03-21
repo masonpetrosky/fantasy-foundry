@@ -9,6 +9,9 @@ from typing import Dict, List, Optional, Set
 import pandas as pd
 
 try:
+    from backend.core.points_value import (
+        dynasty_keep_or_drop_values as _dynasty_keep_or_drop_values,
+    )
     from backend.dynasty_roto_values import (
         COMMON_COLUMN_ALIASES,
         DERIVED_HIT_RATE_COLS,
@@ -43,6 +46,7 @@ try:
     from backend.valuation.dynasty_value_adjustments import (
         _adjust_dynasty_year_value,
         _coerce_projected_volume,
+        _dynasty_year_adjustment_detail,
         _is_near_zero_playing_time,
         _piecewise_age_factor,
         _position_profile,
@@ -50,6 +54,9 @@ try:
         _year_risk_multiplier,
     )
 except ImportError:  # pragma: no cover - direct script execution fallback
+    from core.points_value import (  # type: ignore
+        dynasty_keep_or_drop_values as _dynasty_keep_or_drop_values,
+    )
     from dynasty_roto_values import (  # type: ignore
         COMMON_COLUMN_ALIASES,
         DERIVED_HIT_RATE_COLS,
@@ -84,6 +91,7 @@ except ImportError:  # pragma: no cover - direct script execution fallback
     from valuation.dynasty_value_adjustments import (  # type: ignore
         _adjust_dynasty_year_value,
         _coerce_projected_volume,
+        _dynasty_year_adjustment_detail,
         _is_near_zero_playing_time,
         _piecewise_age_factor,
         _position_profile,
@@ -291,13 +299,27 @@ def _blend_replacement_frame(
     *,
     alpha: float,
 ) -> pd.DataFrame:
-    frozen = frozen_frame.astype(float)
-    current = current_frame.astype(float)
-    idx = frozen.index.union(current.index)
-    cols = frozen.columns.union(current.columns)
-    frozen_aligned = frozen.reindex(index=idx, columns=cols).fillna(0.0)
-    current_aligned = current.reindex(index=idx, columns=cols).fillna(0.0)
-    return (float(alpha) * frozen_aligned) + ((1.0 - float(alpha)) * current_aligned)
+    idx = frozen_frame.index.union(current_frame.index)
+    cols = frozen_frame.columns.union(current_frame.columns)
+    numeric_cols = [col for col in cols if str(col) != "ReplacementDepthMode"]
+
+    frozen_numeric = frozen_frame.reindex(index=idx, columns=numeric_cols).astype(float).fillna(0.0)
+    current_numeric = current_frame.reindex(index=idx, columns=numeric_cols).astype(float).fillna(0.0)
+    blended = (float(alpha) * frozen_numeric) + ((1.0 - float(alpha)) * current_numeric)
+
+    if "ReplacementDepthMode" in cols:
+        frozen_mode = frozen_frame.get("ReplacementDepthMode")
+        current_mode = current_frame.get("ReplacementDepthMode")
+        mode_series = None
+        if isinstance(current_mode, pd.Series):
+            mode_series = current_mode.reindex(idx)
+        if isinstance(frozen_mode, pd.Series):
+            frozen_aligned = frozen_mode.reindex(idx)
+            mode_series = frozen_aligned if mode_series is None else mode_series.combine_first(frozen_aligned)
+        if mode_series is not None:
+            blended["ReplacementDepthMode"] = mode_series.fillna("flat")
+
+    return blended.reindex(columns=cols)
 
 
 def _forced_roster_value(values: List[float], years: List[int], discount: float) -> float:
@@ -876,7 +898,7 @@ def calculate_common_dynasty_values(
     frozen_repl_hit: Optional[pd.DataFrame] = None
     frozen_repl_pit: Optional[pd.DataFrame] = None
     blend_enabled = bool(lg.freeze_replacement_baselines and getattr(lg, "enable_replacement_blend", False))
-    blend_alpha = float(min(max(getattr(lg, "replacement_blend_alpha", 0.70), 0.0), 1.0))
+    blend_alpha = float(min(max(getattr(lg, "replacement_blend_alpha", 0.40), 0.0), 1.0))
     if lg.freeze_replacement_baselines:
         start_ctx_for_replacement = year_contexts.get(start_year)
         if start_ctx_for_replacement is None:
@@ -947,6 +969,20 @@ def calculate_common_dynasty_values(
                 cat_years = player_sgps.setdefault(cat, {})
                 cat_years[year_val] = float(v) if v is not None and not pd.isna(v) else 0.0
 
+    replacement_diagnostics_by_player: Dict[str, Dict[int, dict[str, object]]] = {}
+    if "ReplacementDiagnostics" in all_year.columns:
+        for _, row in all_year.iterrows():
+            player = str(row.get("Player") or "")
+            if not player:
+                continue
+            try:
+                year_val = int(row.get("Year", 0))
+            except (TypeError, ValueError):
+                continue
+            diagnostics = row.get("ReplacementDiagnostics")
+            if isinstance(diagnostics, dict):
+                replacement_diagnostics_by_player.setdefault(player, {})[year_val] = diagnostics
+
     # Wide format: one row per player with Value_YEAR columns
     wide = all_year.pivot_table(index="Player", columns="Year", values="YearValue", aggfunc="max").reset_index()
     wide.columns = ["Player"] + [f"Value_{int(c)}" for c in wide.columns[1:]]
@@ -975,19 +1011,24 @@ def calculate_common_dynasty_values(
     forced_roster_vals: List[float] = []
     raw_negative_year_players: Set[str] = set()
     raw_ir_candidate_players: Set[str] = set()
+    roto_explanations_by_year: List[dict[str, dict[str, object]]] = []
+    player_profiles_for_explanations: List[str] = []
+    current_year_volumes_for_explanations: List[dict[str, float]] = []
+    risk_flags_for_explanations: List[dict[str, bool]] = []
     for _, r in out.iterrows():
         player = str(r.get("Player") or "")
         player_age = age_by_player.get(player)
         player_profile = profile_by_player.get(player, "hitter")
 
         vals: List[float] = []
+        year_adjustment_details: List[dict[str, object]] = []
         has_negative_year = False
         has_ir_candidate_year = False
         for y in years:
             v = r.get(f"Value_{y}")
             if pd.isna(v):
                 v = 0.0
-            adjusted = _adjust_dynasty_year_value(
+            detail = _dynasty_year_adjustment_detail(
                 float(v),
                 player=player,
                 year=int(y),
@@ -1002,7 +1043,15 @@ def calculate_common_dynasty_values(
                 hitter_ab_by_player_year=hitter_ab_by_player_year,
                 pitcher_ip_by_player_year=pitcher_ip_by_player_year,
             )
+            replacement_diagnostics = replacement_diagnostics_by_player.get(player, {}).get(int(y))
+            if isinstance(replacement_diagnostics, dict):
+                detail["replacement_value_diagnostics"] = dict(replacement_diagnostics)
+                best_slot = str(replacement_diagnostics.get("best_slot") or "").strip()
+                if best_slot:
+                    detail["best_slot"] = best_slot
+            adjusted = float(detail["adjusted_year_value"])
             vals.append(adjusted)
+            year_adjustment_details.append(detail)
             if adjusted < 0.0:
                 has_negative_year = True
                 if _is_near_zero_playing_time(
@@ -1013,14 +1062,46 @@ def calculate_common_dynasty_values(
                 ):
                     has_ir_candidate_year = True
 
-        raw_vals.append(dynasty_keep_or_drop_value(vals, years, lg.discount))
+        keep_drop = _dynasty_keep_or_drop_values(vals, years, discount=float(lg.discount))
+        raw_vals.append(float(keep_drop.raw_total))
         forced_roster_vals.append(_forced_roster_value(vals, years, lg.discount))
+        explain_by_year: dict[str, dict[str, object]] = {}
+        for idx, y in enumerate(years):
+            detail = dict(year_adjustment_details[idx])
+            detail["discount_factor"] = float(keep_drop.discount_factors[idx])
+            detail["discounted_contribution"] = float(keep_drop.discounted_contributions[idx])
+            detail["keep_drop_value"] = float(keep_drop.continuation_values[idx])
+            detail["keep_drop_hold_value"] = float(keep_drop.hold_values[idx])
+            detail["keep_drop_keep"] = bool(keep_drop.keep_flags[idx])
+            explain_by_year[str(int(y))] = detail
+        roto_explanations_by_year.append(explain_by_year)
+        player_profiles_for_explanations.append(player_profile)
+        current_year_volumes_for_explanations.append(
+            {
+                "ab": float(hitter_ab_by_player_year.get((player, int(start_year)), 0.0)),
+                "ip": float(pitcher_ip_by_player_year.get((player, int(start_year)), 0.0)),
+            }
+        )
+        risk_flags_for_explanations.append(
+            {
+                "playing_time_reliability_enabled": bool(getattr(lg, "enable_playing_time_reliability", False)),
+                "age_risk_enabled": bool(getattr(lg, "enable_age_risk_adjustment", False)),
+                "prospect_risk_enabled": bool(getattr(lg, "enable_prospect_risk_adjustment", False)),
+                "bench_stash_relief_enabled": bool(getattr(lg, "enable_bench_stash_relief", False)),
+                "ir_stash_relief_enabled": bool(getattr(lg, "enable_ir_stash_relief", False)),
+                "replacement_blend_enabled": bool(getattr(lg, "enable_replacement_blend", False)),
+            }
+        )
         if has_negative_year:
             raw_negative_year_players.add(player)
         if has_ir_candidate_year:
             raw_ir_candidate_players.add(player)
 
     out["RawDynastyValue"] = raw_vals
+    out["_ExplainRotoByYear"] = roto_explanations_by_year
+    out["_ExplainPlayerProfile"] = player_profiles_for_explanations
+    out["_ExplainCurrentYearVolume"] = current_year_volumes_for_explanations
+    out["_ExplainRiskFlags"] = risk_flags_for_explanations
 
     # Centering: replacement-level roster cutoff with minors reserved first.
     out, valuation_diagnostics = _apply_dynasty_centering(

@@ -8,7 +8,7 @@ import pandas as pd
 
 def _prepare_side_frame(df: pd.DataFrame, *, side: str) -> tuple[pd.DataFrame, list[str]]:
     sgp_cols = [col for col in df.columns if col.startswith("SGP_")]
-    keep_cols = ["Player", "Year", "YearValue", "BestSlot", "Team", "Age", "Pos", *sgp_cols]
+    keep_cols = ["Player", "Year", "YearValue", "BestSlot", "Team", "Age", "Pos", "ReplacementDiagnostics", *sgp_cols]
     existing_cols = [col for col in keep_cols if col in df.columns]
     frame = df[existing_cols].copy() if existing_cols else pd.DataFrame()
 
@@ -23,6 +23,7 @@ def _prepare_side_frame(df: pd.DataFrame, *, side: str) -> tuple[pd.DataFrame, l
         "Team": f"Team_{side}",
         "Age": f"Age_{side}",
         "Pos": f"Pos_{side}",
+        "ReplacementDiagnostics": f"ReplacementDiagnostics_{side}",
     }
     sgp_categories: list[str] = []
     for col in sgp_cols:
@@ -70,6 +71,8 @@ def combine_two_way(hit_vals: pd.DataFrame, pit_vals: pd.DataFrame, two_way: str
     pit_slots = _column_or_default(merged, "BestSlot_pit", dtype="object")
     hit_slot_values = hit_slots.to_numpy(dtype=object)
     pit_slot_values = pit_slots.to_numpy(dtype=object)
+    hit_diags = _column_or_default(merged, "ReplacementDiagnostics_hit", dtype="object")
+    pit_diags = _column_or_default(merged, "ReplacementDiagnostics_pit", dtype="object")
 
     if two_way == "sum":
         year_values = hit_values.fillna(0.0) + pit_values.fillna(0.0)
@@ -143,5 +146,40 @@ def combine_two_way(hit_vals: pd.DataFrame, pit_vals: pd.DataFrame, two_way: str
         else:
             merged[f"SGP_{category}"] = np.where(choose_hit.to_numpy(), hit_sgp.to_numpy(), pit_sgp.to_numpy())
 
+    replacement_diags: list[dict | None] = []
+    for idx in merged.index:
+        hit_diag = hit_diags.iloc[idx] if isinstance(hit_diags.iloc[idx], dict) else None
+        pit_diag = pit_diags.iloc[idx] if isinstance(pit_diags.iloc[idx], dict) else None
+        if two_way == "sum":
+            if hit_diag and pit_diag:
+                category_sgp: dict[str, float] = {}
+                for source in (hit_diag, pit_diag):
+                    for category, value in dict(source.get("category_sgp") or {}).items():
+                        try:
+                            category_sgp[str(category)] = float(category_sgp.get(str(category), 0.0)) + float(value)
+                        except (TypeError, ValueError):
+                            continue
+                replacement_diags.append(
+                    {
+                        "side": "two_way",
+                        "two_way_mode": "sum",
+                        "best_slot": best_slots.iloc[idx],
+                        "category_sgp": category_sgp,
+                        "components": {"hit": hit_diag, "pit": pit_diag},
+                    }
+                )
+            else:
+                replacement_diags.append(hit_diag or pit_diag)
+        else:
+            use_hit = bool(choose_hit.iloc[idx]) if idx in choose_hit.index else False
+            selected = hit_diag if use_hit or pd.isna(pit_values.iloc[idx]) else pit_diag
+            if isinstance(selected, dict):
+                selected = dict(selected)
+                selected["two_way_mode"] = "max"
+                selected["selected_side"] = "hit" if use_hit or pd.isna(pit_values.iloc[idx]) else "pit"
+            replacement_diags.append(selected)
+
+    merged["ReplacementDiagnostics"] = replacement_diags
+
     base_cols = ["Player", "Year", "YearValue", "BestSlot", "Team", "Pos", "Age"]
-    return merged[base_cols + [f"SGP_{category}" for category in all_sgp_cats]]
+    return merged[base_cols + ["ReplacementDiagnostics"] + [f"SGP_{category}" for category in all_sgp_cats]]

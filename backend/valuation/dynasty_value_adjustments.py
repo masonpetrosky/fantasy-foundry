@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Dict, Set
+from typing import Any, Dict, Set
 
 import pandas as pd
 
@@ -129,6 +129,92 @@ def _coerce_projected_volume(value: object) -> float:
     return float(parsed)
 
 
+def _dynasty_year_adjustment_detail(
+    value: float,
+    *,
+    player: str,
+    year: int,
+    start_year: int,
+    age_start: float | None,
+    profile: str,
+    lg: CommonDynastyRotoSettings,
+    minor_eligibility_by_year: Dict[tuple[str, int], bool],
+    minor_stash_players: Set[str],
+    bench_stash_players: Set[str],
+    ir_stash_players: Set[str],
+    hitter_ab_by_player_year: Dict[tuple[str, int], float],
+    pitcher_ip_by_player_year: Dict[tuple[str, int], float],
+) -> dict[str, Any]:
+    raw_value = float(value)
+    age_risk_multiplier = _year_risk_multiplier(
+        age_start=age_start,
+        year=int(year),
+        start_year=int(start_year),
+        profile=profile,
+        enabled=bool(getattr(lg, "enable_age_risk_adjustment", False)),
+    )
+    after_age_value = raw_value * age_risk_multiplier
+
+    minor_eligible = bool(minor_eligibility_by_year.get((player, int(year)), False))
+    prospect_risk_multiplier = _prospect_risk_multiplier(
+        year=int(year),
+        start_year=int(start_year),
+        profile=profile,
+        minor_eligible=minor_eligible,
+        enabled=bool(getattr(lg, "enable_prospect_risk_adjustment", False)),
+    )
+    after_risk_value = after_age_value * prospect_risk_multiplier
+
+    projected_ab = float(hitter_ab_by_player_year.get((player, int(year)), 0.0))
+    projected_ip = float(pitcher_ip_by_player_year.get((player, int(year)), 0.0))
+    near_zero_playing_time = _is_near_zero_playing_time(
+        player,
+        int(year),
+        hitter_ab_by_player_year=hitter_ab_by_player_year,
+        pitcher_ip_by_player_year=pitcher_ip_by_player_year,
+    )
+    can_minor_stash = player in minor_stash_players and minor_eligible
+    can_ir_stash = bool(getattr(lg, "enable_ir_stash_relief", False)) and player in ir_stash_players and near_zero_playing_time
+    can_bench_stash = bool(getattr(lg, "enable_bench_stash_relief", False)) and player in bench_stash_players
+    ir_negative_penalty = float(getattr(lg, "ir_negative_penalty", 1.0))
+    bench_negative_penalty = float(getattr(lg, "bench_negative_penalty", 1.0))
+    adjusted_value = _apply_negative_value_stash_rules(
+        after_risk_value,
+        can_minor_stash=can_minor_stash,
+        can_ir_stash=can_ir_stash,
+        ir_negative_penalty=ir_negative_penalty,
+        can_bench_stash=can_bench_stash,
+        bench_negative_penalty=bench_negative_penalty,
+    )
+    stash_mode = None
+    if raw_value < 0.0 and adjusted_value != after_risk_value:
+        if can_minor_stash:
+            stash_mode = "minor"
+        elif can_ir_stash:
+            stash_mode = "ir"
+        elif can_bench_stash:
+            stash_mode = "bench"
+
+    return {
+        "raw_year_value": raw_value,
+        "age_risk_multiplier": float(age_risk_multiplier),
+        "prospect_risk_multiplier": float(prospect_risk_multiplier),
+        "after_risk_value": float(after_risk_value),
+        "adjusted_year_value": float(adjusted_value),
+        "minor_eligible": minor_eligible,
+        "near_zero_playing_time": near_zero_playing_time,
+        "projected_ab": projected_ab,
+        "projected_ip": projected_ip,
+        "can_minor_stash": can_minor_stash,
+        "can_ir_stash": can_ir_stash,
+        "can_bench_stash": can_bench_stash,
+        "ir_negative_penalty": ir_negative_penalty,
+        "bench_negative_penalty": bench_negative_penalty,
+        "stash_mode": stash_mode,
+        "stash_adjustment_applied": bool(raw_value < 0.0 and adjusted_value != after_risk_value),
+    }
+
+
 def _adjust_dynasty_year_value(
     value: float,
     *,
@@ -145,36 +231,19 @@ def _adjust_dynasty_year_value(
     hitter_ab_by_player_year: Dict[tuple[str, int], float],
     pitcher_ip_by_player_year: Dict[tuple[str, int], float],
 ) -> float:
-    adjusted = float(value)
-    adjusted *= _year_risk_multiplier(
+    detail = _dynasty_year_adjustment_detail(
+        float(value),
+        player=player,
+        year=int(year),
+        start_year=int(start_year),
         age_start=age_start,
-        year=int(year),
-        start_year=int(start_year),
         profile=profile,
-        enabled=bool(getattr(lg, "enable_age_risk_adjustment", False)),
+        lg=lg,
+        minor_eligibility_by_year=minor_eligibility_by_year,
+        minor_stash_players=minor_stash_players,
+        bench_stash_players=bench_stash_players,
+        ir_stash_players=ir_stash_players,
+        hitter_ab_by_player_year=hitter_ab_by_player_year,
+        pitcher_ip_by_player_year=pitcher_ip_by_player_year,
     )
-
-    minor_eligible = bool(minor_eligibility_by_year.get((player, int(year)), False))
-    adjusted *= _prospect_risk_multiplier(
-        year=int(year),
-        start_year=int(start_year),
-        profile=profile,
-        minor_eligible=minor_eligible,
-        enabled=bool(getattr(lg, "enable_prospect_risk_adjustment", False)),
-    )
-
-    return _apply_negative_value_stash_rules(
-        adjusted,
-        can_minor_stash=player in minor_stash_players and minor_eligible,
-        can_ir_stash=bool(getattr(lg, "enable_ir_stash_relief", False))
-        and player in ir_stash_players
-        and _is_near_zero_playing_time(
-            player,
-            int(year),
-            hitter_ab_by_player_year=hitter_ab_by_player_year,
-            pitcher_ip_by_player_year=pitcher_ip_by_player_year,
-        ),
-        ir_negative_penalty=float(getattr(lg, "ir_negative_penalty", 1.0)),
-        can_bench_stash=bool(getattr(lg, "enable_bench_stash_relief", False)) and player in bench_stash_players,
-        bench_negative_penalty=float(getattr(lg, "bench_negative_penalty", 1.0)),
-    )
+    return float(detail["adjusted_year_value"])

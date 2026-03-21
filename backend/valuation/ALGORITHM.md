@@ -76,11 +76,13 @@ Replacement level answers: *"If I dropped this player, how good would the best f
 
 By default, replacement baselines are **frozen from the start year** and reused for all future projection years. This prevents late-horizon value inflation caused by an increasingly thin projected replacement pool in years far from the present.
 
+For broad shared slots with repeated lineup capacity, the live default now also applies a softened internal replacement-depth blend for `OF` and `P`. That blend averages the flat free-agent pool and a full slot-capacity pool, using an internal alpha rather than a user-facing calculator control.
+
 An optional **blend mode** can be enabled to mix the frozen baseline with the current year's computed baseline:
 
     blended = alpha * frozen + (1 - alpha) * current_year
 
-where `alpha` defaults to 0.70, weighting the frozen baseline more heavily.
+where `alpha` defaults to 0.40 for the shipped standard baseline, weighting the current-year baseline more heavily.
 
 ### Per-Year Value Above Replacement
 
@@ -102,8 +104,8 @@ Players like Shohei Ohtani who contribute as both hitters and pitchers need spec
 
 Two modes are available (controlled by the `two_way` setting):
 
-- **"max" (default):** For each year, take the higher of the player's hitting value or pitching value. This reflects how most leagues work -- you roster the player for their best side, and the other side is a bonus that does not stack for valuation purposes.
-- **"sum":** Add the hitting and pitching values together. This is appropriate for leagues where a two-way player genuinely occupies both a hitter slot and a pitcher slot simultaneously, contributing to both.
+- **"sum" (default):** Add the hitting and pitching values together. This is appropriate for leagues where a two-way player genuinely occupies both a hitter slot and a pitcher slot simultaneously, contributing to both.
+- **"max":** For each year, take the higher of the player's hitting value or pitching value. This reflects leagues that effectively value the player for only their best side.
 
 For players who only appear on one side (hitter-only or pitcher-only), they simply get their single-side value regardless of the mode.
 
@@ -237,11 +239,16 @@ In roto mode, the engine breaks down a player's dynasty value into per-category 
 | Parameter | Default | Purpose |
 |---|---|---|
 | `n_teams` | 12 | Number of teams in the league |
-| `horizon_years` | 10 | How many years to project forward |
+| `horizon_years` | 20 | How many years to project forward |
 | `discount` | 0.94 | Annual discount rate for future value |
-| `sims_for_sgp` | 200 | Monte Carlo trials for SGP estimation |
-| `two_way` | "max" | How to combine two-way player values |
+| `sims_for_sgp` | 300 | Monte Carlo trials for SGP estimation |
+| `two_way` | "sum" | How to combine two-way player values |
 | `freeze_replacement_baselines` | true | Reuse start-year replacement level for all years |
+| `enable_replacement_blend` | true | Blend frozen and in-year replacement baselines |
+| `replacement_blend_alpha` | 0.40 | Weight on the frozen baseline when blending |
+| `replacement_depth_mode` | "blended_depth" | Internal OF/P replacement-pool depth calibration mode |
+| `replacement_depth_blend_alpha` | 0.33 | Internal weight on the full-depth OF/P replacement pool |
 | `sgp_denominator_mode` | "classic" | "classic" or "robust" (with Winsorization) |
 | `enable_playing_time_reliability` | false | Unified playing-time guard for all categories |
 | `enable_age_risk_adjustment` | false | Apply age-based decline curves to future values |
+| `enable_prospect_risk_adjustment` | true | Discount future value for minor-eligible players |

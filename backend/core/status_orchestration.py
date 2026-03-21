@@ -125,6 +125,8 @@ def dynasty_lookup_cache_health_payload(*, ctx: StatusOrchestrationContext) -> d
         "require_precomputed": ctx.require_precomputed_dynasty_lookup,
         "version_expected": inspection.expected_version,
         "version_found": inspection.found_version,
+        "methodology_fingerprint_expected": getattr(inspection, "expected_methodology_fingerprint", None),
+        "methodology_fingerprint_found": getattr(inspection, "found_methodology_fingerprint", None),
     }
     if inspection.error:
         payload["error"] = inspection.error

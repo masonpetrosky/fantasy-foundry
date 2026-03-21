@@ -82,8 +82,10 @@ def default_dynasty_lookup(
             bench_negative_penalty=float(params.get("bench_negative_penalty", 0.55)),
             enable_ir_stash_relief=bool(params.get("enable_ir_stash_relief", False)),
             ir_negative_penalty=float(params.get("ir_negative_penalty", 0.20)),
-            enable_replacement_blend=bool(params.get("enable_replacement_blend", False)),
-            replacement_blend_alpha=float(params.get("replacement_blend_alpha", 0.70)),
+            enable_replacement_blend=bool(params.get("enable_replacement_blend", True)),
+            replacement_blend_alpha=float(params.get("replacement_blend_alpha", 0.40)),
+            replacement_depth_mode=str(params.get("replacement_depth_mode", "blended_depth")),
+            replacement_depth_blend_alpha=float(params.get("replacement_depth_blend_alpha", 0.33)),
             **roto_category_settings_from_dict(params),
         ).copy(deep=True)
 

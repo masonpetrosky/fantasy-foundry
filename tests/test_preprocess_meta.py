@@ -228,6 +228,10 @@ class DynastyLookupCacheBuildTests(unittest.TestCase):
                 return_value="fresh-version",
             ), patch.object(
                 backend_app,
+                "_default_dynasty_methodology_fingerprint",
+                return_value="methodology-v1",
+            ), patch.object(
+                backend_app,
                 "_get_default_dynasty_lookup",
                 get_lookup,
             ), patch.object(
@@ -244,7 +248,9 @@ class DynastyLookupCacheBuildTests(unittest.TestCase):
         get_lookup.assert_called_once_with(prefer_precomputed=False)
         self.assertEqual(entity_count, 1)
         self.assertEqual(player_key_count, 1)
+        self.assertEqual(payload["format_version"], 2)
         self.assertEqual(payload["cache_data_version"], "fresh-version")
+        self.assertEqual(payload["default_methodology_fingerprint"], "methodology-v1")
         self.assertEqual(payload["lookup_by_entity"], {"entity-a": {"DynastyValue": 4.2}})
         self.assertEqual(payload["lookup_by_player_key"], {"player-a": {"DynastyValue": 4.2}})
         self.assertEqual(payload["ambiguous_player_keys"], ["ambiguous-player"])

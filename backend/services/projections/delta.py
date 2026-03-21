@@ -111,6 +111,66 @@ def _compute_composite_delta(
     return round(score, 3)
 
 
+def compute_projection_delta_detail_map(
+    current_bat: list[dict[str, Any]],
+    current_pit: list[dict[str, Any]],
+    prev_bat: list[dict[str, Any]],
+    prev_pit: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Compute per-player projection deltas with stat-level detail.
+
+    This is the internal richer representation used by divergence-review and
+    audit tooling. The public delta endpoint still trims the response down to
+    the compact movers payload returned by ``compute_projection_deltas``.
+    """
+    curr_hit_agg = _aggregate_player_stats(current_bat, stat_cols=_HITTER_DELTA_STATS, player_type="H")
+    prev_hit_agg = _aggregate_player_stats(prev_bat, stat_cols=_HITTER_DELTA_STATS, player_type="H")
+    curr_pit_agg = _aggregate_player_stats(current_pit, stat_cols=_PITCHER_DELTA_STATS, player_type="P")
+    prev_pit_agg = _aggregate_player_stats(prev_pit, stat_cols=_PITCHER_DELTA_STATS, player_type="P")
+
+    detail_map: dict[str, dict[str, Any]] = {}
+
+    for key in curr_hit_agg:
+        if key not in prev_hit_agg:
+            continue
+        stat_deltas = {
+            stat: round(curr_hit_agg[key].get(stat, 0) - prev_hit_agg[key].get(stat, 0), 3)
+            for stat in _HITTER_DELTA_STATS
+        }
+        composite = _compute_composite_delta(curr_hit_agg[key], prev_hit_agg[key], _HITTER_DELTA_STATS)
+        detail_map[key] = {
+            "player": curr_hit_agg[key]["_name"],
+            "team": curr_hit_agg[key]["_team"],
+            "pos": curr_hit_agg[key]["_pos"],
+            "type": "H",
+            "deltas": stat_deltas,
+            "composite_delta": composite,
+        }
+
+    for key in curr_pit_agg:
+        if key not in prev_pit_agg:
+            continue
+        stat_deltas = {
+            stat: round(curr_pit_agg[key].get(stat, 0) - prev_pit_agg[key].get(stat, 0), 3)
+            for stat in _PITCHER_DELTA_STATS
+        }
+        composite = _compute_composite_delta(curr_pit_agg[key], prev_pit_agg[key], _PITCHER_DELTA_STATS)
+        if key in detail_map:
+            detail_map[key]["deltas"].update(stat_deltas)
+            detail_map[key]["composite_delta"] = round(detail_map[key]["composite_delta"] + composite, 3)
+        else:
+            detail_map[key] = {
+                "player": curr_pit_agg[key]["_name"],
+                "team": curr_pit_agg[key]["_team"],
+                "pos": curr_pit_agg[key]["_pos"],
+                "type": "P",
+                "deltas": stat_deltas,
+                "composite_delta": composite,
+            }
+
+    return detail_map
+
+
 def compute_projection_deltas(
     current_bat: list[dict[str, Any]],
     current_pit: list[dict[str, Any]],
@@ -125,55 +185,16 @@ def compute_projection_deltas(
         {
             "risers": [...top N players with biggest positive composite delta],
             "fallers": [...top N players with biggest negative composite delta],
-            "delta_map": {player_entity_key: {stat_deltas, composite_delta}},
+            "delta_map": {player_entity_key: {composite_delta}},
             "has_previous": True
         }
     """
-    curr_hit_agg = _aggregate_player_stats(current_bat, stat_cols=_HITTER_DELTA_STATS, player_type="H")
-    prev_hit_agg = _aggregate_player_stats(prev_bat, stat_cols=_HITTER_DELTA_STATS, player_type="H")
-    curr_pit_agg = _aggregate_player_stats(current_pit, stat_cols=_PITCHER_DELTA_STATS, player_type="P")
-    prev_pit_agg = _aggregate_player_stats(prev_pit, stat_cols=_PITCHER_DELTA_STATS, player_type="P")
-
-    delta_map: dict[str, dict[str, Any]] = {}
-
-    # Hitters
-    for key in curr_hit_agg:
-        if key not in prev_hit_agg:
-            continue
-        stat_deltas = {}
-        for stat in _HITTER_DELTA_STATS:
-            stat_deltas[stat] = round(curr_hit_agg[key].get(stat, 0) - prev_hit_agg[key].get(stat, 0), 3)
-        composite = _compute_composite_delta(curr_hit_agg[key], prev_hit_agg[key], _HITTER_DELTA_STATS)
-        delta_map[key] = {
-            "player": curr_hit_agg[key]["_name"],
-            "team": curr_hit_agg[key]["_team"],
-            "pos": curr_hit_agg[key]["_pos"],
-            "type": "H",
-            "deltas": stat_deltas,
-            "composite_delta": composite,
-        }
-
-    # Pitchers
-    for key in curr_pit_agg:
-        if key not in prev_pit_agg:
-            continue
-        stat_deltas = {}
-        for stat in _PITCHER_DELTA_STATS:
-            stat_deltas[stat] = round(curr_pit_agg[key].get(stat, 0) - prev_pit_agg[key].get(stat, 0), 3)
-        composite = _compute_composite_delta(curr_pit_agg[key], prev_pit_agg[key], _PITCHER_DELTA_STATS)
-        if key in delta_map:
-            # Two-way player — add pitcher deltas and update composite
-            delta_map[key]["deltas"].update(stat_deltas)
-            delta_map[key]["composite_delta"] = round(delta_map[key]["composite_delta"] + composite, 3)
-        else:
-            delta_map[key] = {
-                "player": curr_pit_agg[key]["_name"],
-                "team": curr_pit_agg[key]["_team"],
-                "pos": curr_pit_agg[key]["_pos"],
-                "type": "P",
-                "deltas": stat_deltas,
-                "composite_delta": composite,
-            }
+    delta_map = compute_projection_delta_detail_map(
+        current_bat=current_bat,
+        current_pit=current_pit,
+        prev_bat=prev_bat,
+        prev_pit=prev_pit,
+    )
 
     # Sort for risers/fallers
     all_entries = sorted(delta_map.items(), key=lambda kv: kv[1]["composite_delta"], reverse=True)

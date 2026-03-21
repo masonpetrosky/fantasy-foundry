@@ -1086,6 +1086,7 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
     def test_load_precomputed_dynasty_lookup_cache_validates_data_version(self) -> None:
         payload = {
             "data_version": "stale-version",
+            "default_methodology_fingerprint": "current-fingerprint",
             "lookup_by_entity": {"entity-a": {"DynastyValue": 4.2}},
             "lookup_by_player_key": {"player-a": {"DynastyValue": 4.2}},
             "ambiguous_player_keys": [],
@@ -1100,6 +1101,10 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
                 app_module,
                 "_current_data_version",
                 return_value="fresh-version",
+            ), patch.object(
+                app_module,
+                "_default_dynasty_methodology_fingerprint",
+                return_value="current-fingerprint",
             ), patch.object(app_module.os, "getenv", return_value=""):
                 loaded = app_module._load_precomputed_default_dynasty_lookup()
 
@@ -1109,6 +1114,7 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         payload = {
             "cache_data_version": "fresh-version",
             "data_version": "stale-version",
+            "default_methodology_fingerprint": "current-fingerprint",
             "lookup_by_entity": {"entity-a": {"DynastyValue": 4.2}},
             "lookup_by_player_key": {"player-a": {"DynastyValue": 4.2}},
             "ambiguous_player_keys": [],
@@ -1123,6 +1129,10 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
                 app_module,
                 "_current_data_version",
                 return_value="fresh-version",
+            ), patch.object(
+                app_module,
+                "_default_dynasty_methodology_fingerprint",
+                return_value="current-fingerprint",
             ), patch.object(app_module.os, "getenv", return_value=""):
                 loaded = app_module._load_precomputed_default_dynasty_lookup()
 
@@ -1477,4 +1487,3 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(row["PitBB"], 87.0)
         self.assertEqual(row["K"], 350.0)
         self.assertEqual(row["OldestProjectionDate"], "2025-12-30")
-

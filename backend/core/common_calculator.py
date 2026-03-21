@@ -2,12 +2,37 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Callable
 
 import pandas as pd
 
 from backend.services.valuation import ValuationService
+
+
+def _parse_replacement_depth_blend_alpha_by_slot(raw_value: object) -> dict[str, float]:
+    if isinstance(raw_value, str):
+        text = raw_value.strip()
+        if not text:
+            return {}
+        try:
+            raw_value = json.loads(text)
+        except json.JSONDecodeError:
+            return {}
+    if not isinstance(raw_value, dict):
+        return {}
+    out: dict[str, float] = {}
+    for raw_slot, raw_alpha in raw_value.items():
+        slot = str(raw_slot or "").strip().upper()
+        if not slot:
+            continue
+        try:
+            alpha = float(raw_alpha)
+        except (TypeError, ValueError):
+            continue
+        out[slot] = min(max(alpha, 0.0), 1.0)
+    return out
 
 
 def calculate_common_dynasty_frame(
@@ -48,13 +73,16 @@ def calculate_common_dynasty_frame(
     sgp_epsilon_ratio: float = 0.0015,
     enable_playing_time_reliability: bool = False,
     enable_age_risk_adjustment: bool = False,
-    enable_prospect_risk_adjustment: bool = False,
+    enable_prospect_risk_adjustment: bool = True,
     enable_bench_stash_relief: bool = False,
     bench_negative_penalty: float = 0.55,
     enable_ir_stash_relief: bool = False,
     ir_negative_penalty: float = 0.20,
-    enable_replacement_blend: bool = False,
-    replacement_blend_alpha: float = 0.70,
+    enable_replacement_blend: bool = True,
+    replacement_blend_alpha: float = 0.40,
+    replacement_depth_mode: str = "blended_depth",
+    replacement_depth_blend_alpha: float = 0.33,
+    replacement_depth_blend_alpha_by_slot_json: str = "",
     hit_dh: int = 0,
 ) -> pd.DataFrame:
     valuation_service = ValuationService(ensure_backend_module_path_fn=ensure_backend_module_path_fn)
@@ -112,6 +140,11 @@ def calculate_common_dynasty_frame(
         ir_negative_penalty=ir_negative_penalty,
         enable_replacement_blend=enable_replacement_blend,
         replacement_blend_alpha=replacement_blend_alpha,
+        replacement_depth_mode=replacement_depth_mode,
+        replacement_depth_blend_alpha=replacement_depth_blend_alpha,
+        replacement_depth_blend_alpha_by_slot=_parse_replacement_depth_blend_alpha_by_slot(
+            replacement_depth_blend_alpha_by_slot_json
+        ),
         hitter_categories=tuple(hitter_categories),
         pitcher_categories=tuple(pitcher_categories),
     )

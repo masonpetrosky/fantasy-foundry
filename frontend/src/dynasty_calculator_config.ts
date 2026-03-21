@@ -363,8 +363,8 @@ export function buildDefaultCalculatorSettings(meta: CalculatorMeta | null | und
     bench_negative_penalty: 0.55,
     enable_ir_stash_relief: false,
     ir_negative_penalty: 0.2,
-    enable_replacement_blend: false,
-    replacement_blend_alpha: 0.7,
+    enable_replacement_blend: true,
+    replacement_blend_alpha: 0.4,
     start_year: Number(meta?.years?.[0] ?? 2026),
     auction_budget: null,
     ...resolveRotoCategoryDefaults(),
@@ -531,8 +531,8 @@ export function buildCalculatorPayload(settings: Record<string, unknown>, availa
   if (!Number.isFinite(irNegativePenalty) || irNegativePenalty < 0 || irNegativePenalty > 1) {
     return { error: "IR stash penalty must be a number between 0 and 1." };
   }
-  const enableReplacementBlend = coerceBooleanSetting(settings.enable_replacement_blend, false);
-  const replacementBlendAlpha = Number(settings.replacement_blend_alpha);
+  const enableReplacementBlend = coerceBooleanSetting(settings.enable_replacement_blend, true);
+  const replacementBlendAlpha = Number(settings.replacement_blend_alpha ?? 0.4);
   if (!Number.isFinite(replacementBlendAlpha) || replacementBlendAlpha < 0 || replacementBlendAlpha > 1) {
     return { error: "Replacement blend alpha must be a number between 0 and 1." };
   }
