@@ -103,11 +103,21 @@ export function MethodologySection(): React.ReactElement {
             <code>keeper_limit</code> only adjusts future continuation to reflect keeper scarcity. It does not shrink the startup-style dynasty cutoff.
           </li>
           <li>
-            Weekly H2H points mode is a calibrated valuation path, not a day-by-day schedule simulator.
-            It raises pitcher replacement baselines when weekly starts caps and acquisition caps make streamer production fungible.
+            H2H points modes infer healthy reserve composition from lineup pressure:
+            hitter reserve demand comes from uncovered daily starter off-days, and the remaining bench capacity is treated as pitcher reserves.
+            Weekly H2H is still a calibrated valuation path, not a full schedule simulator.
           </li>
           <li>
-            Final-day starts overflow can be modeled explicitly in weekly H2H mode, increasing the effective starts cap by a small calibrated amount.
+            In daily H2H leagues that use only generic <code>P</code> slots, start-capable pitchers can price off a lower
+            starter-specific replacement baseline when held starts are scarcer than the mixed pitcher pool.
+          </li>
+          <li>
+            Daily H2H start volume is selected week-by-week under daily slot limits, weekly starts caps, and weekly add caps.
+            When same-day overflow is enabled, extra starts are only added from the modeled cap-hit day.
+          </li>
+          <li>
+            Keeper-limited H2H points center on a keeper-adjusted H2H score instead of raw long-horizon continuation alone,
+            so deep future value does not dominate purely because the in-season replacement cutoff is large.
           </li>
           <li>
             Two-way handling uses your setting: <code>sum</code> adds both sides, <code>max</code> keeps the higher side.

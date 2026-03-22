@@ -47,6 +47,13 @@ class UsageAllocation:
 
 
 @dataclass(slots=True)
+class DailyUsageDetail:
+    allocation: UsageAllocation
+    assigned_by_day_slot: dict[int, dict[str, float]]
+    day_membership_by_player: dict[str, set[int]]
+
+
+@dataclass(slots=True)
 class PitcherUsageAllocation:
     usage_share_by_player: dict[str, float]
     assigned_appearances_by_player: dict[str, float]
@@ -63,6 +70,8 @@ class PitcherUsageAllocation:
     capped_start_budget: float | None
     selected_held_starts: float | None = None
     selected_streamed_starts: float | None = None
+    selected_overflow_starts: float | None = None
+    effective_period_start_cap: float | None = None
     streaming_adds_per_period: int | None = None
 
 
@@ -82,6 +91,15 @@ class PitcherInningsAllocation:
 class _DailyAllocationResult:
     allocation: UsageAllocation
     assigned_by_day_slot: dict[int, dict[str, float]]
+
+
+@dataclass(slots=True)
+class _CappedStartSelectionResult:
+    selected_start_days_by_player: dict[str, set[int]]
+    selected_held_starts: float | None
+    selected_streamed_starts: float | None
+    selected_overflow_starts: float | None
+    effective_period_start_cap: float | None
 
 
 def annual_slot_capacity(
@@ -105,25 +123,64 @@ def allocate_hitter_usage_daily(
     slot_capacity: dict[str, float],
     total_days: int = _SYNTHETIC_SEASON_DAYS,
 ) -> UsageAllocation:
+    return allocate_hitter_usage_daily_detail(
+        entries,
+        slot_capacity=slot_capacity,
+        total_days=total_days,
+    ).allocation
+
+
+def allocate_hitter_usage_daily_detail(
+    entries: list[VolumeEntry],
+    *,
+    slot_capacity: dict[str, float],
+    total_days: int = _SYNTHETIC_SEASON_DAYS,
+) -> DailyUsageDetail:
     normalized_entries = _normalize_entries(entries)
-    day_membership_by_player: dict[str, set[int]] = {}
-    for entry in normalized_entries:
-        day_membership_by_player[entry.player_id] = set(
-            _generate_synthetic_days(
-                player_id=entry.player_id,
-                year=entry.year,
-                count=_coerce_daily_event_count(entry.projected_volume, total_days=total_days),
-                tag="hit-active",
-                total_days=total_days,
-            )
-        )
-    return _allocate_daily_entries(
+    day_membership_by_player = _build_day_membership_by_player(
+        normalized_entries,
+        tag="hit-active",
+        total_days=total_days,
+    )
+    allocation_result = _allocate_daily_entries(
         normalized_entries,
         slot_capacity=slot_capacity,
         day_membership_by_player=day_membership_by_player,
         total_days=total_days,
         side="hitter",
-    ).allocation
+    )
+    return DailyUsageDetail(
+        allocation=allocation_result.allocation,
+        assigned_by_day_slot=allocation_result.assigned_by_day_slot,
+        day_membership_by_player=day_membership_by_player,
+    )
+
+
+def allocate_hitter_usage_daily_to_day_slot_capacity(
+    entries: list[VolumeEntry],
+    *,
+    day_slot_capacity: dict[int, dict[str, int]],
+    total_days: int = _SYNTHETIC_SEASON_DAYS,
+) -> DailyUsageDetail:
+    normalized_entries = _normalize_entries(entries)
+    day_membership_by_player = _build_day_membership_by_player(
+        normalized_entries,
+        tag="hit-active",
+        total_days=total_days,
+    )
+    allocation_result = _allocate_daily_entries(
+        normalized_entries,
+        slot_capacity={},
+        day_membership_by_player=day_membership_by_player,
+        total_days=total_days,
+        side="hitter",
+        day_slot_capacity=day_slot_capacity,
+    )
+    return DailyUsageDetail(
+        allocation=allocation_result.allocation,
+        assigned_by_day_slot=allocation_result.assigned_by_day_slot,
+        day_membership_by_player=day_membership_by_player,
+    )
 
 
 def allocate_pitcher_usage_daily(
@@ -134,6 +191,7 @@ def allocate_pitcher_usage_daily(
     capped_start_budget: float | None,
     held_player_ids: set[str] | None = None,
     streaming_adds_per_period: int | None = None,
+    allow_same_day_starts_overflow: bool = False,
     total_days: int = _SYNTHETIC_SEASON_DAYS,
     period_days: int = _SYNTHETIC_PERIOD_DAYS,
 ) -> PitcherUsageAllocation:
@@ -173,29 +231,34 @@ def allocate_pitcher_usage_daily(
         non_start_days_by_player[entry.player_id] = non_start_days
         total_requested_starts += float(start_count)
 
-    selected_start_days_by_player = (
+    selected_start_days_result = (
         _cap_start_days_by_period(
             normalized_entries,
             start_days_by_player=start_days_by_player,
             capped_start_budget=capped_start_budget,
+            slot_capacity=slot_capacity,
             held_player_ids=held_ids,
             streaming_adds_per_period=streaming_adds_per_period,
+            allow_same_day_starts_overflow=allow_same_day_starts_overflow,
             total_days=total_days,
             period_days=period_days,
         )
         if capped_start_budget is not None
         or streaming_adds_per_period is not None
-        else {player_id: set(days) for player_id, days in start_days_by_player.items()}
+        or held_ids
+        else _CappedStartSelectionResult(
+            selected_start_days_by_player={player_id: set(days) for player_id, days in start_days_by_player.items()},
+            selected_held_starts=None,
+            selected_streamed_starts=None,
+            selected_overflow_starts=None,
+            effective_period_start_cap=None,
+        )
     )
-    selected_held_starts = None
-    selected_streamed_starts = None
-    if capped_start_budget is not None or streaming_adds_per_period is not None or held_ids:
-        selected_held_starts = float(
-            sum(len(days) for player_id, days in selected_start_days_by_player.items() if player_id in held_ids)
-        )
-        selected_streamed_starts = float(
-            sum(len(days) for player_id, days in selected_start_days_by_player.items() if player_id not in held_ids)
-        )
+    selected_start_days_by_player = selected_start_days_result.selected_start_days_by_player
+    selected_held_starts = selected_start_days_result.selected_held_starts
+    selected_streamed_starts = selected_start_days_result.selected_streamed_starts
+    selected_overflow_starts = selected_start_days_result.selected_overflow_starts
+    effective_period_start_cap = selected_start_days_result.effective_period_start_cap
 
     start_entries = [
         VolumeEntry(
@@ -269,6 +332,8 @@ def allocate_pitcher_usage_daily(
         capped_start_budget=None if capped_start_budget is None else float(max(capped_start_budget, 0.0)),
         selected_held_starts=selected_held_starts,
         selected_streamed_starts=selected_streamed_starts,
+        selected_overflow_starts=selected_overflow_starts,
+        effective_period_start_cap=effective_period_start_cap,
         streaming_adds_per_period=(
             None if streaming_adds_per_period is None else max(int(streaming_adds_per_period), 0)
         ),
@@ -479,6 +544,26 @@ def _generate_synthetic_days(
     return sorted(days)
 
 
+def _build_day_membership_by_player(
+    entries: list[VolumeEntry],
+    *,
+    tag: str,
+    total_days: int,
+) -> dict[str, set[int]]:
+    day_membership_by_player: dict[str, set[int]] = {}
+    for entry in entries:
+        day_membership_by_player[entry.player_id] = set(
+            _generate_synthetic_days(
+                player_id=entry.player_id,
+                year=entry.year,
+                count=_coerce_daily_event_count(entry.projected_volume, total_days=total_days),
+                tag=tag,
+                total_days=total_days,
+            )
+        )
+    return day_membership_by_player
+
+
 def _slot_daily_capacity(
     slot_capacity: dict[str, float],
     *,
@@ -521,20 +606,56 @@ def _allocate_daily_entries(
     total_days: int,
     side: str,
     preassigned_by_day_slot: dict[int, dict[str, float]] | None = None,
+    day_slot_capacity: dict[int, dict[str, int]] | None = None,
 ) -> _DailyAllocationResult:
-    normalized_slot_capacity = {
-        str(slot): max(float(capacity), 0.0)
-        for slot, capacity in slot_capacity.items()
-        if float(capacity) > _EPSILON
-    }
+    normalized_day_slot_capacity: dict[int, dict[str, int]] | None = None
+    if day_slot_capacity is not None:
+        normalized_day_slot_capacity = {}
+        for day, slot_map in day_slot_capacity.items():
+            normalized_slots = {
+                str(slot): max(int(capacity), 0)
+                for slot, capacity in slot_map.items()
+                if int(capacity) > 0
+            }
+            if normalized_slots:
+                normalized_day_slot_capacity[int(day)] = normalized_slots
+        normalized_slot_capacity: dict[str, float] = {}
+        for slot_map in normalized_day_slot_capacity.values():
+            for slot, capacity in slot_map.items():
+                normalized_slot_capacity[slot] = float(normalized_slot_capacity.get(slot, 0.0) + float(capacity))
+    else:
+        normalized_slot_capacity = {
+            str(slot): max(float(capacity), 0.0)
+            for slot, capacity in slot_capacity.items()
+            if float(capacity) > _EPSILON
+        }
     normalized_entries = [
         entry
         for entry in _normalize_entries(entries)
         if entry.slots & set(normalized_slot_capacity.keys())
     ]
-    per_day_capacity = _slot_daily_capacity(normalized_slot_capacity, total_days=total_days)
+    uniform_per_day_capacity = (
+        None
+        if normalized_day_slot_capacity is not None
+        else _slot_daily_capacity(normalized_slot_capacity, total_days=total_days)
+    )
 
-    if not normalized_entries or not per_day_capacity:
+    if not normalized_entries or not normalized_slot_capacity:
+        return _DailyAllocationResult(
+            allocation=UsageAllocation(
+                usage_share_by_player={},
+                assigned_volume_by_player={},
+                assigned_volume_by_player_slot={},
+                slot_capacity=normalized_slot_capacity,
+                slot_assigned_volume={slot: 0.0 for slot in normalized_slot_capacity},
+                total_requested_volume=float(sum(float(entry.projected_volume) for entry in normalized_entries)),
+                total_assigned_volume=0.0,
+                total_capacity=float(sum(normalized_slot_capacity.values())),
+            ),
+            assigned_by_day_slot={},
+        )
+
+    if normalized_day_slot_capacity is None and not uniform_per_day_capacity:
         return _DailyAllocationResult(
             allocation=UsageAllocation(
                 usage_share_by_player={},
@@ -568,9 +689,14 @@ def _allocate_daily_entries(
 
     for day in range(int(total_days)):
         day_preassigned = preassigned.get(day, {})
+        day_capacity = (
+            normalized_day_slot_capacity.get(day, {})
+            if normalized_day_slot_capacity is not None
+            else uniform_per_day_capacity or {}
+        )
         remaining_capacity = {
-            slot: max(int(per_day_capacity.get(slot, 0) - int(round(day_preassigned.get(slot, 0.0)))), 0)
-            for slot in per_day_capacity
+            slot: max(int(day_capacity.get(slot, 0) - int(round(day_preassigned.get(slot, 0.0)))), 0)
+            for slot in day_capacity
         }
         if not any(remaining_capacity.values()):
             continue
@@ -588,7 +714,7 @@ def _allocate_daily_entries(
                 key=lambda slot: _slot_sort_key(
                     slot,
                     side=side,
-                    daily_capacity=per_day_capacity,
+                    daily_capacity=day_capacity,
                     remaining_capacity=remaining_capacity,
                 ),
             )
@@ -630,61 +756,192 @@ def _cap_start_days_by_period(
     *,
     start_days_by_player: dict[str, set[int]],
     capped_start_budget: float | None,
+    slot_capacity: dict[str, float],
     held_player_ids: set[str] | None,
     streaming_adds_per_period: int | None,
+    allow_same_day_starts_overflow: bool,
     total_days: int,
     period_days: int,
-) -> dict[str, set[int]]:
-    if capped_start_budget is None and streaming_adds_per_period is None:
-        return {player_id: set(days) for player_id, days in start_days_by_player.items()}
+) -> _CappedStartSelectionResult:
+    if capped_start_budget is None and streaming_adds_per_period is None and not held_player_ids:
+        return _CappedStartSelectionResult(
+            selected_start_days_by_player={player_id: set(days) for player_id, days in start_days_by_player.items()},
+            selected_held_starts=None,
+            selected_streamed_starts=None,
+            selected_overflow_starts=None,
+            effective_period_start_cap=None,
+        )
 
     held_ids = {str(player_id).strip() for player_id in (held_player_ids or set()) if str(player_id).strip()}
     periods = max(int(math.ceil(float(total_days) / max(int(period_days), 1))), 1)
-    budget_per_period = float(max(capped_start_budget, 0.0)) / float(periods)
+    budget_per_period = (
+        None
+        if capped_start_budget is None
+        else float(max(capped_start_budget, 0.0)) / float(periods)
+    )
     streaming_limit_per_period = None if streaming_adds_per_period is None else max(int(streaming_adds_per_period), 0)
     selected: dict[str, set[int]] = {player_id: set() for player_id in start_days_by_player}
     sorted_entries = sorted(entries, key=lambda entry: (-float(entry.quality), str(entry.player_id)))
+    daily_start_capacity = _daily_start_slot_capacity(slot_capacity, total_days=total_days)
+    selected_held_starts = 0
+    selected_streamed_starts = 0
+    selected_overflow_starts = 0
 
     assigned_so_far = 0
     for period_idx in range(periods):
         allowed_this_period: int | None = None
         if capped_start_budget is not None:
-            cumulative_budget = float((period_idx + 1) * budget_per_period)
+            cumulative_budget = float((period_idx + 1) * float(budget_per_period or 0.0))
             allowed_this_period = max(int(math.floor(cumulative_budget + 1e-9)) - assigned_so_far, 0)
+        if daily_start_capacity <= 0:
+            continue
         if allowed_this_period is not None and allowed_this_period <= 0:
             continue
         period_start = period_idx * max(int(period_days), 1)
         period_end = min(period_start + max(int(period_days), 1), int(total_days))
         held_events: list[tuple[float, str, int]] = []
         stream_events: list[tuple[float, str, int]] = []
+        held_events_by_day: dict[int, list[tuple[float, str, int]]] = {}
+        stream_events_by_day: dict[int, list[tuple[float, str, int]]] = {}
         for entry in sorted_entries:
             player_days = start_days_by_player.get(entry.player_id, set())
             for day in sorted(day for day in player_days if period_start <= int(day) < period_end):
                 event = (float(entry.quality), str(entry.player_id), int(day))
                 if entry.player_id in held_ids:
                     held_events.append(event)
+                    held_events_by_day.setdefault(int(day), []).append(event)
                 else:
                     stream_events.append(event)
+                    stream_events_by_day.setdefault(int(day), []).append(event)
         held_events.sort(key=lambda item: (-item[0], item[1], item[2]))
         stream_events.sort(key=lambda item: (-item[0], item[1], item[2]))
+        for event_list in held_events_by_day.values():
+            event_list.sort(key=lambda item: (-item[0], item[1], item[2]))
+        for event_list in stream_events_by_day.values():
+            event_list.sort(key=lambda item: (-item[0], item[1], item[2]))
 
-        selected_events: list[tuple[float, str, int]] = []
-        if allowed_this_period is None:
-            selected_events.extend(held_events)
-        else:
-            selected_events.extend(held_events[:allowed_this_period])
-        remaining_limit = None if allowed_this_period is None else max(allowed_this_period - len(selected_events), 0)
-        stream_limit = len(stream_events) if remaining_limit is None else remaining_limit
-        if streaming_limit_per_period is not None:
-            stream_limit = min(stream_limit, streaming_limit_per_period)
-        selected_events.extend(stream_events[:stream_limit])
+        period_selected = 0
+        period_streamed = 0
+        day_selected_counts: dict[int, int] = {}
+        selected_event_keys: set[tuple[str, str, int]] = set()
 
-        for _quality, player_id, day in selected_events:
-            selected.setdefault(player_id, set()).add(day)
+        def _try_select_event(
+            source: str,
+            player_id: str,
+            event_day: int,
+            *,
+            enforce_weekly_cap: bool,
+        ) -> bool:
+            nonlocal period_selected, period_streamed, selected_held_starts, selected_streamed_starts
+            if day_selected_counts.get(event_day, 0) >= daily_start_capacity:
+                return False
+            if allowed_this_period is not None and enforce_weekly_cap and period_selected >= allowed_this_period:
+                return False
+            if source == "stream" and streaming_limit_per_period is not None and period_streamed >= streaming_limit_per_period:
+                return False
+            event_key = (source, player_id, event_day)
+            if event_key in selected_event_keys:
+                return False
+            selected_event_keys.add(event_key)
+            selected.setdefault(player_id, set()).add(event_day)
+            day_selected_counts[event_day] = int(day_selected_counts.get(event_day, 0) + 1)
+            period_selected += 1
+            if source == "held":
+                selected_held_starts += 1
+            else:
+                selected_streamed_starts += 1
+                period_streamed += 1
+            return True
+
+        for _quality, player_id, event_day in held_events:
+            _try_select_event("held", player_id, event_day, enforce_weekly_cap=True)
+        for _quality, player_id, event_day in stream_events:
+            _try_select_event("stream", player_id, event_day, enforce_weekly_cap=True)
+
+        if allow_same_day_starts_overflow and allowed_this_period is not None and period_selected >= allowed_this_period:
+            stream_slots_remaining = (
+                None
+                if streaming_limit_per_period is None
+                else max(int(streaming_limit_per_period) - int(period_streamed), 0)
+            )
+            best_overflow_day: int | None = None
+            best_overflow_events: list[tuple[str, str, int]] = []
+            best_overflow_quality = float("-inf")
+            for day in range(period_start, period_end):
+                if int(day_selected_counts.get(day, 0)) <= 0:
+                    continue
+                remaining_day_capacity = max(int(daily_start_capacity) - int(day_selected_counts.get(day, 0)), 0)
+                if remaining_day_capacity <= 0:
+                    continue
+                day_overflow_events: list[tuple[str, str, int]] = []
+                day_overflow_quality = 0.0
+                for quality, player_id, event_day in held_events_by_day.get(day, []):
+                    if remaining_day_capacity <= 0:
+                        break
+                    event_key = ("held", player_id, event_day)
+                    if event_key in selected_event_keys:
+                        continue
+                    day_overflow_events.append(("held", player_id, event_day))
+                    day_overflow_quality += float(quality)
+                    remaining_day_capacity -= 1
+                stream_slots_for_day = stream_slots_remaining
+                for quality, player_id, event_day in stream_events_by_day.get(day, []):
+                    if remaining_day_capacity <= 0:
+                        break
+                    if stream_slots_for_day is not None and stream_slots_for_day <= 0:
+                        break
+                    event_key = ("stream", player_id, event_day)
+                    if event_key in selected_event_keys:
+                        continue
+                    day_overflow_events.append(("stream", player_id, event_day))
+                    day_overflow_quality += float(quality)
+                    remaining_day_capacity -= 1
+                    if stream_slots_for_day is not None:
+                        stream_slots_for_day -= 1
+                if day_overflow_events and day_overflow_quality > best_overflow_quality:
+                    best_overflow_day = int(day)
+                    best_overflow_events = day_overflow_events
+                    best_overflow_quality = float(day_overflow_quality)
+            if best_overflow_day is not None:
+                overflow_added = 0
+                for source, player_id, event_day in best_overflow_events:
+                    if _try_select_event(source, player_id, event_day, enforce_weekly_cap=False):
+                        overflow_added += 1
+                selected_overflow_starts += int(overflow_added)
+
         if allowed_this_period is not None:
-            assigned_so_far += len(selected_events)
+            assigned_so_far += min(period_selected, allowed_this_period)
 
-    return selected
+    total_selected_starts = selected_held_starts + selected_streamed_starts
+    return _CappedStartSelectionResult(
+        selected_start_days_by_player=selected,
+        selected_held_starts=float(selected_held_starts),
+        selected_streamed_starts=float(selected_streamed_starts),
+        selected_overflow_starts=float(selected_overflow_starts),
+        effective_period_start_cap=float(total_selected_starts) / float(periods),
+    )
+
+
+def _daily_start_slot_capacity(
+    slot_capacity: dict[str, float],
+    *,
+    total_days: int,
+) -> int:
+    return max(
+        int(
+            sum(
+                _slot_daily_capacity(
+                    {
+                        slot: capacity
+                        for slot, capacity in slot_capacity.items()
+                        if str(slot) in {"P", "SP"}
+                    },
+                    total_days=total_days,
+                ).values()
+            )
+        ),
+        0,
+    )
 
 
 def _allocate_volume(
