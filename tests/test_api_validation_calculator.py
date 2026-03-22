@@ -112,18 +112,19 @@ class CalculatorValidationTests(unittest.TestCase):
 
     def test_calculate_request_default_horizon_is_twenty(self) -> None:
         req = app_module.CalculateRequest()
+        cache_params = app_module._default_calculation_cache_params()
         self.assertEqual(req.horizon, 20)
         self.assertEqual(req.minors, app_module.COMMON_DEFAULT_MINOR_SLOTS)
         self.assertEqual(req.sgp_denominator_mode, "classic")
         self.assertFalse(req.enable_playing_time_reliability)
         self.assertFalse(req.enable_age_risk_adjustment)
-        self.assertTrue(req.enable_prospect_risk_adjustment)
-        self.assertFalse(req.enable_bench_stash_relief)
-        self.assertEqual(req.bench_negative_penalty, 0.55)
-        self.assertFalse(req.enable_ir_stash_relief)
-        self.assertEqual(req.ir_negative_penalty, 0.20)
         self.assertTrue(req.enable_replacement_blend)
         self.assertEqual(req.replacement_blend_alpha, 0.40)
+        self.assertTrue(cache_params["enable_prospect_risk_adjustment"])
+        self.assertFalse(cache_params["enable_bench_stash_relief"])
+        self.assertEqual(cache_params["bench_negative_penalty"], 0.55)
+        self.assertFalse(cache_params["enable_ir_stash_relief"])
+        self.assertEqual(cache_params["ir_negative_penalty"], 0.20)
 
     def test_runtime_and_model_default_settings_stay_aligned(self) -> None:
         req = app_module.CalculateRequest()
@@ -136,8 +137,11 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertEqual(req.horizon, model_defaults.horizon_years)
         self.assertEqual(req.two_way, cache_params["two_way"])
         self.assertEqual(req.two_way, model_defaults.two_way)
-        self.assertEqual(req.enable_prospect_risk_adjustment, cache_params["enable_prospect_risk_adjustment"])
-        self.assertEqual(req.enable_prospect_risk_adjustment, model_defaults.enable_prospect_risk_adjustment)
+        self.assertEqual(cache_params["enable_prospect_risk_adjustment"], model_defaults.enable_prospect_risk_adjustment)
+        self.assertEqual(cache_params["enable_bench_stash_relief"], model_defaults.enable_bench_stash_relief)
+        self.assertEqual(cache_params["bench_negative_penalty"], model_defaults.bench_negative_penalty)
+        self.assertEqual(cache_params["enable_ir_stash_relief"], model_defaults.enable_ir_stash_relief)
+        self.assertEqual(cache_params["ir_negative_penalty"], model_defaults.ir_negative_penalty)
         self.assertEqual(req.enable_replacement_blend, cache_params["enable_replacement_blend"])
         self.assertEqual(req.enable_replacement_blend, model_defaults.enable_replacement_blend)
         self.assertEqual(req.replacement_blend_alpha, cache_params["replacement_blend_alpha"])
@@ -223,7 +227,7 @@ class CalculatorValidationTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422)
 
-    def test_points_mode_forwards_weekly_and_stash_settings(self) -> None:
+    def test_points_mode_applies_hidden_weekly_and_stash_settings_from_league_depth(self) -> None:
         fake_out = pd.DataFrame(
             [
                 {
@@ -298,15 +302,12 @@ class CalculatorValidationTests(unittest.TestCase):
                     "discount": 0.94,
                     "two_way": "sum",
                     "points_valuation_mode": "weekly_h2h",
+                    "bench": 10,
+                    "ir": 4,
                     "ip_max": 1400,
                     "weekly_starts_cap": 12,
                     "weekly_acquisition_cap": 7,
                     "allow_same_day_starts_overflow": True,
-                    "enable_prospect_risk_adjustment": True,
-                    "enable_bench_stash_relief": True,
-                    "bench_negative_penalty": 0.45,
-                    "enable_ir_stash_relief": True,
-                    "ir_negative_penalty": 0.15,
                     "hit_of": 1,
                     "pit_p": 1,
                     "pts_hit_1b": 1,
@@ -321,9 +322,9 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertTrue(captured_kwargs.get("allow_same_day_starts_overflow"))
         self.assertTrue(captured_kwargs.get("enable_prospect_risk_adjustment"))
         self.assertTrue(captured_kwargs.get("enable_bench_stash_relief"))
-        self.assertEqual(captured_kwargs.get("bench_negative_penalty"), 0.45)
+        self.assertEqual(captured_kwargs.get("bench_negative_penalty"), 0.55)
         self.assertTrue(captured_kwargs.get("enable_ir_stash_relief"))
-        self.assertEqual(captured_kwargs.get("ir_negative_penalty"), 0.15)
+        self.assertEqual(captured_kwargs.get("ir_negative_penalty"), 0.20)
 
     def test_points_request_accepts_daily_h2h_mode(self) -> None:
         fake_out = pd.DataFrame(
@@ -669,15 +670,11 @@ class CalculatorValidationTests(unittest.TestCase):
                     "pit_p": 7,
                     "pit_sp": 1,
                     "pit_rp": 1,
+                    "bench": 10,
                     "ir": 4,
                     "sgp_denominator_mode": "robust",
                     "enable_playing_time_reliability": True,
                     "enable_age_risk_adjustment": True,
-                    "enable_prospect_risk_adjustment": True,
-                    "enable_bench_stash_relief": True,
-                    "bench_negative_penalty": 0.45,
-                    "enable_ir_stash_relief": True,
-                    "ir_negative_penalty": 0.15,
                     "enable_replacement_blend": True,
                     "replacement_blend_alpha": 0.55,
                 },
@@ -696,9 +693,9 @@ class CalculatorValidationTests(unittest.TestCase):
         self.assertTrue(captured_kwargs.get("enable_age_risk_adjustment"))
         self.assertTrue(captured_kwargs.get("enable_prospect_risk_adjustment"))
         self.assertTrue(captured_kwargs.get("enable_bench_stash_relief"))
-        self.assertEqual(captured_kwargs.get("bench_negative_penalty"), 0.45)
+        self.assertEqual(captured_kwargs.get("bench_negative_penalty"), 0.55)
         self.assertTrue(captured_kwargs.get("enable_ir_stash_relief"))
-        self.assertEqual(captured_kwargs.get("ir_negative_penalty"), 0.15)
+        self.assertEqual(captured_kwargs.get("ir_negative_penalty"), 0.20)
         self.assertTrue(captured_kwargs.get("enable_replacement_blend"))
         self.assertEqual(captured_kwargs.get("replacement_blend_alpha"), 0.55)
 
@@ -1548,11 +1545,6 @@ class CalculatorValidationTests(unittest.TestCase):
                 "sims": 300,
                 "ip_min": 1000,
                 "ip_max": 1500,
-                "enable_prospect_risk_adjustment": True,
-                "enable_bench_stash_relief": True,
-                "enable_ir_stash_relief": True,
-                "bench_negative_penalty": 0.55,
-                "ir_negative_penalty": 0.2,
                 "hit_c": 2,
                 "hit_1b": 1,
                 "hit_2b": 1,

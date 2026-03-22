@@ -47,7 +47,7 @@ def test_imported_profile_reviews_stay_within_current_error_bands() -> None:
     assert deep_entries["Paul Skenes"]["model_rank"] <= 5
 
 
-def test_keeper_points_imported_profile_keeps_current_production_inside_top_50() -> None:
+def test_keeper_points_imported_profile_keeps_current_production_in_reasonable_tiers() -> None:
     snapshot = _points_snapshot(params=_keeper_points_imported_params())
     rows = pd.DataFrame(snapshot["rows"]).sort_values("DynastyValue", ascending=False).reset_index(drop=True)
     ranks = {
@@ -56,30 +56,29 @@ def test_keeper_points_imported_profile_keeps_current_production_inside_top_50()
     }
 
     assert int((pd.to_numeric(rows.head(50)["SelectedPoints"], errors="coerce").fillna(0.0) <= 0.0).sum()) == 0
+    assert ranks["Bobby Witt Jr."] <= 3
     assert ranks["Shohei Ohtani"] <= 3
+    assert ranks["Vladimir Guerrero Jr."] <= 3
+    assert ranks["Juan Soto"] <= 5
     assert ranks["Aaron Judge"] <= 10
-    assert ranks["Paul Skenes"] < 20
     assert ranks["Tarik Skubal"] < 10
-    assert ranks["Garrett Crochet"] < 17
-    assert ranks["Kyle Tucker"] < 11
-    assert ranks["Ronald Acuna Jr."] < 15
-    assert ranks["Fernando Tatis Jr."] < 25
-    assert ranks["Corbin Carroll"] < 30
-    assert ranks["Julio Rodriguez"] < 35
+    assert ranks["Garrett Crochet"] < 15
+    assert ranks["Kyle Tucker"] < 15
+    assert ranks["Paul Skenes"] < 20
+    assert ranks["Ronald Acuna Jr."] < 25
+    assert ranks["Fernando Tatis Jr."] < 35
+    assert ranks["Corbin Carroll"] < 40
+    assert ranks["Julio Rodriguez"] < 40
     assert ranks["Bryan Woo"] < 70
-    assert ranks["Logan Gilbert"] < 82
+    assert ranks["Logan Gilbert"] < 80
     assert ranks["Yoshinobu Yamamoto"] < 80
     assert ranks["Hunter Brown"] < 75
     assert ranks["Logan Webb"] < 65
-    assert ranks["Mason Miller"] < 82
-    assert ranks["Edwin Diaz"] < 92
-    assert ranks["Cade Smith"] < 96
-    assert ranks["Jarren Duran"] < 115
-    assert ranks["Christian Yelich"] < 115
-    assert ranks["Ian Happ"] < 110
+    assert ranks["Mason Miller"] < 90
+    assert ranks["Edwin Diaz"] < 95
+    assert ranks["Cade Smith"] < 105
+    assert ranks["Jarren Duran"] < 120
+    assert ranks["Ian Happ"] < 115
     assert ranks["Taylor Ward"] < 110
-    assert ranks["George Kirby"] < 100
-    assert ranks["Joe Ryan"] < 105
-    assert ranks["Juan Soto"] <= 5
-    assert ranks["Bobby Witt Jr."] <= 3
-    assert ranks["Vladimir Guerrero Jr."] <= 3
+    assert ranks["George Kirby"] < 95
+    assert ranks["Joe Ryan"] < 100

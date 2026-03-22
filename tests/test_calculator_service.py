@@ -665,7 +665,9 @@ def test_run_calculate_request_sanitizes_nested_payload_before_cache_and_respons
     assert result["diagnostics"]["summary"]["worst"] is None
     assert result["explanations"]["test-player"]["per_year"][0]["raw_year_value"] is None
     assert result["explanations"]["test-player"]["per_year"][0]["discounted_contribution"] is None
-    cache_key = harness.service._ctx.calc_result_cache_key(CalculateRequest().model_dump())
+    cache_key = harness.service._ctx.calc_result_cache_key(
+        harness.service._resolved_runtime_settings(CalculateRequest().model_dump())
+    )
     assert harness.result_cache[cache_key] == result
     json.dumps(result, allow_nan=False)
 

@@ -9,6 +9,10 @@ from typing import Any, Callable, Mapping
 import pandas as pd
 
 DEFAULT_DYNASTY_METHODOLOGY_VERSION = "2026-03-22"
+HIDDEN_DYNASTY_BENCH_STASH_MIN_BENCH_SLOTS = 10
+HIDDEN_DYNASTY_IR_STASH_MIN_IR_SLOTS = 4
+HIDDEN_DYNASTY_BENCH_NEGATIVE_PENALTY = 0.55
+HIDDEN_DYNASTY_IR_NEGATIVE_PENALTY = 0.20
 
 
 def default_dynasty_methodology_fingerprint(
@@ -38,6 +42,79 @@ def coerce_bool(value: object, *, default: bool = False) -> bool:
     if text in {"0", "false", "no", "n", "off"}:
         return False
     return default
+
+
+def _coerce_non_negative_int(value: object, *, default: int = 0) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return int(default)
+    return max(parsed, 0)
+
+
+def _coerce_float(value: object, *, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def resolve_hidden_dynasty_modeling_settings(
+    *,
+    bench_slots: object,
+    ir_slots: object,
+    source: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    bench = _coerce_non_negative_int(bench_slots)
+    ir = _coerce_non_negative_int(ir_slots)
+    resolved: dict[str, Any] = {
+        "enable_prospect_risk_adjustment": True,
+        "enable_bench_stash_relief": bench >= HIDDEN_DYNASTY_BENCH_STASH_MIN_BENCH_SLOTS,
+        "bench_negative_penalty": HIDDEN_DYNASTY_BENCH_NEGATIVE_PENALTY,
+        "enable_ir_stash_relief": ir >= HIDDEN_DYNASTY_IR_STASH_MIN_IR_SLOTS,
+        "ir_negative_penalty": HIDDEN_DYNASTY_IR_NEGATIVE_PENALTY,
+    }
+    if not isinstance(source, Mapping):
+        return resolved
+
+    if "enable_prospect_risk_adjustment" in source:
+        resolved["enable_prospect_risk_adjustment"] = coerce_bool(
+            source.get("enable_prospect_risk_adjustment"),
+            default=bool(resolved["enable_prospect_risk_adjustment"]),
+        )
+    if "enable_bench_stash_relief" in source:
+        resolved["enable_bench_stash_relief"] = coerce_bool(
+            source.get("enable_bench_stash_relief"),
+            default=bool(resolved["enable_bench_stash_relief"]),
+        )
+    if "bench_negative_penalty" in source:
+        resolved["bench_negative_penalty"] = _coerce_float(
+            source.get("bench_negative_penalty"),
+            default=HIDDEN_DYNASTY_BENCH_NEGATIVE_PENALTY,
+        )
+    if "enable_ir_stash_relief" in source:
+        resolved["enable_ir_stash_relief"] = coerce_bool(
+            source.get("enable_ir_stash_relief"),
+            default=bool(resolved["enable_ir_stash_relief"]),
+        )
+    if "ir_negative_penalty" in source:
+        resolved["ir_negative_penalty"] = _coerce_float(
+            source.get("ir_negative_penalty"),
+            default=HIDDEN_DYNASTY_IR_NEGATIVE_PENALTY,
+        )
+    return resolved
+
+
+def with_resolved_hidden_dynasty_modeling_settings(settings: Mapping[str, Any] | None) -> dict[str, Any]:
+    normalized = dict(settings or {})
+    normalized.update(
+        resolve_hidden_dynasty_modeling_settings(
+            bench_slots=normalized.get("bench"),
+            ir_slots=normalized.get("ir"),
+            source=normalized,
+        )
+    )
+    return normalized
 
 
 def roto_category_settings_from_dict(
@@ -590,18 +667,13 @@ def default_calculation_cache_params(
         "sgp_epsilon_ratio": 0.0015,
         "enable_playing_time_reliability": False,
         "enable_age_risk_adjustment": False,
-        "enable_prospect_risk_adjustment": True,
-        "enable_bench_stash_relief": False,
-        "bench_negative_penalty": 0.55,
-        "enable_ir_stash_relief": False,
-        "ir_negative_penalty": 0.20,
         "enable_replacement_blend": True,
         "replacement_blend_alpha": 0.40,
         "replacement_depth_mode": "blended_depth",
         "replacement_depth_blend_alpha": 0.33,
     }
     params.update(roto_category_field_defaults)
-    return params
+    return with_resolved_hidden_dynasty_modeling_settings(params)
 
 
 def calculator_guardrails_payload(
@@ -682,7 +754,7 @@ PREWARM_CONFIGS: list[dict[str, Any]] = [
     {"label": "14T-5x5-roto", "teams": 14},
     # 4) 12-team points
     {"label": "12T-points", "mode": "points"},
-    # 5) 12-team deep 6x6 roto (OPS + QA3/SVH with stash realism)
+    # 5) 12-team deep 6x6 roto (OPS + QA3/SVH with hidden stash realism)
     {
         "label": "12T-deep-dynasty-roto",
         "hit_c": 2,
@@ -708,10 +780,5 @@ PREWARM_CONFIGS: list[dict[str, Any]] = [
         "roto_pit_sv": False,
         "roto_pit_qa3": True,
         "roto_pit_svh": True,
-        "enable_prospect_risk_adjustment": True,
-        "enable_bench_stash_relief": True,
-        "bench_negative_penalty": 0.55,
-        "enable_ir_stash_relief": True,
-        "ir_negative_penalty": 0.20,
     },
 ]

@@ -13,6 +13,7 @@ from fastapi import HTTPException, Request
 from pydantic import BaseModel, Field, model_validator
 
 from backend.core.calculator_orchestration import finalize_job_locked
+from backend.core.calculator_helpers import with_resolved_hidden_dynasty_modeling_settings
 from backend.core.export_utils import clean_value_for_json
 from backend.domain.constants import (
     CALCULATOR_RESULT_POINTS_EXPORT_ORDER,
@@ -36,11 +37,6 @@ class CalculateRequest(BaseModel):
     sgp_epsilon_ratio: float = Field(default=0.0015, ge=0.0, le=1000.0)
     enable_playing_time_reliability: bool = False
     enable_age_risk_adjustment: bool = False
-    enable_prospect_risk_adjustment: bool = True
-    enable_bench_stash_relief: bool = False
-    bench_negative_penalty: float = Field(default=0.55, ge=0.0, le=1.0)
-    enable_ir_stash_relief: bool = False
-    ir_negative_penalty: float = Field(default=0.20, ge=0.0, le=1.0)
     enable_replacement_blend: bool = True
     replacement_blend_alpha: float = Field(default=0.40, ge=0.0, le=1.0)
     teams: int = Field(default=12, ge=2, le=30)
@@ -324,9 +320,13 @@ class CalculatorService:
                 ordered.append(col)
         return ordered
 
+    @staticmethod
+    def _resolved_runtime_settings(payload: dict[str, Any]) -> dict[str, Any]:
+        return with_resolved_hidden_dynasty_modeling_settings(payload)
+
     def _run_calculate_request(self, req: CalculateRequest, *, source: str) -> dict:
         started = time.perf_counter()
-        settings = req.model_dump()
+        settings = self._resolved_runtime_settings(req.model_dump())
         if req.scoring_mode == "points":
             active_cache = self._ctx.calculate_points_dynasty_frame_cached
         else:
@@ -381,11 +381,11 @@ class CalculatorService:
                         weekly_starts_cap=req.weekly_starts_cap,
                         allow_same_day_starts_overflow=req.allow_same_day_starts_overflow,
                         weekly_acquisition_cap=req.weekly_acquisition_cap,
-                        enable_prospect_risk_adjustment=req.enable_prospect_risk_adjustment,
-                        enable_bench_stash_relief=req.enable_bench_stash_relief,
-                        bench_negative_penalty=req.bench_negative_penalty,
-                        enable_ir_stash_relief=req.enable_ir_stash_relief,
-                        ir_negative_penalty=req.ir_negative_penalty,
+                        enable_prospect_risk_adjustment=bool(settings["enable_prospect_risk_adjustment"]),
+                        enable_bench_stash_relief=bool(settings["enable_bench_stash_relief"]),
+                        bench_negative_penalty=float(settings["bench_negative_penalty"]),
+                        enable_ir_stash_relief=bool(settings["enable_ir_stash_relief"]),
+                        ir_negative_penalty=float(settings["ir_negative_penalty"]),
                         start_year=req.start_year,
                         pts_hit_1b=req.pts_hit_1b,
                         pts_hit_2b=req.pts_hit_2b,
@@ -441,11 +441,11 @@ class CalculatorService:
                         sgp_epsilon_ratio=req.sgp_epsilon_ratio,
                         enable_playing_time_reliability=req.enable_playing_time_reliability,
                         enable_age_risk_adjustment=req.enable_age_risk_adjustment,
-                        enable_prospect_risk_adjustment=req.enable_prospect_risk_adjustment,
-                        enable_bench_stash_relief=req.enable_bench_stash_relief,
-                        bench_negative_penalty=req.bench_negative_penalty,
-                        enable_ir_stash_relief=req.enable_ir_stash_relief,
-                        ir_negative_penalty=req.ir_negative_penalty,
+                        enable_prospect_risk_adjustment=bool(settings["enable_prospect_risk_adjustment"]),
+                        enable_bench_stash_relief=bool(settings["enable_bench_stash_relief"]),
+                        bench_negative_penalty=float(settings["bench_negative_penalty"]),
+                        enable_ir_stash_relief=bool(settings["enable_ir_stash_relief"]),
+                        ir_negative_penalty=float(settings["ir_negative_penalty"]),
                         enable_replacement_blend=req.enable_replacement_blend,
                         replacement_blend_alpha=req.replacement_blend_alpha,
                         **self._ctx.roto_category_settings_from_dict(settings),
@@ -736,7 +736,7 @@ class CalculatorService:
         client_ip = self._ctx.client_ip(request)
         created_at = self._ctx.iso_now()
         payload = req.model_dump()
-        cache_key = self._ctx.calc_result_cache_key(payload)
+        cache_key = self._ctx.calc_result_cache_key(self._resolved_runtime_settings(payload))
         cached_result = self._ctx.result_cache_get(cache_key)
         job_id = uuid4().hex
         job = {

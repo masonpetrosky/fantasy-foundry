@@ -8,6 +8,8 @@ from typing import Any, Callable
 
 import pandas as pd
 
+from backend.core.calculator_helpers import with_resolved_hidden_dynasty_modeling_settings
+
 logger = logging.getLogger(__name__)
 
 DynastyLookup = tuple[dict[str, dict], dict[str, dict], set[str], list[str]]
@@ -44,7 +46,7 @@ def default_dynasty_lookup(
         )
 
     try:
-        params = default_calculation_cache_params()
+        params = with_resolved_hidden_dynasty_modeling_settings(default_calculation_cache_params())
         out = calculate_common_dynasty_frame_cached(
             teams=int(params["teams"]),
             sims=int(params["sims"]),

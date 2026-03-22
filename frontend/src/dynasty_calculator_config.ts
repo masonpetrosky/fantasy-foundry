@@ -78,11 +78,6 @@ export interface CalculatorSettings {
   sgp_epsilon_ratio: number;
   enable_playing_time_reliability: boolean;
   enable_age_risk_adjustment: boolean;
-  enable_prospect_risk_adjustment: boolean;
-  enable_bench_stash_relief: boolean;
-  bench_negative_penalty: number;
-  enable_ir_stash_relief: boolean;
-  ir_negative_penalty: number;
   enable_replacement_blend: boolean;
   replacement_blend_alpha: number;
   start_year: number;
@@ -154,11 +149,6 @@ export function buildDefaultCalculatorSettings(meta: CalculatorMeta | null | und
     sgp_epsilon_ratio: 0.0015,
     enable_playing_time_reliability: false,
     enable_age_risk_adjustment: false,
-    enable_prospect_risk_adjustment: true,
-    enable_bench_stash_relief: false,
-    bench_negative_penalty: 0.55,
-    enable_ir_stash_relief: false,
-    ir_negative_penalty: 0.2,
     enable_replacement_blend: true,
     replacement_blend_alpha: 0.4,
     start_year: Number(meta?.years?.[0] ?? 2026),
@@ -319,17 +309,6 @@ export function buildCalculatorPayload(settings: Record<string, unknown>, availa
   }
   const enablePlayingTimeReliability = coerceBooleanSetting(settings.enable_playing_time_reliability, false);
   const enableAgeRiskAdjustment = coerceBooleanSetting(settings.enable_age_risk_adjustment, false);
-  const enableProspectRiskAdjustment = coerceBooleanSetting(settings.enable_prospect_risk_adjustment, true);
-  const enableBenchStashRelief = coerceBooleanSetting(settings.enable_bench_stash_relief, false);
-  const benchNegativePenalty = Number(settings.bench_negative_penalty);
-  if (!Number.isFinite(benchNegativePenalty) || benchNegativePenalty < 0 || benchNegativePenalty > 1) {
-    return { error: "Bench stash penalty must be a number between 0 and 1." };
-  }
-  const enableIrStashRelief = coerceBooleanSetting(settings.enable_ir_stash_relief, false);
-  const irNegativePenalty = Number(settings.ir_negative_penalty);
-  if (!Number.isFinite(irNegativePenalty) || irNegativePenalty < 0 || irNegativePenalty > 1) {
-    return { error: "IR stash penalty must be a number between 0 and 1." };
-  }
   const enableReplacementBlend = coerceBooleanSetting(settings.enable_replacement_blend, true);
   const replacementBlendAlpha = Number(settings.replacement_blend_alpha ?? 0.4);
   if (!Number.isFinite(replacementBlendAlpha) || replacementBlendAlpha < 0 || replacementBlendAlpha > 1) {
@@ -377,7 +356,6 @@ export function buildCalculatorPayload(settings: Record<string, unknown>, availa
   }
 
   const payload: Record<string, unknown> = {
-    ...settings,
     mode,
     teams,
     sims,
@@ -403,11 +381,6 @@ export function buildCalculatorPayload(settings: Record<string, unknown>, availa
     sgp_epsilon_ratio: sgpEpsilonRatio,
     enable_playing_time_reliability: enablePlayingTimeReliability,
     enable_age_risk_adjustment: enableAgeRiskAdjustment,
-    enable_prospect_risk_adjustment: enableProspectRiskAdjustment,
-    enable_bench_stash_relief: enableBenchStashRelief,
-    bench_negative_penalty: benchNegativePenalty,
-    enable_ir_stash_relief: enableIrStashRelief,
-    ir_negative_penalty: irNegativePenalty,
     enable_replacement_blend: enableReplacementBlend,
     replacement_blend_alpha: replacementBlendAlpha,
     start_year: startYear,

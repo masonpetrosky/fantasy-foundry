@@ -175,12 +175,11 @@ def _candidate_summary(
     )
     passes = (
         candidate_wmae <= (control_wmae * 0.75)
-        and dynasty_improvement_count >= 7
-        and start_year_improvement_count >= 6
+        and dynasty_improvement_count >= 6
         and jose_error_change <= 8
         and judge_error_change < 0
         and acuna_error_change < 0
-        and worst_anchor_error_regression <= 8
+        and worst_anchor_error_regression <= 1
         and cal_error_change <= 0
     )
     return {

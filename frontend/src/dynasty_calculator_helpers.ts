@@ -72,11 +72,6 @@ export function buildQuickStartSettings({
     sgp_epsilon_ratio: 0.0015,
     enable_playing_time_reliability: false,
     enable_age_risk_adjustment: false,
-    enable_prospect_risk_adjustment: true,
-    enable_bench_stash_relief: false,
-    bench_negative_penalty: 0.55,
-    enable_ir_stash_relief: false,
-    ir_negative_penalty: 0.2,
     enable_replacement_blend: true,
     replacement_blend_alpha: 0.4,
     start_year: startYear,
@@ -134,11 +129,6 @@ export function buildQuickStartSettings({
       roto_pit_qs: false,
       roto_pit_qa3: true,
       roto_pit_svh: true,
-      enable_prospect_risk_adjustment: true,
-      enable_bench_stash_relief: true,
-      bench_negative_penalty: 0.55,
-      enable_ir_stash_relief: true,
-      ir_negative_penalty: 0.2,
     } as CalculatorSettings;
   }
 

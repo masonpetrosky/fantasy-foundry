@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 
+from backend.core.calculator_helpers import with_resolved_hidden_dynasty_modeling_settings
 from backend.core.runtime_state_protocols import RuntimeStateHelpersState
 
 
@@ -297,6 +298,7 @@ def calculate_points_dynasty_frame_cached(
 
 def _prewarm_roto_config(*, state: RuntimeStateHelpersState, params: dict) -> None:
     """Prewarm a single roto calculator configuration."""
+    params = with_resolved_hidden_dynasty_modeling_settings(params)
     ip_max = params["ip_max"]
     state._calculate_common_dynasty_frame_cached(
         teams=int(params["teams"]),
@@ -345,6 +347,7 @@ def _prewarm_roto_config(*, state: RuntimeStateHelpersState, params: dict) -> No
 
 def _prewarm_points_config(*, state: RuntimeStateHelpersState, params: dict) -> None:
     """Prewarm a single points calculator configuration."""
+    params = with_resolved_hidden_dynasty_modeling_settings(params)
     pts = state.DEFAULT_POINTS_SCORING
     state._calculate_points_dynasty_frame_cached(
         teams=int(params["teams"]),
@@ -372,6 +375,11 @@ def _prewarm_points_config(*, state: RuntimeStateHelpersState, params: dict) -> 
         weekly_starts_cap=params.get("weekly_starts_cap"),
         allow_same_day_starts_overflow=bool(params.get("allow_same_day_starts_overflow", False)),
         weekly_acquisition_cap=params.get("weekly_acquisition_cap"),
+        enable_prospect_risk_adjustment=bool(params.get("enable_prospect_risk_adjustment", True)),
+        enable_bench_stash_relief=bool(params.get("enable_bench_stash_relief", False)),
+        bench_negative_penalty=float(params.get("bench_negative_penalty", 0.55)),
+        enable_ir_stash_relief=bool(params.get("enable_ir_stash_relief", False)),
+        ir_negative_penalty=float(params.get("ir_negative_penalty", 0.20)),
         start_year=int(params["start_year"]),
         **pts,
     )
@@ -411,6 +419,7 @@ def prewarm_default_calculation_caches(*, state: RuntimeStateHelpersState) -> No
             for k, v in config.items():
                 if k not in ("label", "mode"):
                     params[k] = v
+            params = with_resolved_hidden_dynasty_modeling_settings(params)
 
             state.CALC_LOGGER.info("prewarm [%d/%d] %s", i + 1, len(configs_to_run), label)
             if mode == "points":

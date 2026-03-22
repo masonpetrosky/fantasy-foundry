@@ -362,6 +362,28 @@ describe("calculator preset storage", () => {
     expect(loaded["My League"]).toEqual({ teams: 14, scoring_mode: "roto" });
   });
 
+  it("strips retired dynasty modeling keys from stored presets", () => {
+    const { store } = withStorage();
+    writeCalculatorPresets({
+      "My League": {
+        teams: 14,
+        scoring_mode: "roto",
+        enable_prospect_risk_adjustment: false,
+        enable_bench_stash_relief: true,
+        bench_negative_penalty: 0.1,
+        enable_ir_stash_relief: true,
+        ir_negative_penalty: 0.1,
+      },
+    });
+    const loaded = readCalculatorPresets();
+    expect(loaded["My League"]).toEqual({ teams: 14, scoring_mode: "roto" });
+    expect(store["ff:calc-presets:v1"]).not.toContain("enable_prospect_risk_adjustment");
+    expect(store["ff:calc-presets:v1"]).not.toContain("enable_bench_stash_relief");
+    expect(store["ff:calc-presets:v1"]).not.toContain("bench_negative_penalty");
+    expect(store["ff:calc-presets:v1"]).not.toContain("enable_ir_stash_relief");
+    expect(store["ff:calc-presets:v1"]).not.toContain("ir_negative_penalty");
+  });
+
   it("returns empty object on malformed storage", () => {
     withStorage({ "ff:calc-presets:v1": "{{invalid" });
     expect(readCalculatorPresets()).toEqual({});
@@ -504,6 +526,20 @@ describe("mergeKnownCalculatorSettings", () => {
     expect(merged.hit_dh).toBe(0);
     expect(merged.teams).toBe(14);
   });
+
+  it("ignores retired dynasty modeling keys from legacy presets", () => {
+    const base = { teams: 12, bench: 6, ir: 0 };
+    const incoming = {
+      teams: 14,
+      enable_prospect_risk_adjustment: false,
+      enable_bench_stash_relief: true,
+      bench_negative_penalty: 0.1,
+      enable_ir_stash_relief: true,
+      ir_negative_penalty: 0.1,
+    };
+    const merged = mergeKnownCalculatorSettings(base, incoming);
+    expect(merged).toEqual({ teams: 14, bench: 6, ir: 0, mode: "common" });
+  });
 });
 
 describe("encodeCalculatorSettings / decodeCalculatorSettings", () => {
@@ -546,6 +582,28 @@ describe("encodeCalculatorSettings / decodeCalculatorSettings", () => {
     const settings = { teams: 12, hit_dh: 2, scoring_mode: "roto" };
     const encoded = encodeCalculatorSettings(settings);
     expect(decodeCalculatorSettings(encoded)).toEqual(settings);
+  });
+
+  it("strips retired dynasty modeling keys from legacy share links", () => {
+    vi.stubGlobal("window", {
+      btoa: (s: string) => globalThis.btoa(s),
+      atob: (s: string) => globalThis.atob(s),
+    });
+
+    const settings = {
+      teams: 12,
+      scoring_mode: "roto",
+      enable_prospect_risk_adjustment: false,
+      enable_bench_stash_relief: true,
+      bench_negative_penalty: 0.1,
+      enable_ir_stash_relief: true,
+      ir_negative_penalty: 0.1,
+    };
+    const encoded = encodeCalculatorSettings(settings);
+    expect(decodeCalculatorSettings(encoded)).toEqual({
+      teams: 12,
+      scoring_mode: "roto",
+    });
   });
 });
 

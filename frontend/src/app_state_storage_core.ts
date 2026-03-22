@@ -9,6 +9,14 @@ export interface CalculatorPreset {
   [key: string]: unknown;
 }
 
+const REMOVED_CALCULATOR_PRESET_KEYS = new Set([
+  "enable_prospect_risk_adjustment",
+  "enable_bench_stash_relief",
+  "bench_negative_penalty",
+  "enable_ir_stash_relief",
+  "ir_negative_penalty",
+]);
+
 export interface CloudPreferences {
   calculatorPresets: Record<string, CalculatorPreset>;
   playerWatchlist: Record<string, PlayerWatchEntry>;
@@ -169,7 +177,9 @@ export function normalizeCalculatorPresets(presets: unknown): Record<string, Cal
     const name = String(rawName || "").trim();
     if (!name) return;
     if (!rawPreset || typeof rawPreset !== "object" || Array.isArray(rawPreset)) return;
-    sanitized[name] = { ...(rawPreset as CalculatorPreset) };
+    sanitized[name] = Object.fromEntries(
+      Object.entries(rawPreset as CalculatorPreset).filter(([key]) => !REMOVED_CALCULATOR_PRESET_KEYS.has(key))
+    );
   });
   return sanitized;
 }

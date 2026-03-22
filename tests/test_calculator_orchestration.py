@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from fastapi import HTTPException
 
+from backend.core.calculator_helpers import with_resolved_hidden_dynasty_modeling_settings
 from backend.core.calculator_orchestration import (
     CalculatorOrchestrationContext,
     calculate_dynasty_values,
@@ -571,7 +572,7 @@ def test_export_calculate_dynasty_values_defaults_to_csv_without_explanations() 
 def test_create_calculate_dynasty_job_returns_cached_result_without_executor_submit() -> None:
     harness = _build_harness()
     req = _RequestModel(scoring_mode="roto", teams=12)
-    cache_key = harness.ctx.calc_result_cache_key(req.model_dump())
+    cache_key = harness.ctx.calc_result_cache_key(with_resolved_hidden_dynasty_modeling_settings(req.model_dump()))
     harness.cached_results[cache_key] = {"total": 1, "data": [{"Player": "Cached"}]}
 
     payload = create_calculate_dynasty_job(

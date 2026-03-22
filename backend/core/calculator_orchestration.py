@@ -11,6 +11,8 @@ from uuid import uuid4
 
 from fastapi import HTTPException, Request
 
+from backend.core.calculator_helpers import with_resolved_hidden_dynasty_modeling_settings
+
 logger = logging.getLogger(__name__)
 
 CalculateRequestModel = type
@@ -241,7 +243,7 @@ def create_calculate_dynasty_job(
     client_ip = ctx.client_ip(request)
     created_at = ctx.iso_now()
     payload = req.model_dump()
-    cache_key = ctx.calc_result_cache_key(payload)
+    cache_key = ctx.calc_result_cache_key(with_resolved_hidden_dynasty_modeling_settings(payload))
     cached_result = ctx.result_cache_get(cache_key)
     job_id = uuid4().hex
     job = {

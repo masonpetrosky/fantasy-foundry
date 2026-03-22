@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from backend.core.calculator_helpers import resolve_hidden_dynasty_modeling_settings
+
 
 CASES = {
     "exact": {
@@ -93,6 +95,12 @@ CASES = {
 def _build_settings(case: dict) -> object:
     from backend.valuation.models import CommonDynastyRotoSettings
 
+    dynasty_modeling = resolve_hidden_dynasty_modeling_settings(
+        bench_slots=case.get("bench_slots"),
+        ir_slots=case.get("ir_slots"),
+        source=case,
+    )
+
     return CommonDynastyRotoSettings(
         n_teams=int(case["teams"]),
         hitter_slots=dict(case["hitter_slots"]),
@@ -109,11 +117,11 @@ def _build_settings(case: dict) -> object:
         two_way=str(case["two_way"]),
         hitter_categories=tuple(case["hitter_categories"]),
         pitcher_categories=tuple(case["pitcher_categories"]),
-        enable_prospect_risk_adjustment=bool(case.get("enable_prospect_risk_adjustment", False)),
-        enable_bench_stash_relief=bool(case.get("enable_bench_stash_relief", False)),
-        bench_negative_penalty=float(case.get("bench_negative_penalty", 0.55)),
-        enable_ir_stash_relief=bool(case.get("enable_ir_stash_relief", False)),
-        ir_negative_penalty=float(case.get("ir_negative_penalty", 0.20)),
+        enable_prospect_risk_adjustment=bool(dynasty_modeling["enable_prospect_risk_adjustment"]),
+        enable_bench_stash_relief=bool(dynasty_modeling["enable_bench_stash_relief"]),
+        bench_negative_penalty=float(dynasty_modeling["bench_negative_penalty"]),
+        enable_ir_stash_relief=bool(dynasty_modeling["enable_ir_stash_relief"]),
+        ir_negative_penalty=float(dynasty_modeling["ir_negative_penalty"]),
     )
 
 

@@ -16,6 +16,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from backend.core.calculator_helpers import with_resolved_hidden_dynasty_modeling_settings
+
+
+def _resolved_dynasty_params(params: dict[str, Any]) -> dict[str, Any]:
+    return with_resolved_hidden_dynasty_modeling_settings(params)
+
 
 def _settings_snapshot(params: dict[str, Any]) -> dict[str, Any]:
     return {
@@ -46,6 +52,7 @@ def _replacement_depth_blend_alpha_by_slot_json(params: dict[str, Any]) -> str:
 def _common_roto_snapshot(*, params: dict[str, Any]) -> dict[str, Any]:
     import backend.runtime as runtime
 
+    params = _resolved_dynasty_params(params)
     out = runtime._calculate_common_dynasty_frame_cached(
         teams=int(params["teams"]),
         sims=int(params["sims"]),
@@ -121,6 +128,7 @@ def _common_roto_snapshot(*, params: dict[str, Any]) -> dict[str, Any]:
 def _common_roto_league_settings(*, runtime_module: Any, params: dict[str, Any]) -> Any:
     from backend.valuation.models import CommonDynastyRotoSettings
 
+    params = _resolved_dynasty_params(params)
     hitter_categories, pitcher_categories = runtime_module._selected_roto_categories(params)
     return CommonDynastyRotoSettings(
         n_teams=int(params["teams"]),
@@ -287,15 +295,17 @@ def _raw_start_year_snapshot(*, params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _default_roto_params(*, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    from backend.core.calculator_helpers import with_resolved_hidden_dynasty_modeling_settings
     import backend.runtime as runtime
 
     params = dict(runtime._default_calculation_cache_params())
     if isinstance(overrides, dict):
         params.update(overrides)
-    return params
+    return with_resolved_hidden_dynasty_modeling_settings(params)
 
 
 def _deep_roto_params(*, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    from backend.core.calculator_helpers import with_resolved_hidden_dynasty_modeling_settings
     import backend.runtime as runtime
     from backend.core.calculator_helpers import PREWARM_CONFIGS
 
@@ -304,7 +314,7 @@ def _deep_roto_params(*, overrides: dict[str, Any] | None = None) -> dict[str, A
     params.update({key: value for key, value in deep_config.items() if key not in {"label", "mode"}})
     if isinstance(overrides, dict):
         params.update(overrides)
-    return params
+    return with_resolved_hidden_dynasty_modeling_settings(params)
 
 
 def _slot_context_candidate_params() -> dict[str, dict[str, Any]]:
@@ -333,6 +343,7 @@ def _slot_context_candidate_params() -> dict[str, dict[str, Any]]:
 
 
 def _points_profile_params(profile_id: str, *, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    from backend.core.calculator_helpers import with_resolved_hidden_dynasty_modeling_settings
     import backend.runtime as runtime
 
     params = dict(runtime._default_calculation_cache_params())
@@ -367,7 +378,7 @@ def _points_profile_params(profile_id: str, *, overrides: dict[str, Any] | None 
         )
     if isinstance(overrides, dict):
         params.update(overrides)
-    return params
+    return with_resolved_hidden_dynasty_modeling_settings(params)
 
 
 def _points_snapshot(*, params: dict[str, Any]) -> dict[str, Any]:
@@ -548,6 +559,7 @@ def _points_pitcher_row(
 
 
 def _synthetic_points_params(*, overrides: dict[str, Any]) -> dict[str, Any]:
+    from backend.core.calculator_helpers import with_resolved_hidden_dynasty_modeling_settings
     params = _points_profile_params("points_season_total")
     params.update(
         {
@@ -606,7 +618,7 @@ def _synthetic_points_params(*, overrides: dict[str, Any]) -> dict[str, Any]:
         }
     )
     params.update(overrides)
-    return params
+    return with_resolved_hidden_dynasty_modeling_settings(params)
 
 
 def _run_synthetic_points_snapshot(
@@ -617,6 +629,7 @@ def _run_synthetic_points_snapshot(
 ) -> dict[str, Any]:
     import backend.app as app_module
 
+    params = _resolved_dynasty_params(params)
     years = sorted(
         {
             int(row.get("Year"))
@@ -1060,6 +1073,7 @@ def _points_profile_snapshots() -> tuple[dict[str, dict[str, Any]], dict[str, di
 
 
 def _keeper_points_imported_params(*, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    from backend.core.calculator_helpers import with_resolved_hidden_dynasty_modeling_settings
     params = _points_profile_params("points_weekly_h2h")
     params.update(
         {
@@ -1108,7 +1122,7 @@ def _keeper_points_imported_params(*, overrides: dict[str, Any] | None = None) -
     )
     if isinstance(overrides, dict):
         params.update(overrides)
-    return params
+    return with_resolved_hidden_dynasty_modeling_settings(params)
 
 
 def _imported_profile_review(

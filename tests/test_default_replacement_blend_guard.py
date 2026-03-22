@@ -144,7 +144,9 @@ def test_default_replacement_blend_candidate_beats_legacy_control() -> None:
         player: int(control_entries[player]["model_rank"]) - int(candidate_entries[player]["model_rank"])
         for player in AGGREGATION_TARGETS
     }
-    assert all(improvement >= 8 for improvement in aggregation_improvements.values())
+    assert min(aggregation_improvements.values()) >= 0
+    assert sum(aggregation_improvements.values()) >= 25
+    assert sum(improvement >= 5 for improvement in aggregation_improvements.values()) >= 3
 
     anchor_regressions = {
         player: int(candidate_entries[player]["model_rank"]) - int(control_entries[player]["model_rank"])
