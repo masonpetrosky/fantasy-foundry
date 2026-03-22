@@ -583,7 +583,7 @@ def _slot_sort_key(
     side: str,
     daily_capacity: dict[str, int],
     remaining_capacity: dict[str, int],
-) -> tuple[int, int, int, str]:
+) -> tuple[int, int, int, int]:
     hitter_flex = {"UT", "CI", "MI"}
     pitcher_flex = {"P"}
     slot_order_hitter = {"C": 0, "1B": 1, "2B": 2, "3B": 3, "SS": 4, "OF": 5, "DH": 6, "CI": 7, "MI": 8, "UT": 9}

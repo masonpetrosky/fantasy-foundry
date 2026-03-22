@@ -48,12 +48,14 @@ Prefer the smallest relevant validation first, then widen only as needed.
 | Scenario | Command |
 |---|---|
 | Backend targeted check after a small backend fix | targeted `pytest` selection when obvious |
+| Fastest backend sanity lane while iterating | `make test-backend-quick` |
 | Default backend regression lane | `make test-backend-fast` |
+| Backend fast lane with coverage parity | `make test-backend-fast-cov` |
 | Full backend suite when coverage or wider regressions matter | `pytest -q` |
 | Frontend targeted check after a small frontend fix | targeted `cd frontend && npm test -- <pattern>` when obvious |
 | Default frontend suite | `cd frontend && npm test` |
 | Backend + frontend lint plus generated-artifact guard | `make lint` |
-| Backend type-check | `make typecheck` |
+| Backend type-check | `make typecheck` (`mypy backend`) |
 | Frontend type-check | `cd frontend && npm run typecheck` |
 | Security scan | `make security` |
 | Full local quality gate | `make check` |
@@ -81,6 +83,7 @@ Useful pytest markers from `pytest.ini`:
 ## Repo-Specific Boundaries
 
 - Keep `frontend/src/features/projections/container.tsx` focused on orchestration and rendering; place stateful logic in hooks under `frontend/src/features/projections/hooks/` and reusable presentation in `frontend/src/features/projections/components/`.
+- Keep `frontend/src/main.tsx`, `frontend/src/dynasty_calculator.tsx`, and `frontend/src/features/projections/container.tsx` under the 500-line guardrail enforced by `scripts/check_max_file_lines.py`.
 - Preserve local storage keys used by layout, column visibility, filter presets, and calculator/share-link state.
 - Route backend env/config changes through `backend/core/settings.py`.
 - Keep frontend env changes aligned with `frontend/.env.example`.

@@ -1,6 +1,6 @@
 # Projections Container Decomposition Checklist
 
-Status: Active  
+Status: Completed  
 Owner: Frontend
 
 ## Objective
@@ -21,6 +21,7 @@ Continue reducing `frontend/src/features/projections/container.tsx` to orchestra
   - screen-level orchestration
   - composition of hooks/components
   - top-level side-effect coordination
+- [x] Keep `frontend/src/features/projections/container.tsx` under the 500-line guardrail by moving derived view logic into feature hooks and leaving render composition in the container.
 - [x] Add focused tests for each extracted hook:
   - column visibility persistence
   - layout state behavior
@@ -30,4 +31,5 @@ Continue reducing `frontend/src/features/projections/container.tsx` to orchestra
 ## Acceptance Criteria
 - `cd frontend && npm test` passes.
 - `cd frontend && npm run lint` passes.
+- `python scripts/check_max_file_lines.py` passes with `frontend/src/features/projections/container.tsx` under 500 lines.
 - Existing projections user flows remain behaviorally equivalent.

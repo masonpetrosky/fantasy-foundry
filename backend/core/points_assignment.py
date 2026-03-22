@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import heapq
 from dataclasses import dataclass
+from typing import Any, cast
 
 
 @dataclass(slots=True)
@@ -15,6 +16,13 @@ class _FlowEdge:
 
 
 _SEASON_WEEKS = 26.0
+
+
+def _coerce_float(value: object, default: float = 0.0) -> float:
+    try:
+        return float(cast(Any, value))
+    except (TypeError, ValueError):
+        return float(default)
 
 
 def _effective_weekly_starts_cap(
@@ -80,10 +88,7 @@ def optimize_points_slot_assignment(
         player_id = str(entry.get("player_id") or "").strip()
         if not player_id:
             continue
-        try:
-            points = float(entry.get("points") or 0.0)
-        except (TypeError, ValueError):
-            continue
+        points = _coerce_float(entry.get("points"), 0.0)
         raw_slots = entry.get("slots")
         if isinstance(raw_slots, set):
             slots = {str(slot) for slot in raw_slots}
@@ -100,7 +105,7 @@ def optimize_points_slot_assignment(
             continue
 
         existing = player_rows.get(player_id)
-        if existing is None or float(existing.get("points") or 0.0) < points:
+        if existing is None or _coerce_float(existing.get("points"), 0.0) < points:
             player_rows[player_id] = {"points": points, "slots": eligible_slots}
 
     if not player_rows:
@@ -135,7 +140,7 @@ def optimize_points_slot_assignment(
     for player_id in player_ids:
         player_node = player_node_by_id[player_id]
         row = player_rows[player_id]
-        points = float(row["points"])
+        points = _coerce_float(row["points"], 0.0)
         slots = set(row["slots"]) if isinstance(row["slots"], set) else set()
         for slot in sorted(slots):
             replacement_points = float(replacement_by_slot.get(slot, 0.0))
@@ -205,7 +210,7 @@ def optimize_points_slot_assignment(
         edges = player_edges.get(player_id, [])
         if not edges:
             continue
-        points = float(player_rows[player_id]["points"])
+        points = _coerce_float(player_rows[player_id]["points"], 0.0)
         for slot, edge_idx, player_node in edges:
             edge = graph[player_node][edge_idx]
             if edge.capacity != 0:

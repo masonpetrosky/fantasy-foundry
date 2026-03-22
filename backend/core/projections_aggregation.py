@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Any, Callable, cast
 
 import pandas as pd
 
@@ -11,7 +11,7 @@ def coerce_numeric(value: object) -> float | None:
     if value is None or isinstance(value, bool):
         return None
     try:
-        parsed = float(value)
+        parsed = float(cast(Any, value))
     except (TypeError, ValueError):
         return None
     if pd.isna(parsed):

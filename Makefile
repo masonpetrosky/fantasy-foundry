@@ -1,4 +1,4 @@
-.PHONY: guard-generated-artifacts scrub-os-metadata test test-backend test-backend-fast test-backend-full-regression test-frontend lint lint-backend lint-frontend typecheck security check format clean docker-build dev help
+.PHONY: guard-generated-artifacts scrub-os-metadata test test-backend test-backend-quick test-backend-fast test-backend-fast-cov test-backend-full-regression test-frontend lint lint-backend lint-frontend typecheck security check format clean docker-build dev help
 
 guard-generated-artifacts:
 	./scripts/check_generated_artifacts_untracked.sh
@@ -11,8 +11,14 @@ test: test-backend test-frontend
 test-backend:
 	pytest -q
 
+test-backend-quick:
+	pytest -q --no-cov -m "not slow and not integration and not valuation and not full_regression"
+
 test-backend-fast:
-	pytest -q -m "not full_regression"
+	pytest -q --no-cov -m "not full_regression"
+
+test-backend-fast-cov:
+	pytest -q -m "not full_regression" --cov=backend --cov-branch --cov-report=term-missing --cov-fail-under=75
 
 test-backend-full-regression:
 	pytest -q -m "full_regression" --no-cov
@@ -30,12 +36,12 @@ lint-frontend:
 	cd frontend && npm run lint
 
 typecheck:
-	mypy backend/api/middleware.py backend/api/models.py backend/api/error_handlers.py backend/api/app_factory.py backend/api/dependencies.py backend/api/routes/status.py backend/api/routes/projections.py backend/api/routes/calculate.py backend/api/routes/billing.py backend/api/routes/fantrax.py backend/api/routes/newsletter.py backend/api/routes/og_cards.py backend/api/routes/frontend_assets.py backend/core/settings.py backend/core/networking.py backend/core/rate_limit.py backend/core/result_cache.py backend/core/jobs.py backend/core/data_refresh.py backend/core/structured_logging.py backend/core/runtime_config.py backend/core/runtime_state_protocols.py backend/core/exceptions.py backend/core/status_orchestration.py backend/core/circuit_breaker.py backend/core/runtime_defaults.py backend/core/runtime_security.py backend/core/runtime_infra.py backend/core/runtime_state.py backend/core/projection_preprocessing.py backend/core/metrics.py backend/core/runtime_facade.py backend/core/runtime_cache_job_helpers.py backend/core/runtime_endpoint_handlers.py backend/core/runtime_orchestration_helpers.py backend/core/runtime_projection_helpers.py backend/core/runtime_startup.py backend/core/runtime_state_helpers.py backend/core/runtime_bootstrap.py backend/domain/constants.py backend/valuation/models.py backend/valuation/positions.py backend/valuation/assignment.py backend/valuation/team_stats.py backend/valuation/credit_guards.py backend/valuation/sgp_math.py backend/valuation/projection_identity.py backend/valuation/projection_averaging.py backend/valuation/minor_eligibility.py backend/valuation/xlsx_formatting.py backend/valuation/cli.py backend/valuation/cli_args.py backend/valuation/common_orchestration.py backend/services/calculator/service.py backend/services/projections/service.py backend/services/projections/delta.py backend/services/projections/runtime_boundaries.py backend/services/valuation/service.py backend/services/billing.py backend/services/fantrax/service.py backend/services/fantrax/models.py backend/services/fantrax/mapping.py
+	mypy backend
 
 security:
 	bandit -r backend -ll --quiet
 
-check: lint test-backend-fast test-frontend typecheck security
+check: lint test-backend-fast-cov test-frontend typecheck security
 	python scripts/check_max_file_lines.py
 	cd frontend && npm run typecheck
 	./scripts/check_frontend_asset_budget.sh
@@ -62,8 +68,10 @@ dev:
 help:
 	@echo "Available targets:"
 	@echo "  make test                  Run all tests (backend + frontend)"
-	@echo "  make test-backend          Backend tests with coverage"
-	@echo "  make test-backend-fast     Backend tests (skip full_regression)"
+	@echo "  make test-backend          Backend full suite"
+	@echo "  make test-backend-quick    Backend quick lane (skip slow/integration/valuation/full_regression)"
+	@echo "  make test-backend-fast     Backend default fast lane (skip full_regression)"
+	@echo "  make test-backend-fast-cov Backend fast lane with coverage"
 	@echo "  make test-frontend         Frontend tests"
 	@echo "  make lint                  Run all linters + artifact guards"
 	@echo "  make typecheck             Run mypy type checks"

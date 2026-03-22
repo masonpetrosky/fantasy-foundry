@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { formatCellValue } from "../../formatting_utils";
 import { useProjectionColumnVisibility } from "./hooks/useProjectionColumnVisibility";
 import { useProjectionCollections } from "./hooks/useProjectionCollections";
@@ -9,9 +9,10 @@ import { useProjectionExportPipeline } from "./hooks/useProjectionExportPipeline
 import { useProjectionFilterPresets } from "./hooks/useProjectionFilterPresets";
 import { useProjectionTelemetry } from "./hooks/useProjectionTelemetry";
 import { useProjectionRowsMarkup } from "./hooks/useProjectionRowsMarkup";
+import { useProjectionExplorerDataView } from "./hooks/useProjectionExplorerDataView";
+import { useProjectionEmptyState, useProjectionExplorerShell } from "./hooks/useProjectionExplorerShell";
 import { useProjectionWatchlistComposition } from "./hooks/useProjectionWatchlistComposition";
-import { CAREER_TOTALS_FILTER_VALUE, DEFAULT_PROJECTIONS_SORT_COL, DEFAULT_PROJECTIONS_SORT_DIR, DEFAULT_PROJECTIONS_TAB, useProjectionsData } from "../../hooks/useProjectionsData";
-import { buildActiveFilterChips, resolveProjectionEmptyStateModel, resolveProjectionSwipeHint } from "./view_state";
+import { CAREER_TOTALS_FILTER_VALUE, useProjectionsData } from "../../hooks/useProjectionsData";
 import { useProjectionDeltas } from "../../hooks/useProjectionDeltas";
 import { PlayerProfile } from "./components/PlayerProfile";
 import { ProjectionCollectionsWorkspace } from "./components/ProjectionCollectionsWorkspace";
@@ -23,11 +24,9 @@ import { ProjectionResultsShell } from "./components/ProjectionResultsShell";
 import { ProjectionSectionTabs } from "./components/ProjectionSectionTabs";
 import { ProjectionStatusMessages } from "./components/ProjectionStatusMessages";
 import type { TierLimits } from "../../premium";
-import { isRotoStatDynastyCol, rotoStatDynastyLabel } from "../../dynasty_calculator_config";
 import type { CalculatorSettings } from "../../dynasty_calculator_config";
 import type { PlayerWatchEntry } from "../../app_state_storage";
 import { useCalculatorOverlayContext } from "../../contexts/CalculatorOverlayContext";
-import { trackEvent } from "../../analytics";
 import { useToastContext } from "../../Toast";
 
 interface ProjectionsExplorerProps {
@@ -54,14 +53,6 @@ export function ProjectionsExplorer({
   fantraxRosterPlayerKeys,
 }: ProjectionsExplorerProps): React.ReactElement {
   const toastCtx = useToastContext();
-
-  const prevDataVersionRef = useRef(dataVersion);
-  useEffect(() => {
-    if (prevDataVersionRef.current && prevDataVersionRef.current !== dataVersion) {
-      toastCtx?.addToast("Projection data has been updated.", { type: "info" });
-    }
-    prevDataVersionRef.current = dataVersion;
-  }, [dataVersion, toastCtx]);
 
   const {
     calculatorOverlayByPlayerKey,
@@ -147,55 +138,45 @@ export function ProjectionsExplorer({
     dataVersion,
   });
 
-  const activeFilterChips = useMemo(() => buildActiveFilterChips({
+  const { deltaMap } = useProjectionDeltas(apiBase);
+  const {
+    data,
+    filteredData,
+    filterActions,
+    filterState,
+  } = useProjectionExplorerDataView({
+    toastCtx,
+    dataVersion,
+    baseData,
+    applyCalculatorOverlayToRows,
+    deltaMap,
+    rosterOnly,
+    fantraxRosterPlayerKeys,
+    tab,
     search,
     teamFilter,
     resolvedYearFilter,
     posFilters,
     watchlistOnly,
-    careerTotalsFilterValue: CAREER_TOTALS_FILTER_VALUE,
-  }), [posFilters, resolvedYearFilter, search, teamFilter, watchlistOnly]);
-  const hasActiveFilters = activeFilterChips.length > 0;
+    sortCol,
+    sortDir,
+    setTab,
+    setSearch,
+    setTeamFilter,
+    setYearFilter,
+    setPosFilters,
+    setWatchlistOnly,
+    setSortCol,
+    setSortDir,
+    setOffset,
+  });
 
-  const { deltaMap } = useProjectionDeltas(apiBase);
+  const { projectionFilterPresets, applyProjectionFilterPreset, saveCustomProjectionPreset, activeProjectionPresetKey, clearAllFilters } = useProjectionFilterPresets({
+    filterActions,
+    filterState,
+    setShowPosMenu: closePosMenu,
+  });
 
-  const data = useMemo(() => {
-    const overlaid = applyCalculatorOverlayToRows(baseData);
-    if (!deltaMap || Object.keys(deltaMap).length === 0) return overlaid;
-    return overlaid.map((row) => {
-      const key = String(row.PlayerEntityKey || row.PlayerKey || "");
-      const delta = deltaMap[key];
-      if (!delta) return row;
-      return { ...row, ProjectionDelta: delta.composite_delta };
-    });
-  }, [applyCalculatorOverlayToRows, baseData, deltaMap]);
-
-  const filteredData = useMemo(() => {
-    if (!rosterOnly || !fantraxRosterPlayerKeys || fantraxRosterPlayerKeys.size === 0) return data;
-    return data.filter((row) => {
-      const key = String(row.PlayerEntityKey || row.PlayerKey || "");
-      return key && fantraxRosterPlayerKeys.has(key);
-    });
-  }, [data, rosterOnly, fantraxRosterPlayerKeys]);
-
-  const filterActions = useMemo(() => ({
-    setTab, setSearch, setTeamFilter, setYearFilter, setPosFilters,
-    setWatchlistOnly, setSortCol, setSortDir, setOffset,
-  }), [setTab, setSearch, setTeamFilter, setYearFilter, setPosFilters, setWatchlistOnly, setSortCol, setSortDir, setOffset]);
-
-  const filterState = useMemo(() => ({
-    tab, search, teamFilter, resolvedYearFilter, posFilters, watchlistOnly, sortCol, sortDir,
-  }), [tab, search, teamFilter, resolvedYearFilter, posFilters, watchlistOnly, sortCol, sortDir]);
-
-  const {
-    projectionFilterPresets,
-    applyProjectionFilterPreset,
-    saveCustomProjectionPreset,
-    activeProjectionPresetKey,
-    clearAllFilters,
-  } = useProjectionFilterPresets({ filterActions, filterState, setShowPosMenu: closePosMenu });
-
-  const page = filteredData;
   const collections = useProjectionCollections({
     watchlist,
     setWatchlist,
@@ -243,33 +224,9 @@ export function ProjectionsExplorer({
     seasonCol: careerTotalsView ? "Years" : "Year",
   });
 
-  function handleSort(col: string): void {
-    const nextDir = sortCol === col
-      ? (sortDir === "asc" ? "desc" : "asc")
-      : (col === "Player" || col === "Team" || col === "Pos" || col === "Type" || col === "Year" || col === "Years" ? "asc" : "desc");
-    if (sortCol === col) {
-      setSortDir(d => d === "asc" ? "desc" : "asc");
-    } else {
-      setSortCol(col);
-      setSortDir(nextDir);
-    }
-    trackEvent("ff_projection_sort", { column: col, direction: nextDir, tab });
-  }
-
-  function handleSelectTab(nextTab: string): void {
-    const resolvedTab = nextTab === "bat" || nextTab === "pitch"
-      ? nextTab
-      : DEFAULT_PROJECTIONS_TAB;
-    setTab(resolvedTab);
-    setSortCol(DEFAULT_PROJECTIONS_SORT_COL);
-    setSortDir(DEFAULT_PROJECTIONS_SORT_DIR);
-    setOffset(0);
-    setPosFilters([]);
-    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
-  }
-
   const seasonCol = careerTotalsView ? "Years" : "Year";
   const dynastyYearCols = selectedDynastyYears.map(year => `Value_${year}`);
+  const showCards = mobileLayoutMode === "cards";
   const {
     tableColumnCatalog,
     requiredProjectionTableCols,
@@ -289,13 +246,45 @@ export function ProjectionsExplorer({
     dynastyYearCols,
     activeCalculatorSettings,
   });
-
   const {
-    exportError,
-    exportingFormat,
-    exportCurrentProjections,
-    clearExportError,
-  } = useProjectionExportPipeline({
+    activeFilterChips,
+    hasActiveFilters,
+    handleSort,
+    handleSelectTab,
+    colLabels,
+    swipeHintModel,
+    showMobileSwipeHint,
+  } = useProjectionExplorerShell({
+    search,
+    teamFilter,
+    resolvedYearFilter,
+    posFilters,
+    watchlistOnly,
+    sortCol,
+    sortDir,
+    tab,
+    selectedDynastyYears,
+    tableColumnCatalog,
+    canScrollLeft,
+    canScrollRight,
+    showCards,
+    isMobileViewport,
+    mobileLayoutMode,
+    colsLength: cols.length,
+    displayedPageLength: filteredData.length,
+    loading,
+    totalRows,
+    offset,
+    projectionTableScrollRef,
+    updateProjectionHorizontalAffordance,
+    setTab,
+    setSortCol,
+    setSortDir,
+    setOffset,
+    setPosFilters,
+  });
+
+  const { exportError, exportingFormat, exportCurrentProjections, clearExportError } = useProjectionExportPipeline({
     apiBase,
     tab,
     search,
@@ -312,58 +301,19 @@ export function ProjectionsExplorer({
     cols,
   });
 
-  const colLabels = useMemo(() => {
-    const labels: Record<string, string> = {
-      Type: "Side",
-      OldestProjectionDate: "Oldest Proj Date",
-      Rank: "Rank",
-      DynastyValue: "Dynasty Value",
-      AuctionDollars: "Auction $",
-      ProjectionDelta: "\u0394 Proj",
-      Years: "Years",
-      PitH: "P H",
-      PitHR: "P HR",
-      PitBB: "P BB",
-    };
-    dynastyYearCols.forEach(col => {
-      labels[col] = `${col.replace("Value_", "")} Dyn Value`;
-    });
-    tableColumnCatalog.forEach(col => {
-      if (isRotoStatDynastyCol(col)) {
-        labels[col] = rotoStatDynastyLabel(col);
-      }
-    });
-    return labels;
-  }, [dynastyYearCols, tableColumnCatalog]);
-
-  const displayedPage = page;
-  const showCards = mobileLayoutMode === "cards";
+  const displayedPage = filteredData;
   const showInitialLoadSkeleton = loading && displayedPage.length === 0;
   const showInlineRefreshError = Boolean(error) && displayedPage.length > 0;
   const searchIsDebouncing = search !== debouncedSearch;
 
-  const swipeHintModel = useMemo(() => resolveProjectionSwipeHint({
-    canScrollLeft,
-    canScrollRight,
-  }), [canScrollLeft, canScrollRight]);
-  const showMobileSwipeHint = !showCards
-    && isMobileViewport
-    && swipeHintModel.showSwipeHint;
-
-  const showCollectionsWorkspace = Boolean(hasSuccessfulCalcRun)
-    || workspaceHasWatchlistActivity
-    || workspaceHasComparisonActivity;
-
-  const emptyStateModel = useMemo(() => resolveProjectionEmptyStateModel({
+  const showCollectionsWorkspace = Boolean(hasSuccessfulCalcRun) || workspaceHasWatchlistActivity || workspaceHasComparisonActivity;
+  const emptyStateModel = useProjectionEmptyState({
     watchlistOnly,
     resolvedYearFilter,
     hasActiveFilters,
-    careerTotalsFilterValue: CAREER_TOTALS_FILTER_VALUE,
-  }), [hasActiveFilters, resolvedYearFilter, watchlistOnly]);
+  });
 
-  const {
-    lastRefreshedLabel,
-  } = useProjectionTelemetry({
+  const { lastRefreshedLabel } = useProjectionTelemetry({
     loading,
     error,
     displayedPage,
@@ -377,10 +327,7 @@ export function ProjectionsExplorer({
     totalRows,
   });
 
-  const {
-    cardRowsMarkup,
-    tableRowsMarkup,
-  } = useProjectionRowsMarkup({
+  const { cardRowsMarkup, tableRowsMarkup } = useProjectionRowsMarkup({
     showCards,
     displayedPage,
     offset,
@@ -397,40 +344,8 @@ export function ProjectionsExplorer({
     onViewProfile: handleViewProfile,
   });
 
-  useEffect(() => {
-    const onResize = (): void => updateProjectionHorizontalAffordance();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [updateProjectionHorizontalAffordance]);
-
-  useEffect(() => {
-    const raf = window.requestAnimationFrame(() => updateProjectionHorizontalAffordance());
-    return () => window.cancelAnimationFrame(raf);
-  }, [updateProjectionHorizontalAffordance, cols.length, displayedPage.length, loading, totalRows, tab, offset, mobileLayoutMode]);
-
-  useEffect(() => {
-    if (!isMobileViewport) return;
-    if (mobileLayoutMode === "cards") {
-      return;
-    }
-    const el = projectionTableScrollRef.current;
-    if (!el) return;
-    el.scrollLeft = 0;
-    updateProjectionHorizontalAffordance();
-  }, [tab, mobileLayoutMode, isMobileViewport, updateProjectionHorizontalAffordance, projectionTableScrollRef]);
-
   const emptyStateActions = (
-    <ProjectionEmptyStateActions
-      clearAllFilters={clearAllFilters}
-      clearFiltersDisabled={emptyStateModel.clearFiltersDisabled}
-      showTurnOffWatchlistAction={emptyStateModel.showTurnOffWatchlistAction}
-      setWatchlistOnly={setWatchlistOnly}
-      applyProjectionFilterPreset={applyProjectionFilterPreset}
-      setSearch={setSearch}
-      showSwitchToCareerTotalsAction={emptyStateModel.showSwitchToCareerTotalsAction}
-      setYearFilter={setYearFilter}
-      careerTotalsFilterValue={CAREER_TOTALS_FILTER_VALUE}
-    />
+    <ProjectionEmptyStateActions clearAllFilters={clearAllFilters} clearFiltersDisabled={emptyStateModel.clearFiltersDisabled} showTurnOffWatchlistAction={emptyStateModel.showTurnOffWatchlistAction} setWatchlistOnly={setWatchlistOnly} applyProjectionFilterPreset={applyProjectionFilterPreset} setSearch={setSearch} showSwitchToCareerTotalsAction={emptyStateModel.showSwitchToCareerTotalsAction} setYearFilter={setYearFilter} careerTotalsFilterValue={CAREER_TOTALS_FILTER_VALUE} />
   );
 
   return (
@@ -558,7 +473,7 @@ export function ProjectionsExplorer({
         sortCol={sortCol}
         sortDir={sortDir as "asc" | "desc"}
         onSort={handleSort}
-        projectionTableScrollRef={projectionTableScrollRef as React.RefObject<HTMLDivElement | null>}
+        projectionTableScrollRef={projectionTableScrollRef}
         onTableScroll={handleProjectionTableScroll}
         tableRowsMarkup={tableRowsMarkup}
         totalRows={totalRows}

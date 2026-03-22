@@ -43,7 +43,7 @@ export interface ProjectionLayoutState {
   isMobileViewport: boolean;
   mobileLayoutMode: MobileLayoutMode;
   setMobileLayoutMode: (mode: MobileLayoutMode) => void;
-  projectionTableScrollRef: RefObject<HTMLElement | null>;
+  projectionTableScrollRef: RefObject<HTMLDivElement | null>;
   canScrollLeft: boolean;
   canScrollRight: boolean;
   updateProjectionHorizontalAffordance: () => void;
@@ -55,7 +55,7 @@ export function useProjectionLayoutState(): ProjectionLayoutState {
     window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches
   ));
   const [mobileLayoutMode, setMobileLayoutMode] = useState<MobileLayoutMode>(readInitialMobileLayoutMode);
-  const projectionTableScrollRef = useRef<HTMLElement | null>(null);
+  const projectionTableScrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 

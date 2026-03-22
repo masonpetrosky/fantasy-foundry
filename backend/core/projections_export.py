@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import cmp_to_key
-from typing import Callable, Literal
+from typing import Any, Callable, Literal, cast
 
 import pandas as pd
 from fastapi import HTTPException
@@ -197,11 +197,11 @@ def sort_projection_rows(
             return cmp if compare_dir == "asc" else -cmp
 
         try:
-            av_num = float(av)
+            av_num = float(cast(Any, av))
         except (TypeError, ValueError):
             av_num = float("-inf")
         try:
-            bv_num = float(bv)
+            bv_num = float(cast(Any, bv))
         except (TypeError, ValueError):
             bv_num = float("-inf")
         if pd.isna(av_num):

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import pytest
+
 from backend.core.points_audit_review import (
     render_points_audit_markdown,
     render_points_audit_memo_markdown,
     review_points_audit,
 )
 from scripts.report_default_dynasty_divergence import _deep_roto_params, _points_profile_params
+
+pytestmark = pytest.mark.valuation
 
 
 def _profile_snapshot(*, mode: str, fingerprint: str) -> dict:

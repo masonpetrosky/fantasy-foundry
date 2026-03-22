@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from backend.core.dynasty_divergence_review import (
     aggregation_tail_recommendation,
     attribution_recommendation,
@@ -29,6 +31,8 @@ from backend.core.dynasty_divergence_review import (
     triage_bucket,
     weighted_mean_absolute_rank_error,
 )
+
+pytestmark = pytest.mark.valuation
 
 
 def test_summarize_divergence_drivers_surfaces_long_horizon_and_volume_flags() -> None:

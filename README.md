@@ -33,7 +33,10 @@ dynasty-site/
 │   ├── core/dynasty_lookup_orchestration.py # Dynasty lookup attach/year-filter helpers
 │   ├── core/projection_preprocessing.py # Projection data identity/date averaging helpers
 │   ├── core/projection_utils.py        # Projection utility/parsing helpers
-│   ├── core/points_calculator.py       # Points scoring and replacement-level calculation helpers
+│   ├── core/points_calculator.py       # Stable points-calculator facade
+│   ├── core/points_calculator_preparation.py # Points input shaping, survivor pools, and setup helpers
+│   ├── core/points_calculator_usage.py # Points workload/replacement allocation helpers
+│   ├── core/points_calculator_output.py # Points valuation/output assembly helpers
 │   ├── core/calculator_helpers.py      # Category parsing, guardrails, and explanation helpers
 │   ├── core/common_calculator.py       # Cached common roto calculator orchestration helper
 │   ├── core/export_utils.py            # CSV/XLSX export and record serialization helpers
@@ -136,11 +139,17 @@ Without these env vars, the site continues to work with local-only browser stora
 # Backend full suite
 pytest -q
 
-# Backend fast suite (matches required PR CI lane)
-pytest -q -m "not full_regression"
+# Backend quickest iteration lane
+make test-backend-quick
 
-# Backend high-cost regression lane (scheduled + manual CI)
-pytest -q -m "full_regression" --no-cov
+# Backend default fast lane
+make test-backend-fast
+
+# Backend fast lane with CI coverage settings
+make test-backend-fast-cov
+
+# Backend high-cost regression lane
+make test-backend-full-regression
 
 # Frontend unit tests
 cd frontend
@@ -177,7 +186,7 @@ npm run lint
 GNU `make` is required for the shortcut below.
 
 ```bash
-# Full mypy check across all typed modules (see Makefile for complete file list)
+# Package-wide backend mypy check
 make typecheck
 ```
 
@@ -195,7 +204,7 @@ rg --no-ignore <pattern>
 GNU `make` is required for the shortcut below.
 
 ```bash
-# Runs lint + backend fast suite + frontend tests + backend type checks
+# Runs lint + backend fast coverage lane + frontend tests + backend type checks
 make check
 ```
 
@@ -231,6 +240,7 @@ python scripts/check_max_file_lines.py
 ```
 
 This guardrail keeps new backend/frontend source files under the configured line threshold while allowing known legacy hotspots during incremental refactors.
+It also enforces 500-line shells for `frontend/src/main.tsx`, `frontend/src/dynasty_calculator.tsx`, and `frontend/src/features/projections/container.tsx`, plus focused limits for the decomposed points-calculator modules.
 
 ### CI Parity Check (Ruff Per-File Ignore Allowlist)
 ```bash

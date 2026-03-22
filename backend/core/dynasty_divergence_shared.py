@@ -7,7 +7,7 @@ import re
 from collections import Counter
 from pathlib import Path
 from statistics import median
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence, cast
 
 _NORMALIZE_PLAYER_RE = re.compile(r"[^a-z0-9]+")
 DEFAULT_DYNASTY_BENCHMARK_PATH = (
@@ -261,7 +261,7 @@ def load_dynasty_benchmark(
         player = str(entry.get("player") or "").strip()
         benchmark_rank = entry.get("benchmark_rank")
         try:
-            rank_value = int(benchmark_rank)
+            rank_value = int(cast(Any, benchmark_rank))
         except (TypeError, ValueError):
             continue
         if not player or rank_value <= 0:
@@ -280,14 +280,14 @@ def load_dynasty_benchmark(
 
 def _coerce_float(value: object) -> float | None:
     try:
-        return float(value)
+        return float(cast(Any, value))
     except (TypeError, ValueError):
         return None
 
 
 def _coerce_int(value: object) -> int | None:
     try:
-        return int(value)
+        return int(cast(Any, value))
     except (TypeError, ValueError):
         return None
 

@@ -150,19 +150,23 @@ def default_dynasty_lookup(
                 if record_team_key:
                     team_matches = [candidate for candidate in candidates if str(candidate.get("team_key") or "") == record_team_key]
                     if len(team_matches) == 1:
-                        return team_matches[0].get("values") if isinstance(team_matches[0].get("values"), dict) else None
+                        matched_values = team_matches[0].get("values")
+                        return matched_values if isinstance(matched_values, dict) else None
                     return None
-                return (
-                    candidates[0].get("values")
-                    if len(candidates) == 1 and isinstance(candidates[0].get("values"), dict)
-                    else None
-                )
+                if len(candidates) != 1:
+                    return None
+                candidate_values = candidates[0].get("values")
+                return candidate_values if isinstance(candidate_values, dict) else None
 
             if record_team_key:
                 team_matches = [candidate for candidate in candidates if str(candidate.get("team_key") or "") == record_team_key]
                 if len(team_matches) == 1:
-                    return team_matches[0].get("values") if isinstance(team_matches[0].get("values"), dict) else None
-            return candidates[0].get("values") if len(candidates) == 1 and isinstance(candidates[0].get("values"), dict) else None
+                    matched_values = team_matches[0].get("values")
+                    return matched_values if isinstance(matched_values, dict) else None
+            if len(candidates) != 1:
+                return None
+            candidate_values = candidates[0].get("values")
+            return candidate_values if isinstance(candidate_values, dict) else None
 
         lookup_by_entity: dict[str, dict] = {}
         lookup_by_player_key: dict[str, dict] = {}

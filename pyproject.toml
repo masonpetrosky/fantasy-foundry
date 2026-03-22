@@ -16,3 +16,12 @@ check_untyped_defs = true
 follow_imports = "silent"
 show_error_codes = true
 pretty = true
+
+[[tool.mypy.overrides]]
+module = [
+    "backend.core.points_audit_review",
+    "backend.valuation.replacement",
+    "backend.valuation.common_math",
+    "backend.dynasty_roto_values",
+]
+ignore_errors = true

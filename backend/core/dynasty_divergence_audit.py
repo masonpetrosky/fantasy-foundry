@@ -229,10 +229,10 @@ def review_dynasty_divergence(
     entries: list[dict[str, Any]] = []
     for benchmark in benchmark_list:
         player_key = str(benchmark.get("player_key") or normalize_player_name(benchmark.get("player")))
-        model_entry = model_index.get(player_key)
-        explanation = model_entry.get("explanation") if isinstance(model_entry, dict) else None
-        benchmark_rank = int(benchmark.get("benchmark_rank")) if benchmark.get("benchmark_rank") is not None else None
-        model_rank = int(model_entry["model_rank"]) if isinstance(model_entry, dict) else None
+        indexed_model_entry = model_index.get(player_key)
+        explanation = indexed_model_entry.get("explanation") if isinstance(indexed_model_entry, dict) else None
+        benchmark_rank = _coerce_int(benchmark.get("benchmark_rank"))
+        model_rank = int(indexed_model_entry["model_rank"]) if isinstance(indexed_model_entry, dict) else None
         raw_start_year_entry = raw_start_year_index.get(player_key)
         raw_start_year_rank = (
             _coerce_int(raw_start_year_entry.get("raw_start_year_rank"))

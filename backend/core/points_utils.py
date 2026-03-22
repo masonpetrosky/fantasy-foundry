@@ -130,8 +130,10 @@ def calculate_pitcher_points_breakdown(
 
 def _scale_points_breakdown(breakdown: dict, share: float) -> dict:
     scaled_share = min(max(float(share), 0.0), 1.0)
-    stats = breakdown.get("stats") if isinstance(breakdown.get("stats"), dict) else {}
-    rule_points = breakdown.get("rule_points") if isinstance(breakdown.get("rule_points"), dict) else {}
+    raw_stats = breakdown.get("stats")
+    stats = raw_stats if isinstance(raw_stats, dict) else {}
+    raw_rule_points = breakdown.get("rule_points")
+    rule_points = raw_rule_points if isinstance(raw_rule_points, dict) else {}
     return {
         "stats": {str(key): round(float(value) * scaled_share, 4) for key, value in stats.items()},
         "rule_points": {str(key): round(float(value) * scaled_share, 4) for key, value in rule_points.items()},

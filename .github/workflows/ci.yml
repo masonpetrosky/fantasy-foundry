@@ -125,8 +125,8 @@ jobs:
 
       # --- Tests ---
 
-      - name: Run Unit + Integration Test Suite
-        run: pytest -q -m "not full_regression"
+      - name: Run Backend Fast Coverage Lane
+        run: make test-backend-fast-cov
 
       # --- Data artifact freshness ---
 

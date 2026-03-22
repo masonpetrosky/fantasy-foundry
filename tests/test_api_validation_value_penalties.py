@@ -4,9 +4,12 @@ import unittest
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 
 import backend.app as app_module
 from backend.valuation.active_volume import VolumeEntry, allocate_pitcher_usage_daily
+
+pytestmark = pytest.mark.valuation
 
 
 class DynastyValuePenaltyRemovalTests(unittest.TestCase):
