@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Set, SupportsFloat, SupportsIndex, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -47,23 +47,28 @@ try:
         _initial_hitter_weight,
         _initial_pitcher_weight,
     )
+    from backend.valuation.year_context import (
+        CommonYearContextLike,
+        context_optional_value,
+        context_value,
+    )
 except ImportError:
     from valuation.credit_guards import (  # type: ignore[no-redef]
         _apply_hitter_playing_time_reliability_guard as _apply_hitter_playing_time_reliability_guard,
     )
-    from valuation.credit_guards import (
+    from valuation.credit_guards import (  # type: ignore[no-redef]
         _apply_low_volume_non_ratio_positive_guard as _apply_low_volume_non_ratio_positive_guard,
     )
-    from valuation.credit_guards import (
+    from valuation.credit_guards import (  # type: ignore[no-redef]
         _apply_low_volume_ratio_guard as _apply_low_volume_ratio_guard,
     )
-    from valuation.credit_guards import (
+    from valuation.credit_guards import (  # type: ignore[no-redef]
         _apply_pitcher_playing_time_reliability_guard as _apply_pitcher_playing_time_reliability_guard,
     )
-    from valuation.credit_guards import (
+    from valuation.credit_guards import (  # type: ignore[no-redef]
         _coerce_non_negative_float as _coerce_non_negative_float,
     )
-    from valuation.credit_guards import (
+    from valuation.credit_guards import (  # type: ignore[no-redef]
         _positive_credit_scale as _positive_credit_scale,
     )
     from valuation.models import (  # type: ignore[no-redef]
@@ -86,6 +91,11 @@ except ImportError:
         _initial_hitter_weight,
         _initial_pitcher_weight,
     )
+    from valuation.year_context import (  # type: ignore[no-redef]
+        CommonYearContextLike,
+        context_optional_value,
+        context_value,
+    )
 
 COMMON_REVERSED_PITCH_CATS: Set[str] = {"ERA", "WHIP"}
 REPLACEMENT_DEPTH_MODES: Set[str] = {"flat", "half_depth", "full_depth", "blended_depth"}
@@ -102,13 +112,22 @@ def _round_float_map(values: dict[str, float], *, digits: int = 4) -> dict[str, 
     return out
 
 
-def _round_component_map(values: dict[str, object], *, digits: int = 4) -> dict[str, float]:
+def _coerce_float(value: object) -> float | None:
+    if isinstance(value, (str, bytes, bytearray, SupportsFloat, SupportsIndex)):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _round_component_map(values: Mapping[str, object], *, digits: int = 4) -> dict[str, float]:
     out: dict[str, float] = {}
     for key, value in values.items():
-        try:
-            out[str(key)] = round(float(value), digits)
-        except (TypeError, ValueError):
+        candidate = _coerce_float(value)
+        if candidate is None:
             continue
+        out[str(key)] = round(candidate, digits)
     return out
 
 
@@ -255,7 +274,7 @@ def _replacement_row(
         replacement_pool_depth = len(selected)
         replacement_row = baseline_row if len(selected) == 0 else selected[component_cols].mean()
 
-    row = {c: float(replacement_row.get(c, 0.0)) for c in component_cols}
+    row: dict[str, Any] = {c: float(replacement_row.get(c, 0.0)) for c in component_cols}
     row["AssignedSlot"] = slot
     row["ReplacementPoolDepth"] = replacement_pool_depth
     row["ReplacementDepthMode"] = effective_mode
@@ -267,10 +286,10 @@ def _replacement_row(
     return row
 
 
-def _pitching_totals_summary(values: dict[str, object]) -> dict[str, float]:
-    totals = {col: float(values.get(col, 0.0)) for col in PIT_COMPONENT_COLS}
-    totals["ERA"] = float(values.get("ERA", 0.0))
-    totals["WHIP"] = float(values.get("WHIP", 0.0))
+def _pitching_totals_summary(values: Mapping[str, object]) -> dict[str, float]:
+    totals = {col: float(_coerce_float(values.get(col, 0.0)) or 0.0) for col in PIT_COMPONENT_COLS}
+    totals["ERA"] = float(_coerce_float(values.get("ERA", 0.0)) or 0.0)
+    totals["WHIP"] = float(_coerce_float(values.get("WHIP", 0.0)) or 0.0)
     return _round_component_map(totals)
 
 
@@ -301,7 +320,7 @@ def _active_common_pitch_categories(lg: CommonDynastyRotoSettings) -> List[str]:
 
 
 def _pitcher_is_rp_only(row: dict[str, object] | pd.Series) -> bool:
-    pos_set = parse_pit_positions(row.get("Pos", ""))
+    pos_set = parse_pit_positions(str(row.get("Pos", "") or ""))
     return "RP" in pos_set and "SP" not in pos_set
 
 
@@ -333,7 +352,7 @@ def _positive_save_guard_exempt_categories(
 
 
 def compute_replacement_baselines(
-    ctx: dict,
+    ctx: CommonYearContextLike,
     lg: CommonDynastyRotoSettings,
     rostered_players: Set[str],
     n_repl: Optional[int] = None,
@@ -341,16 +360,16 @@ def compute_replacement_baselines(
     """Build per-slot replacement baselines from the unrostered pool."""
     n_repl = int(n_repl or lg.n_teams)
 
-    bat_y = ctx["bat_y"].copy()
-    pit_y = ctx["pit_y"].copy()
+    bat_y = cast(pd.DataFrame, context_value(ctx, "bat_y")).copy()
+    pit_y = cast(pd.DataFrame, context_value(ctx, "pit_y")).copy()
 
     for c in HIT_COMPONENT_COLS:
         bat_y[c] = bat_y[c].fillna(0.0)
     for c in PIT_COMPONENT_COLS:
         pit_y[c] = pit_y[c].fillna(0.0)
 
-    hit_categories = ctx.get("hit_categories") or _active_common_hit_categories(lg)
-    pit_categories = ctx.get("pit_categories") or _active_common_pitch_categories(lg)
+    hit_categories = cast(list[str] | None, context_optional_value(ctx, "hit_categories")) or _active_common_hit_categories(lg)
+    pit_categories = cast(list[str] | None, context_optional_value(ctx, "pit_categories")) or _active_common_pitch_categories(lg)
     bat_y["weight"] = _initial_hitter_weight(bat_y, categories=hit_categories)
     pit_y["weight"] = _initial_pitcher_weight(pit_y, categories=pit_categories)
 
@@ -360,8 +379,8 @@ def compute_replacement_baselines(
     fa_hit["elig"] = fa_hit["Pos"].apply(lambda p: eligible_hit_slots(parse_hit_positions(p)))
     fa_pit["elig"] = fa_pit["Pos"].apply(lambda p: eligible_pit_slots(parse_pit_positions(p)))
 
-    baseline_hit_avg = ctx["baseline_hit"]
-    baseline_pit_avg = ctx["baseline_pit"]
+    baseline_hit_avg = cast(pd.DataFrame, context_value(ctx, "baseline_hit"))
+    baseline_pit_avg = cast(pd.DataFrame, context_value(ctx, "baseline_pit"))
     replacement_depth_mode = _normalized_replacement_depth_mode(lg)
 
     repl_hit_rows: List[dict] = []
@@ -423,26 +442,26 @@ def compute_replacement_baselines(
 
 
 def compute_year_player_values_vs_replacement(
-    ctx: dict,
+    ctx: CommonYearContextLike,
     lg: CommonDynastyRotoSettings,
     repl_hit: pd.DataFrame,
     repl_pit: pd.DataFrame,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Compute per-year values as marginal roto points above replacement."""
-    year = int(ctx["year"])
-    bat_y = ctx["bat_y"]
-    pit_y = ctx["pit_y"]
+    year = int(cast(int, context_value(ctx, "year")))
+    bat_y = cast(pd.DataFrame, context_value(ctx, "bat_y"))
+    pit_y = cast(pd.DataFrame, context_value(ctx, "pit_y"))
 
-    baseline_hit_avg = ctx["baseline_hit"]
-    baseline_pit_avg = ctx["baseline_pit"]
-    base_hit_tot_avg = ctx["base_hit_tot"]
-    base_pit_tot_avg = ctx["base_pit_tot"]
-    rep_rates = ctx.get("rep_rates")
+    baseline_hit_avg = cast(pd.DataFrame, context_value(ctx, "baseline_hit"))
+    baseline_pit_avg = cast(pd.DataFrame, context_value(ctx, "baseline_pit"))
+    base_hit_tot_avg = cast(pd.Series, context_value(ctx, "base_hit_tot"))
+    base_pit_tot_avg = cast(pd.Series, context_value(ctx, "base_pit_tot"))
+    rep_rates = cast(dict[str, float] | None, context_optional_value(ctx, "rep_rates"))
 
-    sgp_hit = ctx["sgp_hit"]
-    sgp_pit = ctx["sgp_pit"]
-    hit_categories = ctx.get("hit_categories") or _active_common_hit_categories(lg)
-    pit_categories = ctx.get("pit_categories") or _active_common_pitch_categories(lg)
+    sgp_hit = cast(dict[str, float], context_value(ctx, "sgp_hit"))
+    sgp_pit = cast(dict[str, float], context_value(ctx, "sgp_pit"))
+    hit_categories = cast(list[str] | None, context_optional_value(ctx, "hit_categories")) or _active_common_hit_categories(lg)
+    pit_categories = cast(list[str] | None, context_optional_value(ctx, "pit_categories")) or _active_common_pitch_categories(lg)
 
     hit_rows = []
     for row in bat_y.to_dict(orient="records"):
@@ -555,8 +574,8 @@ def compute_year_player_values_vs_replacement(
 
         best_val = -1e18
         best_slot = None
-        best_stat_sgps: Dict[str, float] = {}
-        best_diag: dict[str, Any] | None = None
+        best_pitch_stat_sgps: Dict[str, float] = {}
+        best_pitch_diag: dict[str, Any] | None = None
 
         for slot in slots:
             if slot not in baseline_pit_avg.index or slot not in repl_pit.index:
@@ -590,15 +609,15 @@ def compute_year_player_values_vs_replacement(
 
             base_pit_cats = common_pitch_category_totals(base_bounded)
             new_pit_cats = common_pitch_category_totals(new_bounded)
-            delta: Dict[str, float] = {}
+            pitch_delta: Dict[str, float] = {}
             for cat in pit_categories:
                 new_val = float(new_pit_cats.get(cat, 0.0))
                 base_val = float(base_pit_cats.get(cat, 0.0))
                 if cat in COMMON_REVERSED_PITCH_CATS:
-                    delta[cat] = base_val - new_val
+                    pitch_delta[cat] = base_val - new_val
                 else:
-                    delta[cat] = new_val - base_val
-            delta_before_guard = dict(delta)
+                    pitch_delta[cat] = new_val - base_val
+            delta_before_guard = dict(pitch_delta)
             pitcher_ip = _coerce_non_negative_float(row.get("IP", 0.0))
             slot_ip_reference = _coerce_non_negative_float(b_avg.get("IP", 0.0))
             positive_credit_scale = _positive_credit_scale(
@@ -609,7 +628,7 @@ def compute_year_player_values_vs_replacement(
             if bool(getattr(lg, "enable_playing_time_reliability", False)):
                 guard_mode = "playing_time_reliability"
                 _apply_pitcher_playing_time_reliability_guard(
-                    delta,
+                    pitch_delta,
                     pit_categories=pit_categories,
                     pitcher_ip=pitcher_ip,
                     slot_ip_reference=slot_ip_reference,
@@ -617,7 +636,7 @@ def compute_year_player_values_vs_replacement(
             else:
                 guard_mode = "low_volume_split"
                 _apply_low_volume_non_ratio_positive_guard(
-                    delta,
+                    pitch_delta,
                     pit_categories=pit_categories,
                     pitcher_ip=pitcher_ip,
                     slot_ip_reference=slot_ip_reference,
@@ -629,19 +648,19 @@ def compute_year_player_values_vs_replacement(
                     ),
                 )
                 _apply_low_volume_ratio_guard(
-                    delta,
+                    pitch_delta,
                     pit_categories=pit_categories,
                     pitcher_ip=pitcher_ip,
                     slot_ip_reference=slot_ip_reference,
                 )
 
             val = 0.0
-            stat_sgps: Dict[str, float] = {}
+            pitcher_stat_sgps: Dict[str, float] = {}
             for c in pit_categories:
                 denom = float(sgp_pit[c])
-                sgp_c = (delta[c] / denom) if denom else 0.0
+                sgp_c = (pitch_delta[c] / denom) if denom else 0.0
                 val += sgp_c
-                stat_sgps[c] = sgp_c
+                pitcher_stat_sgps[c] = sgp_c
 
             workload_share = (pitcher_ip / slot_ip_reference) if slot_ip_reference > 0.0 else None
             base_ip_raw = float(base_raw.get("IP", 0.0))
@@ -651,7 +670,7 @@ def compute_year_player_values_vs_replacement(
             candidate_diag = {
                 "side": "pit",
                 "best_slot": str(slot),
-                "category_sgp": _round_float_map(stat_sgps),
+                "category_sgp": _round_float_map(pitcher_stat_sgps),
                 "slot_baseline_reference": _reference_summary(
                     slot=str(slot),
                     row=b_avg,
@@ -669,7 +688,7 @@ def compute_year_player_values_vs_replacement(
                     "workload_share": round(float(workload_share), 6) if workload_share is not None else None,
                     "positive_credit_scale": round(float(positive_credit_scale), 6),
                     "pre_guard_category_delta": _round_float_map(delta_before_guard),
-                    "post_guard_category_delta": _round_float_map(delta),
+                    "post_guard_category_delta": _round_float_map(pitch_delta),
                 },
                 "bounds": {
                     "applied": bool(
@@ -689,8 +708,8 @@ def compute_year_player_values_vs_replacement(
             if val > best_val:
                 best_val = val
                 best_slot = slot
-                best_stat_sgps = stat_sgps
-                best_diag = candidate_diag
+                best_pitch_stat_sgps = pitcher_stat_sgps
+                best_pitch_diag = candidate_diag
 
         pit_rows.append(
             {
@@ -702,8 +721,8 @@ def compute_year_player_values_vs_replacement(
                 "Pos": row.get("Pos", np.nan),
                 "BestSlot": best_slot,
                 "YearValue": float(best_val),
-                "ReplacementDiagnostics": best_diag,
-                **{f"SGP_{cat}": best_stat_sgps.get(cat, 0.0) for cat in pit_categories},
+                "ReplacementDiagnostics": best_pitch_diag,
+                **{f"SGP_{cat}": best_pitch_stat_sgps.get(cat, 0.0) for cat in pit_categories},
             }
         )
 

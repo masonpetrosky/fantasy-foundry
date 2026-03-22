@@ -8,16 +8,16 @@ from typing import Optional, Set
 import pandas as pd
 
 try:
-    from backend.dynasty_roto_values import (
+    from backend.valuation.dynasty_aggregation import dynasty_keep_or_drop_value
+    from backend.valuation.minor_eligibility import (
         _fillna_bool,
         _select_mlb_roster_with_active_floor,
-        dynasty_keep_or_drop_value,
     )
 except ImportError:  # pragma: no cover - direct script execution fallback
-    from dynasty_roto_values import (  # type: ignore[no-redef]
+    from valuation.dynasty_aggregation import dynasty_keep_or_drop_value  # type: ignore[no-redef]
+    from valuation.minor_eligibility import (  # type: ignore[no-redef]
         _fillna_bool,
         _select_mlb_roster_with_active_floor,
-        dynasty_keep_or_drop_value,
     )
 
 _CENTERING_ZERO_EPSILON = 1e-12

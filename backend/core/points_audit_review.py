@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from statistics import median
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Sequence, SupportsFloat, SupportsIndex
 
 POINTS_PROFILE_IDS: tuple[str, ...] = (
     "points_season_total",
@@ -133,17 +133,31 @@ POINTS_AUDIT_SCENARIOS: tuple[dict[str, Any], ...] = (
 
 
 def _coerce_float(value: object) -> float | None:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+    if isinstance(value, (str, bytes, bytearray, SupportsFloat, SupportsIndex)):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def _coerce_int(value: object) -> int | None:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
+    if isinstance(value, (str, bytes, bytearray, SupportsIndex)):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _as_dict(value: object) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _as_row_list(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [row for row in value if isinstance(row, dict)]
 
 
 def _serialize_settings_snapshot(settings_snapshot: object) -> str:
@@ -229,8 +243,8 @@ def _paired_cohort_entries(
         variant = variant_index.get(str(player).strip())
         if not isinstance(control, dict) or not isinstance(variant, dict):
             continue
-        control_points = control.get("start_year_points") if isinstance(control.get("start_year_points"), dict) else {}
-        variant_points = variant.get("start_year_points") if isinstance(variant.get("start_year_points"), dict) else {}
+        control_points = _as_dict(control.get("start_year_points"))
+        variant_points = _as_dict(variant.get("start_year_points"))
         pairs.append(
             {
                 "player": str(player).strip(),
@@ -585,7 +599,7 @@ def review_points_audit(
             "valuation_diagnostics": snapshot.get("valuation_diagnostics") if isinstance(snapshot.get("valuation_diagnostics"), dict) else {},
             "entries": _ranked_points_entries(
                 rows=rows if isinstance(rows, list) else [],
-                explanations=explanations if isinstance(explanations, dict) else {},
+                explanations=_as_dict(explanations),
             ),
         }
 
@@ -597,12 +611,12 @@ def review_points_audit(
         if not isinstance(control_snapshot, dict) or not isinstance(variant_snapshot, dict):
             continue
         control_entries = _ranked_points_entries(
-            rows=control_snapshot.get("rows") if isinstance(control_snapshot.get("rows"), list) else [],
-            explanations=control_snapshot.get("explanations") if isinstance(control_snapshot.get("explanations"), dict) else {},
+            rows=_as_row_list(control_snapshot.get("rows")),
+            explanations=_as_dict(control_snapshot.get("explanations")),
         )
         variant_entries = _ranked_points_entries(
-            rows=variant_snapshot.get("rows") if isinstance(variant_snapshot.get("rows"), list) else [],
-            explanations=variant_snapshot.get("explanations") if isinstance(variant_snapshot.get("explanations"), dict) else {},
+            rows=_as_row_list(variant_snapshot.get("rows")),
+            explanations=_as_dict(variant_snapshot.get("explanations")),
         )
         status, evaluation_reason, direct_metrics, pool_recenter_metrics = _evaluate_points_scenario(
             scenario=scenario,
@@ -761,7 +775,10 @@ def render_points_audit_markdown(review: dict[str, Any]) -> str:
             ]
         )
     lines.extend(["## Scenario Results", ""])
-    for scenario in review.get("scenario_results") if isinstance(review.get("scenario_results"), list) else []:
+    scenario_results = review.get("scenario_results")
+    if not isinstance(scenario_results, list):
+        scenario_results = []
+    for scenario in scenario_results:
         if not isinstance(scenario, dict):
             continue
         lines.append(

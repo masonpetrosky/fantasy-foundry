@@ -22,9 +22,11 @@ from .positions import (
     parse_hit_positions,
     parse_pit_positions,
 )
+from .year_context import CommonYearContext
 
 __all__ = [
     "CommonDynastyRotoSettings",
+    "CommonYearContext",
     "HAVE_SCIPY",
     "HIT_COMPONENT_COLS",
     "PIT_COMPONENT_COLS",

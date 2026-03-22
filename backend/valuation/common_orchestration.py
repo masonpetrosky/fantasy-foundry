@@ -10,38 +10,18 @@ import pandas as pd
 try:
     from backend.core.points_value import (
         apply_dynasty_aggregation_adjustments as _apply_dynasty_aggregation_adjustments,
+    )
+    from backend.core.points_value import (
         dynasty_keep_or_drop_values as _dynasty_keep_or_drop_values,
     )
-    from backend.dynasty_roto_values import (
-        COMMON_COLUMN_ALIASES,
-        DERIVED_HIT_RATE_COLS,
-        DERIVED_PIT_RATE_COLS,
-        HIT_COMPONENT_COLS,
-        PLAYER_ENTITY_KEY_COL,
-        CommonDynastyRotoSettings,
-        _add_player_identity_keys,
-        _attach_identity_columns_to_output,
-        _build_player_identity_lookup,
-        _fillna_bool,
-        _find_projection_date_col,
-        _non_vacant_player_names,
-        _players_with_playing_time,
-        _resolve_minor_eligibility_by_year,
-        average_recent_projections,
+    from backend.valuation.common_math import (
         combine_two_way,
         compute_replacement_baselines,
         compute_year_context,
         compute_year_player_values,
         compute_year_player_values_vs_replacement,
-        dynasty_keep_or_drop_value,
-        normalize_input_schema,
-        numeric_stat_cols_for_recent_avg,
-        projection_meta_for_start_year,
-        recompute_common_rates_hit,
-        recompute_common_rates_pit,
-        reorder_detail_columns,
-        require_cols,
     )
+    from backend.valuation.dynasty_aggregation import dynasty_keep_or_drop_value
     from backend.valuation.dynasty_value_adjustments import (
         _adjust_dynasty_year_value,
         _coerce_projected_volume,
@@ -52,33 +32,26 @@ try:
         _prospect_risk_multiplier,
         _year_risk_multiplier,
     )
-except ImportError:  # pragma: no cover - direct script execution fallback
-    from core.points_value import (  # type: ignore
-        apply_dynasty_aggregation_adjustments as _apply_dynasty_aggregation_adjustments,
-        dynasty_keep_or_drop_values as _dynasty_keep_or_drop_values,
-    )
-    from dynasty_roto_values import (  # type: ignore
-        COMMON_COLUMN_ALIASES,
-        DERIVED_HIT_RATE_COLS,
-        DERIVED_PIT_RATE_COLS,
-        HIT_COMPONENT_COLS,
-        PLAYER_ENTITY_KEY_COL,
-        CommonDynastyRotoSettings,
-        _add_player_identity_keys,
-        _attach_identity_columns_to_output,
-        _build_player_identity_lookup,
+    from backend.valuation.minor_eligibility import (
         _fillna_bool,
-        _find_projection_date_col,
         _non_vacant_player_names,
         _players_with_playing_time,
         _resolve_minor_eligibility_by_year,
+    )
+    from backend.valuation.models import (
+        HIT_COMPONENT_COLS,
+        CommonDynastyRotoSettings,
+    )
+    from backend.valuation.projection_compat import (
+        COMMON_COLUMN_ALIASES,
+        DERIVED_HIT_RATE_COLS,
+        DERIVED_PIT_RATE_COLS,
+        PLAYER_ENTITY_KEY_COL,
+        _add_player_identity_keys,
+        _attach_identity_columns_to_output,
+        _build_player_identity_lookup,
+        _find_projection_date_col,
         average_recent_projections,
-        combine_two_way,
-        compute_replacement_baselines,
-        compute_year_context,
-        compute_year_player_values,
-        compute_year_player_values_vs_replacement,
-        dynasty_keep_or_drop_value,
         normalize_input_schema,
         numeric_stat_cols_for_recent_avg,
         projection_meta_for_start_year,
@@ -87,6 +60,22 @@ except ImportError:  # pragma: no cover - direct script execution fallback
         reorder_detail_columns,
         require_cols,
     )
+    from backend.valuation.year_context import CommonYearContext
+except ImportError:  # pragma: no cover - direct script execution fallback
+    from core.points_value import (  # type: ignore
+        apply_dynasty_aggregation_adjustments as _apply_dynasty_aggregation_adjustments,
+    )
+    from core.points_value import (  # type: ignore[no-redef]
+        dynasty_keep_or_drop_values as _dynasty_keep_or_drop_values,
+    )
+    from valuation.common_math import (  # type: ignore
+        combine_two_way,
+        compute_replacement_baselines,
+        compute_year_context,
+        compute_year_player_values,
+        compute_year_player_values_vs_replacement,
+    )
+    from valuation.dynasty_aggregation import dynasty_keep_or_drop_value  # type: ignore[no-redef]
     from valuation.dynasty_value_adjustments import (  # type: ignore
         _adjust_dynasty_year_value,
         _coerce_projected_volume,
@@ -97,6 +86,35 @@ except ImportError:  # pragma: no cover - direct script execution fallback
         _prospect_risk_multiplier,
         _year_risk_multiplier,
     )
+    from valuation.minor_eligibility import (  # type: ignore
+        _fillna_bool,
+        _non_vacant_player_names,
+        _players_with_playing_time,
+        _resolve_minor_eligibility_by_year,
+    )
+    from valuation.models import (  # type: ignore[no-redef]
+        HIT_COMPONENT_COLS,
+        CommonDynastyRotoSettings,
+    )
+    from valuation.projection_compat import (  # type: ignore
+        COMMON_COLUMN_ALIASES,
+        DERIVED_HIT_RATE_COLS,
+        DERIVED_PIT_RATE_COLS,
+        PLAYER_ENTITY_KEY_COL,
+        _add_player_identity_keys,
+        _attach_identity_columns_to_output,
+        _build_player_identity_lookup,
+        _find_projection_date_col,
+        average_recent_projections,
+        normalize_input_schema,
+        numeric_stat_cols_for_recent_avg,
+        projection_meta_for_start_year,
+        recompute_common_rates_hit,
+        recompute_common_rates_pit,
+        reorder_detail_columns,
+        require_cols,
+    )
+    from valuation.year_context import CommonYearContext  # type: ignore[no-redef]
 try:
     from backend.valuation.common_centering import (
         _apply_dynasty_centering,
@@ -369,10 +387,10 @@ def calculate_common_dynasty_values(
 
     # PASS 1: average-starter values to estimate who is rostered in a deep league.
     # Each year's context + player values are independent, so compute in parallel.
-    year_contexts: Dict[int, dict] = {}
+    year_contexts: Dict[int, CommonYearContext] = {}
     year_tables_avg: List[pd.DataFrame] = []
 
-    def _compute_year_pass1(y: int) -> tuple[int, dict, pd.DataFrame]:
+    def _compute_year_pass1(y: int) -> tuple[int, CommonYearContext, pd.DataFrame]:
         if verbose:
             print(f"Year {y}: baseline + SGP + player values (avg-starter pass) ...")
         ctx = compute_year_context(y, bat, pit, lg, rng_seed=seed + y)
@@ -385,10 +403,10 @@ def calculate_common_dynasty_values(
             year_contexts[y] = ctx
             year_tables_avg.append(combined)
 
-    start_ctx = year_contexts.get(start_year, {})
+    start_ctx = year_contexts.get(start_year)
     active_floor_names = (
-        _non_vacant_player_names(start_ctx.get("assigned_hit"))
-        | _non_vacant_player_names(start_ctx.get("assigned_pit"))
+        _non_vacant_player_names(start_ctx.assigned_hit if start_ctx is not None else None)
+        | _non_vacant_player_names(start_ctx.assigned_pit if start_ctx is not None else None)
     )
     active_candidate_players = _players_with_playing_time(bat, pit, [int(start_year)])
 
@@ -731,17 +749,25 @@ def calculate_common_dynasty_values(
         hitter_ab_by_player_year=hitter_ab_by_player_year,
         pitcher_ip_by_player_year=pitcher_ip_by_player_year,
     )
+    def _hitter_usage_diagnostics_for_year(year: int) -> dict[str, float | int | None]:
+        ctx = year_contexts.get(year)
+        return {} if ctx is None else ctx.hitter_usage_diagnostics
+
+    def _pitcher_usage_diagnostics_for_year(year: int) -> dict[str, float | int | None]:
+        ctx = year_contexts.get(year)
+        return {} if ctx is None else ctx.pitcher_usage_diagnostics
+
     valuation_diagnostics["HitterUsageByYear"] = {
         str(year): {
             str(key): value
-            for key, value in dict(year_contexts.get(year, {}).get("hitter_usage_diagnostics", {})).items()
+            for key, value in _hitter_usage_diagnostics_for_year(year).items()
         }
         for year in years
     }
     valuation_diagnostics["PitcherUsageByYear"] = {
         str(year): {
             str(key): value
-            for key, value in dict(year_contexts.get(year, {}).get("pitcher_usage_diagnostics", {})).items()
+            for key, value in _pitcher_usage_diagnostics_for_year(year).items()
         }
         for year in years
     }

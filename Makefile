@@ -18,7 +18,7 @@ test-backend-fast:
 	pytest -q --no-cov -m "not full_regression"
 
 test-backend-fast-cov:
-	pytest -q -m "not full_regression" --cov=backend --cov-branch --cov-report=term-missing --cov-fail-under=75
+	pytest -q -m "not full_regression" --cov=backend --cov-branch --cov-report=term-missing --cov-fail-under=80
 
 test-backend-full-regression:
 	pytest -q -m "full_regression" --no-cov

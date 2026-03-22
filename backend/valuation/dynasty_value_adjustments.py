@@ -9,14 +9,14 @@ from typing import Any, Dict, Set
 import pandas as pd
 
 try:
-    from backend.dynasty_roto_values import (
+    from backend.valuation.minor_eligibility import _apply_negative_value_stash_rules
+    from backend.valuation.models import (
         CommonDynastyRotoSettings,
-        _apply_negative_value_stash_rules,
     )
 except ImportError:  # pragma: no cover - direct script execution fallback
-    from dynasty_roto_values import (  # type: ignore
+    from valuation.minor_eligibility import _apply_negative_value_stash_rules  # type: ignore[no-redef]
+    from valuation.models import (  # type: ignore
         CommonDynastyRotoSettings,
-        _apply_negative_value_stash_rules,
     )
 
 

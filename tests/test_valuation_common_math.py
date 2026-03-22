@@ -290,6 +290,8 @@ def test_compute_year_context_and_values_smoke() -> None:
 
     ctx = common_math.compute_year_context(2026, bat, pit, lg, rng_seed=5)
     assert {"baseline_hit", "baseline_pit", "sgp_hit", "sgp_pit", "rep_rates"}.issubset(ctx.keys())
+    assert ctx["bat_y"] is ctx.bat_y
+    assert ctx.get("assigned_hit") is ctx.assigned_hit
 
     hit_vals, pit_vals = common_math.compute_year_player_values(ctx, lg)
     assert len(hit_vals) == 1

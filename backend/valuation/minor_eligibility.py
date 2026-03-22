@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Dict, List, Optional, Set
 
 import numpy as np
@@ -194,7 +195,7 @@ def _select_mlb_roster_with_active_floor(
     return pd.concat([selected, fill], ignore_index=True)
 
 
-def _estimate_bench_negative_penalty(start_ctx: dict, lg: object) -> float:
+def _estimate_bench_negative_penalty(start_ctx: Mapping[str, object], lg: object) -> float:
     """Estimate marginal active-slot opportunity cost for one bench stash slot.
 
     Returns a factor in [0, 1] used to scale negative year values for players

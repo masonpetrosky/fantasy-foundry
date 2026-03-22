@@ -45,16 +45,18 @@ def coerce_bool(value: object, *, default: bool = False) -> bool:
 
 
 def _coerce_non_negative_int(value: object, *, default: int = 0) -> int:
+    candidate = value if isinstance(value, (int, float, str, bytes, bytearray)) else str(value)
     try:
-        parsed = int(value)
+        parsed = int(candidate)
     except (TypeError, ValueError):
         return int(default)
     return max(parsed, 0)
 
 
 def _coerce_float(value: object, *, default: float) -> float:
+    candidate = value if isinstance(value, (int, float, str, bytes, bytearray)) else str(value)
     try:
-        return float(value)
+        return float(candidate)
     except (TypeError, ValueError):
         return float(default)
 

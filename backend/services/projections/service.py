@@ -5,8 +5,6 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Callable, Literal, Optional
 
-from fastapi import HTTPException
-
 from backend.core.projections_aggregation import (
     aggregate_all_projection_career_rows as core_aggregate_all_projection_career_rows,
 )
@@ -34,6 +32,7 @@ from backend.core.projections_export import (
 from backend.core.projections_export import (
     validate_sort_col as core_validate_sort_col,
 )
+from backend.services.projections import profile_ops, query_ops
 from backend.services.projections.filters import (
     career_group_key,
     coerce_record_year,
@@ -468,29 +467,7 @@ class ProjectionService:
         pos: str | None,
         player_keys: set[str] | None = None,
     ) -> list[dict]:
-        out = records
-        if player:
-            q = player.strip().lower()
-            out = [r for r in out if q in str(r.get("Player", "")).lower()]
-        if team:
-            team_normalized = team.strip().lower()
-            out = [
-                r
-                for r in out
-                if str(r.get("Team", "")).strip().lower() == team_normalized
-                or str(r.get("MLBTeam", "")).strip().lower() == team_normalized
-            ]
-        if years is not None:
-            out = [r for r in out if self._coerce_record_year(r.get("Year")) in years]
-        if pos:
-            requested_positions = self._position_tokens(pos)
-            if requested_positions:
-                out = [
-                    r for r in out if requested_positions.intersection(self._position_tokens(r.get("Pos", "")))
-                ]
-        if player_keys:
-            out = [r for r in out if player_keys.intersection(self._row_player_filter_keys(r))]
-        return out
+        return query_ops.filter_records(self, records, player, team, years, pos, player_keys)
 
     # ------------------------------------------------------------------
     # Private: row fetching
@@ -513,29 +490,22 @@ class ProjectionService:
         sort_col: str | None,
         sort_dir: str | None,
     ) -> tuple[dict, ...]:
-        cached_rows = self._cached_projection_rows(
+        return query_ops.get_projection_rows(
+            self,
             dataset,
-            self._normalize_filter_value(player),
-            self._normalize_filter_value(team),
-            self._normalize_player_keys_filter(player_keys),
-            year,
-            self._normalize_filter_value(years),
-            self._normalize_filter_value(pos),
-            include_dynasty,
-            self._normalize_filter_value(dynasty_years),
-            career_totals,
-        )
-        with_overlay = self._apply_calculator_overlay_values(
-            list(cached_rows),
+            player=player,
+            team=team,
+            player_keys=player_keys,
+            year=year,
+            years=years,
+            pos=pos,
             include_dynasty=include_dynasty,
+            dynasty_years=dynasty_years,
             calculator_job_id=calculator_job_id,
+            career_totals=career_totals,
+            sort_col=sort_col,
+            sort_dir=sort_dir,
         )
-        sorted_rows = self._sort_projection_rows(
-            with_overlay,
-            self._normalize_filter_value(sort_col),
-            self._normalize_sort_dir(sort_dir),
-        )
-        return tuple(sorted_rows)
 
     def _get_all_projection_rows(
         self,
@@ -553,28 +523,21 @@ class ProjectionService:
         sort_col: str | None,
         sort_dir: str | None,
     ) -> tuple[dict, ...]:
-        cached_rows = self._cached_all_projection_rows(
-            self._normalize_filter_value(player),
-            self._normalize_filter_value(team),
-            self._normalize_player_keys_filter(player_keys),
-            year,
-            self._normalize_filter_value(years),
-            self._normalize_filter_value(pos),
-            include_dynasty,
-            self._normalize_filter_value(dynasty_years),
-            career_totals,
-        )
-        with_overlay = self._apply_calculator_overlay_values(
-            list(cached_rows),
+        return query_ops.get_all_projection_rows(
+            self,
+            player=player,
+            team=team,
+            player_keys=player_keys,
+            year=year,
+            years=years,
+            pos=pos,
             include_dynasty=include_dynasty,
+            dynasty_years=dynasty_years,
             calculator_job_id=calculator_job_id,
+            career_totals=career_totals,
+            sort_col=sort_col,
+            sort_dir=sort_dir,
         )
-        sorted_rows = self._sort_projection_rows(
-            with_overlay,
-            self._normalize_filter_value(sort_col),
-            self._normalize_sort_dir(sort_dir),
-        )
-        return tuple(sorted_rows)
 
     # ------------------------------------------------------------------
     # Public API
@@ -599,42 +562,24 @@ class ProjectionService:
         limit: int,
         offset: int,
     ) -> dict[str, Any]:
-        self._ctx.refresh_data_if_needed()
-        validated_sort_col = self._validate_sort_col(sort_col, dataset=dataset)
-        if dataset == "all":
-            filtered = self._get_all_projection_rows(
-                player=player,
-                team=team,
-                player_keys=player_keys,
-                year=year,
-                years=years,
-                pos=pos,
-                include_dynasty=include_dynasty,
-                dynasty_years=dynasty_years,
-                calculator_job_id=calculator_job_id,
-                career_totals=career_totals,
-                sort_col=validated_sort_col,
-                sort_dir=sort_dir,
-            )
-        else:
-            filtered = self._get_projection_rows(
-                dataset,
-                player=player,
-                team=team,
-                player_keys=player_keys,
-                year=year,
-                years=years,
-                pos=pos,
-                include_dynasty=include_dynasty,
-                dynasty_years=dynasty_years,
-                calculator_job_id=calculator_job_id,
-                career_totals=career_totals,
-                sort_col=validated_sort_col,
-                sort_dir=sort_dir,
-            )
-        total = len(filtered)
-        page = list(filtered[offset : offset + limit])
-        return {"total": total, "offset": offset, "limit": limit, "data": page}
+        return query_ops.projection_response(
+            self,
+            dataset,
+            player=player,
+            team=team,
+            player_keys=player_keys,
+            year=year,
+            years=years,
+            pos=pos,
+            dynasty_years=dynasty_years,
+            career_totals=career_totals,
+            include_dynasty=include_dynasty,
+            calculator_job_id=calculator_job_id,
+            sort_col=sort_col,
+            sort_dir=sort_dir,
+            limit=limit,
+            offset=offset,
+        )
 
     def projection_profile(
         self,
@@ -644,74 +589,13 @@ class ProjectionService:
         include_dynasty: bool = True,
         calculator_job_id: str | None = None,
     ) -> dict[str, Any]:
-        normalized_player_id = self._normalize_filter_value(player_id)
-        if not normalized_player_id:
-            raise HTTPException(status_code=422, detail="player_id is required.")
-
-        series = self.projection_response(
-            dataset,
-            player=None,
-            team=None,
-            player_keys=normalized_player_id,
-            year=None,
-            years=None,
-            pos=None,
-            dynasty_years=None,
-            career_totals=False,
+        return profile_ops.projection_profile(
+            self,
+            player_id=player_id,
+            dataset=dataset,
             include_dynasty=include_dynasty,
             calculator_job_id=calculator_job_id,
-            sort_col="Year",
-            sort_dir="asc",
-            limit=5000,
-            offset=0,
         )
-        career_totals = self.projection_response(
-            dataset,
-            player=None,
-            team=None,
-            player_keys=normalized_player_id,
-            year=None,
-            years=None,
-            pos=None,
-            dynasty_years=None,
-            career_totals=True,
-            include_dynasty=include_dynasty,
-            calculator_job_id=calculator_job_id,
-            sort_col="DynastyValue",
-            sort_dir="desc",
-            limit=5000,
-            offset=0,
-        )
-
-        matched_players: list[dict[str, Any]] = []
-        seen_keys: set[str] = set()
-        for row in career_totals.get("data", []):
-            player_entity_key = str(row.get(self._ctx.player_entity_key_col) or "").strip()
-            player_key = str(row.get(self._ctx.player_key_col) or "").strip()
-            identity_key = player_entity_key or player_key
-            if not identity_key or identity_key in seen_keys:
-                continue
-            seen_keys.add(identity_key)
-            matched_players.append(
-                {
-                    "player_entity_key": player_entity_key or None,
-                    "player_key": player_key or None,
-                    "player": str(row.get("Player") or "").strip() or None,
-                    "team": self._row_team_value(row) or None,
-                    "pos": str(row.get("Pos") or "").strip() or None,
-                }
-            )
-
-        return {
-            "player_id": normalized_player_id,
-            "dataset": dataset,
-            "include_dynasty": bool(include_dynasty),
-            "series_total": int(series.get("total", 0)),
-            "career_totals_total": int(career_totals.get("total", 0)),
-            "matched_players": matched_players,
-            "series": list(series.get("data", [])),
-            "career_totals": list(career_totals.get("data", [])),
-        }
 
     def projection_compare(
         self,
@@ -725,50 +609,17 @@ class ProjectionService:
         years: str | None = None,
         dynasty_years: str | None = None,
     ) -> dict[str, Any]:
-        requested_player_keys = self._parse_player_keys_filter(player_keys)
-        if not requested_player_keys or len(requested_player_keys) < 2:
-            raise HTTPException(
-                status_code=422,
-                detail="player_keys must include at least two PlayerKey or PlayerEntityKey values.",
-            )
-        normalized_player_keys = ",".join(sorted(requested_player_keys))
-        resolved_year = None if career_totals else year
-        resolved_years = None if career_totals else years
-        sort_col = "DynastyValue" if career_totals else "Year"
-        sort_dir = "desc" if career_totals else "asc"
-        response = self.projection_response(
-            dataset,
-            player=None,
-            team=None,
-            player_keys=normalized_player_keys,
-            year=resolved_year,
-            years=resolved_years,
-            pos=None,
-            dynasty_years=dynasty_years,
-            career_totals=career_totals,
+        return profile_ops.projection_compare(
+            self,
+            player_keys=player_keys,
+            dataset=dataset,
             include_dynasty=include_dynasty,
             calculator_job_id=calculator_job_id,
-            sort_col=sort_col,
-            sort_dir=sort_dir,
-            limit=5000,
-            offset=0,
+            career_totals=career_totals,
+            year=year,
+            years=years,
+            dynasty_years=dynasty_years,
         )
-        matched_player_keys = sorted(
-            {
-                str(row.get(self._ctx.player_entity_key_col) or row.get(self._ctx.player_key_col) or "").strip()
-                for row in response.get("data", [])
-                if str(row.get(self._ctx.player_entity_key_col) or row.get(self._ctx.player_key_col) or "").strip()
-            }
-        )
-        return {
-            "dataset": dataset,
-            "include_dynasty": bool(include_dynasty),
-            "career_totals": bool(career_totals),
-            "requested_player_keys": sorted(requested_player_keys),
-            "matched_player_keys": matched_player_keys,
-            "total": int(response.get("total", 0)),
-            "data": list(response.get("data", [])),
-        }
 
     def export_projections(
         self,
@@ -788,62 +639,21 @@ class ProjectionService:
         sort_dir: Literal["asc", "desc"] = "desc",
         columns: Optional[str] = None,
     ):
-        self._ctx.refresh_data_if_needed()
-        validated_sort_col = self._validate_sort_col(sort_col, dataset=dataset)
-        if dataset == "all":
-            rows = list(
-                self._get_all_projection_rows(
-                    player=player,
-                    team=team,
-                    player_keys=player_keys,
-                    year=year,
-                    years=years,
-                    pos=pos,
-                    include_dynasty=include_dynasty,
-                    dynasty_years=dynasty_years,
-                    calculator_job_id=calculator_job_id,
-                    career_totals=career_totals,
-                    sort_col=validated_sort_col,
-                    sort_dir=sort_dir,
-                )
-            )
-        else:
-            rows = list(
-                self._get_projection_rows(
-                    dataset,
-                    player=player,
-                    team=team,
-                    player_keys=player_keys,
-                    year=year,
-                    years=years,
-                    pos=pos,
-                    include_dynasty=include_dynasty,
-                    dynasty_years=dynasty_years,
-                    calculator_job_id=calculator_job_id,
-                    career_totals=career_totals,
-                    sort_col=validated_sort_col,
-                    sort_dir=sort_dir,
-                )
-            )
-
-        requested_export_columns = self._parse_export_columns(columns)
-        default_export_columns = self._default_projection_export_columns(
-            rows,
-            dataset=dataset,
-            career_totals=career_totals,
-        )
-        return self._ctx.tabular_export_response(
-            rows,
-            filename_base=f"projections-{dataset}",
+        return query_ops.export_projections(
+            self,
+            dataset,
             file_format=file_format,
-            selected_columns=requested_export_columns,
-            default_columns=default_export_columns,
-            required_columns=["Player"],
-            disallowed_columns=[
-                self._ctx.player_key_col,
-                self._ctx.player_entity_key_col,
-                "DynastyMatchStatus",
-                "RawDynastyValue",
-                "minor_eligible",
-            ],
+            player=player,
+            team=team,
+            player_keys=player_keys,
+            year=year,
+            years=years,
+            pos=pos,
+            dynasty_years=dynasty_years,
+            career_totals=career_totals,
+            include_dynasty=include_dynasty,
+            calculator_job_id=calculator_job_id,
+            sort_col=sort_col,
+            sort_dir=sort_dir,
+            columns=columns,
         )

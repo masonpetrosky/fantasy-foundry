@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
 import pandas as pd
 
@@ -54,13 +56,13 @@ try:
         parse_pit_positions,
     )
     from backend.valuation.replacement import (
+        _positive_save_guard_exempt_categories as _positive_save_guard_exempt_categories,
+    )
+    from backend.valuation.replacement import (
         compute_replacement_baselines as compute_replacement_baselines,
     )
     from backend.valuation.replacement import (
         compute_year_player_values_vs_replacement as compute_year_player_values_vs_replacement,
-    )
-    from backend.valuation.replacement import (
-        _positive_save_guard_exempt_categories as _positive_save_guard_exempt_categories,
     )
     from backend.valuation.sgp_math import (
         _mean_adjacent_rank_gap as _mean_adjacent_rank_gap,
@@ -108,6 +110,12 @@ try:
     from backend.valuation.weighting import (
         _initial_pitcher_weight as _initial_pitcher_weight,
     )
+    from backend.valuation.year_context import (
+        CommonYearContext,
+        CommonYearContextLike,
+        context_optional_value,
+        context_value,
+    )
 except ImportError:
     from valuation.active_volume import (  # type: ignore[no-redef]
         SYNTHETIC_SEASON_DAYS,
@@ -125,22 +133,22 @@ except ImportError:
     from valuation.credit_guards import (  # type: ignore[no-redef]
         _apply_hitter_playing_time_reliability_guard as _apply_hitter_playing_time_reliability_guard,
     )
-    from valuation.credit_guards import (
+    from valuation.credit_guards import (  # type: ignore[no-redef]
         _apply_low_volume_non_ratio_positive_guard as _apply_low_volume_non_ratio_positive_guard,
     )
-    from valuation.credit_guards import (
+    from valuation.credit_guards import (  # type: ignore[no-redef]
         _apply_low_volume_ratio_guard as _apply_low_volume_ratio_guard,
     )
-    from valuation.credit_guards import (
+    from valuation.credit_guards import (  # type: ignore[no-redef]
         _apply_pitcher_playing_time_reliability_guard as _apply_pitcher_playing_time_reliability_guard,
     )
-    from valuation.credit_guards import (
+    from valuation.credit_guards import (  # type: ignore[no-redef]
         _coerce_non_negative_float as _coerce_non_negative_float,
     )
-    from valuation.credit_guards import (
+    from valuation.credit_guards import (  # type: ignore[no-redef]
         _low_volume_positive_credit_scale as _low_volume_positive_credit_scale,
     )
-    from valuation.credit_guards import (
+    from valuation.credit_guards import (  # type: ignore[no-redef]
         _positive_credit_scale as _positive_credit_scale,
     )
     from valuation.models import (  # type: ignore[no-redef]
@@ -157,59 +165,65 @@ except ImportError:
         parse_pit_positions,
     )
     from valuation.replacement import (  # type: ignore[no-redef]
+        _positive_save_guard_exempt_categories as _positive_save_guard_exempt_categories,
+    )
+    from valuation.replacement import (  # type: ignore[no-redef]
         compute_replacement_baselines as compute_replacement_baselines,
     )
-    from valuation.replacement import (
+    from valuation.replacement import (  # type: ignore[no-redef]
         compute_year_player_values_vs_replacement as compute_year_player_values_vs_replacement,
-    )
-    from valuation.replacement import (
-        _positive_save_guard_exempt_categories as _positive_save_guard_exempt_categories,
     )
     from valuation.sgp_math import (  # type: ignore[no-redef]
         _mean_adjacent_rank_gap as _mean_adjacent_rank_gap,
     )
-    from valuation.sgp_math import (
+    from valuation.sgp_math import (  # type: ignore[no-redef]
         _sgp_denominator_floor as _sgp_denominator_floor,
     )
-    from valuation.sgp_math import (
+    from valuation.sgp_math import (  # type: ignore[no-redef]
         _sgp_estimator_options as _sgp_estimator_options,
     )
-    from valuation.sgp_math import (
+    from valuation.sgp_math import (  # type: ignore[no-redef]
         simulate_sgp_hit as simulate_sgp_hit,
     )
-    from valuation.sgp_math import (
+    from valuation.sgp_math import (  # type: ignore[no-redef]
         simulate_sgp_pit as simulate_sgp_pit,
     )
     from valuation.team_stats import (  # type: ignore[no-redef]
         _team_avg as _team_avg,
     )
-    from valuation.team_stats import (
+    from valuation.team_stats import (  # type: ignore[no-redef]
         _team_era as _team_era,
     )
-    from valuation.team_stats import (
+    from valuation.team_stats import (  # type: ignore[no-redef]
         _team_obp as _team_obp,
     )
-    from valuation.team_stats import (
+    from valuation.team_stats import (  # type: ignore[no-redef]
         _team_whip as _team_whip,
     )
-    from valuation.team_stats import (
+    from valuation.team_stats import (  # type: ignore[no-redef]
         common_apply_pitching_bounds as common_apply_pitching_bounds,
     )
-    from valuation.team_stats import (
+    from valuation.team_stats import (  # type: ignore[no-redef]
         common_hit_category_totals as common_hit_category_totals,
     )
-    from valuation.team_stats import (
+    from valuation.team_stats import (  # type: ignore[no-redef]
         common_pitch_category_totals as common_pitch_category_totals,
     )
-    from valuation.team_stats import (
+    from valuation.team_stats import (  # type: ignore[no-redef]
         common_replacement_pitcher_rates as common_replacement_pitcher_rates,
     )
     from valuation.two_way import combine_two_way as combine_two_way  # type: ignore[no-redef]
     from valuation.weighting import (  # type: ignore[no-redef]
         _initial_hitter_weight as _initial_hitter_weight,
     )
-    from valuation.weighting import (
+    from valuation.weighting import (  # type: ignore[no-redef]
         _initial_pitcher_weight as _initial_pitcher_weight,
+    )
+    from valuation.year_context import (  # type: ignore[no-redef]
+        CommonYearContext,
+        CommonYearContextLike,
+        context_optional_value,
+        context_value,
     )
 
 
@@ -500,7 +514,7 @@ def compute_year_context(
     pit: pd.DataFrame,
     lg: CommonDynastyRotoSettings,
     rng_seed: int | None = None,
-) -> dict:
+) -> CommonYearContext:
     bat_y = bat[bat["Year"] == year].copy()
     pit_y = pit[pit["Year"] == year].copy()
     hit_categories = _active_common_hit_categories(lg)
@@ -596,47 +610,47 @@ def compute_year_context(
     sgp_hit = simulate_sgp_hit(assigned_hit, lg, rng_hit, categories=hit_categories)
     sgp_pit = simulate_sgp_pit(assigned_pit, lg, rng_pit, rep_rates=rep_rates, categories=pit_categories)
 
-    return {
-        "year": year,
-        "bat_y": bat_y,
-        "pit_y": pit_y,
-        "assigned_hit": assigned_hit,
-        "assigned_pit": assigned_pit,
-        "baseline_hit": baseline_hit,
-        "baseline_pit": baseline_pit,
-        "base_hit_tot": base_hit_tot,
-        "base_avg": base_avg,
-        "base_pit_tot": base_pit_tot,
-        "base_pit_bounded": base_pit_bounded,
-        "rep_rates": rep_rates,
-        "sgp_hit": sgp_hit,
-        "sgp_pit": sgp_pit,
-        "hit_categories": hit_categories,
-        "pit_categories": pit_categories,
-        "hitter_usage_diagnostics": hitter_usage_diagnostics,
-        "pitcher_usage_diagnostics": pitcher_usage_diagnostics,
-    }
+    return CommonYearContext(
+        year=year,
+        bat_y=bat_y,
+        pit_y=pit_y,
+        assigned_hit=assigned_hit,
+        assigned_pit=assigned_pit,
+        baseline_hit=baseline_hit,
+        baseline_pit=baseline_pit,
+        base_hit_tot=base_hit_tot,
+        base_avg=base_avg,
+        base_pit_tot=base_pit_tot,
+        base_pit_bounded=base_pit_bounded,
+        rep_rates=rep_rates,
+        sgp_hit=sgp_hit,
+        sgp_pit=sgp_pit,
+        hit_categories=hit_categories,
+        pit_categories=pit_categories,
+        hitter_usage_diagnostics=hitter_usage_diagnostics,
+        pitcher_usage_diagnostics=pitcher_usage_diagnostics,
+    )
 
 
-def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> tuple[pd.DataFrame, pd.DataFrame]:
-    year = int(ctx["year"])
-    bat_y = ctx["bat_y"]
-    pit_y = ctx["pit_y"]
+def compute_year_player_values(ctx: CommonYearContextLike, lg: CommonDynastyRotoSettings) -> tuple[pd.DataFrame, pd.DataFrame]:
+    year = int(cast(int, context_value(ctx, "year")))
+    bat_y = cast(pd.DataFrame, context_value(ctx, "bat_y"))
+    pit_y = cast(pd.DataFrame, context_value(ctx, "pit_y"))
 
-    baseline_hit = ctx["baseline_hit"]
-    baseline_pit = ctx["baseline_pit"]
-    base_hit_tot = ctx["base_hit_tot"]
+    baseline_hit = cast(pd.DataFrame, context_value(ctx, "baseline_hit"))
+    baseline_pit = cast(pd.DataFrame, context_value(ctx, "baseline_pit"))
+    base_hit_tot = cast(pd.Series, context_value(ctx, "base_hit_tot"))
     base_hit_cats = common_hit_category_totals({col: float(base_hit_tot[col]) for col in HIT_COMPONENT_COLS})
 
-    base_pit_tot = ctx["base_pit_tot"]
-    rep_rates = ctx.get("rep_rates")
-    base_pit_bounded = dict(ctx["base_pit_bounded"])
+    base_pit_tot = cast(pd.Series, context_value(ctx, "base_pit_tot"))
+    rep_rates = cast(dict[str, float] | None, context_optional_value(ctx, "rep_rates"))
+    base_pit_bounded = dict(cast(dict[str, float], context_value(ctx, "base_pit_bounded")))
     base_pit_cats = common_pitch_category_totals(base_pit_bounded)
 
-    sgp_hit = ctx["sgp_hit"]
-    sgp_pit = ctx["sgp_pit"]
-    hit_categories = ctx.get("hit_categories") or _active_common_hit_categories(lg)
-    pit_categories = ctx.get("pit_categories") or _active_common_pitch_categories(lg)
+    sgp_hit = cast(dict[str, float], context_value(ctx, "sgp_hit"))
+    sgp_pit = cast(dict[str, float], context_value(ctx, "sgp_pit"))
+    hit_categories = cast(list[str] | None, context_optional_value(ctx, "hit_categories")) or _active_common_hit_categories(lg)
+    pit_categories = cast(list[str] | None, context_optional_value(ctx, "pit_categories")) or _active_common_pitch_categories(lg)
 
     # --- Hitters: best eligible slot vs average starter at that slot ---
     hit_rows = []
@@ -648,7 +662,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> tupl
 
         best_val = -1e18
         best_slot = None
-        best_stat_sgps: dict[str, float] = {}
+        best_hit_stat_sgps: dict[str, float] = {}
 
         for slot in slots:
             if slot not in baseline_hit.index:
@@ -680,7 +694,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> tupl
             if val > best_val:
                 best_val = val
                 best_slot = slot
-                best_stat_sgps = stat_sgps
+                best_hit_stat_sgps = stat_sgps
 
         hit_rows.append(
             {
@@ -692,7 +706,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> tupl
                 "Pos": row.get("Pos", np.nan),
                 "BestSlot": best_slot,
                 "YearValue": float(best_val),
-                **{f"SGP_{cat}": best_stat_sgps.get(cat, 0.0) for cat in hit_categories},
+                **{f"SGP_{cat}": best_hit_stat_sgps.get(cat, 0.0) for cat in hit_categories},
             }
         )
 
@@ -708,7 +722,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> tupl
 
         best_val = -1e18
         best_slot = None
-        best_stat_sgps: dict[str, float] = {}
+        best_pitch_stat_sgps: dict[str, float] = {}
 
         for slot in slots:
             if slot not in baseline_pit.index:
@@ -727,24 +741,24 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> tupl
             )
 
             new_pit_cats = common_pitch_category_totals(new_tot_bounded)
-            delta: dict[str, float] = {}
+            pitch_delta: dict[str, float] = {}
             for cat in pit_categories:
                 new_val = float(new_pit_cats.get(cat, 0.0))
                 base_val = float(base_pit_cats.get(cat, 0.0))
                 if cat in COMMON_REVERSED_PITCH_CATS:
-                    delta[cat] = base_val - new_val
+                    pitch_delta[cat] = base_val - new_val
                 else:
-                    delta[cat] = new_val - base_val
+                    pitch_delta[cat] = new_val - base_val
             if bool(getattr(lg, "enable_playing_time_reliability", False)):
                 _apply_pitcher_playing_time_reliability_guard(
-                    delta,
+                    pitch_delta,
                     pit_categories=pit_categories,
                     pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
                     slot_ip_reference=_coerce_non_negative_float(b.get("IP", 0.0)),
                 )
             else:
                 _apply_low_volume_non_ratio_positive_guard(
-                    delta,
+                    pitch_delta,
                     pit_categories=pit_categories,
                     pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
                     slot_ip_reference=_coerce_non_negative_float(b.get("IP", 0.0)),
@@ -756,24 +770,24 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> tupl
                     ),
                 )
                 _apply_low_volume_ratio_guard(
-                    delta,
+                    pitch_delta,
                     pit_categories=pit_categories,
                     pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
                     slot_ip_reference=_coerce_non_negative_float(b.get("IP", 0.0)),
                 )
 
             val = 0.0
-            stat_sgps: dict[str, float] = {}
+            pitcher_stat_sgps: dict[str, float] = {}
             for c in pit_categories:
                 denom = float(sgp_pit[c])
-                sgp_c = (delta[c] / denom) if denom else 0.0
+                sgp_c = (pitch_delta[c] / denom) if denom else 0.0
                 val += sgp_c
-                stat_sgps[c] = sgp_c
+                pitcher_stat_sgps[c] = sgp_c
 
             if val > best_val:
                 best_val = val
                 best_slot = slot
-                best_stat_sgps = stat_sgps
+                best_pitch_stat_sgps = pitcher_stat_sgps
 
         pit_rows.append(
             {
@@ -785,7 +799,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> tupl
                 "Pos": row.get("Pos", np.nan),
                 "BestSlot": best_slot,
                 "YearValue": float(best_val),
-                **{f"SGP_{cat}": best_stat_sgps.get(cat, 0.0) for cat in pit_categories},
+                **{f"SGP_{cat}": best_pitch_stat_sgps.get(cat, 0.0) for cat in pit_categories},
             }
         )
 
@@ -794,6 +808,7 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> tupl
 
 
 __all__ = [
+    "CommonYearContext",
     "COMMON_REVERSED_PITCH_CATS",
     "common_hit_category_totals",
     "common_pitch_category_totals",

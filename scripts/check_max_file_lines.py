@@ -11,12 +11,23 @@ from pathlib import Path
 
 MAX_LINES = 1200
 MAX_LINES_BY_PREFIX = (
+    (Path("backend/core/runtime_composition.py"), 500),
     (Path("backend/core/runtime_projection_helpers.py"), 500),
     (Path("backend/core/runtime_security.py"), 500),
     (Path("backend/core/points_calculator.py"), 500),
     (Path("backend/core/points_calculator_preparation.py"), 500),
     (Path("backend/core/points_calculator_usage.py"), 500),
     (Path("backend/core/points_calculator_output.py"), 750),
+    (Path("backend/services/calculator/service.py"), 750),
+    (Path("backend/services/calculator/models.py"), 300),
+    (Path("backend/services/projections/service.py"), 700),
+    (Path("backend/services/projections/query_ops.py"), 350),
+    (Path("backend/services/projections/profile_ops.py"), 250),
+    (Path("backend/dynasty_roto_values.py"), 500),
+    (Path("backend/valuation/projection_compat.py"), 350),
+    (Path("backend/valuation/common_math_compat.py"), 350),
+    (Path("backend/valuation/minor_eligibility_compat.py"), 300),
+    (Path("backend/valuation/dynasty_aggregation.py"), 150),
     (Path("backend/valuation/cli_args.py"), 500),
     (Path("frontend/src/main.tsx"), 500),
     (Path("frontend/src/dynasty_calculator.tsx"), 500),

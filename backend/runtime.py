@@ -32,7 +32,6 @@ import pandas as pd
 from fastapi import Request
 from fastapi.responses import StreamingResponse
 
-from backend.api.app_factory import create_app
 from backend.api.dependencies import (
     build_calculator_service,
 )
@@ -194,6 +193,7 @@ from backend.core.runtime_cache_job_helpers import (
     RuntimeCacheJobHelperConfig,
     build_runtime_cache_job_helpers,
 )
+from backend.core.runtime_composition import RuntimeAppConfig, build_runtime_composition
 from backend.core.runtime_config import (
     ALL_TAB_HITTER_STAT_COLS,
     ALL_TAB_PITCH_STAT_COLS,
@@ -230,9 +230,7 @@ from backend.core.runtime_defaults import (
     POINTS_PITCHER_SLOT_DEFAULTS,
 )
 from backend.core.runtime_endpoint_handlers import (
-    RouterWiringConfig,
     build_billing_wiring,
-    wire_routers,
 )
 from backend.core.runtime_facade import (
     apply_runtime_facade_aliases,
@@ -717,37 +715,6 @@ _validate_runtime_configuration()
 
 METRICS_COLLECTOR: MetricsCollector | None = MetricsCollector() if SETTINGS.metrics_enabled else None
 
-# ---------------------------------------------------------------------------
-# App
-# ---------------------------------------------------------------------------
-app = create_app(
-    title="Dynasty Baseball Projections",
-    version="1.0.0",
-    app_build_id=APP_BUILD_ID,
-    api_no_cache_headers=API_NO_CACHE_HEADERS,
-    cors_allow_origins=CORS_ALLOW_ORIGINS,
-    environment=APP_ENVIRONMENT,
-    refresh_data_if_needed=_refresh_data_if_needed,
-    current_data_version=_current_data_version,
-    client_identity_resolver=_client_ip,
-    canonical_host=CANONICAL_HOST,
-    enable_startup_calc_prewarm=ENABLE_STARTUP_CALC_PREWARM,
-    prewarm_default_calculation_caches=_prewarm_default_calculation_caches,
-    calculator_job_executor=CALCULATOR_JOB_EXECUTOR,
-    calculator_jobs=CALCULATOR_JOBS,
-    calculator_job_lock=CALCULATOR_JOB_LOCK,
-    docs_enabled=SETTINGS.docs_enabled,
-    metrics_collector=METRICS_COLLECTOR,
-    slow_request_threshold_seconds=SETTINGS.slow_request_threshold_seconds,
-)
-
-# ---------------------------------------------------------------------------
-# API: Metadata
-# ---------------------------------------------------------------------------
-# Endpoint handler aliases are bound by runtime bootstrap so route wiring below
-# can continue to reference stable module-level names.
-
-
 def _get_projection_deltas(*, request: Request) -> dict:
     _enforce_rate_limit(
         request,
@@ -818,49 +785,63 @@ def _get_unique_player_entity_keys() -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Router registration — centralized via wire_routers()
+# App/runtime composition
 # ---------------------------------------------------------------------------
-wire_routers(
-    app,
-    RouterWiringConfig(
-        meta_handler=get_meta,
-        version_handler=get_version,
-        health_handler=get_health,
-        ready_handler=get_ready,
-        ops_handler=get_ops,
-        metrics_collector=METRICS_COLLECTOR,
-        projection_response_handler=projection_response,
-        projection_export_handler=export_projections,
-        projection_profile_handler=RUNTIME_ENDPOINT_HANDLERS.projection_profile,
-        projection_compare_handler=RUNTIME_ENDPOINT_HANDLERS.projection_compare,
-        projection_deltas_handler=_get_projection_deltas,
-        calculate_request_model=CalculateRequest,
-        calculate_export_request_model=CalculateExportRequest,
-        calculate_handler=calculate_dynasty_values,
-        calculate_export_handler=export_calculate_dynasty_values,
-        calculate_job_create_handler=create_calculate_dynasty_job,
-        calculate_job_read_handler=get_calculate_dynasty_job,
-        calculate_job_cancel_handler=cancel_calculate_dynasty_job,
-        calculate_authorize_handler=_authorize_calculate_request,
-        enforce_rate_limit=_enforce_rate_limit,
-        client_ip_resolver=_client_ip,
-        league_fetcher=_fantrax_fetch_league,
-        player_summary_getter=lambda: PLAYER_SUMMARY_INDEX,
-        fantrax_rate_limit_per_minute=SETTINGS.fantrax_rate_limit_per_minute,
-        player_summary_index=PLAYER_SUMMARY_INDEX,
-        index_path=INDEX_PATH,
-        assets_root=FRONTEND_DIST_ASSETS_DIR,
-        app_build_id=APP_BUILD_ID,
-        index_build_token=INDEX_BUILD_TOKEN,
-        player_keys_getter=_get_unique_player_entity_keys,
-        frontend_exists=FRONTEND_DIR.exists(),
-        buttondown_api_key=SETTINGS.buttondown_api_key,
-        billing_wiring=_BILLING_WIRING,
-        stripe_secret_key=SETTINGS.stripe_secret_key,
-        stripe_webhook_secret=SETTINGS.stripe_webhook_secret,
-        stripe_monthly_price_id=SETTINGS.stripe_monthly_price_id,
-        stripe_annual_price_id=SETTINGS.stripe_annual_price_id,
-    ),
+RUNTIME_APP_CONFIG = RuntimeAppConfig(
+    title="Dynasty Baseball Projections",
+    version="1.0.0",
+    app_build_id=APP_BUILD_ID,
+    api_no_cache_headers=API_NO_CACHE_HEADERS,
+    cors_allow_origins=CORS_ALLOW_ORIGINS,
+    environment=APP_ENVIRONMENT,
+    canonical_host=CANONICAL_HOST,
+    enable_startup_calc_prewarm=ENABLE_STARTUP_CALC_PREWARM,
+    docs_enabled=SETTINGS.docs_enabled,
+    slow_request_threshold_seconds=SETTINGS.slow_request_threshold_seconds,
+)
+RUNTIME_COMPOSITION = build_runtime_composition(
+    app_config=RUNTIME_APP_CONFIG,
+    metrics_collector=METRICS_COLLECTOR,
+    billing_wiring=_BILLING_WIRING,
+    refresh_data_if_needed=_refresh_data_if_needed,
+    current_data_version=_current_data_version,
+    client_identity_resolver=_client_ip,
+    prewarm_default_calculation_caches=_prewarm_default_calculation_caches,
+    calculator_job_executor=CALCULATOR_JOB_EXECUTOR,
+    calculator_jobs=CALCULATOR_JOBS,
+    calculator_job_lock=CALCULATOR_JOB_LOCK,
+    meta_handler=get_meta,
+    version_handler=get_version,
+    health_handler=get_health,
+    ready_handler=get_ready,
+    ops_handler=get_ops,
+    projection_response_handler=projection_response,
+    projection_export_handler=export_projections,
+    projection_profile_handler=RUNTIME_ENDPOINT_HANDLERS.projection_profile,
+    projection_compare_handler=RUNTIME_ENDPOINT_HANDLERS.projection_compare,
+    projection_deltas_handler=_get_projection_deltas,
+    calculate_request_model=CalculateRequest,
+    calculate_export_request_model=CalculateExportRequest,
+    calculate_handler=calculate_dynasty_values,
+    calculate_export_handler=export_calculate_dynasty_values,
+    calculate_job_create_handler=create_calculate_dynasty_job,
+    calculate_job_read_handler=get_calculate_dynasty_job,
+    calculate_job_cancel_handler=cancel_calculate_dynasty_job,
+    calculate_authorize_handler=_authorize_calculate_request,
+    enforce_rate_limit=_enforce_rate_limit,
+    league_fetcher=_fantrax_fetch_league,
+    player_summary_index=PLAYER_SUMMARY_INDEX,
+    player_keys_getter=_get_unique_player_entity_keys,
+    fantrax_rate_limit_per_minute=SETTINGS.fantrax_rate_limit_per_minute,
+    index_path=INDEX_PATH,
+    assets_root=FRONTEND_DIST_ASSETS_DIR,
+    index_build_token=INDEX_BUILD_TOKEN,
+    frontend_exists=FRONTEND_DIR.exists(),
+    buttondown_api_key=SETTINGS.buttondown_api_key,
+    stripe_secret_key=SETTINGS.stripe_secret_key,
+    stripe_webhook_secret=SETTINGS.stripe_webhook_secret,
+    stripe_monthly_price_id=SETTINGS.stripe_monthly_price_id,
+    stripe_annual_price_id=SETTINGS.stripe_annual_price_id,
     build_status_router_fn=build_status_router,
     build_projections_router_fn=build_projections_router,
     build_calculate_router_fn=build_calculate_router,
@@ -870,3 +851,5 @@ wire_routers(
     build_billing_router_fn=build_billing_router,
     build_newsletter_router_fn=build_newsletter_router,
 )
+ROUTER_WIRING_CONFIG = RUNTIME_COMPOSITION.router_wiring_config
+app = RUNTIME_COMPOSITION.app

@@ -50,7 +50,7 @@ Prefer the smallest relevant validation first, then widen only as needed.
 | Backend targeted check after a small backend fix | targeted `pytest` selection when obvious |
 | Fastest backend sanity lane while iterating | `make test-backend-quick` |
 | Default backend regression lane | `make test-backend-fast` |
-| Backend fast lane with coverage parity | `make test-backend-fast-cov` |
+| Backend fast lane with coverage parity (80% backend coverage floor) | `make test-backend-fast-cov` |
 | Full backend suite when coverage or wider regressions matter | `pytest -q` |
 | Frontend targeted check after a small frontend fix | targeted `cd frontend && npm test -- <pattern>` when obvious |
 | Default frontend suite | `cd frontend && npm test` |
