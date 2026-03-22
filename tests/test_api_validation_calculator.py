@@ -1,5 +1,6 @@
 import io
 import ipaddress
+import json
 import sys
 import time
 import types
@@ -1532,3 +1533,74 @@ class CalculatorValidationTests(unittest.TestCase):
 
             self.assertEqual(payload["error"]["status_code"], 422)
             self.assertIn("Not enough players", payload["error"]["detail"])
+
+    @pytest.mark.full_regression
+    def test_calculation_job_exact_deep_roto_configuration_completes_with_strict_json_payload(self) -> None:
+        create = self.client.post(
+            "/api/calculate/jobs",
+            json={
+                "teams": 12,
+                "start_year": 2026,
+                "horizon": 20,
+                "scoring_mode": "roto",
+                "discount": 0.94,
+                "two_way": "sum",
+                "sims": 300,
+                "ip_min": 1000,
+                "ip_max": 1500,
+                "enable_prospect_risk_adjustment": True,
+                "enable_bench_stash_relief": True,
+                "enable_ir_stash_relief": True,
+                "bench_negative_penalty": 0.55,
+                "ir_negative_penalty": 0.2,
+                "hit_c": 2,
+                "hit_1b": 1,
+                "hit_2b": 1,
+                "hit_3b": 1,
+                "hit_ss": 1,
+                "hit_ci": 1,
+                "hit_mi": 1,
+                "hit_of": 5,
+                "hit_ut": 2,
+                "pit_p": 3,
+                "pit_sp": 3,
+                "pit_rp": 3,
+                "bench": 14,
+                "minors": 20,
+                "ir": 8,
+                "roto_hit_r": True,
+                "roto_hit_rbi": True,
+                "roto_hit_hr": True,
+                "roto_hit_sb": True,
+                "roto_hit_avg": True,
+                "roto_hit_ops": True,
+                "roto_pit_w": True,
+                "roto_pit_k": True,
+                "roto_pit_sv": False,
+                "roto_pit_era": True,
+                "roto_pit_whip": True,
+                "roto_pit_qa3": True,
+                "roto_pit_svh": True,
+            },
+        )
+        self.assertEqual(create.status_code, 202)
+        job_id = create.json()["job_id"]
+
+        payload = None
+        deadline = time.time() + 120.0
+        while True:
+            status = self.client.get(f"/api/calculate/jobs/{job_id}")
+            self.assertEqual(status.status_code, 200)
+            payload = status.json()
+            if payload["status"] == "completed":
+                break
+            if payload["status"] == "failed":
+                self.fail(f"Expected completed job, got failed payload: {payload}")
+            if time.time() > deadline:
+                self.fail(f"Timed out waiting for completed status: {payload}")
+            time.sleep(0.25)
+
+        assert payload is not None
+        self.assertEqual(payload["status"], "completed")
+        self.assertGreater(payload["result"]["total"], 0)
+        json.dumps(payload, allow_nan=False)

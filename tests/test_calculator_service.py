@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import threading
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -621,6 +622,52 @@ def test_run_calculation_job_marks_failed_with_http_exception_details() -> None:
 
     assert harness.jobs["job-1"]["status"] == "failed"
     assert harness.jobs["job-1"]["error"] == {"status_code": 422, "detail": "bad settings"}
+
+
+def test_run_calculate_request_sanitizes_nested_payload_before_cache_and_response() -> None:
+    harness = _build_harness()
+    frame = pd.DataFrame(
+        [
+            {
+                "Player": "Test Player",
+                "Team": "SEA",
+                "Pos": "OF",
+                "Age": 24,
+                "DynastyValue": float("nan"),
+                "RawDynastyValue": 12.5,
+                "minor_eligible": False,
+                "Value_2026": float("inf"),
+            }
+        ]
+    )
+    frame.attrs["valuation_diagnostics"] = {
+        "summary": {"best": float("nan"), "worst": float("-inf")},
+    }
+    harness.service._ctx.calculate_common_dynasty_frame_cached = _CacheCallable(frame)
+    harness.service._ctx.build_calculation_explanations = lambda _out, *, settings: {
+        "test-player": {
+            "mode": settings.get("scoring_mode"),
+            "per_year": [
+                {
+                    "year": 2026,
+                    "raw_year_value": float("nan"),
+                    "discounted_contribution": float("inf"),
+                }
+            ],
+        }
+    }
+
+    result = harness.service._run_calculate_request(CalculateRequest(), source="sync")
+
+    assert result["data"][0]["DynastyValue"] is None
+    assert result["data"][0]["Value_2026"] is None
+    assert result["diagnostics"]["summary"]["best"] is None
+    assert result["diagnostics"]["summary"]["worst"] is None
+    assert result["explanations"]["test-player"]["per_year"][0]["raw_year_value"] is None
+    assert result["explanations"]["test-player"]["per_year"][0]["discounted_contribution"] is None
+    cache_key = harness.service._ctx.calc_result_cache_key(CalculateRequest().model_dump())
+    assert harness.result_cache[cache_key] == result
+    json.dumps(result, allow_nan=False)
 
 
 def test_run_calculation_job_marks_cancelled_when_http_exception_arrives_after_cancel_request() -> None:

@@ -8,6 +8,12 @@ describe("formatApiError", () => {
     );
   });
 
+  it("includes request id when present", () => {
+    expect(formatApiError(500, { detail: "Internal error", request_id: "req-123" })).toBe(
+      "Server error 500: Internal error (request id: req-123)"
+    );
+  });
+
   it("returns validation error for array detail", () => {
     const payload = { detail: [{ msg: "field required" }] };
     expect(formatApiError(422, payload)).toBe(

@@ -2,24 +2,33 @@ import { useEffect, useState } from "react";
 
 interface ApiErrorPayload {
   detail?: string | Array<{ msg?: string }>;
+  request_id?: string;
+}
+
+function appendRequestId(message: string, payload: ApiErrorPayload | null): string {
+  const requestId = String(payload?.request_id || "").trim();
+  if (!requestId) {
+    return message;
+  }
+  return `${message} (request id: ${requestId})`;
 }
 
 export function formatApiError(status: number, payload: ApiErrorPayload | null, rawText = ""): string {
   const detail = payload && payload.detail;
   if (typeof detail === "string" && detail.trim()) {
-    return `Server error ${status}: ${detail}`;
+    return appendRequestId(`Server error ${status}: ${detail}`, payload);
   }
   if (Array.isArray(detail) && detail.length > 0) {
     const first = detail[0];
     if (first && typeof first.msg === "string") {
-      return `Validation error (${status}): ${first.msg}`;
+      return appendRequestId(`Validation error (${status}): ${first.msg}`, payload);
     }
   }
   const compactText = String(rawText || "").replace(/\s+/g, " ").trim();
   if (compactText && !compactText.startsWith("<")) {
-    return `Server error ${status}: ${compactText.slice(0, 180)}`;
+    return appendRequestId(`Server error ${status}: ${compactText.slice(0, 180)}`, payload);
   }
-  return `Server error: ${status}`;
+  return appendRequestId(`Server error: ${status}`, payload);
 }
 
 interface ResponseLike {

@@ -8,6 +8,8 @@ import time
 from collections import deque
 from typing import Any, Callable
 
+from backend.core.export_utils import clean_value_for_json
+
 # Bump this version whenever calculation logic changes in a way that
 # invalidates cached results.  Previous versions:
 #   v1 — initial roto-only valuation
@@ -105,19 +107,27 @@ def result_cache_set(
     touch_local_result_cache_key_fn: Callable[[str], None],
     cleanup_local_result_cache_fn: Callable[[float | None], None],
 ) -> None:
+    cleaned_payload = clean_value_for_json(payload)
+    if not isinstance(cleaned_payload, dict):
+        raise TypeError("calculator result cache payload must remain a dict")
+
     if redis_client is not None:
         try:
             redis_client.setex(
                 f"{redis_result_prefix}{cache_key}",
                 cache_ttl_seconds,
-                json.dumps(payload, separators=(",", ":"), sort_keys=True),
+                json.dumps(cleaned_payload, separators=(",", ":"), sort_keys=True),
             )
-        except (ConnectionError, TimeoutError, OSError):
-            logger.warning("failed to write calculator result cache to redis", exc_info=True)
+        except (ConnectionError, TimeoutError, OSError, TypeError, ValueError):
+            logger.warning(
+                "failed to write calculator result cache to redis cache_key=%s",
+                cache_key,
+                exc_info=True,
+            )
 
     expires_at = time.time() + cache_ttl_seconds
     with local_cache_lock:
-        local_cache[cache_key] = (expires_at, dict(payload))
+        local_cache[cache_key] = (expires_at, dict(cleaned_payload))
         touch_local_result_cache_key_fn(cache_key)
         cleanup_local_result_cache_fn(None)
 
@@ -138,14 +148,21 @@ def cache_calculation_job_snapshot(
 ) -> None:
     if redis_client is None:
         return
+    serializable_job = clean_value_for_json(_serializable_job_dict(job))
+    if not isinstance(serializable_job, dict):
+        raise TypeError("calculator job snapshot payload must remain a dict")
     try:
         redis_client.setex(
             f"{redis_job_prefix}{job['job_id']}",
             job_ttl_seconds,
-            json.dumps(_serializable_job_dict(job), separators=(",", ":"), sort_keys=True),
+            json.dumps(serializable_job, separators=(",", ":"), sort_keys=True),
         )
-    except (ConnectionError, TimeoutError, OSError):
-        logger.warning("failed to cache calculator job metadata in redis", exc_info=True)
+    except (ConnectionError, TimeoutError, OSError, TypeError, ValueError):
+        logger.warning(
+            "failed to cache calculator job metadata in redis job_id=%s",
+            job.get("job_id"),
+            exc_info=True,
+        )
 
 
 def cached_calculation_job_snapshot(

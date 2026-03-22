@@ -10,6 +10,7 @@ from threading import Lock
 from unittest.mock import MagicMock
 
 from backend.core.result_cache import (
+    cache_calculation_job_snapshot,
     calc_result_cache_key,
     cleanup_local_result_cache,
     result_cache_get,
@@ -185,3 +186,43 @@ def test_result_cache_set_redis_write_failure_still_writes_local() -> None:
     )
     assert "test_key" in cache
     assert cache["test_key"][1] == {"value": 99}
+
+
+def test_result_cache_set_redis_serialization_failure_still_writes_local() -> None:
+    """Redis serialization failures should not prevent local cache write."""
+    mock_redis = MagicMock()
+    mock_redis.setex.side_effect = ValueError("bad payload")
+
+    cache: dict[str, tuple[float, dict]] = {}
+    lock = Lock()
+
+    result_cache_set(
+        "test_key",
+        {"value": 99},
+        redis_client=mock_redis,
+        redis_result_prefix="result:",
+        cache_ttl_seconds=300,
+        logger=logging.getLogger("test"),
+        local_cache=cache,
+        local_cache_lock=lock,
+        touch_local_result_cache_key_fn=lambda _: None,
+        cleanup_local_result_cache_fn=lambda _: None,
+    )
+
+    assert "test_key" in cache
+    assert cache["test_key"][1] == {"value": 99}
+
+
+def test_cache_calculation_job_snapshot_swallows_redis_serialization_failure() -> None:
+    """Redis serialization failures should not escape the job snapshot helper."""
+    mock_redis = MagicMock()
+    mock_redis.setex.side_effect = TypeError("bad payload")
+
+    cache_calculation_job_snapshot(
+        {"job_id": "job-1", "status": "completed", "result": {"value": 1}},
+        redis_client=mock_redis,
+        redis_job_prefix="job:",
+        job_ttl_seconds=300,
+        logger=logging.getLogger("test"),
+        calculation_job_public_payload_fn=lambda job: job,
+    )

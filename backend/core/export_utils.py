@@ -35,23 +35,58 @@ def as_float(value: object) -> float | None:
     return None
 
 
+def clean_value_for_json(value: object) -> object:
+    """Recursively coerce common pandas/NumPy values into JSON-safe primitives."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {key: clean_value_for_json(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [clean_value_for_json(item) for item in value]
+    if isinstance(value, tuple):
+        return [clean_value_for_json(item) for item in value]
+    if isinstance(value, set):
+        return [clean_value_for_json(item) for item in sorted(value, key=repr)]
+
+    item = getattr(value, "item", None)
+    if callable(item):
+        try:
+            return clean_value_for_json(item())
+        except (TypeError, ValueError):
+            pass
+
+    tolist = getattr(value, "tolist", None)
+    if callable(tolist):
+        try:
+            return clean_value_for_json(tolist())
+        except (TypeError, ValueError):
+            pass
+
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+
+    return value
+
+
 def clean_records_for_json(records: list[dict]) -> list[dict]:
+    cleaned_records: list[dict] = []
     for row in records:
-        for key, value in row.items():
-            if value is None:
-                continue
-
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                if not math.isfinite(float(value)):
-                    row[key] = None
-                continue
-
-            try:
-                if pd.isna(value):
-                    row[key] = None
-            except (TypeError, ValueError):
-                continue
-    return records
+        cleaned_row = clean_value_for_json(row)
+        cleaned_records.append(cleaned_row if isinstance(cleaned_row, dict) else {})
+    return cleaned_records
 
 
 def flatten_explanations_for_export(explanations: dict[str, dict]) -> list[dict]:

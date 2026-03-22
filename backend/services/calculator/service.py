@@ -13,6 +13,7 @@ from fastapi import HTTPException, Request
 from pydantic import BaseModel, Field, model_validator
 
 from backend.core.calculator_orchestration import finalize_job_locked
+from backend.core.export_utils import clean_value_for_json
 from backend.domain.constants import (
     CALCULATOR_RESULT_POINTS_EXPORT_ORDER,
     CALCULATOR_RESULT_STAT_EXPORT_ORDER,
@@ -334,6 +335,7 @@ class CalculatorService:
         result_cache_key = self._ctx.calc_result_cache_key(settings)
         result_cache_hit = False
         status_code = 200
+        failure_stage = "preflight"
 
         try:
             self._ctx.refresh_data_if_needed()
@@ -349,6 +351,7 @@ class CalculatorService:
                 result_cache_hit = True
                 return cached_payload
 
+            failure_stage = "calculation"
             try:
                 if req.scoring_mode == "points":
                     out = self._ctx.calculate_points_dynasty_frame_cached(
@@ -557,13 +560,20 @@ class CalculatorService:
             if not isinstance(diagnostics, dict):
                 diagnostics = {}
 
-            payload = {
-                "total": len(records),
-                "settings": settings,
-                "data": records,
-                "explanations": explanations,
-                "diagnostics": diagnostics,
-            }
+            failure_stage = "payload-assembly"
+            payload = clean_value_for_json(
+                {
+                    "total": len(records),
+                    "settings": settings,
+                    "data": records,
+                    "explanations": explanations,
+                    "diagnostics": diagnostics,
+                }
+            )
+            if not isinstance(payload, dict):
+                raise TypeError("calculator payload must remain a dict after JSON sanitization")
+
+            failure_stage = "cache-persist"
             self._ctx.result_cache_set(result_cache_key, payload)
             return payload
 
@@ -572,7 +582,18 @@ class CalculatorService:
             raise
         except Exception as exc:  # noqa: BLE001 — last-resort catch to produce 500 response
             status_code = 500
-            self._ctx.calc_logger.exception("calculator request failed source=%s", source)
+            self._ctx.calc_logger.exception(
+                "calculator request failed source=%s stage=%s scoring_mode=%s start_year=%s horizon=%s teams=%s sims=%s exception_class=%s detail=%s",
+                source,
+                failure_stage,
+                req.scoring_mode,
+                req.start_year,
+                req.horizon,
+                req.teams,
+                req.sims,
+                type(exc).__name__,
+                str(exc),
+            )
             raise HTTPException(status_code=500, detail="Internal calculator error.") from exc
         finally:
             duration_ms = round((time.perf_counter() - started) * 1000.0, 1)
@@ -620,8 +641,31 @@ class CalculatorService:
                 error={"status_code": exc.status_code, "detail": exc.detail},
                 result=None,
             )
-        except Exception:  # noqa: BLE001 — last-resort safety net for async job finalization
-            self._ctx.calc_logger.exception("calculator job crashed job_id=%s", job_id)
+            if exc.status_code >= 500:
+                root_exc = exc.__cause__ or exc
+                self._ctx.calc_logger.exception(
+                    "calculator job failed job_id=%s scoring_mode=%s start_year=%s horizon=%s teams=%s sims=%s exception_class=%s detail=%s",
+                    job_id,
+                    req_payload.get("scoring_mode"),
+                    req_payload.get("start_year"),
+                    req_payload.get("horizon"),
+                    req_payload.get("teams"),
+                    req_payload.get("sims"),
+                    type(root_exc).__name__,
+                    str(root_exc),
+                )
+        except Exception as exc:  # noqa: BLE001 — last-resort safety net for async job finalization
+            self._ctx.calc_logger.exception(
+                "calculator job crashed job_id=%s scoring_mode=%s start_year=%s horizon=%s teams=%s sims=%s exception_class=%s detail=%s",
+                job_id,
+                req_payload.get("scoring_mode"),
+                req_payload.get("start_year"),
+                req_payload.get("horizon"),
+                req_payload.get("teams"),
+                req_payload.get("sims"),
+                type(exc).__name__,
+                str(exc),
+            )
             finalize_job_locked(
                 self._ctx, job_id,
                 status="failed",
