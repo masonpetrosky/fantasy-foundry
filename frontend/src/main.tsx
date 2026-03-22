@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useMemo } from "react";
+import React, { Suspense, lazy, useMemo, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./styles/typography-table.css";
@@ -7,12 +7,15 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { createAppQueryClient } from "./lib/queryClient";
 import { initSentry } from "./sentry";
 import { initGA4 } from "./ga4";
+import { trackEvent } from "./analytics";
 
 initSentry();
 initGA4();
 import { AppHeader } from "./components/AppHeader";
 import { HeroSection } from "./components/HeroSection";
 import { AppFooter } from "./components/AppFooter";
+import { MetadataStatusPanel } from "./components/MetadataStatusPanel";
+import { QuickStartCommandCenter } from "./components/QuickStartCommandCenter";
 function resolveActivationDiagnosticsPanelEnabled({
   envEnabled = false,
   locationSearch = "",
@@ -36,6 +39,7 @@ import { FeatureErrorBoundary } from "./feature_error_boundary";
 import { ToastProvider } from "./Toast";
 import { PricingSection } from "./PricingSection";
 import { CalculatorOverlayContext } from "./contexts/CalculatorOverlayContext";
+import type { DynastyCalculatorActionBridge } from "./dynasty_calculator";
 import { useAppState } from "./hooks/useAppState";
 
 const API = resolveApiBase();
@@ -103,15 +107,43 @@ function App(): React.ReactElement {
   const { mobileNavOpen, setMobileNavOpen, mobileNavMenuRef, mobileNavTriggerRef } = mobileNavMenu;
   const {
     showQuickStartOnboarding,
+    showQuickStartReminder,
     requestQuickStartRun,
     dismissQuickStartOnboarding,
+    reopenQuickStartOnboarding,
     handleRegisterQuickStartRunner,
   } = quickStart;
+  const calculatorActionBridgeRef = useRef<DynastyCalculatorActionBridge | null>(null);
+  const projectionsContentRef = useRef<HTMLDivElement | null>(null);
 
   const activationDiagnosticsEnabled = useMemo(() => resolveActivationDiagnosticsPanelEnabled({
     envEnabled: ACTIVATION_DIAGNOSTICS_PANEL_ENV_ENABLED,
     locationSearch: typeof window !== "undefined" ? window.location.search : "",
   }), []);
+  const showPostSuccessActions = section === "projections" && Boolean(meta) && Boolean(lastSuccessfulCalcRun)
+    && !showQuickStartOnboarding && !showQuickStartReminder;
+
+  function queueCalculatorAction(source: string, action?: (() => void) | null): void {
+    openCalculatorPanel(source);
+    if (isMobileViewport) {
+      bottomSheet.open();
+    }
+    window.requestAnimationFrame(() => {
+      scrollToCalculator();
+      window.requestAnimationFrame(() => {
+        action?.();
+      });
+    });
+  }
+
+  function trackPostSuccessAction(step: string): void {
+    trackEvent("ff_post_success_action_click", {
+      entry_surface: "post_success_panel",
+      post_success_step: step,
+      has_successful_run: Boolean(lastSuccessfulCalcRun),
+      scoring_mode: String(calculatorSettings?.scoring_mode || "unknown"),
+    });
+  }
 
   return (
     <CalculatorOverlayContext.Provider value={calculatorOverlay}>
@@ -146,46 +178,36 @@ function App(): React.ReactElement {
           projectionSeasons={projectionWindow.seasons || 20}
           scrollToCalculator={scrollToCalculator}
           setSection={setSection}
+          onQuickStartRun={(mode, source) => requestQuickStartRun(mode, { source })}
         />
 
         <div className="container">
-          {showQuickStartOnboarding && ACTIVATION_SPRINT_ENABLED && (
-            <section className="activation-strip" aria-label="Quick start dynasty rankings">
-              <div className="activation-strip-copy">
-                <p className="activation-strip-kicker">Recommended Start</p>
-                <h2>Generate your first custom dynasty rankings now.</h2>
-                <p>Run the default 12-team 5x5 setup, then fine-tune league settings after results load.</p>
-                <ul className="activation-benefits" aria-label="Quick start benefits">
-                  <li>League-specific rankings</li>
-                  <li>Career plus season views</li>
-                  <li>CSV and XLSX export</li>
-                </ul>
-              </div>
-              <div className="activation-strip-actions" role="group" aria-label="Quick start options">
-                <button
-                  type="button"
-                  className="activation-strip-btn activation-strip-btn-primary"
-                  onClick={() => requestQuickStartRun("roto", { source: "activation_strip" })}
-                >
-                  Run Recommended 5x5 Roto
-                </button>
-                <button
-                  type="button"
-                  className="activation-strip-link"
-                  onClick={() => requestQuickStartRun("points", { source: "activation_strip_points_link" })}
-                >
-                  Use Points Instead
-                </button>
-              </div>
-              <button
-                type="button"
-                className="activation-strip-dismiss"
-                onClick={dismissQuickStartOnboarding}
-                aria-label="Dismiss quick start guide"
-              >
-                Dismiss
-              </button>
-            </section>
+          {ACTIVATION_SPRINT_ENABLED && (
+            <QuickStartCommandCenter
+              showQuickStartOnboarding={showQuickStartOnboarding}
+              showQuickStartReminder={showQuickStartReminder}
+              showPostSuccessActions={showPostSuccessActions}
+              allowExport={Boolean(tierLimits?.allowExport)}
+              onRunQuickStart={(mode, source) => requestQuickStartRun(mode, { source })}
+              onDismissQuickStart={dismissQuickStartOnboarding}
+              onReopenQuickStart={reopenQuickStartOnboarding}
+              onSavePreset={() => {
+                trackPostSuccessAction("save_preset");
+                queueCalculatorAction("post_success_save_preset", () => {
+                  calculatorActionBridgeRef.current?.focusPresetNameInput();
+                });
+              }}
+              onCopyShareLink={() => {
+                trackPostSuccessAction("copy_share_link");
+                queueCalculatorAction("post_success_share_link", () => {
+                  void calculatorActionBridgeRef.current?.copyShareLink();
+                });
+              }}
+              onOpenExports={() => {
+                trackPostSuccessAction("open_exports");
+                projectionsContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            />
           )}
           {activationDiagnosticsEnabled && (
             <Suspense fallback={null}>
@@ -195,27 +217,14 @@ function App(): React.ReactElement {
               />
             </Suspense>
           )}
-          {sectionNeedsMeta && metaLoading && !metaError && !meta && (
-            <p className="methodology-note" role="status" aria-live="polite">Loading projections metadata...</p>
-          )}
-          {sectionNeedsMeta && metaError && (
-            <section className="meta-error-panel" role="alert" aria-live="assertive">
-              <h2>Unable to load projections metadata</h2>
-              <p>{metaError}</p>
-              <p>Try reloading metadata now. If this keeps failing, check backend readiness at <code>/api/ready</code>.</p>
-              <div className="meta-error-actions">
-                <button type="button" className="inline-btn" onClick={retryMetaLoad}>
-                  Retry metadata request
-                </button>
-                <button
-                  type="button"
-                  className="inline-btn"
-                  onClick={() => setSection("methodology")}
-                >
-                  Open Methodology
-                </button>
-              </div>
-            </section>
+          {sectionNeedsMeta && (
+            <MetadataStatusPanel
+              metaLoading={metaLoading}
+              metaError={metaError}
+              metaReady={Boolean(meta)}
+              onRetry={retryMetaLoad}
+              onOpenMethodology={() => setSection("methodology")}
+            />
           )}
           {section === "projections" && meta && (
             <div className="projections-workspace">
@@ -270,6 +279,9 @@ function App(): React.ReactElement {
                         onSettingsChange={setCalculatorSettings}
                         onCalculationSuccess={handleCalculationSuccess}
                         onRegisterQuickStartRunner={handleRegisterQuickStartRunner}
+                        onRegisterActionBridge={bridge => {
+                          calculatorActionBridgeRef.current = bridge;
+                        }}
                         onOpenMethodologyGlossary={openMethodologyGlossary}
                         tierLimits={tierLimits}
                         fantrax={fantrax}
@@ -279,7 +291,7 @@ function App(): React.ReactElement {
                   </div>
                 )}
               </section>
-              <div className="projections-content">
+              <div className="projections-content" ref={projectionsContentRef}>
                 {tierLimits?.allowTradeAnalyzer && (
                   <div className="trade-analyzer-toggle-wrap">
                     <button
@@ -389,6 +401,9 @@ function App(): React.ReactElement {
                   onSettingsChange={setCalculatorSettings}
                   onCalculationSuccess={handleCalculationSuccess}
                   onRegisterQuickStartRunner={handleRegisterQuickStartRunner}
+                  onRegisterActionBridge={bridge => {
+                    calculatorActionBridgeRef.current = bridge;
+                  }}
                   onOpenMethodologyGlossary={openMethodologyGlossary}
                   tierLimits={tierLimits}
                   fantrax={fantrax}

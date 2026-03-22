@@ -29,6 +29,7 @@ function makeProps(overrides: Partial<HeroSectionProps> = {}): HeroSectionProps 
     projectionSeasons: 20,
     scrollToCalculator: vi.fn(),
     setSection: vi.fn(),
+    onQuickStartRun: vi.fn(),
     ...overrides,
   };
 }
@@ -53,20 +54,41 @@ describe("HeroSection", () => {
     cleanup();
   });
 
-  it("renders Get Started Free button when not subscribed", () => {
+  it("renders quick-start buttons when not subscribed and metadata is ready", () => {
+    const onQuickStartRun = vi.fn();
+    const { container, cleanup } = renderToContainer(
+      <HeroSection {...makeProps({
+        subscriptionActive: false,
+        meta: { total_hitters: 500, total_pitchers: 300 },
+        onQuickStartRun,
+      })} />
+    );
+    const primaryButtons = Array.from(container.querySelectorAll(".hero-cta-primary"));
+    const pointsButton = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Start Points");
+    const deepButton = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Start Deep Dynasty");
+    expect(primaryButtons).toHaveLength(1);
+    expect(primaryButtons[0].textContent).toBe("Start 5x5 Roto");
+    expect(pointsButton).toBeTruthy();
+    expect(deepButton).toBeTruthy();
+    act(() => { (primaryButtons[0] as HTMLButtonElement).click(); });
+    expect(onQuickStartRun).toHaveBeenCalledWith("roto", "hero_roto");
+    cleanup();
+  });
+
+  it("falls back to scrolling when quick-start metadata is not ready", () => {
     const scrollToCalculator = vi.fn();
     const { container, cleanup } = renderToContainer(
       <HeroSection {...makeProps({ subscriptionActive: false, scrollToCalculator })} />
     );
     const ctaBtn = container.querySelector(".hero-cta-primary") as HTMLButtonElement;
     expect(ctaBtn).not.toBeNull();
-    expect(ctaBtn.textContent).toBe("Get Started Free");
+    expect(ctaBtn.textContent).toBe("Start 5x5 Roto");
     act(() => { ctaBtn.click(); });
     expect(scrollToCalculator).toHaveBeenCalled();
     cleanup();
   });
 
-  it("hides Get Started Free button when subscribed", () => {
+  it("hides quick-start buttons when subscribed", () => {
     const { container, cleanup } = renderToContainer(
       <HeroSection {...makeProps({ subscriptionActive: true })} />
     );
@@ -79,7 +101,9 @@ describe("HeroSection", () => {
     const { container, cleanup } = renderToContainer(
       <HeroSection {...makeProps({ setSection })} />
     );
-    const btn = container.querySelector(".hero-cta-secondary") as HTMLButtonElement;
+    const btn = Array.from(container.querySelectorAll("button")).find(
+      button => button.textContent === "See Methodology"
+    ) as HTMLButtonElement;
     expect(btn.textContent).toBe("See Methodology");
     act(() => { btn.click(); });
     expect(setSection).toHaveBeenCalledWith("methodology");

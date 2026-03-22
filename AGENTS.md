@@ -59,6 +59,7 @@ Prefer the smallest relevant validation first, then widen only as needed.
 | Full local quality gate | `make check` |
 | Docker smoke | `./scripts/smoke_docker.sh 18000` |
 | Generated artifact guard | `./scripts/check_generated_artifacts_untracked.sh` |
+| OS metadata artifact scrub | `./scripts/check_os_metadata_artifacts.sh` |
 | Frontend dist freshness guard | `./scripts/check_frontend_dist.sh` |
 
 Useful pytest markers from `pytest.ini`:
@@ -91,6 +92,7 @@ Useful pytest markers from `pytest.ini`:
 - Do not hand-edit projection data files under `data/` unless the task is explicitly about data refresh or validation.
 - When default dynasty-calculation behavior changes, regenerate `data/dynasty_lookup.json`; the precomputed cache now also carries a default-methodology fingerprint and should be treated as stale when either the projection data version or methodology fingerprint changes.
 - Coverage outputs and caches must remain untracked, including `.coverage`, `coverage.xml`, `htmlcov/`, `frontend/coverage/`, `__pycache__/`, `.pytest_cache/`, `.mypy_cache/`, and `.ruff_cache/`.
+- OS metadata artifacts such as `*:Zone.Identifier` must not be present anywhere in the repo or built assets.
 - Repo-wide searches should rely on `.rgignore` defaults unless you intentionally need `rg --no-ignore`.
 
 ## Definition Of Done

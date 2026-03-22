@@ -6,6 +6,7 @@ DIST_DIR="$REPO_ROOT/frontend/dist"
 INDEX_FILE="$DIST_DIR/index.html"
 MAX_ENTRY_JS_BYTES="${FF_MAX_ENTRY_JS_BYTES:-400000}"
 MAX_ENTRY_CSS_BYTES="${FF_MAX_ENTRY_CSS_BYTES:-170000}"
+MAX_INITIAL_JS_BYTES="${FF_MAX_INITIAL_JS_BYTES:-450000}"
 
 if [[ ! -f "$INDEX_FILE" ]]; then
   echo "Missing $INDEX_FILE. Build frontend assets first (cd frontend && npm run build)."
@@ -37,6 +38,7 @@ IFS=$'\n' read -r -d '' -a entry_assets <<< "$entry_assets_raw" || true
 
 echo "Checking entry-point asset budgets..."
 status=0
+initial_js_total=0
 for rel_asset in "${entry_assets[@]}"; do
   abs_path="$DIST_DIR/$rel_asset"
   if [[ ! -f "$abs_path" ]]; then
@@ -49,6 +51,7 @@ for rel_asset in "${entry_assets[@]}"; do
   if [[ "$rel_asset" == *.js ]]; then
     limit="$MAX_ENTRY_JS_BYTES"
     type_label="JS"
+    initial_js_total=$((initial_js_total + size_bytes))
   else
     limit="$MAX_ENTRY_CSS_BYTES"
     type_label="CSS"
@@ -61,5 +64,12 @@ for rel_asset in "${entry_assets[@]}"; do
     echo "OK $type_label $rel_asset: ${size_bytes} bytes (limit ${limit})."
   fi
 done
+
+if (( initial_js_total > MAX_INITIAL_JS_BYTES )); then
+  echo "Budget exceeded for total initial JS: ${initial_js_total} bytes > ${MAX_INITIAL_JS_BYTES} bytes."
+  status=1
+else
+  echo "OK total initial JS: ${initial_js_total} bytes (limit ${MAX_INITIAL_JS_BYTES})."
+fi
 
 exit "$status"

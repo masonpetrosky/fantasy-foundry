@@ -14,6 +14,9 @@ MAX_LINES_BY_PREFIX = (
     (Path("backend/core/runtime_projection_helpers.py"), 500),
     (Path("backend/core/runtime_security.py"), 500),
     (Path("backend/valuation/cli_args.py"), 500),
+    (Path("frontend/src/dynasty_calculator_config.ts"), 500),
+    (Path("frontend/src/app_state_storage.ts"), 500),
+    (Path("frontend/src/hooks"), 500),
     (Path("frontend/src/features/projections/hooks"), 500),
     (Path("frontend/src/features/projections/components"), 500),
 )

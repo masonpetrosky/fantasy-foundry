@@ -48,6 +48,7 @@ describe("quick_start", () => {
     expect(mode).toBe("points");
     expect(trackEventMock).toHaveBeenNthCalledWith(1, "ff_quickstart_cta_click", {
       source: "hero_cta",
+      entry_surface: "hero",
       mode: "points",
       is_first_run: true,
       section: "projections",
@@ -55,6 +56,7 @@ describe("quick_start", () => {
     });
     expect(trackEventMock).toHaveBeenNthCalledWith(2, "quickstart_click", {
       source: "hero_cta",
+      entry_surface: "hero",
       mode: "points",
       is_first_run: true,
       section: "projections",
@@ -80,6 +82,7 @@ describe("quick_start", () => {
     expect(trackEventMock).toHaveBeenCalledTimes(1);
     expect(trackEventMock).toHaveBeenCalledWith("ff_quickstart_cta_click", {
       source: "activation_strip",
+      entry_surface: "activation_strip",
       mode: "roto",
       is_first_run: false,
       section: "projections",
@@ -99,6 +102,7 @@ describe("quick_start", () => {
 
     expect(trackEventMock).toHaveBeenNthCalledWith(1, "ff_quickstart_impression", {
       source: "activation_strip",
+      entry_surface: "activation_strip",
       mode: "roto",
       is_first_run: true,
       section: "projections",
@@ -106,6 +110,7 @@ describe("quick_start", () => {
     });
     expect(trackEventMock).toHaveBeenNthCalledWith(2, "quickstart_impression", {
       source: "activation_strip",
+      entry_surface: "activation_strip",
       mode: "roto",
       is_first_run: true,
       section: "projections",

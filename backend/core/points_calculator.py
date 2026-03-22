@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable, cast
 
 import pandas as pd
 
@@ -14,6 +14,22 @@ try:
         _effective_weekly_starts_cap,
         _slot_capacity_by_league,
         optimize_points_slot_assignment,
+    )
+    from backend.core.points_output import (
+        build_empty_points_value_frame,
+        build_points_result_rows,
+        calculate_points_raw_totals,
+        finalize_points_dynasty_output,
+        start_capable_pitcher_replacement_value,
+    )
+    from backend.core.points_roster_model import (
+        POINTS_CENTERING_ZERO_EPSILON,
+        active_points_roster_ids,
+        is_h2h_points_mode,
+        model_h2h_points_roster,
+        modeled_bench_hitter_slots_per_team,
+        per_day_slot_capacity,
+        select_points_stash_groups,
     )
     from backend.core.points_utils import (
         _scale_points_breakdown,
@@ -30,7 +46,6 @@ try:
     )
     from backend.core.points_value import (
         KeepDropResult,
-        _apply_negative_value_stash_rules,
         _is_near_zero_playing_time,
         _negative_fallback_value,
         _prospect_risk_multiplier,
@@ -58,6 +73,22 @@ except ImportError:  # pragma: no cover - direct script execution fallback
         _slot_capacity_by_league,
         optimize_points_slot_assignment,
     )
+    from points_output import (  # type: ignore[no-redef]
+        build_empty_points_value_frame,
+        build_points_result_rows,
+        calculate_points_raw_totals,
+        finalize_points_dynasty_output,
+        start_capable_pitcher_replacement_value,
+    )
+    from points_roster_model import (  # type: ignore[no-redef]
+        POINTS_CENTERING_ZERO_EPSILON,
+        active_points_roster_ids,
+        is_h2h_points_mode,
+        model_h2h_points_roster,
+        modeled_bench_hitter_slots_per_team,
+        per_day_slot_capacity,
+        select_points_stash_groups,
+    )
     from points_utils import (  # type: ignore[no-redef]
         _scale_points_breakdown,
         calculate_hitter_points_breakdown,
@@ -73,7 +104,6 @@ except ImportError:  # pragma: no cover - direct script execution fallback
     )
     from points_value import (  # type: ignore[no-redef]
         KeepDropResult,
-        _apply_negative_value_stash_rules,
         _is_near_zero_playing_time,
         _negative_fallback_value,
         _prospect_risk_multiplier,
@@ -97,25 +127,25 @@ except ImportError:  # pragma: no cover - direct script execution fallback
 
 @dataclass(slots=True)
 class PointsCalculatorContext:
-    bat_data: list[dict]
-    pit_data: list[dict]
-    bat_data_raw: list[dict]
-    pit_data_raw: list[dict]
-    meta: dict
-    average_recent_projection_rows: Callable[..., list[dict]]
-    coerce_meta_years: Callable[[dict], list[int]]
+    bat_data: list[dict[str, Any]]
+    pit_data: list[dict[str, Any]]
+    bat_data_raw: list[dict[str, Any]]
+    pit_data_raw: list[dict[str, Any]]
+    meta: dict[str, Any]
+    average_recent_projection_rows: Callable[..., list[dict[str, Any]]]
+    coerce_meta_years: Callable[[dict[str, Any]], list[int]]
     valuation_years: Callable[[int, int, list[int]], list[int]]
     coerce_record_year: Callable[[object], int | None]
-    points_player_identity: Callable[[dict], str]
+    points_player_identity: Callable[[dict[str, Any]], str]
     normalize_player_key: Callable[[object], str]
     player_key_col: str
     player_entity_key_col: str
-    row_team_value: Callable[[dict], str]
+    row_team_value: Callable[[dict[str, Any]], str]
     merge_position_value: Callable[[object, object], str | None]
     coerce_minor_eligible: Callable[[object], bool]
-    calculate_hitter_points_breakdown: Callable[[dict | None, dict[str, float]], dict]
-    calculate_pitcher_points_breakdown: Callable[[dict | None, dict[str, float]], dict]
-    stat_or_zero: Callable[[dict | None, str], float]
+    calculate_hitter_points_breakdown: Callable[[dict[str, Any] | None, dict[str, float]], dict[str, Any]]
+    calculate_pitcher_points_breakdown: Callable[[dict[str, Any] | None, dict[str, float]], dict[str, Any]]
+    stat_or_zero: Callable[[dict[str, Any] | None, str], float]
     points_hitter_eligible_slots: Callable[[object], set[str]]
     points_pitcher_eligible_slots: Callable[[object], set[str]]
     points_slot_replacement: Callable[..., dict[str, float]]
@@ -138,211 +168,6 @@ __all__ = [
     "stat_or_zero",
     "valuation_years",
 ]
-
-
-_POINTS_CENTERING_ZERO_EPSILON = 1e-12
-_POINTS_DEEP_ROSTER_ZERO_CLUSTER_MIN_SHARE = 0.10
-
-
-def _points_row_sort_frame(
-    frame: pd.DataFrame,
-    *,
-    score_col: str,
-    player_entity_key_col: str,
-    player_key_col: str,
-) -> pd.DataFrame:
-    sortable = frame.copy()
-    sortable["_points_sort_score"] = pd.to_numeric(sortable.get(score_col), errors="coerce").fillna(0.0)
-    sortable["_points_sort_entity"] = sortable.get(player_entity_key_col, "").astype(str)
-    sortable["_points_sort_player_key"] = sortable.get(player_key_col, "").astype(str)
-    sortable["_points_sort_player"] = sortable.get("Player", "").astype(str)
-    return sortable.sort_values(
-        ["_points_sort_score", "_points_sort_entity", "_points_sort_player_key", "_points_sort_player"],
-        ascending=[False, True, True, True],
-        kind="mergesort",
-    ).reset_index(drop=True)
-
-
-def _points_centering_baseline(
-    frame: pd.DataFrame,
-    *,
-    score_col: str,
-    replacement_rank: int,
-    player_entity_key_col: str,
-    player_key_col: str,
-) -> float:
-    if frame.empty:
-        return 0.0
-    sorted_frame = _points_row_sort_frame(
-        frame,
-        score_col=score_col,
-        player_entity_key_col=player_entity_key_col,
-        player_key_col=player_key_col,
-    )
-    cutoff_idx = min(max(int(replacement_rank), 1) - 1, len(sorted_frame) - 1)
-    return float(sorted_frame.iloc[cutoff_idx]["_points_sort_score"])
-
-
-def _future_continuation_value(keep_drop: KeepDropResult) -> float:
-    if len(keep_drop.continuation_values) <= 1:
-        return 0.0
-    return float(keep_drop.continuation_values[1])
-
-
-def _is_h2h_points_mode(points_valuation_mode: str) -> bool:
-    return str(points_valuation_mode) in {"weekly_h2h", "daily_h2h"}
-
-
-def _round_half_up_non_negative(value: float) -> int:
-    return max(int(max(float(value), 0.0) + 0.5), 0)
-
-
-def _entry_points_by_player(entries: list[dict[str, object]]) -> dict[str, float]:
-    points_by_player: dict[str, float] = {}
-    for entry in entries:
-        player_id = str(entry.get("player_id") or "").strip()
-        if not player_id:
-            continue
-        try:
-            points = float(entry.get("points") or 0.0)
-        except (TypeError, ValueError):
-            continue
-        existing = points_by_player.get(player_id)
-        if existing is None or points > existing:
-            points_by_player[player_id] = points
-    return points_by_player
-
-
-def _active_points_roster_ids(
-    entries: list[dict[str, object]],
-    *,
-    slot_counts: dict[str, int],
-    teams: int,
-) -> set[str]:
-    active_slots = {slot for slot, count in slot_counts.items() if int(count) > 0}
-    if not active_slots:
-        return set()
-    assignments = optimize_points_slot_assignment(
-        entries,
-        replacement_by_slot={slot: 0.0 for slot in active_slots},
-        slot_capacity=_slot_capacity_by_league(slot_counts, teams=teams),
-    )
-    return set(assignments.keys())
-
-
-def _select_side_aware_reserve_ids(
-    *,
-    hit_entries: list[dict[str, object]],
-    pit_entries: list[dict[str, object]],
-    hitter_count: int,
-    pitcher_count: int,
-    excluded_player_ids: set[str],
-) -> tuple[set[str], set[str]]:
-    remaining_hitter_count = max(int(hitter_count), 0)
-    remaining_pitcher_count = max(int(pitcher_count), 0)
-    if remaining_hitter_count <= 0 and remaining_pitcher_count <= 0:
-        return set(), set()
-
-    hit_points_by_player = _entry_points_by_player(hit_entries)
-    pit_points_by_player = _entry_points_by_player(pit_entries)
-    candidate_ids = (set(hit_points_by_player) | set(pit_points_by_player)) - set(excluded_player_ids)
-    ranked_candidates = sorted(
-        candidate_ids,
-        key=lambda player_id: (
-            -max(
-                float(hit_points_by_player.get(player_id, float("-inf"))),
-                float(pit_points_by_player.get(player_id, float("-inf"))),
-            ),
-            str(player_id),
-        ),
-    )
-
-    reserve_hitters: set[str] = set()
-    reserve_pitchers: set[str] = set()
-    for player_id in ranked_candidates:
-        options: list[tuple[str, float]] = []
-        hitter_points = hit_points_by_player.get(player_id)
-        if remaining_hitter_count > 0 and hitter_points is not None and hitter_points > _POINTS_CENTERING_ZERO_EPSILON:
-            options.append(("hitter", float(hitter_points)))
-        pitcher_points = pit_points_by_player.get(player_id)
-        if remaining_pitcher_count > 0 and pitcher_points is not None and pitcher_points > _POINTS_CENTERING_ZERO_EPSILON:
-            options.append(("pitcher", float(pitcher_points)))
-        if not options:
-            continue
-        chosen_side, _chosen_points = sorted(options, key=lambda item: (-item[1], item[0]))[0]
-        if chosen_side == "hitter":
-            reserve_hitters.add(player_id)
-            remaining_hitter_count -= 1
-        else:
-            reserve_pitchers.add(player_id)
-            remaining_pitcher_count -= 1
-        if remaining_hitter_count <= 0 and remaining_pitcher_count <= 0:
-            break
-
-    return reserve_hitters, reserve_pitchers
-
-
-def _modeled_bench_hitter_slots_per_team(
-    *,
-    reserve_assigned_games_by_day: dict[int, float],
-    teams: int,
-    bench_slots: int,
-    coverage_target: float = 0.99,
-) -> int:
-    if int(bench_slots) <= 0 or int(teams) <= 0:
-        return 0
-    daily_assignable_games = [
-        max(float(assigned_games), 0.0)
-        for _day, assigned_games in sorted(reserve_assigned_games_by_day.items())
-    ]
-    total_assignable_games = float(sum(daily_assignable_games))
-    if total_assignable_games <= _POINTS_CENTERING_ZERO_EPSILON:
-        return 0
-    for per_team_slots in range(max(int(bench_slots), 0) + 1):
-        covered_games = sum(
-            min(float(assigned_games), float(per_team_slots) * float(max(int(teams), 1)))
-            for assigned_games in daily_assignable_games
-        )
-        if covered_games + _POINTS_CENTERING_ZERO_EPSILON >= total_assignable_games * float(coverage_target):
-            return per_team_slots
-    return max(int(bench_slots), 0)
-
-
-def _per_day_slot_capacity(
-    slot_capacity: dict[str, float],
-    *,
-    total_days: int,
-) -> dict[str, int]:
-    per_day_capacity: dict[str, int] = {}
-    for slot, capacity in slot_capacity.items():
-        daily_capacity = int(round(float(capacity) / max(float(total_days), 1.0)))
-        if daily_capacity > 0:
-            per_day_capacity[str(slot)] = daily_capacity
-    return per_day_capacity
-
-
-def _points_centering_baseline_for_roster(
-    frame: pd.DataFrame,
-    *,
-    score_col: str,
-    rostered_player_ids: set[str],
-    minimum_roster_size: int,
-    player_entity_key_col: str,
-    player_key_col: str,
-) -> float:
-    if frame.empty:
-        return 0.0
-    sortable = frame.copy()
-    sortable["_points_sort_score"] = pd.to_numeric(sortable.get(score_col), errors="coerce").fillna(0.0)
-    player_entity = sortable.get(player_entity_key_col, "").astype(str)
-    player_key = sortable.get(player_key_col, "").astype(str)
-    mask = player_entity.isin(rostered_player_ids) | player_key.isin(rostered_player_ids)
-    if not bool(mask.any()):
-        return 0.0
-    baseline_value = float(sortable.loc[mask, "_points_sort_score"].min())
-    if int(minimum_roster_size) > int(mask.sum()):
-        baseline_value = min(baseline_value, 0.0)
-    return baseline_value
 
 
 def calculate_points_dynasty_frame(
@@ -402,26 +227,13 @@ def calculate_points_dynasty_frame(
     hit_dh: int = 0,
 ) -> pd.DataFrame:
     scoring = {
-        "pts_hit_1b": float(pts_hit_1b),
-        "pts_hit_2b": float(pts_hit_2b),
-        "pts_hit_3b": float(pts_hit_3b),
-        "pts_hit_hr": float(pts_hit_hr),
-        "pts_hit_r": float(pts_hit_r),
-        "pts_hit_rbi": float(pts_hit_rbi),
-        "pts_hit_sb": float(pts_hit_sb),
-        "pts_hit_bb": float(pts_hit_bb),
-        "pts_hit_hbp": float(pts_hit_hbp),
-        "pts_hit_so": float(pts_hit_so),
-        "pts_pit_ip": float(pts_pit_ip),
-        "pts_pit_w": float(pts_pit_w),
-        "pts_pit_l": float(pts_pit_l),
-        "pts_pit_k": float(pts_pit_k),
-        "pts_pit_sv": float(pts_pit_sv),
-        "pts_pit_hld": float(pts_pit_hld),
-        "pts_pit_h": float(pts_pit_h),
-        "pts_pit_er": float(pts_pit_er),
-        "pts_pit_bb": float(pts_pit_bb),
-        "pts_pit_hbp": float(pts_pit_hbp),
+        "pts_hit_1b": float(pts_hit_1b), "pts_hit_2b": float(pts_hit_2b), "pts_hit_3b": float(pts_hit_3b),
+        "pts_hit_hr": float(pts_hit_hr), "pts_hit_r": float(pts_hit_r), "pts_hit_rbi": float(pts_hit_rbi),
+        "pts_hit_sb": float(pts_hit_sb), "pts_hit_bb": float(pts_hit_bb), "pts_hit_hbp": float(pts_hit_hbp),
+        "pts_hit_so": float(pts_hit_so), "pts_pit_ip": float(pts_pit_ip), "pts_pit_w": float(pts_pit_w),
+        "pts_pit_l": float(pts_pit_l), "pts_pit_k": float(pts_pit_k), "pts_pit_sv": float(pts_pit_sv),
+        "pts_pit_hld": float(pts_pit_hld), "pts_pit_h": float(pts_pit_h), "pts_pit_er": float(pts_pit_er),
+        "pts_pit_bb": float(pts_pit_bb), "pts_pit_hbp": float(pts_pit_hbp),
     }
 
     bat_rows = ctx.bat_data
@@ -476,19 +288,7 @@ def calculate_points_dynasty_frame(
         pair["pit"] = row
 
     active_slots_per_team = (
-        hit_c
-        + hit_1b
-        + hit_2b
-        + hit_3b
-        + hit_ss
-        + hit_ci
-        + hit_mi
-        + hit_of
-        + hit_dh
-        + hit_ut
-        + pit_p
-        + pit_sp
-        + pit_rp
+        hit_c + hit_1b + hit_2b + hit_3b + hit_ss + hit_ci + hit_mi + hit_of + hit_dh + hit_ut + pit_p + pit_sp + pit_rp
     )
     active_depth_per_team = max(1, active_slots_per_team)
     in_season_depth_per_team = max(1, active_slots_per_team + bench + minors + ir)
@@ -522,16 +322,15 @@ def calculate_points_dynasty_frame(
     starter_slot_capacity = max(int(pit_p) + int(pit_sp), 0)
     n_replacement = max(int(teams), 1)
     freeze_replacement_baselines = True
-    use_h2h_roster_model = _is_h2h_points_mode(points_valuation_mode)
+    use_h2h_roster_model = is_h2h_points_mode(points_valuation_mode)
 
-    player_meta: dict[str, dict[str, object]] = {}
-    per_player_year: dict[str, dict[int, dict[str, object]]] = {}
-    year_hit_entries: dict[int, list[dict[str, object]]] = {year: [] for year in valuation_year_set}
-    year_pit_entries: dict[int, list[dict[str, object]]] = {year: [] for year in valuation_year_set}
-    player_raw_totals: dict[str, float] = {}
+    player_meta: dict[str, dict[str, Any]] = {}
+    per_player_year: dict[str, dict[int, dict[str, Any]]] = {}
+    year_hit_entries: dict[int, list[dict[str, Any]]] = {year: [] for year in valuation_year_set}
+    year_pit_entries: dict[int, list[dict[str, Any]]] = {year: [] for year in valuation_year_set}
     player_profile: dict[str, str] = {}
-    hitter_usage_diagnostics_by_year: dict[int, dict[str, float | int | None]] = {}
-    pitcher_usage_diagnostics_by_year: dict[int, dict[str, float | int | None]] = {}
+    hitter_usage_diagnostics_by_year: dict[int, dict[str, object]] = {}
+    pitcher_usage_diagnostics_by_year: dict[int, dict[str, object]] = {}
     modeled_bench_hitters_per_team_by_year: dict[int, int] = {}
     modeled_bench_pitchers_per_team_by_year: dict[int, int] = {}
     modeled_held_pitchers_per_team_by_year: dict[int, int] = {}
@@ -594,7 +393,7 @@ def calculate_points_dynasty_frame(
         }
         player_profile[player_id] = "pitcher" if meta_pit and not meta_hit else "hitter"
 
-        year_map: dict[int, dict[str, object]] = {}
+        year_map: dict[int, dict[str, Any]] = {}
 
         for year in valuation_year_set:
             pair = per_year.get(year) or {"hit": None, "pit": None}
@@ -706,7 +505,7 @@ def calculate_points_dynasty_frame(
                 hitter_entries,
                 slot_capacity=h2h_daily_hitter_slot_capacity,
             ).allocation
-        reserve_hitter_assignment_entries: list[dict[str, object]] = []
+        reserve_hitter_assignment_entries: list[dict[str, Any]] = []
         active_hitter_ids_for_bench: set[str] = set()
         if use_h2h_roster_model:
             for player_id, year_map in per_player_year.items():
@@ -726,7 +525,7 @@ def calculate_points_dynasty_frame(
                         "slots": set(hit_slots),
                     }
                 )
-            active_hitter_ids_for_bench = _active_points_roster_ids(
+            active_hitter_ids_for_bench = active_points_roster_ids(
                 reserve_hitter_assignment_entries,
                 slot_counts=hitter_slot_counts,
                 teams=teams,
@@ -752,7 +551,7 @@ def calculate_points_dynasty_frame(
         elif points_valuation_mode == "daily_h2h" and weekly_starts_cap is not None and int(weekly_starts_cap) > 0:
             capped_start_budget = float(max(int(weekly_starts_cap), 0)) * _SEASON_WEEKS * max(int(teams), 1)
         if use_h2h_roster_model:
-            per_day_hitter_capacity = _per_day_slot_capacity(
+            per_day_hitter_capacity = per_day_slot_capacity(
                 h2h_hitter_coverage_slot_capacity,
                 total_days=162,
             )
@@ -772,7 +571,7 @@ def calculate_points_dynasty_frame(
                     for slot in per_day_hitter_capacity
                 }
                 uncovered_hitter_games_by_day[day] = float(sum(day_uncovered.values()))
-            modeled_bench_hitters_per_team = _modeled_bench_hitter_slots_per_team(
+            modeled_bench_hitters_per_team = modeled_bench_hitter_slots_per_team(
                 reserve_assigned_games_by_day=uncovered_hitter_games_by_day,
                 teams=teams,
                 bench_slots=bench,
@@ -879,7 +678,7 @@ def calculate_points_dynasty_frame(
                 int(modeled_bench_pitchers_per_team) if use_h2h_roster_model else None
             ),
         }
-        pitcher_diag: dict[str, float | int | None] = {
+        pitcher_diag: dict[str, object] = {
             "slot_appearance_capacity": round(float(sum(annual_pitcher_slot_capacity.values())), 4),
             "assigned_starts": round(float(pitcher_usage.total_assigned_starts), 4),
             "assigned_non_start_appearances": round(float(pitcher_usage.total_assigned_non_start_appearances), 4),
@@ -960,14 +759,10 @@ def calculate_points_dynasty_frame(
                 pit_ip_share = float(pitcher_ip_usage_share.get(player_id, 0.0))
                 pit_share = float(min(max(pit_appearance_share * pit_ip_share, 0.0), 1.0))
 
-            hit_breakdown = _scale_points_breakdown(
-                info.get("raw_hit_breakdown") if isinstance(info.get("raw_hit_breakdown"), dict) else empty_hit_breakdown,
-                hit_share,
-            )
-            pit_breakdown = _scale_points_breakdown(
-                info.get("raw_pit_breakdown") if isinstance(info.get("raw_pit_breakdown"), dict) else empty_pit_breakdown,
-                pit_share,
-            )
+            raw_hit_breakdown_src = info.get("raw_hit_breakdown")
+            hit_breakdown = _scale_points_breakdown(cast(dict[str, Any], raw_hit_breakdown_src) if isinstance(raw_hit_breakdown_src, dict) else empty_hit_breakdown, hit_share)
+            raw_pit_breakdown_src = info.get("raw_pit_breakdown")
+            pit_breakdown = _scale_points_breakdown(cast(dict[str, Any], raw_pit_breakdown_src) if isinstance(raw_pit_breakdown_src, dict) else empty_pit_breakdown, pit_share)
             hit_points = float(raw_hit_points * hit_share)
             pit_points = float(raw_pit_points * pit_share)
 
@@ -1005,45 +800,25 @@ def calculate_points_dynasty_frame(
                     {"player_id": player_id, "points": pit_points, "slots": set(pit_slots)}
                 )
         if use_h2h_roster_model:
-            year_active_pitcher_player_ids[year] = _active_points_roster_ids(
+            year_active_pitcher_player_ids[year] = active_points_roster_ids(
                 year_pit_entries[year],
                 slot_counts=pitcher_slot_counts,
                 teams=teams,
             )
 
-    for player_id, year_map in per_player_year.items():
-        raw_total = 0.0
-        for year_offset, year in enumerate(valuation_year_set):
-            info = year_map.get(year, {})
-            hit_points = float(info.get("hit_points", 0.0))
-            pit_points = float(info.get("pit_points", 0.0))
-            hit_slots = set(info.get("hit_slots", set()))
-            pit_slots = set(info.get("pit_slots", set()))
-
-            selected_raw_points = 0.0
-            if hit_slots and pit_slots:
-                selected_raw_points = hit_points + pit_points if two_way == "sum" else max(hit_points, pit_points)
-            elif hit_slots:
-                selected_raw_points = hit_points
-            elif pit_slots:
-                selected_raw_points = pit_points
-
-            raw_total += selected_raw_points * (float(discount) ** year_offset)
-        player_raw_totals[player_id] = float(raw_total)
+    player_raw_totals = calculate_points_raw_totals(
+        per_player_year=per_player_year,
+        valuation_year_set=valuation_year_set,
+        discount=float(discount),
+        two_way=two_way,
+    )
 
     if not player_meta:
-        empty_columns = [
-            "Player",
-            "Team",
-            "Pos",
-            "Age",
-            "DynastyValue",
-            "RawDynastyValue",
-            "minor_eligible",
-            ctx.player_key_col,
-            ctx.player_entity_key_col,
-        ] + [f"Value_{year}" for year in valuation_year_set]
-        return pd.DataFrame(columns=empty_columns)
+        return build_empty_points_value_frame(
+            valuation_year_set=valuation_year_set,
+            player_key_col=ctx.player_key_col,
+            player_entity_key_col=ctx.player_entity_key_col,
+        )
 
     ranked_players = sorted(
         player_raw_totals.items(),
@@ -1055,140 +830,39 @@ def calculate_points_dynasty_frame(
     }
     modeled_ir_roster_ids: set[str] = set()
     modeled_minor_roster_ids: set[str] = set()
+    held_starter_pitcher_ids: set[str] = set()
     if use_h2h_roster_model:
-        active_hitter_player_ids = _active_points_roster_ids(
-            year_hit_entries.get(start_year, []),
-            slot_counts=hitter_slot_counts,
+        h2h_roster_model = model_h2h_points_roster(
+            start_year=start_year,
+            points_valuation_mode=points_valuation_mode,
             teams=teams,
+            active_slots_per_team=active_slots_per_team,
+            bench=bench,
+            year_hit_entries=year_hit_entries,
+            year_pit_entries=year_pit_entries,
+            hitter_slot_counts=hitter_slot_counts,
+            pitcher_slot_counts=pitcher_slot_counts,
+            modeled_bench_hitters_per_team_by_year=modeled_bench_hitters_per_team_by_year,
+            modeled_bench_pitchers_per_team_by_year=modeled_bench_pitchers_per_team_by_year,
+            year_active_pitcher_player_ids=year_active_pitcher_player_ids,
+            year_start_capable_pitcher_ids=year_start_capable_pitcher_ids,
+            pitcher_usage_diagnostics_by_year=pitcher_usage_diagnostics_by_year,
+            default_rostered_player_ids=rostered_player_ids,
+            default_in_season_rostered_player_ids=in_season_rostered_player_ids,
+            default_replacement_rank=replacement_rank,
+            default_in_season_replacement_rank=in_season_replacement_rank,
         )
-        active_pitcher_player_ids = set(
-            year_active_pitcher_player_ids.get(
-                start_year,
-                _active_points_roster_ids(
-                    year_pit_entries.get(start_year, []),
-                    slot_counts=pitcher_slot_counts,
-                    teams=teams,
-                ),
-            )
+        rostered_player_ids = set(h2h_roster_model.rostered_player_ids)
+        in_season_rostered_player_ids = set(h2h_roster_model.in_season_rostered_player_ids)
+        replacement_rank = int(h2h_roster_model.replacement_rank)
+        in_season_replacement_rank = int(h2h_roster_model.in_season_replacement_rank)
+        held_starter_pitcher_ids = set(h2h_roster_model.held_starter_pitcher_ids)
+        modeled_held_starter_pitchers_per_team_by_year[start_year] = int(
+            h2h_roster_model.modeled_held_starter_pitchers_per_team
         )
-        start_year_pitcher_entries = year_pit_entries.get(start_year, [])
-        start_year_pitcher_points = {
-            str(entry.get("player_id") or ""): float(entry.get("points", 0.0))
-            for entry in start_year_pitcher_entries
-            if str(entry.get("player_id") or "")
-        }
-        start_year_start_capable_pitcher_ids = set(year_start_capable_pitcher_ids.get(start_year, set()))
-        active_starter_pitcher_ids = active_pitcher_player_ids & start_year_start_capable_pitcher_ids
-        active_reliever_pitcher_ids = active_pitcher_player_ids - active_starter_pitcher_ids
-        active_rostered_player_ids = set(active_hitter_player_ids) | set(active_pitcher_player_ids)
-        reserve_hitters_per_team = int(modeled_bench_hitters_per_team_by_year.get(start_year, 0))
-        reserve_pitchers_per_team = int(modeled_bench_pitchers_per_team_by_year.get(start_year, 0))
-        reserve_hitter_count = max(int(teams), 1) * max(reserve_hitters_per_team, 0)
-        reserve_pitcher_count = max(int(teams), 1) * max(reserve_pitchers_per_team, 0)
-        reserve_hitter_player_ids, _unused_pitcher_reserve_ids = _select_side_aware_reserve_ids(
-            hit_entries=year_hit_entries.get(start_year, []),
-            pit_entries=start_year_pitcher_entries,
-            hitter_count=reserve_hitter_count,
-            pitcher_count=0,
-            excluded_player_ids=active_rostered_player_ids,
+        modeled_held_relievers_per_team_by_year[start_year] = int(
+            h2h_roster_model.modeled_held_relievers_per_team
         )
-        total_pitcher_roster_count = max(
-            int(teams), 1
-        ) * max(int(sum(pitcher_slot_counts.values())) + int(reserve_pitchers_per_team), 0)
-        reserve_reliever_pitcher_ids: set[str] = set()
-        target_total_starter_roster_count = max(
-            int(total_pitcher_roster_count) - int(len(active_reliever_pitcher_ids)) - int(len(reserve_reliever_pitcher_ids)),
-            int(len(active_starter_pitcher_ids)),
-        )
-        held_starter_pitcher_ids = set(active_starter_pitcher_ids)
-        for entry in sorted(
-            (
-                entry
-                for entry in start_year_pitcher_entries
-                if str(entry.get("player_id") or "") in start_year_start_capable_pitcher_ids
-                and str(entry.get("player_id") or "") not in held_starter_pitcher_ids
-            ),
-            key=lambda entry: (-float(entry.get("points", 0.0)), str(entry.get("player_id") or "")),
-        ):
-            if len(held_starter_pitcher_ids) >= int(target_total_starter_roster_count):
-                break
-            held_starter_pitcher_ids.add(str(entry.get("player_id") or ""))
-        reserve_starter_pitcher_ids = held_starter_pitcher_ids - active_pitcher_player_ids
-        reserve_pitcher_player_ids = set(reserve_reliever_pitcher_ids) | set(reserve_starter_pitcher_ids)
-        if len(reserve_pitcher_player_ids) < int(reserve_pitcher_count):
-            for entry in sorted(
-                start_year_pitcher_entries,
-                key=lambda entry: (-float(entry.get("points", 0.0)), str(entry.get("player_id") or "")),
-            ):
-                player_id = str(entry.get("player_id") or "")
-                if (
-                    not player_id
-                    or player_id in active_pitcher_player_ids
-                    or player_id in reserve_pitcher_player_ids
-                ):
-                    continue
-                reserve_pitcher_player_ids.add(player_id)
-                if len(reserve_pitcher_player_ids) >= int(reserve_pitcher_count):
-                    break
-        elif len(reserve_pitcher_player_ids) > int(reserve_pitcher_count):
-            reserve_pitcher_player_ids = {
-                player_id
-                for player_id in sorted(
-                    reserve_pitcher_player_ids,
-                    key=lambda player_id: (
-                        -float(start_year_pitcher_points.get(player_id, 0.0)),
-                        str(player_id),
-                    ),
-                )[:reserve_pitcher_count]
-            }
-        modeled_held_starter_pitchers_per_team_by_year[start_year] = _round_half_up_non_negative(
-            float(len(held_starter_pitcher_ids)) / float(max(int(teams), 1))
-        )
-        modeled_held_relievers_per_team_by_year[start_year] = _round_half_up_non_negative(
-            float(len(active_reliever_pitcher_ids) + len(reserve_reliever_pitcher_ids))
-            / float(max(int(teams), 1))
-        )
-        rostered_player_ids = (
-            active_rostered_player_ids
-            | set(reserve_hitter_player_ids)
-            | set(reserve_pitcher_player_ids)
-        )
-        if rostered_player_ids:
-            replacement_rank = max(int(teams) * max(int(active_slots_per_team) + int(bench), 0), 1)
-            in_season_rostered_player_ids = set(rostered_player_ids)
-            in_season_replacement_rank = int(replacement_rank)
-        start_year_pitcher_diag = pitcher_usage_diagnostics_by_year.get(start_year)
-        if isinstance(start_year_pitcher_diag, dict):
-            selected_held_starts = float(start_year_pitcher_diag.get("selected_held_starts") or 0.0)
-            selected_streamed_starts = float(start_year_pitcher_diag.get("selected_streamed_starts") or 0.0)
-            selected_overflow_starts = float(start_year_pitcher_diag.get("selected_overflow_starts") or 0.0)
-            effective_weekly_starts_cap_modeled = (
-                (selected_held_starts + selected_streamed_starts)
-                / float(_SEASON_WEEKS * max(int(teams), 1))
-                if points_valuation_mode == "daily_h2h"
-                else None
-            )
-            overflow_starts_per_week = (
-                selected_overflow_starts / float(_SEASON_WEEKS * max(int(teams), 1))
-                if points_valuation_mode == "daily_h2h"
-                else None
-            )
-            start_year_pitcher_diag.update(
-                {
-                    "modeled_held_starter_pitchers_per_team": int(
-                        modeled_held_starter_pitchers_per_team_by_year.get(start_year, 0)
-                    ),
-                    "modeled_held_relievers_per_team": int(
-                        modeled_held_relievers_per_team_by_year.get(start_year, 0)
-                    ),
-                    "modeled_effective_weekly_starts_cap": round(float(effective_weekly_starts_cap_modeled), 4)
-                    if effective_weekly_starts_cap_modeled is not None
-                    else None,
-                    "modeled_overflow_starts_per_week": round(float(overflow_starts_per_week), 4)
-                    if overflow_starts_per_week is not None
-                    else None,
-                }
-            )
 
     year_hit_replacement: dict[int, dict[str, float]] = {}
     year_pit_replacement: dict[int, dict[str, float]] = {}
@@ -1229,17 +903,14 @@ def calculate_points_dynasty_frame(
         starter_replacement_rostered_ids = (
             set(held_starter_pitcher_ids) if use_h2h_roster_model else set(rostered_player_ids)
         )
-        start_capable_pitcher_replacement = ctx.points_slot_replacement(
-            [
-                entry
-                for entry in year_pit_entries.get(start_year, [])
-                if str(entry.get("player_id") or "") in year_start_capable_pitcher_ids.get(start_year, set())
-            ],
-            active_slots={"P"},
-            rostered_player_ids=starter_replacement_rostered_ids,
+        starter_pitcher_replacement_start_year = start_capable_pitcher_replacement_value(
+            points_slot_replacement=ctx.points_slot_replacement,
+            year_pit_entries=year_pit_entries,
+            start_year=start_year,
+            year_start_capable_pitcher_ids=year_start_capable_pitcher_ids,
+            starter_replacement_rostered_ids=starter_replacement_rostered_ids,
             n_replacement=n_replacement,
         )
-        starter_pitcher_replacement_start_year = float(start_capable_pitcher_replacement.get("P", 0.0))
 
     hitter_slot_capacity = _slot_capacity_by_league(hitter_slot_counts, teams=teams)
     pitcher_slot_capacity = _slot_capacity_by_league(pitcher_slot_counts, teams=teams)
@@ -1260,7 +931,7 @@ def calculate_points_dynasty_frame(
         for year in valuation_year_set
     }
 
-    player_year_details: dict[str, list[dict[str, object]]] = {}
+    player_year_details: dict[str, list[dict[str, Any]]] = {}
     stash_scores_by_player: dict[str, float] = {}
     negative_year_players: set[str] = set()
     ir_candidate_players: set[str] = set()
@@ -1276,8 +947,8 @@ def calculate_points_dynasty_frame(
             raw_pit_points = float(info.get("raw_pit_points", 0.0))
             hit_slots = set(info.get("hit_slots", set()))
             pit_slots = set(info.get("pit_slots", set()))
-            hit_breakdown = info.get("hit_breakdown") if isinstance(info.get("hit_breakdown"), dict) else empty_hit_breakdown
-            pit_breakdown = info.get("pit_breakdown") if isinstance(info.get("pit_breakdown"), dict) else empty_pit_breakdown
+            hit_breakdown = cast(dict[str, Any], info.get("hit_breakdown")) if isinstance(info.get("hit_breakdown"), dict) else empty_hit_breakdown
+            pit_breakdown = cast(dict[str, Any], info.get("pit_breakdown")) if isinstance(info.get("pit_breakdown"), dict) else empty_pit_breakdown
 
             hit_repl_map = year_hit_replacement.get(year, {})
             pit_repl_map = year_pit_replacement.get(year, {})
@@ -1305,18 +976,19 @@ def calculate_points_dynasty_frame(
             if (
                 starter_pitcher_replacement_start_year is not None
                 and float(info.get("projected_pit_starts", 0.0)) >= 1.0
-                and starter_pitcher_replacement_start_year > _POINTS_CENTERING_ZERO_EPSILON
+                and starter_pitcher_replacement_start_year > POINTS_CENTERING_ZERO_EPSILON
             ):
                 if (
                     pit_best_slot == "P"
-                    and starter_pitcher_replacement_start_year < (float(pit_best_replacement) - _POINTS_CENTERING_ZERO_EPSILON)
+                    and starter_pitcher_replacement_start_year
+                    < (float(pit_best_replacement or 0.0) - POINTS_CENTERING_ZERO_EPSILON)
                 ):
                     pit_best_replacement = float(starter_pitcher_replacement_start_year)
                     pit_best_value = float(pit_points - pit_best_replacement)
                 if (
                     pit_assigned_slot == "P"
                     and starter_pitcher_replacement_start_year
-                    < (float(pit_assigned_replacement) - _POINTS_CENTERING_ZERO_EPSILON)
+                    < (float(pit_assigned_replacement) - POINTS_CENTERING_ZERO_EPSILON)
                 ):
                     pit_assigned_replacement = float(starter_pitcher_replacement_start_year)
                     pit_assigned_value = float(pit_assigned_points - pit_assigned_replacement)
@@ -1410,8 +1082,9 @@ def calculate_points_dynasty_frame(
         has_negative_year = False
         has_ir_candidate_year = False
         for detail in year_details:
-            year = int(detail["year"])
-            raw_value = float(detail["selected_points_unadjusted"])
+            typed_detail = cast(dict[str, Any], detail)
+            year = int(cast(Any, typed_detail["year"]))
+            raw_value = float(cast(Any, typed_detail["selected_points_unadjusted"]))
             if raw_value < 0.0:
                 has_negative_year = True
                 if _is_near_zero_playing_time(
@@ -1443,493 +1116,77 @@ def calculate_points_dynasty_frame(
         if has_ir_candidate_year:
             ir_candidate_players.add(player_id)
 
-    if use_h2h_roster_model:
-        ranked_stash_player_ids = [
-            player_id
-            for player_id, _score in sorted(
-                stash_scores_by_player.items(),
-                key=lambda item: (-float(item[1]), str(item[0])),
-            )
-        ]
-        used_h2h_in_season_players = set(in_season_rostered_player_ids)
+    stash_selection = select_points_stash_groups(
+        stash_scores_by_player=stash_scores_by_player,
+        use_h2h_roster_model=use_h2h_roster_model,
+        in_season_rostered_player_ids=in_season_rostered_player_ids,
+        in_season_replacement_rank=in_season_replacement_rank,
+        minor_eligibility_by_year=minor_eligibility_by_year,
+        valuation_year_set=valuation_year_set,
+        start_year=start_year,
+        teams=teams,
+        minors=minors,
+        ir=ir,
+        bench=bench,
+        ir_candidate_players=ir_candidate_players,
+        negative_year_players=negative_year_players,
+        hitter_ab_by_player_year=hitter_ab_by_player_year,
+        pitcher_ip_by_player_year=pitcher_ip_by_player_year,
+    )
+    modeled_minor_roster_ids = set(stash_selection.modeled_minor_roster_ids)
+    modeled_ir_roster_ids = set(stash_selection.modeled_ir_roster_ids)
+    in_season_rostered_player_ids = set(stash_selection.in_season_rostered_player_ids)
+    in_season_replacement_rank = int(stash_selection.in_season_replacement_rank)
 
-        def _select_modeled_in_season_group(limit: int, candidates: set[str]) -> set[str]:
-            selected: set[str] = set()
-            for player_id in ranked_stash_player_ids:
-                if len(selected) >= max(int(limit), 0):
-                    break
-                if player_id in used_h2h_in_season_players or player_id not in candidates:
-                    continue
-                selected.add(player_id)
-                used_h2h_in_season_players.add(player_id)
-            return selected
-
-        start_year_minor_candidates = {
-            player_id
-            for player_id in ranked_stash_player_ids
-            if bool(minor_eligibility_by_year.get((player_id, int(start_year)), False))
-        }
-        start_year_ir_candidates = {
-            player_id
-            for player_id in ranked_stash_player_ids
-            if _is_near_zero_playing_time(
-                player_id,
-                int(start_year),
-                hitter_ab_by_player_year=hitter_ab_by_player_year,
-                pitcher_ip_by_player_year=pitcher_ip_by_player_year,
-            )
-        }
-        modeled_minor_roster_ids = _select_modeled_in_season_group(
-            int(teams) * int(minors),
-            start_year_minor_candidates,
-        )
-        modeled_ir_roster_ids = _select_modeled_in_season_group(
-            int(teams) * int(ir),
-            start_year_ir_candidates,
-        )
-        in_season_rostered_player_ids = (
-            set(in_season_rostered_player_ids)
-            | set(modeled_minor_roster_ids)
-            | set(modeled_ir_roster_ids)
-        )
-        in_season_replacement_rank = max(len(in_season_rostered_player_ids), 1)
-
-    reserve_ranked_player_ids = [
-        player_id
-        for player_id, _score in sorted(
-            stash_scores_by_player.items(),
-            key=lambda item: (-float(item[1]), str(item[0])),
-        )
-        if player_id in in_season_rostered_player_ids
-    ]
-    used_reserve_players: set[str] = set()
-
-    def _select_reserve_group(limit: int, candidates: set[str]) -> set[str]:
-        selected: set[str] = set()
-        for player_id in reserve_ranked_player_ids:
-            if len(selected) >= max(int(limit), 0):
-                break
-            if player_id in used_reserve_players or player_id not in candidates:
-                continue
-            selected.add(player_id)
-            used_reserve_players.add(player_id)
-        return selected
-
-    minor_candidate_players = {
-        player_id
-        for player_id in reserve_ranked_player_ids
-        if any(bool(minor_eligibility_by_year.get((player_id, year), False)) for year in valuation_year_set)
-    }
-    minor_stash_players = _select_reserve_group(int(teams) * int(minors), minor_candidate_players)
-    ir_stash_players = _select_reserve_group(int(teams) * int(ir), set(reserve_ranked_player_ids) & ir_candidate_players)
-    bench_stash_players = _select_reserve_group(
-        int(teams) * int(bench),
-        set(reserve_ranked_player_ids) & negative_year_players,
+    result_rows = build_points_result_rows(
+        player_meta=player_meta,
+        player_year_details=player_year_details,
+        player_profile=player_profile,
+        minor_eligibility_by_year=minor_eligibility_by_year,
+        start_year=start_year,
+        valuation_year_set=valuation_year_set,
+        discount=float(discount),
+        enable_prospect_risk_adjustment=enable_prospect_risk_adjustment,
+        minor_stash_players=set(stash_selection.minor_stash_players),
+        ir_stash_players=set(stash_selection.ir_stash_players),
+        bench_stash_players=set(stash_selection.bench_stash_players),
+        enable_ir_stash_relief=enable_ir_stash_relief,
+        ir_negative_penalty=float(ir_negative_penalty),
+        enable_bench_stash_relief=enable_bench_stash_relief,
+        bench_negative_penalty=float(bench_negative_penalty),
+        hitter_ab_by_player_year=hitter_ab_by_player_year,
+        pitcher_ip_by_player_year=pitcher_ip_by_player_year,
     )
 
-    result_rows: list[dict] = []
-    for player_id, meta_row in player_meta.items():
-        row_out: dict[str, object] = dict(meta_row)
-        row_out["minor_eligible"] = bool(
-            row_out.get("minor_eligible")
-            or minor_eligibility_by_year.get((player_id, int(start_year)), False)
-        )
-        row_out["_ExplainPointsByYear"] = {}
-        year_details = player_year_details.get(player_id, [])
-        adjusted_values: list[float] = []
-
-        for detail in year_details:
-            year = int(detail["year"])
-            adjusted_value = float(detail["selected_points_unadjusted"])
-            adjusted_value *= _prospect_risk_multiplier(
-                year=year,
-                start_year=start_year,
-                profile=player_profile.get(player_id, "hitter"),
-                minor_eligible=bool(minor_eligibility_by_year.get((player_id, year), False)),
-                enabled=enable_prospect_risk_adjustment,
-            )
-            adjusted_value = _apply_negative_value_stash_rules(
-                adjusted_value,
-                can_minor_stash=player_id in minor_stash_players and bool(minor_eligibility_by_year.get((player_id, year), False)),
-                can_ir_stash=enable_ir_stash_relief
-                and player_id in ir_stash_players
-                and _is_near_zero_playing_time(
-                    player_id,
-                    year,
-                    hitter_ab_by_player_year=hitter_ab_by_player_year,
-                    pitcher_ip_by_player_year=pitcher_ip_by_player_year,
-                ),
-                ir_negative_penalty=ir_negative_penalty,
-                can_bench_stash=enable_bench_stash_relief and player_id in bench_stash_players,
-                bench_negative_penalty=bench_negative_penalty,
-            )
-            adjusted_values.append(adjusted_value)
-
-        keep_drop = dynasty_keep_or_drop_values(adjusted_values, valuation_year_set, discount=float(discount))
-
-        for idx, detail in enumerate(year_details):
-            year = int(detail["year"])
-            row_out[f"Value_{year}"] = float(adjusted_values[idx])
-            row_out["_ExplainPointsByYear"][str(year)] = {
-                "hitting_points": round(float(detail["hitting_points"]), 4),
-                "pitching_points": round(float(detail["pitching_points"]), 4),
-                "hitting_raw_points": round(float(detail["hitting_raw_points"]), 4),
-                "pitching_raw_points": round(float(detail["pitching_raw_points"]), 4),
-                "hitting_usage_share": round(float(detail["hitting_usage_share"]), 6),
-                "pitching_usage_share": round(float(detail["pitching_usage_share"]), 6),
-                "pitching_appearance_usage_share": round(float(detail["pitching_appearance_usage_share"]), 6),
-                "pitching_ip_usage_share": round(float(detail["pitching_ip_usage_share"]), 6),
-                "hitting_assigned_games": round(float(detail["hitting_assigned_games"]), 4)
-                if detail["hitting_assigned_games"] is not None
-                else None,
-                "pitching_assigned_appearances": round(float(detail["pitching_assigned_appearances"]), 4)
-                if detail["pitching_assigned_appearances"] is not None
-                else None,
-                "pitching_assigned_starts": round(float(detail["pitching_assigned_starts"]), 4)
-                if detail["pitching_assigned_starts"] is not None
-                else None,
-                "pitching_assigned_non_start_appearances": round(float(detail["pitching_assigned_non_start_appearances"]), 4)
-                if detail["pitching_assigned_non_start_appearances"] is not None
-                else None,
-                "pitching_assigned_ip": round(float(detail["pitching_assigned_ip"]), 4)
-                if detail["pitching_assigned_ip"] is not None
-                else None,
-                "hitting_projected_games": round(float(detail["hitting_projected_games"]), 4),
-                "pitching_projected_appearances": round(float(detail["pitching_projected_appearances"]), 4),
-                "pitching_projected_starts": round(float(detail["pitching_projected_starts"]), 4),
-                "pitching_projected_ip": round(float(detail["pitching_projected_ip"]), 4),
-                "hitting_replacement": round(float(detail["hitting_replacement"]), 4)
-                if detail["hitting_replacement"] is not None
-                else None,
-                "pitching_replacement": round(float(detail["pitching_replacement"]), 4)
-                if detail["pitching_replacement"] is not None
-                else None,
-                "hitting_best_slot": detail["hitting_best_slot"],
-                "pitching_best_slot": detail["pitching_best_slot"],
-                "hitting_value": round(float(detail["hitting_value"]), 4) if detail["hitting_value"] is not None else None,
-                "pitching_value": round(float(detail["pitching_value"]), 4) if detail["pitching_value"] is not None else None,
-                "hitting_assignment_slot": detail["hitting_assignment_slot"],
-                "pitching_assignment_slot": detail["pitching_assignment_slot"],
-                "hitting_assignment_value": round(float(detail["hitting_assignment_value"]), 4),
-                "pitching_assignment_value": round(float(detail["pitching_assignment_value"]), 4),
-                "hitting_assignment_replacement": round(float(detail["hitting_assignment_replacement"]), 4)
-                if detail["hitting_assignment_slot"] is not None
-                else None,
-                "pitching_assignment_replacement": round(float(detail["pitching_assignment_replacement"]), 4)
-                if detail["pitching_assignment_slot"] is not None
-                else None,
-                "selected_side": detail["selected_side"],
-                "selected_raw_points": round(float(detail["selected_raw_points"]), 4),
-                "selected_points_unadjusted": round(float(detail["selected_points_unadjusted"]), 4),
-                "selected_points": round(float(adjusted_values[idx]), 4),
-                "discount_factor": round(float(keep_drop.discount_factors[idx]), 6),
-                "discounted_contribution": round(float(keep_drop.discounted_contributions[idx]), 4),
-                "keep_drop_value": round(float(keep_drop.continuation_values[idx]), 4),
-                "keep_drop_hold_value": round(float(keep_drop.hold_values[idx]), 4),
-                "keep_drop_keep": bool(keep_drop.keep_flags[idx]),
-                "hitting": detail["hitting"],
-                "pitching": detail["pitching"],
-            }
-
-        start_year_points = row_out["_ExplainPointsByYear"].get(str(start_year), {})
-        if isinstance(start_year_points, dict):
-            row_out["HittingPoints"] = start_year_points.get("hitting_points")
-            row_out["PitchingPoints"] = start_year_points.get("pitching_points")
-            row_out["SelectedPoints"] = start_year_points.get("selected_points")
-            row_out["HittingBestSlot"] = start_year_points.get("hitting_best_slot")
-            row_out["PitchingBestSlot"] = start_year_points.get("pitching_best_slot")
-            row_out["HittingValue"] = start_year_points.get("hitting_value")
-            row_out["PitchingValue"] = start_year_points.get("pitching_value")
-            row_out["HittingAssignmentSlot"] = start_year_points.get("hitting_assignment_slot")
-            row_out["PitchingAssignmentSlot"] = start_year_points.get("pitching_assignment_slot")
-            row_out["HittingAssignmentValue"] = start_year_points.get("hitting_assignment_value")
-            row_out["PitchingAssignmentValue"] = start_year_points.get("pitching_assignment_value")
-            row_out["KeepDropValue"] = start_year_points.get("keep_drop_value")
-            row_out["KeepDropHoldValue"] = start_year_points.get("keep_drop_hold_value")
-            row_out["KeepDropKeep"] = start_year_points.get("keep_drop_keep")
-
-        first_year_gap = (
-            max(int(valuation_year_set[1]) - int(valuation_year_set[0]), 0)
-            if len(valuation_year_set) > 1
-            else 0
-        )
-        start_year_value = float(adjusted_values[0]) if adjusted_values else 0.0
-        future_continuation_value = _future_continuation_value(keep_drop)
-        row_out["RawDynastyValue"] = float(keep_drop.raw_total)
-        row_out["StartYearValue"] = start_year_value
-        row_out["FutureContinuationValue"] = future_continuation_value
-        row_out["FutureContinuationDiscountGap"] = int(first_year_gap)
-        result_rows.append(row_out)
-
-    if not result_rows:
-        empty_columns = [
-            "Player",
-            "Team",
-            "Pos",
-            "Age",
-            "DynastyValue",
-            "RawDynastyValue",
-            "StartYearValue",
-            "FutureContinuationValue",
-            "FutureContinuationDiscountGap",
-            "KeeperAdjustedFutureContinuationValue",
-            "ForcedRosterValue",
-            "CenteringScore",
-            "CenteringMode",
-            "ForcedRosterFallbackApplied",
-            "CenteringBaselineValue",
-            "CenteringScoreBaselineValue",
-            "minor_eligible",
-            ctx.player_key_col,
-            ctx.player_entity_key_col,
-        ] + [f"Value_{year}" for year in valuation_year_set]
-        return pd.DataFrame(columns=empty_columns)
-
-    out = pd.DataFrame.from_records(result_rows)
-    raw_series = pd.to_numeric(out["RawDynastyValue"], errors="coerce").fillna(0.0)
-    if use_h2h_roster_model:
-        raw_baseline_value = _points_centering_baseline_for_roster(
-            out,
-            score_col="RawDynastyValue",
-            rostered_player_ids=rostered_player_ids,
-            minimum_roster_size=replacement_rank,
-            player_entity_key_col=ctx.player_entity_key_col,
-            player_key_col=ctx.player_key_col,
-        )
-    else:
-        raw_baseline_value = _points_centering_baseline(
-            out,
-            score_col="RawDynastyValue",
-            replacement_rank=replacement_rank,
-            player_entity_key_col=ctx.player_entity_key_col,
-            player_key_col=ctx.player_key_col,
-        )
-    future_continuation_baseline_value: float | None = None
-    if keeper_continuation_rank is not None:
-        future_continuation_baseline_value = _points_centering_baseline(
-            out,
-            score_col="FutureContinuationValue",
-            replacement_rank=keeper_continuation_rank,
-            player_entity_key_col=ctx.player_entity_key_col,
-            player_key_col=ctx.player_key_col,
-        )
-
-    keeper_adjusted_future_continuation = pd.to_numeric(
-        out["FutureContinuationValue"],
-        errors="coerce",
-    ).fillna(0.0)
-    if future_continuation_baseline_value is not None:
-        keeper_adjusted_future_continuation = keeper_adjusted_future_continuation - float(
-            future_continuation_baseline_value
-        )
-    out["KeeperAdjustedFutureContinuationValue"] = keeper_adjusted_future_continuation.astype(float)
-    out["ForcedRosterValue"] = (
-        pd.to_numeric(out["StartYearValue"], errors="coerce").fillna(0.0)
-        + pd.to_numeric(out["FutureContinuationDiscountGap"], errors="coerce").fillna(0.0).map(
-            lambda gap: float(discount) ** int(max(gap, 0))
-        )
-        * keeper_adjusted_future_continuation
+    return finalize_points_dynasty_output(
+        result_rows=result_rows,
+        valuation_year_set=valuation_year_set,
+        player_key_col=ctx.player_key_col,
+        player_entity_key_col=ctx.player_entity_key_col,
+        rostered_player_ids=rostered_player_ids,
+        replacement_rank=replacement_rank,
+        in_season_replacement_rank=in_season_replacement_rank,
+        active_depth_per_team=active_depth_per_team,
+        in_season_depth_per_team=in_season_depth_per_team,
+        discount=float(discount),
+        keeper_limit=keeper_limit,
+        keeper_continuation_rank=keeper_continuation_rank,
+        points_valuation_mode=points_valuation_mode,
+        weekly_starts_cap=weekly_starts_cap,
+        allow_same_day_starts_overflow=allow_same_day_starts_overflow,
+        weekly_acquisition_cap=weekly_acquisition_cap,
+        use_h2h_roster_model=use_h2h_roster_model,
+        modeled_ir_roster_ids=modeled_ir_roster_ids,
+        modeled_minor_roster_ids=modeled_minor_roster_ids,
+        modeled_bench_hitters_per_team_by_year=modeled_bench_hitters_per_team_by_year,
+        modeled_bench_pitchers_per_team_by_year=modeled_bench_pitchers_per_team_by_year,
+        modeled_held_pitchers_per_team_by_year=modeled_held_pitchers_per_team_by_year,
+        modeled_held_starter_pitchers_per_team_by_year=modeled_held_starter_pitchers_per_team_by_year,
+        modeled_held_relievers_per_team_by_year=modeled_held_relievers_per_team_by_year,
+        starter_slot_capacity=starter_slot_capacity,
+        starter_pitcher_replacement_start_year=starter_pitcher_replacement_start_year,
+        hitter_usage_diagnostics_by_year=hitter_usage_diagnostics_by_year,
+        pitcher_usage_diagnostics_by_year=pitcher_usage_diagnostics_by_year,
+        start_year=start_year,
+        teams=teams,
     )
-    h2h_keeper_adjusted_scoring = bool(use_h2h_roster_model and keeper_limit is not None)
-    out["CenteringScore"] = (
-        pd.to_numeric(out["ForcedRosterValue"], errors="coerce").fillna(0.0)
-        if h2h_keeper_adjusted_scoring
-        else raw_series.astype(float)
-    )
-
-    raw_zero_mask = raw_series.abs() <= float(_POINTS_CENTERING_ZERO_EPSILON)
-    raw_zero_value_count = int(raw_zero_mask.sum())
-    raw_zero_share = (float(raw_zero_value_count) / float(len(out))) if len(out) else 0.0
-
-    if use_h2h_roster_model:
-        centering_score_baseline_value = _points_centering_baseline_for_roster(
-            out,
-            score_col="CenteringScore",
-            rostered_player_ids=rostered_player_ids,
-            minimum_roster_size=replacement_rank,
-            player_entity_key_col=ctx.player_entity_key_col,
-            player_key_col=ctx.player_key_col,
-        )
-    else:
-        centering_score_baseline_value = _points_centering_baseline(
-            out,
-            score_col="CenteringScore",
-            replacement_rank=replacement_rank,
-            player_entity_key_col=ctx.player_entity_key_col,
-            player_key_col=ctx.player_key_col,
-        )
-    centering_score_series = pd.to_numeric(out["CenteringScore"], errors="coerce").fillna(0.0)
-    centering_score_zero_share = (
-        float((centering_score_series.abs() <= float(_POINTS_CENTERING_ZERO_EPSILON)).sum()) / float(len(out))
-        if len(out)
-        else 0.0
-    )
-    deep_roster_zero_baseline_warning = bool(
-        abs(float(centering_score_baseline_value)) <= float(_POINTS_CENTERING_ZERO_EPSILON)
-        and len(out) > 0
-        and (
-            centering_score_zero_share >= float(_POINTS_DEEP_ROSTER_ZERO_CLUSTER_MIN_SHARE)
-            if h2h_keeper_adjusted_scoring
-            else raw_zero_share >= float(_POINTS_DEEP_ROSTER_ZERO_CLUSTER_MIN_SHARE)
-        )
-    )
-
-    centering_mode = "keeper_adjusted_h2h" if h2h_keeper_adjusted_scoring else "standard"
-    forced_roster_fallback_applied = False
-    if deep_roster_zero_baseline_warning and not h2h_keeper_adjusted_scoring:
-        forced_roster_zero_mask = raw_zero_mask.copy()
-        if use_h2h_roster_model:
-            player_entity = out[ctx.player_entity_key_col].astype(str)
-            player_key = out[ctx.player_key_col].astype(str)
-            healthy_roster_mask = player_entity.isin(rostered_player_ids) | player_key.isin(rostered_player_ids)
-            forced_roster_zero_mask = raw_zero_mask & healthy_roster_mask
-        if bool(forced_roster_zero_mask.any()):
-            out.loc[forced_roster_zero_mask, "CenteringScore"] = pd.to_numeric(
-                out.loc[forced_roster_zero_mask, "ForcedRosterValue"],
-                errors="coerce",
-            ).fillna(0.0)
-            if use_h2h_roster_model:
-                centering_score_baseline_value = _points_centering_baseline_for_roster(
-                    out,
-                    score_col="CenteringScore",
-                    rostered_player_ids=rostered_player_ids,
-                    minimum_roster_size=replacement_rank,
-                    player_entity_key_col=ctx.player_entity_key_col,
-                    player_key_col=ctx.player_key_col,
-                )
-            else:
-                centering_score_baseline_value = _points_centering_baseline(
-                    out,
-                    score_col="CenteringScore",
-                    replacement_rank=replacement_rank,
-                    player_entity_key_col=ctx.player_entity_key_col,
-                    player_key_col=ctx.player_key_col,
-                )
-            centering_mode = "forced_roster"
-            forced_roster_fallback_applied = True
-
-    out["DynastyValue"] = pd.to_numeric(out["CenteringScore"], errors="coerce").fillna(0.0) - float(
-        centering_score_baseline_value
-    )
-    out["CenteringMode"] = centering_mode
-    out["ForcedRosterFallbackApplied"] = forced_roster_fallback_applied
-    out["CenteringBaselineValue"] = float(raw_baseline_value)
-    out["CenteringScoreBaselineValue"] = float(centering_score_baseline_value)
-
-    centering_score_series = pd.to_numeric(out["CenteringScore"], errors="coerce").fillna(0.0)
-    dynasty_series = pd.to_numeric(out["DynastyValue"], errors="coerce").fillna(0.0)
-    valuation_diagnostics: dict[str, object] = {
-        "PointsValuationMode": points_valuation_mode,
-        "KeeperLimit": int(keeper_limit) if keeper_limit is not None else None,
-        "H2HKeeperAdjustedScoringApplied": bool(h2h_keeper_adjusted_scoring),
-        "KeeperContinuationRank": int(keeper_continuation_rank) if keeper_continuation_rank is not None else None,
-        "KeeperContinuationBaselineValue": (
-            float(future_continuation_baseline_value)
-            if future_continuation_baseline_value is not None
-            else None
-        ),
-        "ReplacementRank": int(replacement_rank),
-        "InSeasonReplacementRank": int(in_season_replacement_rank),
-        "ActiveDepthPerTeam": int(active_depth_per_team),
-        "InSeasonDepthPerTeam": int(in_season_depth_per_team),
-        "CenteringMode": centering_mode,
-        "ForcedRosterFallbackApplied": forced_roster_fallback_applied,
-        "CenteringBaselineValue": float(raw_baseline_value),
-        "CenteringScoreBaselineValue": float(centering_score_baseline_value),
-        "RawZeroValuePlayerCount": int(raw_zero_value_count),
-        "CenteringScoreZeroPlayerCount": int(
-            (centering_score_series.abs() <= float(_POINTS_CENTERING_ZERO_EPSILON)).sum()
-        ),
-        "DynastyZeroValuePlayerCount": int((dynasty_series.abs() <= float(_POINTS_CENTERING_ZERO_EPSILON)).sum()),
-        "PositiveValuePlayerCount": int((dynasty_series > float(_POINTS_CENTERING_ZERO_EPSILON)).sum()),
-        "deep_roster_zero_baseline_warning": deep_roster_zero_baseline_warning,
-        "HitterUsageByYear": {
-            str(year): diagnostics
-            for year, diagnostics in sorted(hitter_usage_diagnostics_by_year.items())
-        },
-        "PitcherUsageByYear": {
-            str(year): diagnostics
-            for year, diagnostics in sorted(pitcher_usage_diagnostics_by_year.items())
-        },
-    }
-    if use_h2h_roster_model:
-        valuation_diagnostics.update(
-            {
-                "ModeledBenchHittersPerTeam": int(modeled_bench_hitters_per_team_by_year.get(start_year, 0)),
-                "ModeledBenchPitchersPerTeam": int(modeled_bench_pitchers_per_team_by_year.get(start_year, 0)),
-                "ModeledHeldPitchersPerTeam": int(
-                    modeled_held_pitchers_per_team_by_year.get(start_year, max(int(starter_slot_capacity), 0))
-                ),
-                "ModeledHeldStarterPitchersPerTeam": int(
-                    modeled_held_starter_pitchers_per_team_by_year.get(start_year, 0)
-                ),
-                "ModeledHeldRelieversPerTeam": int(
-                    modeled_held_relievers_per_team_by_year.get(start_year, 0)
-                ),
-                "ModeledReserveRosterSize": int(len(rostered_player_ids)),
-                "ModeledIrRosterSize": int(len(modeled_ir_roster_ids)),
-                "ModeledMinorRosterSize": int(len(modeled_minor_roster_ids)),
-                "ModeledStarterPitcherReplacement": (
-                    float(starter_pitcher_replacement_start_year)
-                    if starter_pitcher_replacement_start_year is not None
-                    else None
-                ),
-                "ModeledEffectiveWeeklyStartsCap": (
-                    round(
-                        (
-                            float(
-                                (pitcher_usage_diagnostics_by_year.get(start_year, {}) or {}).get("selected_held_starts") or 0.0
-                            )
-                            + float(
-                                (pitcher_usage_diagnostics_by_year.get(start_year, {}) or {}).get("selected_streamed_starts")
-                                or 0.0
-                            )
-                        )
-                        / float(_SEASON_WEEKS * max(int(teams), 1)),
-                        4,
-                    )
-                    if points_valuation_mode == "daily_h2h"
-                    else None
-                ),
-                "ModeledOverflowStartsPerWeek": (
-                    round(
-                        float(
-                            (pitcher_usage_diagnostics_by_year.get(start_year, {}) or {}).get("selected_overflow_starts")
-                            or 0.0
-                        )
-                        / float(_SEASON_WEEKS * max(int(teams), 1)),
-                        4,
-                    )
-                    if points_valuation_mode == "daily_h2h"
-                    else None
-                ),
-            }
-        )
-    if points_valuation_mode == "weekly_h2h":
-        valuation_diagnostics.update(
-            {
-                "WeeklyStartsCap": weekly_starts_cap,
-                "AllowSameDayStartsOverflow": bool(allow_same_day_starts_overflow),
-                "WeeklyAcquisitionCap": weekly_acquisition_cap,
-                "WeeklyPitchingByYear": {
-                    str(year): diagnostics
-                    for year, diagnostics in sorted(pitcher_usage_diagnostics_by_year.items())
-                },
-            }
-        )
-    if points_valuation_mode == "daily_h2h":
-        valuation_diagnostics.update(
-            {
-                "WeeklyStartsCap": weekly_starts_cap,
-                "AllowSameDayStartsOverflow": bool(allow_same_day_starts_overflow),
-                "WeeklyAcquisitionCap": weekly_acquisition_cap,
-                "SyntheticSeasonDays": int(SYNTHETIC_SEASON_DAYS),
-                "SyntheticPeriodDays": int(SYNTHETIC_PERIOD_DAYS),
-                "DailyPitchingByYear": {
-                    str(year): diagnostics
-                    for year, diagnostics in sorted(pitcher_usage_diagnostics_by_year.items())
-                },
-            }
-        )
-    out.attrs["valuation_diagnostics"] = valuation_diagnostics
-    return out

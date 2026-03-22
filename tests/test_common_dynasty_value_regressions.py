@@ -148,6 +148,10 @@ def _run_common_values(
         hitter_categories=("HR",),
         pitcher_categories=("W",),
         two_way="sum",
+        # This file locks long-lived common-mode math expectations and should
+        # not drift when default methodology tuning changes elsewhere.
+        enable_replacement_blend=False,
+        replacement_depth_mode="flat",
     )
     base_settings.update(settings_overrides)
     out = calculate_common_dynasty_values(

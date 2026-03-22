@@ -1,7 +1,10 @@
-.PHONY: guard-generated-artifacts test test-backend test-backend-fast test-backend-full-regression test-frontend lint lint-backend lint-frontend typecheck security check format clean docker-build dev help
+.PHONY: guard-generated-artifacts scrub-os-metadata test test-backend test-backend-fast test-backend-full-regression test-frontend lint lint-backend lint-frontend typecheck security check format clean docker-build dev help
 
 guard-generated-artifacts:
 	./scripts/check_generated_artifacts_untracked.sh
+
+scrub-os-metadata:
+	./scripts/check_os_metadata_artifacts.sh
 
 test: test-backend test-frontend
 
@@ -17,7 +20,7 @@ test-backend-full-regression:
 test-frontend:
 	cd frontend && npm test
 
-lint: guard-generated-artifacts lint-backend lint-frontend
+lint: guard-generated-artifacts scrub-os-metadata lint-backend lint-frontend
 
 lint-backend:
 	python scripts/check_ruff_per_file_ignores.py
@@ -33,6 +36,10 @@ security:
 	bandit -r backend -ll --quiet
 
 check: lint test-backend-fast test-frontend typecheck security
+	python scripts/check_max_file_lines.py
+	cd frontend && npm run typecheck
+	./scripts/check_frontend_asset_budget.sh
+	./scripts/check_frontend_dist.sh
 
 format:
 	ruff format backend tests preprocess.py scripts
@@ -58,10 +65,10 @@ help:
 	@echo "  make test-backend          Backend tests with coverage"
 	@echo "  make test-backend-fast     Backend tests (skip full_regression)"
 	@echo "  make test-frontend         Frontend tests"
-	@echo "  make lint                  Run all linters"
+	@echo "  make lint                  Run all linters + artifact guards"
 	@echo "  make typecheck             Run mypy type checks"
 	@echo "  make security              Run Bandit SAST scan"
-	@echo "  make check                 All quality gates"
+	@echo "  make check                 Local CI-parity quality gate"
 	@echo "  make format                Auto-format backend + frontend"
 	@echo "  make clean                 Remove caches and build artifacts"
 	@echo "  make docker-build          Build Docker image"

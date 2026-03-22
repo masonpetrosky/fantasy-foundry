@@ -8,7 +8,6 @@ from typing import Any, Callable, Mapping
 
 import pandas as pd
 
-
 DEFAULT_DYNASTY_METHODOLOGY_VERSION = "2026-03-21"
 
 

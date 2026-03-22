@@ -6,6 +6,7 @@ export interface HeroSectionProps {
   projectionSeasons: number;
   scrollToCalculator: () => void;
   setSection: (section: string) => void;
+  onQuickStartRun: (mode: "roto" | "points" | "deep", source: string) => void;
 }
 
 export const HeroSection = React.memo(function HeroSection({
@@ -14,7 +15,10 @@ export const HeroSection = React.memo(function HeroSection({
   projectionSeasons,
   scrollToCalculator,
   setSection,
+  onQuickStartRun,
 }: HeroSectionProps): React.ReactElement {
+  const quickStartEnabled = Boolean(meta);
+
   return (
     <>
       <div className="hero fade-up">
@@ -22,9 +26,44 @@ export const HeroSection = React.memo(function HeroSection({
         <p>Comprehensive player projections from 2026 through 2045. Browse the data, configure your league settings, and generate personalized dynasty rankings.</p>
         <div className="hero-actions fade-up fade-up-2">
           {!subscriptionActive && (
-            <button className="hero-cta hero-cta-primary" onClick={scrollToCalculator}>
-              Get Started Free
-            </button>
+            <>
+              <button
+                className="hero-cta hero-cta-primary"
+                onClick={() => {
+                  if (!quickStartEnabled) {
+                    scrollToCalculator();
+                    return;
+                  }
+                  onQuickStartRun("roto", "hero_roto");
+                }}
+              >
+                Start 5x5 Roto
+              </button>
+              <button
+                className="hero-cta hero-cta-secondary"
+                onClick={() => {
+                  if (!quickStartEnabled) {
+                    scrollToCalculator();
+                    return;
+                  }
+                  onQuickStartRun("points", "hero_points");
+                }}
+              >
+                Start Points
+              </button>
+              <button
+                className="hero-cta hero-cta-secondary"
+                onClick={() => {
+                  if (!quickStartEnabled) {
+                    scrollToCalculator();
+                    return;
+                  }
+                  onQuickStartRun("deep", "hero_deep");
+                }}
+              >
+                Start Deep Dynasty
+              </button>
+            </>
           )}
           <button className="hero-cta hero-cta-secondary" onClick={() => setSection("methodology")}>
             See Methodology

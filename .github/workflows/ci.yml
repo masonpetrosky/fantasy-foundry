@@ -40,6 +40,9 @@ jobs:
       - name: Enforce Generated Artifact Tracking Guard
         run: ./scripts/check_generated_artifacts_untracked.sh
 
+      - name: Enforce OS Metadata Artifact Scrub
+        run: ./scripts/check_os_metadata_artifacts.sh
+
       - name: Detect changed paths
         uses: dorny/paths-filter@v3
         id: filter
@@ -82,7 +85,7 @@ jobs:
     needs: detect-changes
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && needs.detect-changes.outputs.backend == 'true')
+      ((github.event_name == 'pull_request' || github.event_name == 'push') && needs.detect-changes.outputs.backend == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -146,7 +149,7 @@ jobs:
     needs: detect-changes
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && needs.detect-changes.outputs.frontend == 'true')
+      ((github.event_name == 'pull_request' || github.event_name == 'push') && needs.detect-changes.outputs.frontend == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -214,7 +217,7 @@ jobs:
     needs: [detect-changes, frontend-quality]
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && needs.detect-changes.outputs.frontend == 'true')
+      ((github.event_name == 'pull_request' || github.event_name == 'push') && needs.detect-changes.outputs.frontend == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -249,7 +252,7 @@ jobs:
   docker-build:
     needs: detect-changes
     if: |
-      (github.event_name == 'pull_request' && needs.detect-changes.outputs.docker == 'true') ||
+      ((github.event_name == 'pull_request' || github.event_name == 'push') && needs.detect-changes.outputs.docker == 'true') ||
       (github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -267,7 +270,7 @@ jobs:
   e2e-smoke:
     needs: detect-changes
     if: |
-      (github.event_name == 'pull_request' && (needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.frontend == 'true')) ||
+      ((github.event_name == 'pull_request' || github.event_name == 'push') && (needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.frontend == 'true')) ||
       (github.event_name == 'workflow_dispatch' && inputs.run_e2e)
     runs-on: ubuntu-latest
     timeout-minutes: 25

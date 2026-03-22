@@ -22,6 +22,16 @@ interface QuickStartAnalyticsInput {
   dataVersion?: string;
 }
 
+function resolveQuickStartEntrySurface(source: unknown): string {
+  const normalizedSource = String(source || "").trim().toLowerCase();
+  if (!normalizedSource) return "activation_strip";
+  if (normalizedSource.startsWith("hero")) return "hero";
+  if (normalizedSource.startsWith("activation_reminder")) return "activation_reminder";
+  if (normalizedSource.startsWith("activation_strip")) return "activation_strip";
+  if (normalizedSource.startsWith("calculator_sidebar")) return "calculator_sidebar";
+  return normalizedSource;
+}
+
 function buildQuickStartAnalyticsProps({
   mode,
   source,
@@ -31,6 +41,7 @@ function buildQuickStartAnalyticsProps({
 }: QuickStartAnalyticsInput): Record<string, string | boolean> {
   const props: Record<string, string | boolean> = {
     source: String(source || "").trim() || "activation_strip",
+    entry_surface: resolveQuickStartEntrySurface(source),
     mode: normalizeQuickStartMode(mode),
     is_first_run: Boolean(isFirstRun),
   };

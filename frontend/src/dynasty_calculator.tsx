@@ -225,6 +225,11 @@ interface CalculationSuccessInfo {
   playerCount: number;
 }
 
+export interface DynastyCalculatorActionBridge {
+  copyShareLink: () => Promise<void>;
+  focusPresetNameInput: () => void;
+}
+
 interface DynastyCalculatorProps {
   apiBase: string;
   meta: CalculatorMeta;
@@ -234,6 +239,7 @@ interface DynastyCalculatorProps {
   onCalculationSuccess?: (info: CalculationSuccessInfo) => void;
   onSettingsChange?: (settings: CalculatorSettings) => void;
   onRegisterQuickStartRunner?: (runner: ((mode: string) => void) | null) => void;
+  onRegisterActionBridge?: (bridge: DynastyCalculatorActionBridge | null) => void;
   onOpenMethodologyGlossary?: (anchorId?: string) => void;
   tierLimits?: TierLimits | null;
   fantrax?: UseFantraxLeagueResult | null;
@@ -248,6 +254,7 @@ export function DynastyCalculator({
   onCalculationSuccess,
   onSettingsChange,
   onRegisterQuickStartRunner,
+  onRegisterActionBridge,
   onOpenMethodologyGlossary,
   tierLimits,
   fantrax,
@@ -271,6 +278,9 @@ export function DynastyCalculator({
   const calcActiveJobIdRef = useRef("");
   const quickStartRunRef = useRef<((mode: string) => void) | null>(null);
   const firstSuccessTrackedRef = useRef(Boolean(hasSuccessfulRun));
+  const presetNameInputRef = useRef<HTMLInputElement | null>(null);
+  const actionBridgeCopyShareLinkRef = useRef<() => Promise<void>>(async () => undefined);
+  const actionBridgeFocusPresetNameInputRef = useRef<() => void>(() => undefined);
 
   const availableYears = useMemo(
     () => (meta.years || []).map(Number).filter(Number.isFinite),
@@ -503,6 +513,24 @@ export function DynastyCalculator({
       setStatus("Share link is ready.");
     }
   }
+
+  function focusPresetNameInput(): void {
+    presetNameInputRef.current?.focus();
+    presetNameInputRef.current?.select();
+  }
+  actionBridgeCopyShareLinkRef.current = copyShareLink;
+  actionBridgeFocusPresetNameInputRef.current = focusPresetNameInput;
+
+  useEffect(() => {
+    if (typeof onRegisterActionBridge !== "function") return undefined;
+    onRegisterActionBridge({
+      copyShareLink: () => actionBridgeCopyShareLinkRef.current(),
+      focusPresetNameInput: () => actionBridgeFocusPresetNameInputRef.current(),
+    });
+    return () => {
+      onRegisterActionBridge(null);
+    };
+  }, [onRegisterActionBridge]);
 
   function clearAppliedValues(): void {
     if (typeof onClearMainTableOverlay === "function") {
@@ -737,6 +765,7 @@ export function DynastyCalculator({
         state={sidebarState}
         actions={sidebarActions}
         fantrax={fantrax || null}
+        presetNameInputRef={presetNameInputRef}
       />
     </div>
   );

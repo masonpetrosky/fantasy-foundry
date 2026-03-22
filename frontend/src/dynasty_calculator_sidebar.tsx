@@ -63,6 +63,7 @@ interface DynastyCalculatorSidebarProps {
   state: SidebarState;
   actions: SidebarActions;
   fantrax: UseFantraxLeagueResult | null;
+  presetNameInputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
 export function DynastyCalculatorSidebar({
@@ -72,6 +73,7 @@ export function DynastyCalculatorSidebar({
   state,
   actions,
   fantrax,
+  presetNameInputRef,
 }: DynastyCalculatorSidebarProps): React.ReactElement {
   const {
     calculationNotice,
@@ -427,6 +429,7 @@ export function DynastyCalculatorSidebar({
             <label htmlFor="calc-preset-name">Preset Name</label>
             <input
               id="calc-preset-name"
+              ref={presetNameInputRef}
               type="text"
               value={presetName}
               placeholder="e.g. 12-team H2H Points"

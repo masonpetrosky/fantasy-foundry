@@ -29,6 +29,7 @@ function defaultProps(): React.ComponentProps<typeof HeroSection> {
     projectionSeasons: 20,
     scrollToCalculator: vi.fn(),
     setSection: vi.fn(),
+    onQuickStartRun: vi.fn(),
   };
 }
 

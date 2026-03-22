@@ -62,7 +62,7 @@ from backend.core.calculator_helpers import (
     default_calculation_cache_params as core_default_calculation_cache_params,
 )
 from backend.core.calculator_helpers import (
-    default_dynasty_methodology_fingerprint as core_default_dynasty_methodology_fingerprint,
+    default_dynasty_methodology_fingerprint as core_default_dynasty_methodology_fingerprint,  # noqa: F401
 )
 from backend.core.calculator_helpers import (
     is_user_fixable_calculation_error as core_is_user_fixable_calculation_error,
