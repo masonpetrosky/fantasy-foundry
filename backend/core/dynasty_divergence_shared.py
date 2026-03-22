@@ -13,6 +13,21 @@ _NORMALIZE_PLAYER_RE = re.compile(r"[^a-z0-9]+")
 DEFAULT_DYNASTY_BENCHMARK_PATH = (
     Path(__file__).resolve().parents[1] / "benchmarks" / "default_roto_consensus_2026-03-21.json"
 )
+IMPORTED_SHALLOW_DYNASTY_BENCHMARK_PATH = (
+    Path(__file__).resolve().parents[1] / "benchmarks" / "imported_shallow_roto_chatgpt_2026-03-22.json"
+)
+IMPORTED_DEEP_DYNASTY_BENCHMARK_PATH = (
+    Path(__file__).resolve().parents[1] / "benchmarks" / "imported_deep_roto_chatgpt_2026-03-22.json"
+)
+IMPORTED_KEEPER_POINTS_BENCHMARK_PATH = (
+    Path(__file__).resolve().parents[1] / "benchmarks" / "imported_keeper_weekly_points_chatgpt_2026-03-22.json"
+)
+BENCHMARK_PATHS_BY_PROFILE_ID: dict[str, Path] = {
+    "standard_roto": DEFAULT_DYNASTY_BENCHMARK_PATH,
+    "shallow_roto_imported": IMPORTED_SHALLOW_DYNASTY_BENCHMARK_PATH,
+    "deep_roto_imported": IMPORTED_DEEP_DYNASTY_BENCHMARK_PATH,
+    "keeper_points_imported": IMPORTED_KEEPER_POINTS_BENCHMARK_PATH,
+}
 DEFAULT_MEMO_TARGET_PLAYERS: tuple[str, ...] = (
     "Corbin Carroll",
     "Yordan Alvarez",
@@ -191,6 +206,9 @@ AUDIT_PROFILE_IDS: tuple[str, ...] = (
     "points_season_total",
     "points_weekly_h2h",
     "points_daily_h2h",
+    "shallow_roto_imported",
+    "deep_roto_imported",
+    "keeper_points_imported",
 )
 DEFAULT_DEEP_MEMO_TARGET_PLAYERS: tuple[str, ...] = (
     "Roman Anthony",
@@ -222,8 +240,16 @@ def normalize_player_name(value: object) -> str:
     return _NORMALIZE_PLAYER_RE.sub("-", text).strip("-")
 
 
-def load_dynasty_benchmark(path: str | Path | None = None) -> list[dict[str, Any]]:
-    benchmark_path = Path(path or DEFAULT_DYNASTY_BENCHMARK_PATH).expanduser().resolve()
+def load_dynasty_benchmark(
+    path: str | Path | None = None,
+    *,
+    profile_id: str = "standard_roto",
+) -> list[dict[str, Any]]:
+    default_path = BENCHMARK_PATHS_BY_PROFILE_ID.get(
+        str(profile_id or "").strip() or "standard_roto",
+        DEFAULT_DYNASTY_BENCHMARK_PATH,
+    )
+    benchmark_path = Path(path or default_path).expanduser().resolve()
     payload = json.loads(benchmark_path.read_text(encoding="utf-8"))
     if not isinstance(payload, list):
         raise ValueError(f"Benchmark fixture {benchmark_path} must be a JSON array.")

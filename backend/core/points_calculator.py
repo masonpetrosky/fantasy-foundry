@@ -20,6 +20,7 @@ try:
         build_points_result_rows,
         calculate_points_raw_totals,
         finalize_points_dynasty_output,
+        relief_pitcher_replacement_value,
         start_capable_pitcher_replacement_value,
     )
     from backend.core.points_roster_model import (
@@ -78,6 +79,7 @@ except ImportError:  # pragma: no cover - direct script execution fallback
         build_points_result_rows,
         calculate_points_raw_totals,
         finalize_points_dynasty_output,
+        relief_pitcher_replacement_value,
         start_capable_pitcher_replacement_value,
     )
     from points_roster_model import (  # type: ignore[no-redef]
@@ -323,6 +325,7 @@ def calculate_points_dynasty_frame(
     n_replacement = max(int(teams), 1)
     freeze_replacement_baselines = True
     use_h2h_roster_model = is_h2h_points_mode(points_valuation_mode)
+    keeper_continuation_horizon_years = 3 if use_h2h_roster_model and keeper_limit is not None else None
 
     player_meta: dict[str, dict[str, Any]] = {}
     per_player_year: dict[str, dict[int, dict[str, Any]]] = {}
@@ -336,7 +339,9 @@ def calculate_points_dynasty_frame(
     modeled_held_pitchers_per_team_by_year: dict[int, int] = {}
     modeled_held_starter_pitchers_per_team_by_year: dict[int, int] = {}
     modeled_held_relievers_per_team_by_year: dict[int, int] = {}
+    year_active_hitter_player_ids: dict[int, set[str]] = {}
     year_start_capable_pitcher_ids: dict[int, set[str]] = {}
+    year_relief_pitcher_ids: dict[int, set[str]] = {}
     year_active_pitcher_player_ids: dict[int, set[str]] = {}
     empty_hit_breakdown = ctx.calculate_hitter_points_breakdown(None, scoring)
     empty_pit_breakdown = ctx.calculate_pitcher_points_breakdown(None, scoring)
@@ -488,6 +493,7 @@ def calculate_points_dynasty_frame(
             for player_id, projected_starts in pitcher_start_volume.items()
             if float(projected_starts) >= 1.0
         }
+        year_relief_pitcher_ids[year] = set(pitcher_start_volume.keys()) - set(year_start_capable_pitcher_ids[year])
 
         if points_valuation_mode == "weekly_h2h":
             hitter_usage = allocate_hitter_usage(
@@ -530,6 +536,7 @@ def calculate_points_dynasty_frame(
                 slot_counts=hitter_slot_counts,
                 teams=teams,
             )
+            year_active_hitter_player_ids[year] = set(active_hitter_ids_for_bench)
 
         effective_weekly_cap: float | None = None
         capped_start_budget: float | None = None
@@ -898,7 +905,8 @@ def calculate_points_dynasty_frame(
             )
 
     starter_pitcher_replacement_start_year: float | None = None
-    use_start_capable_pitcher_replacement = bool(points_valuation_mode == "daily_h2h" and active_pitcher_slots == {"P"})
+    reliever_pitcher_replacement_start_year: float | None = None
+    use_start_capable_pitcher_replacement = bool(use_h2h_roster_model and active_pitcher_slots == {"P"})
     if use_start_capable_pitcher_replacement:
         starter_replacement_rostered_ids = (
             set(held_starter_pitcher_ids) if use_h2h_roster_model else set(rostered_player_ids)
@@ -909,6 +917,18 @@ def calculate_points_dynasty_frame(
             start_year=start_year,
             year_start_capable_pitcher_ids=year_start_capable_pitcher_ids,
             starter_replacement_rostered_ids=starter_replacement_rostered_ids,
+            n_replacement=n_replacement,
+        )
+        reliever_replacement_rostered_ids = (
+            set(year_active_pitcher_player_ids.get(start_year, set()))
+            - set(year_start_capable_pitcher_ids.get(start_year, set()))
+        )
+        reliever_pitcher_replacement_start_year = relief_pitcher_replacement_value(
+            points_slot_replacement=ctx.points_slot_replacement,
+            year_pit_entries=year_pit_entries,
+            start_year=start_year,
+            year_relief_pitcher_ids=year_relief_pitcher_ids,
+            reliever_replacement_rostered_ids=reliever_replacement_rostered_ids,
             n_replacement=n_replacement,
         )
 
@@ -930,6 +950,143 @@ def calculate_points_dynasty_frame(
         )
         for year in valuation_year_set
     }
+
+    keeper_start_year_value_by_player: dict[str, float] = {}
+    if use_h2h_roster_model and keeper_limit is not None:
+        keeper_hit_replacement = ctx.points_slot_replacement(
+            year_hit_entries.get(start_year, []),
+            active_slots=active_hitter_slots,
+            rostered_player_ids=year_active_hitter_player_ids.get(start_year, set()),
+            n_replacement=n_replacement,
+        )
+        keeper_pit_replacement = ctx.points_slot_replacement(
+            year_pit_entries.get(start_year, []),
+            active_slots=active_pitcher_slots,
+            rostered_player_ids=year_active_pitcher_player_ids.get(start_year, set()),
+            n_replacement=n_replacement,
+        )
+        keeper_start_capable_pitcher_replacement: float | None = None
+        keeper_relief_pitcher_replacement: float | None = None
+        if active_pitcher_slots == {"P"}:
+            keeper_start_capable_pitcher_replacement = start_capable_pitcher_replacement_value(
+                points_slot_replacement=ctx.points_slot_replacement,
+                year_pit_entries=year_pit_entries,
+                start_year=start_year,
+                year_start_capable_pitcher_ids=year_start_capable_pitcher_ids,
+                starter_replacement_rostered_ids=(
+                    set(year_active_pitcher_player_ids.get(start_year, set()))
+                    & set(year_start_capable_pitcher_ids.get(start_year, set()))
+                ),
+                n_replacement=n_replacement,
+            )
+            keeper_relief_pitcher_replacement = relief_pitcher_replacement_value(
+                points_slot_replacement=ctx.points_slot_replacement,
+                year_pit_entries=year_pit_entries,
+                start_year=start_year,
+                year_relief_pitcher_ids=year_relief_pitcher_ids,
+                reliever_replacement_rostered_ids=(
+                    set(year_active_pitcher_player_ids.get(start_year, set()))
+                    - set(year_start_capable_pitcher_ids.get(start_year, set()))
+                ),
+                n_replacement=n_replacement,
+            )
+        keeper_hit_assignments = optimize_points_slot_assignment(
+            year_hit_entries.get(start_year, []),
+            replacement_by_slot=keeper_hit_replacement,
+            slot_capacity=hitter_slot_capacity,
+        )
+        keeper_pit_assignments = optimize_points_slot_assignment(
+            year_pit_entries.get(start_year, []),
+            replacement_by_slot=keeper_pit_replacement,
+            slot_capacity=pitcher_slot_capacity,
+        )
+        for player_id in player_meta:
+            info = per_player_year.get(player_id, {}).get(start_year, {})
+            hit_points = float(info.get("hit_points", 0.0))
+            pit_points = float(info.get("pit_points", 0.0))
+            hit_slots = set(info.get("hit_slots", set()))
+            pit_slots = set(info.get("pit_slots", set()))
+
+            hit_best_value, _hit_best_slot, _hit_best_replacement = _best_slot_surplus(
+                points=hit_points,
+                eligible_slots=hit_slots,
+                replacement_by_slot=keeper_hit_replacement,
+            )
+            pit_best_value, pit_best_slot, pit_best_replacement = _best_slot_surplus(
+                points=pit_points,
+                eligible_slots=pit_slots,
+                replacement_by_slot=keeper_pit_replacement,
+            )
+            hit_assignment = keeper_hit_assignments.get(player_id)
+            pit_assignment = keeper_pit_assignments.get(player_id)
+            hit_assigned_slot = str(hit_assignment.get("slot")) if isinstance(hit_assignment, dict) else None
+            pit_assigned_slot = str(pit_assignment.get("slot")) if isinstance(pit_assignment, dict) else None
+            hit_assigned_value = float(hit_assignment.get("value", 0.0)) if isinstance(hit_assignment, dict) else 0.0
+            pit_assigned_value = float(pit_assignment.get("value", 0.0)) if isinstance(pit_assignment, dict) else 0.0
+            pit_assigned_points = float(pit_assignment.get("points", 0.0)) if isinstance(pit_assignment, dict) else 0.0
+            pit_assigned_replacement = float(pit_assignment.get("replacement", 0.0)) if isinstance(pit_assignment, dict) else 0.0
+            projected_pit_appearances = float(info.get("projected_pit_appearances", 0.0))
+            projected_pit_starts = float(info.get("projected_pit_starts", 0.0))
+            if (
+                keeper_start_capable_pitcher_replacement is not None
+                and projected_pit_starts >= 1.0
+                and keeper_start_capable_pitcher_replacement > POINTS_CENTERING_ZERO_EPSILON
+            ):
+                if (
+                    pit_best_slot == "P"
+                    and keeper_start_capable_pitcher_replacement
+                    < (float(pit_best_replacement or 0.0) - POINTS_CENTERING_ZERO_EPSILON)
+                ):
+                    pit_best_replacement = float(keeper_start_capable_pitcher_replacement)
+                    pit_best_value = float(pit_points - pit_best_replacement)
+                if (
+                    pit_assigned_slot == "P"
+                    and keeper_start_capable_pitcher_replacement
+                    < (float(pit_assigned_replacement) - POINTS_CENTERING_ZERO_EPSILON)
+                ):
+                    pit_assigned_replacement = float(keeper_start_capable_pitcher_replacement)
+                    pit_assigned_value = float(pit_assigned_points - pit_assigned_replacement)
+            elif (
+                keeper_relief_pitcher_replacement is not None
+                and projected_pit_appearances > 0.0
+                and projected_pit_starts < 1.0
+                and keeper_relief_pitcher_replacement > POINTS_CENTERING_ZERO_EPSILON
+            ):
+                if (
+                    pit_best_slot == "P"
+                    and keeper_relief_pitcher_replacement
+                    < (float(pit_best_replacement or 0.0) - POINTS_CENTERING_ZERO_EPSILON)
+                ):
+                    pit_best_replacement = float(keeper_relief_pitcher_replacement)
+                    pit_best_value = float(pit_points - pit_best_replacement)
+                if (
+                    pit_assigned_slot == "P"
+                    and keeper_relief_pitcher_replacement
+                    < (float(pit_assigned_replacement) - POINTS_CENTERING_ZERO_EPSILON)
+                ):
+                    pit_assigned_replacement = float(keeper_relief_pitcher_replacement)
+                    pit_assigned_value = float(pit_assigned_points - pit_assigned_replacement)
+            hit_selected_value = _negative_fallback_value(
+                best_value=hit_best_value,
+                assigned_slot=hit_assigned_slot,
+                assigned_value=hit_assigned_value,
+            )
+            pit_selected_value = _negative_fallback_value(
+                best_value=pit_best_value,
+                assigned_slot=pit_assigned_slot,
+                assigned_value=pit_assigned_value,
+            )
+            if two_way == "sum":
+                keeper_start_year_value_by_player[player_id] = float(hit_selected_value + pit_selected_value)
+            else:
+                if hit_selected_value > pit_selected_value:
+                    keeper_start_year_value_by_player[player_id] = float(hit_selected_value)
+                elif pit_selected_value > hit_selected_value:
+                    keeper_start_year_value_by_player[player_id] = float(pit_selected_value)
+                elif hit_selected_value != 0.0:
+                    keeper_start_year_value_by_player[player_id] = float(hit_selected_value)
+                else:
+                    keeper_start_year_value_by_player[player_id] = 0.0
 
     player_year_details: dict[str, list[dict[str, Any]]] = {}
     stash_scores_by_player: dict[str, float] = {}
@@ -973,9 +1130,11 @@ def calculate_points_dynasty_frame(
             pit_assigned_points = float(pit_assignment.get("points", 0.0)) if isinstance(pit_assignment, dict) else 0.0
             hit_assigned_replacement = float(hit_assignment.get("replacement", 0.0)) if isinstance(hit_assignment, dict) else 0.0
             pit_assigned_replacement = float(pit_assignment.get("replacement", 0.0)) if isinstance(pit_assignment, dict) else 0.0
+            projected_pit_appearances = float(info.get("projected_pit_appearances", 0.0))
+            projected_pit_starts = float(info.get("projected_pit_starts", 0.0))
             if (
                 starter_pitcher_replacement_start_year is not None
-                and float(info.get("projected_pit_starts", 0.0)) >= 1.0
+                and projected_pit_starts >= 1.0
                 and starter_pitcher_replacement_start_year > POINTS_CENTERING_ZERO_EPSILON
             ):
                 if (
@@ -991,6 +1150,26 @@ def calculate_points_dynasty_frame(
                     < (float(pit_assigned_replacement) - POINTS_CENTERING_ZERO_EPSILON)
                 ):
                     pit_assigned_replacement = float(starter_pitcher_replacement_start_year)
+                    pit_assigned_value = float(pit_assigned_points - pit_assigned_replacement)
+            elif (
+                reliever_pitcher_replacement_start_year is not None
+                and projected_pit_appearances > 0.0
+                and projected_pit_starts < 1.0
+                and reliever_pitcher_replacement_start_year > POINTS_CENTERING_ZERO_EPSILON
+            ):
+                if (
+                    pit_best_slot == "P"
+                    and reliever_pitcher_replacement_start_year
+                    < (float(pit_best_replacement or 0.0) - POINTS_CENTERING_ZERO_EPSILON)
+                ):
+                    pit_best_replacement = float(reliever_pitcher_replacement_start_year)
+                    pit_best_value = float(pit_points - pit_best_replacement)
+                if (
+                    pit_assigned_slot == "P"
+                    and reliever_pitcher_replacement_start_year
+                    < (float(pit_assigned_replacement) - POINTS_CENTERING_ZERO_EPSILON)
+                ):
+                    pit_assigned_replacement = float(reliever_pitcher_replacement_start_year)
                     pit_assigned_value = float(pit_assigned_points - pit_assigned_replacement)
             hit_selected_value = _negative_fallback_value(
                 best_value=hit_best_value,
@@ -1110,6 +1289,7 @@ def calculate_points_dynasty_frame(
             ranking_values,
             valuation_year_set,
             discount=float(discount),
+            continuation_horizon_years=keeper_continuation_horizon_years,
         ).raw_total
         if has_negative_year:
             negative_year_players.add(player_id)
@@ -1146,6 +1326,8 @@ def calculate_points_dynasty_frame(
         start_year=start_year,
         valuation_year_set=valuation_year_set,
         discount=float(discount),
+        continuation_horizon_years=keeper_continuation_horizon_years,
+        keeper_start_year_value_by_player=keeper_start_year_value_by_player,
         enable_prospect_risk_adjustment=enable_prospect_risk_adjustment,
         minor_stash_players=set(stash_selection.minor_stash_players),
         ir_stash_players=set(stash_selection.ir_stash_players),
@@ -1185,6 +1367,7 @@ def calculate_points_dynasty_frame(
         modeled_held_relievers_per_team_by_year=modeled_held_relievers_per_team_by_year,
         starter_slot_capacity=starter_slot_capacity,
         starter_pitcher_replacement_start_year=starter_pitcher_replacement_start_year,
+        reliever_pitcher_replacement_start_year=reliever_pitcher_replacement_start_year,
         hitter_usage_diagnostics_by_year=hitter_usage_diagnostics_by_year,
         pitcher_usage_diagnostics_by_year=pitcher_usage_diagnostics_by_year,
         start_year=start_year,

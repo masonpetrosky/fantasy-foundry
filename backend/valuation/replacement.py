@@ -300,6 +300,38 @@ def _active_common_pitch_categories(lg: CommonDynastyRotoSettings) -> List[str]:
     return selected or list(PIT_CATS)
 
 
+def _pitcher_is_rp_only(row: dict[str, object] | pd.Series) -> bool:
+    pos_set = parse_pit_positions(row.get("Pos", ""))
+    return "RP" in pos_set and "SP" not in pos_set
+
+
+def _generic_p_save_context_active(
+    lg: CommonDynastyRotoSettings,
+    *,
+    pit_categories: list[str],
+) -> bool:
+    if _slot_count_per_team(lg, "P") <= 0 or _slot_count_per_team(lg, "RP") > 0:
+        return False
+    active_cats = {str(cat).upper() for cat in pit_categories}
+    return bool(active_cats & {"SV", "SVH"})
+
+
+def _positive_save_guard_exempt_categories(
+    *,
+    lg: CommonDynastyRotoSettings,
+    pit_categories: list[str],
+    slot: str,
+    row: dict[str, object] | pd.Series,
+) -> set[str]:
+    if str(slot).upper() != "P":
+        return set()
+    if not _generic_p_save_context_active(lg, pit_categories=pit_categories):
+        return set()
+    if not _pitcher_is_rp_only(row):
+        return set()
+    return {cat for cat in pit_categories if str(cat).upper() in {"SV", "SVH"}}
+
+
 def compute_replacement_baselines(
     ctx: dict,
     lg: CommonDynastyRotoSettings,
@@ -367,6 +399,26 @@ def compute_replacement_baselines(
         )
 
     repl_pit = pd.DataFrame(repl_pit_rows).set_index("AssignedSlot")
+    if _generic_p_save_context_active(lg, pit_categories=pit_categories) and "P" in baseline_pit_avg.index:
+        rp_only_mask = fa_pit["Pos"].apply(
+            lambda value: _pitcher_is_rp_only({"Pos": value})
+        ).astype(bool)
+        rp_only_candidates = fa_pit.loc[rp_only_mask].sort_values("weight", ascending=False)
+        if not rp_only_candidates.empty:
+            rp_context_row = _replacement_row(
+                slot="P",
+                baseline_row=baseline_pit_avg.loc["P"],
+                candidates=rp_only_candidates,
+                component_cols=PIT_COMPONENT_COLS,
+                lg=lg,
+                n_repl=n_repl,
+                mode=replacement_depth_mode,
+            )
+            rp_context_row["AssignedSlot"] = "P_RP_CONTEXT"
+            repl_pit = pd.concat(
+                [repl_pit, pd.DataFrame([rp_context_row]).set_index("AssignedSlot")],
+                axis=0,
+            )
     return repl_hit, repl_pit
 
 
@@ -511,7 +563,11 @@ def compute_year_player_values_vs_replacement(
                 continue
 
             b_avg = baseline_pit_avg.loc[slot]
-            b_rep = repl_pit.loc[slot]
+            b_rep = (
+                repl_pit.loc["P_RP_CONTEXT"]
+                if slot == "P" and _pitcher_is_rp_only(row) and "P_RP_CONTEXT" in repl_pit.index
+                else repl_pit.loc[slot]
+            )
 
             base_raw = {c: float(base_pit_tot_avg[c]) for c in PIT_COMPONENT_COLS}
             new_raw = {c: float(base_pit_tot_avg[c]) for c in PIT_COMPONENT_COLS}
@@ -565,6 +621,12 @@ def compute_year_player_values_vs_replacement(
                     pit_categories=pit_categories,
                     pitcher_ip=pitcher_ip,
                     slot_ip_reference=slot_ip_reference,
+                    positive_exempt_categories=_positive_save_guard_exempt_categories(
+                        lg=lg,
+                        pit_categories=pit_categories,
+                        slot=slot,
+                        row=row,
+                    ),
                 )
                 _apply_low_volume_ratio_guard(
                     delta,
@@ -596,7 +658,7 @@ def compute_year_player_values_vs_replacement(
                     component_cols=PIT_COMPONENT_COLS,
                 ),
                 "replacement_reference": _reference_summary(
-                    slot=str(slot),
+                    slot=str(b_rep.get("AssignedSlot", slot)),
                     row=b_rep,
                     component_cols=PIT_COMPONENT_COLS,
                 ),

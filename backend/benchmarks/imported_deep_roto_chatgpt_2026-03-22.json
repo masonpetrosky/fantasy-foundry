@@ -1,0 +1,4178 @@
+[
+  {
+    "player": "Shohei Ohtani",
+    "benchmark_rank": 1,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: TWP; Team: LAD; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Bobby Witt Jr.",
+    "benchmark_rank": 2,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: KC; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ronald Acuna Jr.",
+    "benchmark_rank": 3,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: ATL; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Aaron Judge",
+    "benchmark_rank": 4,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: NYY; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Tarik Skubal",
+    "benchmark_rank": 5,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: DET; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Paul Skenes",
+    "benchmark_rank": 6,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: PIT; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Juan Soto",
+    "benchmark_rank": 7,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: NYM; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Corbin Carroll",
+    "benchmark_rank": 8,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: AZ; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Julio Rodriguez",
+    "benchmark_rank": 9,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: SEA; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Elly De La Cruz",
+    "benchmark_rank": 10,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: CIN; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Garrett Crochet",
+    "benchmark_rank": 11,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: BOS; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jackson Chourio",
+    "benchmark_rank": 12,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: MIL; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jose Ramirez",
+    "benchmark_rank": 13,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: CLE; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Junior Caminero",
+    "benchmark_rank": 14,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: TB; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Fernando Tatis Jr.",
+    "benchmark_rank": 15,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: SD; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Cal Raleigh",
+    "benchmark_rank": 16,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: SEA; Tier: Cornerstone; Confidence: Higher; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Nick Kurtz",
+    "benchmark_rank": 17,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: ATH; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Vladimir Guerrero Jr.",
+    "benchmark_rank": 18,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: TOR; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kyle Tucker",
+    "benchmark_rank": 19,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: FA; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "James Wood",
+    "benchmark_rank": 20,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: WSH; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Gunnar Henderson",
+    "benchmark_rank": 21,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: BAL; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Roman Anthony",
+    "benchmark_rank": 22,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: BOS; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Francisco Lindor",
+    "benchmark_rank": 23,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: NYM; Tier: Cornerstone; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Hunter Brown",
+    "benchmark_rank": 24,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: HOU; Tier: Cornerstone; Confidence: Higher; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Yoshinobu Yamamoto",
+    "benchmark_rank": 25,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: LAD; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kyle Schwarber",
+    "benchmark_rank": 26,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: PHI; Tier: Franchise core; Confidence: Higher; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jazz Chisholm Jr.",
+    "benchmark_rank": 27,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: NYY; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Logan Gilbert",
+    "benchmark_rank": 28,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SEA; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Wyatt Langford",
+    "benchmark_rank": 29,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: TEX; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ketel Marte",
+    "benchmark_rank": 30,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: AZ; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Yordan Alvarez",
+    "benchmark_rank": 31,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: HOU; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Pete Alonso",
+    "benchmark_rank": 32,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: BAL; Tier: Franchise core; Confidence: Higher; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Zach Neto",
+    "benchmark_rank": 33,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: LAA; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Cristopher Sanchez",
+    "benchmark_rank": 34,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: PHI; Tier: Franchise core; Confidence: Higher; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Pete Crow-Armstrong",
+    "benchmark_rank": 35,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: CHC; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Rafael Devers",
+    "benchmark_rank": 36,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: DH; Team: SF; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Mason Miller",
+    "benchmark_rank": 37,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: SD; Tier: Franchise core; Confidence: Higher; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Trea Turner",
+    "benchmark_rank": 38,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: PHI; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Riley Greene",
+    "benchmark_rank": 39,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: DET; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Matt Olson",
+    "benchmark_rank": 40,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: ATL; Tier: Franchise core; Confidence: Higher; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Hunter Greene",
+    "benchmark_rank": 41,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CIN; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Bryce Harper",
+    "benchmark_rank": 42,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: PHI; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Konnor Griffin",
+    "benchmark_rank": 43,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: PIT; Tier: Franchise core; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jackson Merrill",
+    "benchmark_rank": 44,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: SD; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Manny Machado",
+    "benchmark_rank": 45,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: SD; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Mookie Betts",
+    "benchmark_rank": 46,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: LAD; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "CJ Abrams",
+    "benchmark_rank": 47,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: WSH; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Eury Perez",
+    "benchmark_rank": 48,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIA; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brent Rooker",
+    "benchmark_rank": 49,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: ATH; Tier: Franchise core; Confidence: Higher; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Cole Ragans",
+    "benchmark_rank": 50,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: KC; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kevin McGonigle",
+    "benchmark_rank": 51,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: DET; Tier: Franchise core; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jesus Made",
+    "benchmark_rank": 52,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: MIL; Tier: Franchise core; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Leodalis De Vries",
+    "benchmark_rank": 53,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: OAK; Tier: Franchise core; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "William Contreras",
+    "benchmark_rank": 54,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: MIL; Tier: Franchise core; Confidence: Higher; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Andres Munoz",
+    "benchmark_rank": 55,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: SEA; Tier: Franchise core; Confidence: Higher; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Spencer Schwellenbach",
+    "benchmark_rank": 56,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ATL; Tier: Franchise core; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Josh Naylor",
+    "benchmark_rank": 57,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: SEA; Tier: Franchise core; Confidence: Higher; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Bryan Woo",
+    "benchmark_rank": 58,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SEA; Tier: Franchise core; Confidence: Higher; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Joe Ryan",
+    "benchmark_rank": 59,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIN; Tier: Franchise core; Confidence: Higher; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "George Kirby",
+    "benchmark_rank": 60,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SEA; Tier: Franchise core; Confidence: Higher; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Max Fried",
+    "benchmark_rank": 61,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYY; Tier: Top-120; Confidence: Higher; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jeremy Pena",
+    "benchmark_rank": 62,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: HOU; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Austin Riley",
+    "benchmark_rank": 63,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: ATL; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Corey Seager",
+    "benchmark_rank": 64,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: TEX; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Seiya Suzuki",
+    "benchmark_rank": 65,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: CHC; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Samuel Basallo",
+    "benchmark_rank": 66,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: BAL; Tier: Top-120; Confidence: Higher; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Sebastian Walcott",
+    "benchmark_rank": 67,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: TEX; Tier: Top-120; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Geraldo Perdomo",
+    "benchmark_rank": 68,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: AZ; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Bo Bichette",
+    "benchmark_rank": 69,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: FA; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Freddy Peralta",
+    "benchmark_rank": 70,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIL; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Cody Bellinger",
+    "benchmark_rank": 71,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: FA; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Alex Bregman",
+    "benchmark_rank": 72,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: FA; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Logan Webb",
+    "benchmark_rank": 73,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SF; Tier: Top-120; Confidence: Higher; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Tyler Soderstrom",
+    "benchmark_rank": 74,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: ATH; Tier: Top-120; Confidence: Higher; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jackson Holliday",
+    "benchmark_rank": 75,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: BAL; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Spencer Strider",
+    "benchmark_rank": 76,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ATL; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jarren Duran",
+    "benchmark_rank": 77,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: BOS; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jhoan Duran",
+    "benchmark_rank": 78,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: PHI; Tier: Top-120; Confidence: Higher; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Blake Snell",
+    "benchmark_rank": 79,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: LAD; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Maikel Garcia",
+    "benchmark_rank": 80,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: KC; Tier: Top-120; Confidence: Higher; League-fit notes: OPS drag; Origin: Overall dynasty"
+  },
+  {
+    "player": "Michael Busch",
+    "benchmark_rank": 81,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: CHC; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brice Turang",
+    "benchmark_rank": 82,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: MIL; Tier: Top-120; Confidence: Higher; League-fit notes: OPS drag; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jacob deGrom",
+    "benchmark_rank": 83,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TEX; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Shea Langeliers",
+    "benchmark_rank": 84,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: ATH; Tier: Top-120; Confidence: Higher; League-fit notes: C2 boost; OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Edwin Diaz",
+    "benchmark_rank": 85,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: LAD; Tier: Top-120; Confidence: Higher; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Freddie Freeman",
+    "benchmark_rank": 86,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: LAD; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Agustin Ramirez",
+    "benchmark_rank": 87,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: MIA; Tier: Top-120; Confidence: Higher; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Vinnie Pasquantino",
+    "benchmark_rank": 88,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: KC; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Chris Sale",
+    "benchmark_rank": 89,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ATL; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Chase Burns",
+    "benchmark_rank": 90,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CIN; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ben Rice",
+    "benchmark_rank": 91,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: NYY; Tier: Top-120; Confidence: Higher; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Dylan Cease",
+    "benchmark_rank": 92,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TOR; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Colt Emerson",
+    "benchmark_rank": 93,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: SEA; Tier: Top-120; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "JJ Wetherholt",
+    "benchmark_rank": 94,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: STL; Tier: Top-120; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Drake Baldwin",
+    "benchmark_rank": 95,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: ATL; Tier: Top-120; Confidence: Higher; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Byron Buxton",
+    "benchmark_rank": 96,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: MIN; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Oneil Cruz",
+    "benchmark_rank": 97,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: PIT; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jesus Luzardo",
+    "benchmark_rank": 98,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: PHI; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jordan Westburg",
+    "benchmark_rank": 99,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: BAL; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Hunter Goodman",
+    "benchmark_rank": 100,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: COL; Tier: Top-120; Confidence: Higher; League-fit notes: C2 boost; OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Cade Smith",
+    "benchmark_rank": 101,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: CLE; Tier: Top-120; Confidence: Higher; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Tyler Glasnow",
+    "benchmark_rank": 102,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: LAD; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Lawrence Butler",
+    "benchmark_rank": 103,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: ATH; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Andy Pages",
+    "benchmark_rank": 104,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: LAD; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jacob Misiorowski",
+    "benchmark_rank": 105,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIL; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Framber Valdez",
+    "benchmark_rank": 106,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: FA; Tier: Top-120; Confidence: Higher; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Nolan McLean",
+    "benchmark_rank": 107,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYM; Tier: Top-120; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Bryce Eldridge",
+    "benchmark_rank": 108,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: SF; Tier: Top-120; Confidence: Higher; League-fit notes: OPS fit; Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kyle Stowers",
+    "benchmark_rank": 109,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: MIA; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Max Clark",
+    "benchmark_rank": 110,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: DET; Tier: Top-120; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Randy Arozarena",
+    "benchmark_rank": 111,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: SEA; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Will Smith",
+    "benchmark_rank": 112,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: LAD; Tier: Top-120; Confidence: Higher; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Walker Jenkins",
+    "benchmark_rank": 113,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: MIN; Tier: Top-120; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Isaac Paredes",
+    "benchmark_rank": 114,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: HOU; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Michael Harris II",
+    "benchmark_rank": 115,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: ATL; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Willy Adames",
+    "benchmark_rank": 116,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: SF; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Christian Yelich",
+    "benchmark_rank": 117,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: MIL; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Luke Keaschall",
+    "benchmark_rank": 118,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: MIN; Tier: Top-120; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Michael King",
+    "benchmark_rank": 119,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SD; Tier: Top-120; Confidence: Higher; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Josh Hader",
+    "benchmark_rank": 120,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: HOU; Tier: Top-120; Confidence: Higher; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Matt Shaw",
+    "benchmark_rank": 121,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: CHC; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Zack Wheeler",
+    "benchmark_rank": 122,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: PHI; Tier: Core keeper; Confidence: Higher; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kyle Bradish",
+    "benchmark_rank": 123,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: BAL; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Bubba Chandler",
+    "benchmark_rank": 124,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: PIT; Tier: Core keeper; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Nick Pivetta",
+    "benchmark_rank": 125,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SD; Tier: Core keeper; Confidence: Higher; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Spencer Torkelson",
+    "benchmark_rank": 126,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: DET; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Pablo Lopez",
+    "benchmark_rank": 127,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIN; Tier: Core keeper; Confidence: Higher; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "MacKenzie Gore",
+    "benchmark_rank": 128,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: WSH; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Mike Trout",
+    "benchmark_rank": 129,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: LAA; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ceddanne Rafaela",
+    "benchmark_rank": 130,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: BOS; Tier: Core keeper; Confidence: Higher; League-fit notes: OPS drag; Origin: Overall dynasty"
+  },
+  {
+    "player": "Emmet Sheehan",
+    "benchmark_rank": 131,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: LAD; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Nick Lodolo",
+    "benchmark_rank": 132,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CIN; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jacob Wilson",
+    "benchmark_rank": 133,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: ATH; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Trey Yesavage",
+    "benchmark_rank": 134,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TOR; Tier: Core keeper; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Addison Barger",
+    "benchmark_rank": 135,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: TOR; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jac Caglianone",
+    "benchmark_rank": 136,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: KC; Tier: Core keeper; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Roki Sasaki",
+    "benchmark_rank": 137,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: LAD; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jose Altuve",
+    "benchmark_rank": 138,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: HOU; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jo Adell",
+    "benchmark_rank": 139,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: LAA; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jonathan Aranda",
+    "benchmark_rank": 140,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: TB; Tier: Core keeper; Confidence: Higher; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Sandy Alcantara",
+    "benchmark_rank": 141,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIA; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Teoscar Hernandez",
+    "benchmark_rank": 142,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: LAD; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Nico Hoerner",
+    "benchmark_rank": 143,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: CHC; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ryan Pepiot",
+    "benchmark_rank": 144,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TB; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ivan Herrera",
+    "benchmark_rank": 145,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: STL; Tier: Core keeper; Confidence: Higher; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Eugenio Suarez",
+    "benchmark_rank": 146,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: SEA; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Heliot Ramos",
+    "benchmark_rank": 147,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: SF; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Matt Chapman",
+    "benchmark_rank": 148,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: SF; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Aidan Miller",
+    "benchmark_rank": 149,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: PHI; Tier: Core keeper; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Carson Benge",
+    "benchmark_rank": 150,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: NYM; Tier: Core keeper; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Gavin Williams",
+    "benchmark_rank": 151,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CLE; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Sal Stewart",
+    "benchmark_rank": 152,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: CIN; Tier: Core keeper; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Luis Pena",
+    "benchmark_rank": 153,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: MIL; Tier: Core keeper; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Devin Williams",
+    "benchmark_rank": 154,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: NYM; Tier: Core keeper; Confidence: Higher; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jackson Jobe",
+    "benchmark_rank": 155,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: DET; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "George Lombard",
+    "benchmark_rank": 156,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: NYY; Tier: Core keeper; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jared Jones",
+    "benchmark_rank": 157,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: PIT; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Luis Robert Jr.",
+    "benchmark_rank": 158,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: CWS; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Travis Bazzana",
+    "benchmark_rank": 159,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: CLE; Tier: Core keeper; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Drew Rasmussen",
+    "benchmark_rank": 160,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TB; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Tatsuya Imai",
+    "benchmark_rank": 161,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: FA; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Cam Schlittler",
+    "benchmark_rank": 162,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYY; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Thomas White",
+    "benchmark_rank": 163,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIA; Tier: Core keeper; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Raisel Iglesias",
+    "benchmark_rank": 164,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: ATL; Tier: Core keeper; Confidence: Higher; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Royce Lewis",
+    "benchmark_rank": 165,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: MIN; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Shane Baz",
+    "benchmark_rank": 166,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TB; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Eduardo Quintero",
+    "benchmark_rank": 167,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: LAD; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Adley Rutschman",
+    "benchmark_rank": 168,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: BAL; Tier: Core keeper; Confidence: Higher; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ozzie Albies",
+    "benchmark_rank": 169,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: ATL; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Robbie Ray",
+    "benchmark_rank": 170,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SF; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jasson Dominguez",
+    "benchmark_rank": 171,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: NYY; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Steven Kwan",
+    "benchmark_rank": 172,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: CLE; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Bryce Miller",
+    "benchmark_rank": 173,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SEA; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kris Bubic",
+    "benchmark_rank": 174,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: KC; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Bryce Rainer",
+    "benchmark_rank": 175,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: DET; Tier: Core keeper; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Noelvi Marte",
+    "benchmark_rank": 176,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: CIN; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Carlos Rodon",
+    "benchmark_rank": 177,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYY; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Shota Imanaga",
+    "benchmark_rank": 178,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CHC; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kerry Carpenter",
+    "benchmark_rank": 179,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: DET; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Payton Tolle",
+    "benchmark_rank": 180,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: BOS; Tier: Core keeper; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Shane Bieber",
+    "benchmark_rank": 181,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TOR; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Dylan Crews",
+    "benchmark_rank": 182,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: WSH; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kyle Manzardo",
+    "benchmark_rank": 183,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: CLE; Tier: Core keeper; Confidence: Higher; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Edward Cabrera",
+    "benchmark_rank": 184,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIA; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Grayson Rodriguez",
+    "benchmark_rank": 185,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: LAA; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ranger Suarez",
+    "benchmark_rank": 186,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: PHI; Tier: Core keeper; Confidence: Higher; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kevin Gausman",
+    "benchmark_rank": 187,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TOR; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Luis Castillo",
+    "benchmark_rank": 188,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SEA; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Josue De Paula",
+    "benchmark_rank": 189,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: LAD; Tier: Core keeper; Confidence: Higher; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kristian Campbell",
+    "benchmark_rank": 190,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: BOS; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Yandy Diaz",
+    "benchmark_rank": 191,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: TB; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Corbin Burnes",
+    "benchmark_rank": 192,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: AZ; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Wilyer Abreu",
+    "benchmark_rank": 193,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: BOS; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Colson Montgomery",
+    "benchmark_rank": 194,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: CWS; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jakob Marsee",
+    "benchmark_rank": 195,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: MIA; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Daylen Lile",
+    "benchmark_rank": 196,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: WSH; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Nathan Eovaldi",
+    "benchmark_rank": 197,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TEX; Tier: Core keeper; Confidence: Higher; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "David Bednar",
+    "benchmark_rank": 198,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: NYY; Tier: Core keeper; Confidence: Higher; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Cam Smith",
+    "benchmark_rank": 199,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: HOU; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Cade Horton",
+    "benchmark_rank": 200,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CHC; Tier: Core keeper; Confidence: Higher; Origin: Overall dynasty"
+  },
+  {
+    "player": "Sal Frelick",
+    "benchmark_rank": 201,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: MIL; Tier: Core keeper; Confidence: Medium; League-fit notes: OPS drag; Origin: Overall dynasty"
+  },
+  {
+    "player": "Justin Steele",
+    "benchmark_rank": 202,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CHC; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kade Anderson",
+    "benchmark_rank": 203,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SEA; Tier: Core keeper; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Sonny Gray",
+    "benchmark_rank": 204,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: BOS; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Yainer Diaz",
+    "benchmark_rank": 205,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: HOU; Tier: Core keeper; Confidence: Medium; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Tanner Bibee",
+    "benchmark_rank": 206,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CLE; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ryan Helsley",
+    "benchmark_rank": 207,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: BAL; Tier: Core keeper; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Marcelo Mayer",
+    "benchmark_rank": 208,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: BOS; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ethan Holliday",
+    "benchmark_rank": 209,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: COL; Tier: Core keeper; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kyle Teel",
+    "benchmark_rank": 210,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: CWS; Tier: Core keeper; Confidence: Medium; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ian Happ",
+    "benchmark_rank": 211,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: CHC; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Aaron Nola",
+    "benchmark_rank": 212,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: PHI; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brandon Woodruff",
+    "benchmark_rank": 213,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIL; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brandon Nimmo",
+    "benchmark_rank": 214,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: TEX; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Taylor Ward",
+    "benchmark_rank": 215,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: BAL; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "George Springer",
+    "benchmark_rank": 216,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: TOR; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Gerrit Cole",
+    "benchmark_rank": 217,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYY; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Chandler Simpson",
+    "benchmark_rank": 218,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: TB; Tier: Core keeper; Confidence: Medium; League-fit notes: OPS drag; Origin: Overall dynasty"
+  },
+  {
+    "player": "Rainiel Rodriguez",
+    "benchmark_rank": 219,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: STL; Tier: Core keeper; Confidence: Medium; League-fit notes: C2 boost; Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Willson Contreras",
+    "benchmark_rank": 220,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: STL; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Mickey Moniak",
+    "benchmark_rank": 221,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: COL; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Eli Willits",
+    "benchmark_rank": 222,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: WSH; Tier: Core keeper; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brenton Doyle",
+    "benchmark_rank": 223,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: COL; Tier: Core keeper; Confidence: Medium; League-fit notes: OPS drag; Origin: Overall dynasty"
+  },
+  {
+    "player": "Daulton Varsho",
+    "benchmark_rank": 224,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: TOR; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Zyhir Hope",
+    "benchmark_rank": 225,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: LAD; Tier: Core keeper; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Andrew Painter",
+    "benchmark_rank": 226,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: PHI; Tier: Core keeper; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Josue Briceno",
+    "benchmark_rank": 227,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: DET; Tier: Core keeper; Confidence: Medium; League-fit notes: C2 boost; Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jonah Tong",
+    "benchmark_rank": 228,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYM; Tier: Core keeper; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Lazaro Montes",
+    "benchmark_rank": 229,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: SEA; Tier: Core keeper; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Xavier Edwards",
+    "benchmark_rank": 230,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: MIA; Tier: Core keeper; Confidence: Medium; League-fit notes: OPS drag; Origin: Overall dynasty"
+  },
+  {
+    "player": "Alejandro Kirk",
+    "benchmark_rank": 231,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: TOR; Tier: Core keeper; Confidence: Medium; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Hurston Waldrep",
+    "benchmark_rank": 232,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ATL; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Robby Snelling",
+    "benchmark_rank": 233,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIA; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Dansby Swanson",
+    "benchmark_rank": 234,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: CHC; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Colton Cowser",
+    "benchmark_rank": 235,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: BAL; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Andrew Abbott",
+    "benchmark_rank": 236,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CIN; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jett Williams",
+    "benchmark_rank": 237,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: NYM; Tier: Core keeper; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Carter Jensen",
+    "benchmark_rank": 238,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: KC; Tier: Core keeper; Confidence: Medium; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ezequiel Tovar",
+    "benchmark_rank": 239,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: COL; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Coby Mayo",
+    "benchmark_rank": 240,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: BAL; Tier: Core keeper; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Masyn Winn",
+    "benchmark_rank": 241,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: STL; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Matt McLain",
+    "benchmark_rank": 242,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: CIN; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Trevor Story",
+    "benchmark_rank": 243,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: BOS; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Max Meyer",
+    "benchmark_rank": 244,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIA; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "AJ Smith-Shawver",
+    "benchmark_rank": 245,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ATL; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brandon Lowe",
+    "benchmark_rank": 246,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: TB; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Trevor Rogers",
+    "benchmark_rank": 247,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: BAL; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Bryan Reynolds",
+    "benchmark_rank": 248,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: PIT; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Mark Vientos",
+    "benchmark_rank": 249,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: NYM; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Alec Burleson",
+    "benchmark_rank": 250,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: STL; Tier: Strong depth; Confidence: Medium; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Braden Montgomery",
+    "benchmark_rank": 251,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: CWS; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jack Flaherty",
+    "benchmark_rank": 252,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: DET; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Emilio Pagan",
+    "benchmark_rank": 253,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: CIN; Tier: Strong depth; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Giancarlo Stanton",
+    "benchmark_rank": 254,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: DH; Team: NYY; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Shane McClanahan",
+    "benchmark_rank": 255,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TB; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Connelly Early",
+    "benchmark_rank": 256,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: BOS; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Seth Hernandez",
+    "benchmark_rank": 257,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: PIT; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Lenyn Sosa",
+    "benchmark_rank": 258,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: CWS; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ramon Laureano",
+    "benchmark_rank": 259,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: SD; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Luis Garcia (2B)",
+    "benchmark_rank": 260,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: WSH; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Bryson Stott",
+    "benchmark_rank": 261,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: PHI; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brett Baty",
+    "benchmark_rank": 262,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: NYM; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jordan Beck",
+    "benchmark_rank": 263,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: COL; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Munetaka Murakami",
+    "benchmark_rank": 264,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: CWS; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Casey Mize",
+    "benchmark_rank": 265,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: DET; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ryan Waldschmidt",
+    "benchmark_rank": 266,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: AZ; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Gabriel Moreno",
+    "benchmark_rank": 267,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: AZ; Tier: Strong depth; Confidence: Medium; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Abner Uribe",
+    "benchmark_rank": 268,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: MIL; Tier: Strong depth; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Zac Gallen",
+    "benchmark_rank": 269,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: FA; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jack Leiter",
+    "benchmark_rank": 270,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TEX; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Aroldis Chapman",
+    "benchmark_rank": 271,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: BOS; Tier: Strong depth; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Alex Freeland",
+    "benchmark_rank": 272,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: LAD; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Otto Lopez",
+    "benchmark_rank": 273,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: MIA; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kaelen Culpepper",
+    "benchmark_rank": 274,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: MIN; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Quinn Priester",
+    "benchmark_rank": 275,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIL; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Francisco Alvarez",
+    "benchmark_rank": 276,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: NYM; Tier: Strong depth; Confidence: Medium; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kodai Senga",
+    "benchmark_rank": 277,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYM; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Dennis Santana",
+    "benchmark_rank": 278,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: PIT; Tier: Strong depth; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brendan Donovan",
+    "benchmark_rank": 279,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: STL; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ronny Henriquez",
+    "benchmark_rank": 280,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: MIA; Tier: Strong depth; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Gleyber Torres",
+    "benchmark_rank": 281,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: DET; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Edward Florentino",
+    "benchmark_rank": 282,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: PIT; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Trevor Megill",
+    "benchmark_rank": 283,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: MIL; Tier: Strong depth; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Nolan Schanuel",
+    "benchmark_rank": 284,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: LAA; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jose Caballero",
+    "benchmark_rank": 285,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: NYY; Tier: Strong depth; Confidence: Medium; League-fit notes: OPS drag; Origin: Overall dynasty"
+  },
+  {
+    "player": "Reese Olson",
+    "benchmark_rank": 286,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: DET; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brayan Bello",
+    "benchmark_rank": 287,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: BOS; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kenley Jansen",
+    "benchmark_rank": 288,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: LAA; Tier: Strong depth; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ryan Sloan",
+    "benchmark_rank": 289,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SEA; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Noah Cameron",
+    "benchmark_rank": 290,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: KC; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ryan Weathers",
+    "benchmark_rank": 291,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIA; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Franklin Arias",
+    "benchmark_rank": 292,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: BOS; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Zebby Matthews",
+    "benchmark_rank": 293,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIN; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "JoJo Parker",
+    "benchmark_rank": 294,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: TOR; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Moises Ballesteros",
+    "benchmark_rank": 295,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: CHC; Tier: Strong depth; Confidence: Medium; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Daniel Palencia",
+    "benchmark_rank": 296,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: CHC; Tier: Strong depth; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Carlos Correa",
+    "benchmark_rank": 297,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: HOU; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Anthony Volpe",
+    "benchmark_rank": 298,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: NYY; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Shane Smith",
+    "benchmark_rank": 299,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CWS; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Mike Sirota",
+    "benchmark_rank": 300,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: LAD; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Max Muncy",
+    "benchmark_rank": 301,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: LAD; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jamie Arnold",
+    "benchmark_rank": 302,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIA; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Dalton Rushing",
+    "benchmark_rank": 303,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: LAD; Tier: Strong depth; Confidence: Medium; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jurickson Profar",
+    "benchmark_rank": 304,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: ATL; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jordan Lawlar",
+    "benchmark_rank": 305,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: AZ; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Josh Lowe",
+    "benchmark_rank": 306,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: TB; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Riley O'Brien",
+    "benchmark_rank": 307,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: STL; Tier: Strong depth; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Salvador Perez",
+    "benchmark_rank": 308,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: KC; Tier: Strong depth; Confidence: Medium; League-fit notes: C2 boost; OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jorge Polanco",
+    "benchmark_rank": 309,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: SEA; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Triston Casas",
+    "benchmark_rank": 310,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: BOS; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Colt Keith",
+    "benchmark_rank": 311,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: DET; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Braxton Ashcraft",
+    "benchmark_rank": 312,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: PIT; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ryne Nelson",
+    "benchmark_rank": 313,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: AZ; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Spencer Steer",
+    "benchmark_rank": 314,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: CIN; Tier: Strong depth; Confidence: Medium; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Taj Bradley",
+    "benchmark_rank": 315,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIN; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Aiva Arquette",
+    "benchmark_rank": 316,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: MIA; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Alec Bohm",
+    "benchmark_rank": 317,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: PHI; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Joshua Baez",
+    "benchmark_rank": 318,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: STL; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Caleb Durbin",
+    "benchmark_rank": 319,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: MIL; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Will Warren",
+    "benchmark_rank": 320,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYY; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Miguel Vargas",
+    "benchmark_rank": 321,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: CWS; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Trent Grisham",
+    "benchmark_rank": 322,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: NYY; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jeff Hoffman",
+    "benchmark_rank": 323,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: TOR; Tier: Strong depth; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Cooper Pratt",
+    "benchmark_rank": 324,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: MIL; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Mitch Keller",
+    "benchmark_rank": 325,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: PIT; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Bailey Ober",
+    "benchmark_rank": 326,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIN; Tier: Strong depth; Confidence: Medium; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Carson Williams",
+    "benchmark_rank": 327,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: TB; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Dylan Beavers",
+    "benchmark_rank": 328,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: BAL; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Eduardo Tait",
+    "benchmark_rank": 329,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: MIN; Tier: Strong depth; Confidence: Medium; League-fit notes: C2 boost; Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jung Hoo Lee",
+    "benchmark_rank": 330,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: SF; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "David Festa",
+    "benchmark_rank": 331,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIN; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Travis Sykora",
+    "benchmark_rank": 332,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: WSH; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ernie Clement",
+    "benchmark_rank": 333,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: TOR; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Luis Gil",
+    "benchmark_rank": 334,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYY; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Joe Musgrove",
+    "benchmark_rank": 335,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SD; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Carlos Estevez",
+    "benchmark_rank": 336,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: KC; Tier: Strong depth; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Logan Henderson",
+    "benchmark_rank": 337,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIL; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Quinn Mathews",
+    "benchmark_rank": 338,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: STL; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Liam Doyle",
+    "benchmark_rank": 339,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: STL; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Christian Walker",
+    "benchmark_rank": 340,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: HOU; Tier: Strong depth; Confidence: Medium; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Christian Moore",
+    "benchmark_rank": 341,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: LAA; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brody Hopkins",
+    "benchmark_rank": 342,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TB; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Troy Melton",
+    "benchmark_rank": 343,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: DET; Tier: Strong depth; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Xander Bogaerts",
+    "benchmark_rank": 344,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: SD; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Chase Dollander",
+    "benchmark_rank": 345,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: COL; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Robert Suarez",
+    "benchmark_rank": 346,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: ATL; Tier: Strong depth; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Andrew Vaughn",
+    "benchmark_rank": 347,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: MIL; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Justin Crawford",
+    "benchmark_rank": 348,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: PHI; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Grant Taylor",
+    "benchmark_rank": 349,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: CWS; Tier: Strong depth; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Emmanuel Rodriguez",
+    "benchmark_rank": 350,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: MIN; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Tommy Edman",
+    "benchmark_rank": 351,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: LAD; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Clarke Schmidt",
+    "benchmark_rank": 352,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYY; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Grant Holmes",
+    "benchmark_rank": 353,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ATL; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Anthony Santander",
+    "benchmark_rank": 354,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: TOR; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Gage Jump",
+    "benchmark_rank": 355,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ATH; Tier: Strong depth; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Evan Carter",
+    "benchmark_rank": 356,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: TEX; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Spencer Arrighetti",
+    "benchmark_rank": 357,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: HOU; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Alfredo Duno",
+    "benchmark_rank": 358,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: CIN; Tier: Strong depth; Confidence: Medium; League-fit notes: C2 boost; Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ralphy Velazquez",
+    "benchmark_rank": 359,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: CLE; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Matthew Boyd",
+    "benchmark_rank": 360,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CHC; Tier: Strong depth; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Matt Wallner",
+    "benchmark_rank": 361,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: MIN; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kyle Finnegan",
+    "benchmark_rank": 362,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: DET; Tier: Deep hold; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Josh Jung",
+    "benchmark_rank": 363,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: TEX; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Blake Mitchell",
+    "benchmark_rank": 364,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: KC; Tier: Deep hold; Confidence: Medium; League-fit notes: C2 boost; Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Pete Fairbanks",
+    "benchmark_rank": 365,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: MIA; Tier: Deep hold; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Logan O'Hoppe",
+    "benchmark_rank": 366,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: LAA; Tier: Deep hold; Confidence: Medium; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Luis Morales",
+    "benchmark_rank": 367,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ATH; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Luis Arraez",
+    "benchmark_rank": 368,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: FA; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jose Soriano",
+    "benchmark_rank": 369,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: LAA; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Chase DeLauter",
+    "benchmark_rank": 370,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: CLE; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Owen Caissie",
+    "benchmark_rank": 371,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: CHC; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Arjun Nimmala",
+    "benchmark_rank": 372,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: TOR; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brandon Pfaadt",
+    "benchmark_rank": 373,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: AZ; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Merrill Kelly",
+    "benchmark_rank": 374,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TEX; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Josuar Gonzalez",
+    "benchmark_rank": 375,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: SF; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Adolis Garcia",
+    "benchmark_rank": 376,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: TEX; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Felnin Celesten",
+    "benchmark_rank": 377,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: SEA; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ha-Seong Kim",
+    "benchmark_rank": 378,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: ATL; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Steele Hall",
+    "benchmark_rank": 379,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: CIN; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Landen Roupp",
+    "benchmark_rank": 380,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SF; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Joey Cantillo",
+    "benchmark_rank": 381,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CLE; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Noah Schultz",
+    "benchmark_rank": 382,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CWS; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ryan Clifford",
+    "benchmark_rank": 383,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: NYM; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Bryan Abreu",
+    "benchmark_rank": 384,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: HOU; Tier: Deep hold; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Chase Meidroth",
+    "benchmark_rank": 385,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: CWS; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "TJ Friedl",
+    "benchmark_rank": 386,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: CIN; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Theo Gillen",
+    "benchmark_rank": 387,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: TB; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Angel Genao",
+    "benchmark_rank": 388,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: CLE; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Marcell Ozuna",
+    "benchmark_rank": 389,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: DH; Team: FA; Tier: Deep hold; Confidence: Medium; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Cole Young",
+    "benchmark_rank": 390,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: SEA; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Mick Abel",
+    "benchmark_rank": 391,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIN; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brady House",
+    "benchmark_rank": 392,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: WSH; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Harry Ford",
+    "benchmark_rank": 393,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: WSH; Tier: Deep hold; Confidence: Medium; League-fit notes: C2 boost; Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Cristian Javier",
+    "benchmark_rank": 394,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: HOU; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Joe Boyle",
+    "benchmark_rank": 395,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TB; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brooks Lee",
+    "benchmark_rank": 396,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: MIN; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Hayden Birdsong",
+    "benchmark_rank": 397,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SF; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jacob Lopez",
+    "benchmark_rank": 398,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ATH; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Austin Wells",
+    "benchmark_rank": 399,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: NYY; Tier: Deep hold; Confidence: Medium; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Michael Arroyo",
+    "benchmark_rank": 400,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: SEA; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Billy Carlson",
+    "benchmark_rank": 401,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: CWS; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Charlie Condon",
+    "benchmark_rank": 402,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: COL; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Edgar Quero",
+    "benchmark_rank": 403,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: CWS; Tier: Deep hold; Confidence: Medium; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Carlos Lagrange",
+    "benchmark_rank": 404,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYY; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kyson Witherspoon",
+    "benchmark_rank": 405,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: BOS; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jaxon Wiggins",
+    "benchmark_rank": 406,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CHC; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jaison Chourio",
+    "benchmark_rank": 407,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: CLE; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brandon Sproat",
+    "benchmark_rank": 408,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYM; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Max P Muncy",
+    "benchmark_rank": 409,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: ATH; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Tyler Bremner",
+    "benchmark_rank": 410,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: LAA; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Marcus Semien",
+    "benchmark_rank": 411,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: NYM; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Cade Cavalli",
+    "benchmark_rank": 412,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: WSH; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jake Burger",
+    "benchmark_rank": 413,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: TEX; Tier: Deep hold; Confidence: Medium; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Joe Mack",
+    "benchmark_rank": 414,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: MIA; Tier: Deep hold; Confidence: Medium; League-fit notes: C2 boost; Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brady Singer",
+    "benchmark_rank": 415,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CIN; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jonny Farmelo",
+    "benchmark_rank": 416,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: SEA; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Will Vest",
+    "benchmark_rank": 417,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: DET; Tier: Deep hold; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Emil Morales",
+    "benchmark_rank": 418,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: LAD; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Randy Rodriguez",
+    "benchmark_rank": 419,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: SF; Tier: Deep hold; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Lars Nootbaar",
+    "benchmark_rank": 420,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: STL; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Simeon Woods Richardson",
+    "benchmark_rank": 421,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIN; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Xavier Isaac",
+    "benchmark_rank": 422,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: TB; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Justin Martinez",
+    "benchmark_rank": 423,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: AZ; Tier: Deep hold; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Josh Smith",
+    "benchmark_rank": 424,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: TEX; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Griffin Jax",
+    "benchmark_rank": 425,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: TB; Tier: Deep hold; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ryan Walker",
+    "benchmark_rank": 426,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: SF; Tier: Deep hold; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Reid Detmers",
+    "benchmark_rank": 427,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: LAA; Tier: Deep hold; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ricky Tiedemann",
+    "benchmark_rank": 428,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TOR; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kumar Rocker",
+    "benchmark_rank": 429,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TEX; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Cam Caminiti",
+    "benchmark_rank": 430,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ATL; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jeferson Quero",
+    "benchmark_rank": 431,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: MIL; Tier: Deep hold; Confidence: Medium; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Connor Norby",
+    "benchmark_rank": 432,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: MIA; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Tink Hence",
+    "benchmark_rank": 433,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: STL; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "C.J. Kayfus",
+    "benchmark_rank": 434,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: CLE; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Seth Lugo",
+    "benchmark_rank": 435,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: KC; Tier: Deep hold; Confidence: Medium; League-fit notes: QA3 fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ian Seymour",
+    "benchmark_rank": 436,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: TB; Tier: Deep hold; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Alex Clemmey",
+    "benchmark_rank": 437,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: WSH; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kevin Alcantara",
+    "benchmark_rank": 438,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: CHC; Tier: Deep hold; Confidence: Medium; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "JR Ritchie",
+    "benchmark_rank": 439,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ATL; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Dillon Dingler",
+    "benchmark_rank": 440,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: DET; Tier: Deep hold; Confidence: Medium; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Clay Holmes",
+    "benchmark_rank": 441,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYM; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Braylon Payne",
+    "benchmark_rank": 442,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: MIL; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Kyle Harrison",
+    "benchmark_rank": 443,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: BOS; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Victor Scott II",
+    "benchmark_rank": 444,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: STL; Tier: Deep hold; Confidence: Medium; League-fit notes: OPS drag; Origin: Overall dynasty"
+  },
+  {
+    "player": "Yusei Kikuchi",
+    "benchmark_rank": 445,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: LAA; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Parker Meadows",
+    "benchmark_rank": 446,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: DET; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Chase Petty",
+    "benchmark_rank": 447,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CIN; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Hagen Smith",
+    "benchmark_rank": 448,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CWS; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Camilo Doval",
+    "benchmark_rank": 449,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: NYY; Tier: Deep hold; Confidence: Medium; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Matthew Liberatore",
+    "benchmark_rank": 450,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: STL; Tier: Deep hold; Confidence: Medium; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ronny Mauricio",
+    "benchmark_rank": 451,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: NYM; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Slade Caldwell",
+    "benchmark_rank": 452,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: AZ; Tier: Deep hold; Confidence: Lower; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Hyeseong Kim",
+    "benchmark_rank": 453,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: LAD; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jhostynxon Garcia",
+    "benchmark_rank": 454,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: PIT; Tier: Deep hold; Confidence: Lower; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "J.T. Realmuto",
+    "benchmark_rank": 455,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: FA; Tier: Deep hold; Confidence: Lower; League-fit notes: C2 boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Zack Gelof",
+    "benchmark_rank": 456,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: ATH; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Felix Bautista",
+    "benchmark_rank": 457,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: BAL; Tier: Deep hold; Confidence: Lower; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Parker Messick",
+    "benchmark_rank": 458,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CLE; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Mike Yastrzemski",
+    "benchmark_rank": 459,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: ATL; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jurrangelo Cijntje",
+    "benchmark_rank": 460,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SEA; Tier: Deep hold; Confidence: Lower; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Tylor Megill",
+    "benchmark_rank": 461,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYM; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Zack Littell",
+    "benchmark_rank": 462,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: FA; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jarlin Susana",
+    "benchmark_rank": 463,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: WSH; Tier: Deep hold; Confidence: Lower; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Hunter Barco",
+    "benchmark_rank": 464,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: PIT; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Chad Patrick",
+    "benchmark_rank": 465,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIL; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Spencer Jones",
+    "benchmark_rank": 466,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: NYY; Tier: Deep hold; Confidence: Lower; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ethan Salas",
+    "benchmark_rank": 467,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: SD; Tier: Deep hold; Confidence: Lower; League-fit notes: C2 boost; Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Rhett Lowder",
+    "benchmark_rank": 468,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CIN; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Reynaldo Lopez",
+    "benchmark_rank": 469,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ATL; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ben Brown",
+    "benchmark_rank": 470,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CHC; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Andres Gimenez",
+    "benchmark_rank": 471,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: TOR; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Christian Scott",
+    "benchmark_rank": 472,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYM; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ryan O'Hearn",
+    "benchmark_rank": 473,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: PIT; Tier: Deep hold; Confidence: Lower; League-fit notes: OPS fit; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jose Berrios",
+    "benchmark_rank": 474,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TOR; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jackson Ferris",
+    "benchmark_rank": 475,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: LAD; Tier: Deep hold; Confidence: Lower; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "David Peterson",
+    "benchmark_rank": 476,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYM; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Cam Collier",
+    "benchmark_rank": 477,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: CIN; Tier: Deep hold; Confidence: Lower; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jacob Reimer",
+    "benchmark_rank": 478,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: NYM; Tier: Deep hold; Confidence: Lower; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jordan Walker",
+    "benchmark_rank": 479,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: STL; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jeremiah Estrada",
+    "benchmark_rank": 480,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: SD; Tier: Deep hold; Confidence: Lower; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Victor Scott",
+    "benchmark_rank": 481,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: CF; Team: STL; Tier: Deep hold; Confidence: Lower; League-fit notes: OPS drag; Origin: Overall dynasty"
+  },
+  {
+    "player": "Caden Dana",
+    "benchmark_rank": 482,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: LAA; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Dustin May",
+    "benchmark_rank": 483,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: BOS; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "River Ryan",
+    "benchmark_rank": 484,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: LAD; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Brice Matthews",
+    "benchmark_rank": 485,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: HOU; Tier: Deep hold; Confidence: Lower; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Luisangel Acuna",
+    "benchmark_rank": 486,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: NYM; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Sean Burke",
+    "benchmark_rank": 487,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CWS; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Carson Whisenhunt",
+    "benchmark_rank": 488,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SF; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Tyler O'Neill",
+    "benchmark_rank": 489,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RF; Team: BAL; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Lourdes Gurriel Jr.",
+    "benchmark_rank": 490,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: AZ; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ben Casparius",
+    "benchmark_rank": 491,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: LAD; Tier: Deep hold; Confidence: Lower; League-fit notes: SVH boost; Origin: Overall dynasty"
+  },
+  {
+    "player": "Esmerlyn Valdez",
+    "benchmark_rank": 492,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: PIT; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "J.P. Crawford",
+    "benchmark_rank": 493,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: SEA; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Andrew Fischer",
+    "benchmark_rank": 494,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: MIL; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Slade Cecconi",
+    "benchmark_rank": 495,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CLE; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Zach Eflin",
+    "benchmark_rank": 496,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: FA; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Termarr Johnson",
+    "benchmark_rank": 497,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: PIT; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Michael McGreevy",
+    "benchmark_rank": 498,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: STL; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Lucas Giolito",
+    "benchmark_rank": 499,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: FA; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Jacob Melton",
+    "benchmark_rank": 500,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: HOU; Tier: Deep hold; Confidence: Lower; Origin: Overall dynasty"
+  },
+  {
+    "player": "Zac Veen",
+    "benchmark_rank": 501,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: LF; Team: COL; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Patrick Bailey",
+    "benchmark_rank": 502,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: SF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: Catcher depth"
+  },
+  {
+    "player": "Deyvison De Los Santos",
+    "benchmark_rank": 503,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: MIA; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Ryan Jeffers",
+    "benchmark_rank": 504,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: MIN; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: MLB depth"
+  },
+  {
+    "player": "Tyler Stephenson",
+    "benchmark_rank": 505,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: CIN; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: MLB depth"
+  },
+  {
+    "player": "Noble Meyer",
+    "benchmark_rank": 506,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIA; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Overall dynasty"
+  },
+  {
+    "player": "Chris Bassitt",
+    "benchmark_rank": 507,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: BAL; Tier: Very deep / minors; Confidence: Lower; League-fit notes: QA3 fit; Origin: MLB depth"
+  },
+  {
+    "player": "Seranthony Dominguez",
+    "benchmark_rank": 508,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: CWS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: MLB depth"
+  },
+  {
+    "player": "Sean Manaea",
+    "benchmark_rank": 509,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: NYM; Tier: Very deep / minors; Confidence: Lower; League-fit notes: QA3 fit; Origin: MLB depth"
+  },
+  {
+    "player": "Keibert Ruiz",
+    "benchmark_rank": 510,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: WSH; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: Catcher depth"
+  },
+  {
+    "player": "Jefferson Rojas",
+    "benchmark_rank": 511,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Leonardo Bernal",
+    "benchmark_rank": 512,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Thayron Liranzo",
+    "benchmark_rank": 513,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Freddy Fermin",
+    "benchmark_rank": 514,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: SD; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: MLB depth"
+  },
+  {
+    "player": "Willi Castro",
+    "benchmark_rank": 515,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: COL; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Cedric Mullins II",
+    "benchmark_rank": 516,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: TB; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Bo Naylor",
+    "benchmark_rank": 517,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: CLE; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: MLB depth"
+  },
+  {
+    "player": "Jameson Taillon",
+    "benchmark_rank": 518,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CHC; Tier: Very deep / minors; Confidence: Lower; League-fit notes: QA3 fit; Origin: MLB depth"
+  },
+  {
+    "player": "Michael Wacha",
+    "benchmark_rank": 519,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: KC; Tier: Very deep / minors; Confidence: Lower; League-fit notes: QA3 fit; Origin: MLB depth"
+  },
+  {
+    "player": "Brandon Marsh",
+    "benchmark_rank": 520,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: PHI; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Didier Fuentes",
+    "benchmark_rank": 521,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Jake Cronenworth",
+    "benchmark_rank": 522,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: SD; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Joey Ortiz",
+    "benchmark_rank": 523,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: MIL; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Spencer Horwitz",
+    "benchmark_rank": 524,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: PIT; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Pavin Smith",
+    "benchmark_rank": 525,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: AZ; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "LuJames Groover",
+    "benchmark_rank": 526,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Jorge Soler",
+    "benchmark_rank": 527,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: LAA; Tier: Very deep / minors; Confidence: Lower; League-fit notes: OPS fit; Origin: MLB depth"
+  },
+  {
+    "player": "Ryan McMahon",
+    "benchmark_rank": 528,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: NYY; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Tre' Morgan",
+    "benchmark_rank": 529,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Matt Brash",
+    "benchmark_rank": 530,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: Bullpen depth"
+  },
+  {
+    "player": "Kayson Cunningham",
+    "benchmark_rank": 531,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Brayden Taylor",
+    "benchmark_rank": 532,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Jose Alvarado",
+    "benchmark_rank": 533,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: Bullpen depth"
+  },
+  {
+    "player": "Ben Hess",
+    "benchmark_rank": 534,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Kevin Ginkel",
+    "benchmark_rank": 535,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: AZ; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: MLB depth"
+  },
+  {
+    "player": "Alex Vesia",
+    "benchmark_rank": 536,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: LAD; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: MLB depth"
+  },
+  {
+    "player": "Cody Ponce",
+    "benchmark_rank": 537,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TOR; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Robert Stephenson",
+    "benchmark_rank": 538,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: LAA; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: MLB depth"
+  },
+  {
+    "player": "Mike Burrows",
+    "benchmark_rank": 539,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: HOU; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Luis Severino",
+    "benchmark_rank": 540,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ATH; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Victor Vodnik",
+    "benchmark_rank": 541,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: COL; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: MLB depth"
+  },
+  {
+    "player": "Eduardo Rodriguez",
+    "benchmark_rank": 542,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: AZ; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Taylor Rogers",
+    "benchmark_rank": 543,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: MIN; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: MLB depth"
+  },
+  {
+    "player": "Edwin Uceta",
+    "benchmark_rank": 544,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: TB; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: MLB depth"
+  },
+  {
+    "player": "Hunter Gaddis",
+    "benchmark_rank": 545,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: Bullpen depth"
+  },
+  {
+    "player": "Keegan Akin",
+    "benchmark_rank": 546,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: Bullpen depth"
+  },
+  {
+    "player": "Lucas Erceg",
+    "benchmark_rank": 547,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: Bullpen depth"
+  },
+  {
+    "player": "Jordan Leasure",
+    "benchmark_rank": 548,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: Bullpen depth"
+  },
+  {
+    "player": "Garrett Cleavinger",
+    "benchmark_rank": 549,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: Bullpen depth"
+  },
+  {
+    "player": "Justin Sterner",
+    "benchmark_rank": 550,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: Bullpen depth"
+  },
+  {
+    "player": "Kade Strowd",
+    "benchmark_rank": 551,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: Bullpen depth"
+  },
+  {
+    "player": "Hogan Harris",
+    "benchmark_rank": 552,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: Bullpen depth"
+  },
+  {
+    "player": "Nick Martinez",
+    "benchmark_rank": 553,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TB; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Aaron Civale",
+    "benchmark_rank": 554,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ATH; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Andre Pallante",
+    "benchmark_rank": 555,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: STL; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Logan Allen",
+    "benchmark_rank": 556,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: CLE; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Randy Vasquez",
+    "benchmark_rank": 557,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SD; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Chris Paddack",
+    "benchmark_rank": 558,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: MIA; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Michael Lorenzen",
+    "benchmark_rank": 559,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: COL; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Adrian Houser",
+    "benchmark_rank": 560,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: SF; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Max Scherzer",
+    "benchmark_rank": 561,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TOR; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Dean Kremer",
+    "benchmark_rank": 562,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: BAL; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Harrison Bader",
+    "benchmark_rank": 563,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: SF; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Jesus Sanchez",
+    "benchmark_rank": 564,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: TOR; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Dominic Canzone",
+    "benchmark_rank": 565,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: SEA; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Trevor Larnach",
+    "benchmark_rank": 566,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: MIN; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Tyler Freeman",
+    "benchmark_rank": 567,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: COL; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Wenceel Perez",
+    "benchmark_rank": 568,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: DET; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Lane Thomas",
+    "benchmark_rank": 569,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: KC; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Andrew Benintendi",
+    "benchmark_rank": 570,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: CWS; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Kyle Isbel",
+    "benchmark_rank": 571,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: KC; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Nick Castellanos",
+    "benchmark_rank": 572,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: SD; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Gavin Sheets",
+    "benchmark_rank": 573,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Team: SD; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Joc Pederson",
+    "benchmark_rank": 574,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: UT; Team: TEX; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Sean Murphy",
+    "benchmark_rank": 575,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: ATL; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: Catcher depth"
+  },
+  {
+    "player": "Jeff McNeil",
+    "benchmark_rank": 576,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: ATH; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Carson Kelly",
+    "benchmark_rank": 577,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: CHC; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: MLB depth"
+  },
+  {
+    "player": "Luis Rengifo",
+    "benchmark_rank": 578,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Team: MIL; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Joey Bart",
+    "benchmark_rank": 579,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: PIT; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: Catcher depth"
+  },
+  {
+    "player": "Brayan Rocchio",
+    "benchmark_rank": 580,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: CLE; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Connor Wong",
+    "benchmark_rank": 581,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: BOS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: Catcher depth"
+  },
+  {
+    "player": "Danny Jansen",
+    "benchmark_rank": 582,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: TEX; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: Catcher depth"
+  },
+  {
+    "player": "Ke'Bryan Hayes",
+    "benchmark_rank": 583,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: CIN; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Nasim Nunez",
+    "benchmark_rank": 584,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Team: WSH; Tier: Very deep / minors; Confidence: Lower; League-fit notes: OPS drag; Origin: MLB depth"
+  },
+  {
+    "player": "Jared Triolo",
+    "benchmark_rank": 585,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Team: PIT; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Nick Fortes",
+    "benchmark_rank": 586,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: TB; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: Catcher depth"
+  },
+  {
+    "player": "Miguel Amaya",
+    "benchmark_rank": 587,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: CHC; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: Catcher depth"
+  },
+  {
+    "player": "Liam Hicks",
+    "benchmark_rank": 588,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: MIA; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: Catcher depth"
+  },
+  {
+    "player": "Pedro Pages",
+    "benchmark_rank": 589,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: STL; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: Catcher depth"
+  },
+  {
+    "player": "Victor Caratini",
+    "benchmark_rank": 590,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: MIN; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: MLB depth"
+  },
+  {
+    "player": "Carlos Narvaez",
+    "benchmark_rank": 591,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: BOS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: Catcher depth"
+  },
+  {
+    "player": "Ike Irish",
+    "benchmark_rank": 592,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Tommy Troy",
+    "benchmark_rank": 593,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Tommy White",
+    "benchmark_rank": 594,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Kendry Chourio",
+    "benchmark_rank": 595,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Wehiwa Aloy",
+    "benchmark_rank": 596,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Aroon Escobar",
+    "benchmark_rank": 597,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Blake Burke",
+    "benchmark_rank": 598,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Diego Tornes",
+    "benchmark_rank": 599,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Alejandro Rosario",
+    "benchmark_rank": 600,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Marco Dinges",
+    "benchmark_rank": 601,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Billy Amick",
+    "benchmark_rank": 602,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Gavin Kilen",
+    "benchmark_rank": 603,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Dakota Jordan",
+    "benchmark_rank": 604,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Andrew Salas",
+    "benchmark_rank": 605,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Sammy Stafura",
+    "benchmark_rank": 606,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Zach Ehrhard",
+    "benchmark_rank": 607,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Creed Willems",
+    "benchmark_rank": 608,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Dylan Jordan",
+    "benchmark_rank": 609,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Kevin Parada",
+    "benchmark_rank": 610,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Starlyn Caba",
+    "benchmark_rank": 611,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Matthew Etzel",
+    "benchmark_rank": 612,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Cooper Kinney",
+    "benchmark_rank": 613,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Yohandy Morales",
+    "benchmark_rank": 614,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Kendall George",
+    "benchmark_rank": 615,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Denzer Guzman",
+    "benchmark_rank": 616,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Yoeilin Cespedes",
+    "benchmark_rank": 617,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Everson Pereira",
+    "benchmark_rank": 618,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Reed Trimble",
+    "benchmark_rank": 619,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Jorbit Vivas",
+    "benchmark_rank": 620,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 2B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Blaze Jordan",
+    "benchmark_rank": 621,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Carson Palmquist",
+    "benchmark_rank": 622,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Henry Baez",
+    "benchmark_rank": 623,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Michael Kennedy",
+    "benchmark_rank": 624,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Dalton Pence",
+    "benchmark_rank": 625,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Ayden Johnson",
+    "benchmark_rank": 626,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Jedixson Paez",
+    "benchmark_rank": 627,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Matt Wilkinson",
+    "benchmark_rank": 628,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Andrew Morris",
+    "benchmark_rank": 629,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Joshua Kuroda-Grauer",
+    "benchmark_rank": 630,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Griffin Herring",
+    "benchmark_rank": 631,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Marco Luciano",
+    "benchmark_rank": 632,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Nico Perez",
+    "benchmark_rank": 633,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Cole Mathis",
+    "benchmark_rank": 634,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Tommy Hawke",
+    "benchmark_rank": 635,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Carson Roccaforte",
+    "benchmark_rank": 636,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Brad Lord",
+    "benchmark_rank": 637,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: WSH; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: MLB depth"
+  },
+  {
+    "player": "A.J. Vukovich",
+    "benchmark_rank": 638,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Matt Svanson",
+    "benchmark_rank": 639,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: STL; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: MLB depth"
+  },
+  {
+    "player": "Jose Fermin",
+    "benchmark_rank": 640,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Robert Garcia",
+    "benchmark_rank": 641,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: RP; Team: TEX; Tier: Very deep / minors; Confidence: Lower; League-fit notes: SVH boost; Origin: MLB depth"
+  },
+  {
+    "player": "Sayer Diederich",
+    "benchmark_rank": 642,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Kyle Higashioka",
+    "benchmark_rank": 643,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Team: TEX; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Origin: Catcher depth"
+  },
+  {
+    "player": "Miles Mikolas",
+    "benchmark_rank": 644,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: WSH; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Johan Oviedo",
+    "benchmark_rank": 645,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: BOS; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Josh Bell",
+    "benchmark_rank": 646,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 1B; Team: MIN; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Michael Soroka",
+    "benchmark_rank": 647,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: ARZ; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Dante Nori",
+    "benchmark_rank": 648,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Jimmy Crooks",
+    "benchmark_rank": 649,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Steven Matz",
+    "benchmark_rank": 650,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Team: TB; Tier: Very deep / minors; Confidence: Lower; Origin: MLB depth"
+  },
+  {
+    "player": "Christian Zazueta",
+    "benchmark_rank": 651,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Yairo Padilla",
+    "benchmark_rank": 652,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Jose Corniell",
+    "benchmark_rank": 653,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Trey Gibson",
+    "benchmark_rank": 654,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Kendry Rojas",
+    "benchmark_rank": 655,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Trevor Harrison",
+    "benchmark_rank": 656,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Dasan Hill",
+    "benchmark_rank": 657,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Keiner Delgado",
+    "benchmark_rank": 658,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "K.C. Hunt",
+    "benchmark_rank": 659,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "David Hagaman",
+    "benchmark_rank": 660,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Karson Milbrandt",
+    "benchmark_rank": 661,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Zach Cole",
+    "benchmark_rank": 662,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: C; Tier: Very deep / minors; Confidence: Lower; League-fit notes: C2 boost; Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Carlos Gutierrez",
+    "benchmark_rank": 663,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "David Sandlin",
+    "benchmark_rank": 664,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Jogly Garcia",
+    "benchmark_rank": 665,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: 3B; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Josh Hartle",
+    "benchmark_rank": 666,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SP; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "William Bergolla",
+    "benchmark_rank": 667,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Jhancarlos Lara",
+    "benchmark_rank": 668,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Jean Carlos Sio",
+    "benchmark_rank": 669,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Noah Mendlinger",
+    "benchmark_rank": 670,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: SS; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Elijah Hainline",
+    "benchmark_rank": 671,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Pos: OF; Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Ramon Ramirez",
+    "benchmark_rank": 672,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Devin Fitz-Gerald",
+    "benchmark_rank": 673,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Nestor German",
+    "benchmark_rank": 674,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Benny Thompson",
+    "benchmark_rank": 675,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Marshall Toole",
+    "benchmark_rank": 676,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Yorger Bautista",
+    "benchmark_rank": 677,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Joe Glassey",
+    "benchmark_rank": 678,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Luke Nowak",
+    "benchmark_rank": 679,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Ryan Lambert",
+    "benchmark_rank": 680,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Braylin Morel",
+    "benchmark_rank": 681,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Yondrei Rojas",
+    "benchmark_rank": 682,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Nigel Belgrave",
+    "benchmark_rank": 683,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Angel Feliz",
+    "benchmark_rank": 684,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Carson Hobbs",
+    "benchmark_rank": 685,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Tanner McDougal",
+    "benchmark_rank": 686,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Keyner Benitez",
+    "benchmark_rank": 687,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Andy Fabian",
+    "benchmark_rank": 688,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Charlie Szykowny",
+    "benchmark_rank": 689,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Joey Volini",
+    "benchmark_rank": 690,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Ryan Forcucci",
+    "benchmark_rank": 691,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Adonys Guzman",
+    "benchmark_rank": 692,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Saul Garcia",
+    "benchmark_rank": 693,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Eddie Micheletti Jr.",
+    "benchmark_rank": 694,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Chris Veach",
+    "benchmark_rank": 695,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  },
+  {
+    "player": "Mike Paredes",
+    "benchmark_rank": 696,
+    "source": "Imported ChatGPT 5.4 Pro deep dynasty board captured 2026-03-22",
+    "notes": "Tier: Very deep / minors; Confidence: Lower; League-fit notes: Deep minors; Origin: Prospect depth"
+  }
+]

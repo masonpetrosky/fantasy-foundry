@@ -67,6 +67,7 @@ def _apply_low_volume_non_ratio_positive_guard(
     slot_ip_reference: float,
     min_share_for_positive_ratio_credit: float = 0.35,
     full_share_for_positive_ratio_credit: float = 1.00,
+    positive_exempt_categories: set[str] | None = None,
 ) -> None:
     """Scale positive non-ratio pitching category credit for tiny workloads."""
     scale = _low_volume_positive_credit_scale(
@@ -78,8 +79,11 @@ def _apply_low_volume_non_ratio_positive_guard(
     if scale >= 1.0:
         return
 
+    exempt_categories = {str(cat).upper() for cat in (positive_exempt_categories or set())}
     for cat in pit_categories:
         if cat in COMMON_REVERSED_PITCH_CATS:
+            continue
+        if str(cat).upper() in exempt_categories:
             continue
         if float(delta.get(cat, 0.0)) > 0.0:
             delta[cat] = float(delta[cat]) * scale

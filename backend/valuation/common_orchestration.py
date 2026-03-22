@@ -9,6 +9,7 @@ import pandas as pd
 
 try:
     from backend.core.points_value import (
+        apply_dynasty_aggregation_adjustments as _apply_dynasty_aggregation_adjustments,
         dynasty_keep_or_drop_values as _dynasty_keep_or_drop_values,
     )
     from backend.dynasty_roto_values import (
@@ -53,6 +54,7 @@ try:
     )
 except ImportError:  # pragma: no cover - direct script execution fallback
     from core.points_value import (  # type: ignore
+        apply_dynasty_aggregation_adjustments as _apply_dynasty_aggregation_adjustments,
         dynasty_keep_or_drop_values as _dynasty_keep_or_drop_values,
     )
     from dynasty_roto_values import (  # type: ignore
@@ -123,6 +125,10 @@ __all__ = [
 ]
 
 
+_COMMON_CONTINUATION_TAIL_START_YEAR = 4
+_COMMON_CONTINUATION_TAIL_DECAY = 0.80
+
+
 def _build_stash_frame(
     base_frame: pd.DataFrame,
     *,
@@ -188,7 +194,13 @@ def _build_stash_frame(
             negative_year_players.add(player)
         if has_ir_candidate_year:
             ir_candidate_players.add(player)
-        scores.append(dynasty_keep_or_drop_value(adjusted_values, years, lg.discount))
+        aggregation_values = _apply_dynasty_aggregation_adjustments(
+            adjusted_values,
+            years,
+            continuation_tail_start_year=_COMMON_CONTINUATION_TAIL_START_YEAR,
+            continuation_tail_decay=_COMMON_CONTINUATION_TAIL_DECAY,
+        )
+        scores.append(dynasty_keep_or_drop_value(aggregation_values, years, lg.discount))
 
     stash = base_frame[["Player"]].copy()
     stash["StashScore"] = scores
@@ -642,9 +654,26 @@ def calculate_common_dynasty_values(
                 ):
                     has_ir_candidate_year = True
 
-        keep_drop = _dynasty_keep_or_drop_values(vals, years, discount=float(lg.discount))
+        keep_drop = _dynasty_keep_or_drop_values(
+            vals,
+            years,
+            discount=float(lg.discount),
+            continuation_tail_start_year=_COMMON_CONTINUATION_TAIL_START_YEAR,
+            continuation_tail_decay=_COMMON_CONTINUATION_TAIL_DECAY,
+        )
         raw_vals.append(float(keep_drop.raw_total))
-        forced_roster_vals.append(_forced_roster_value(vals, years, lg.discount))
+        forced_roster_vals.append(
+            _forced_roster_value(
+                _apply_dynasty_aggregation_adjustments(
+                    vals,
+                    years,
+                    continuation_tail_start_year=_COMMON_CONTINUATION_TAIL_START_YEAR,
+                    continuation_tail_decay=_COMMON_CONTINUATION_TAIL_DECAY,
+                ),
+                years,
+                lg.discount,
+            )
+        )
         explain_by_year: dict[str, dict[str, object]] = {}
         for idx, y in enumerate(years):
             detail = dict(year_adjustment_details[idx])

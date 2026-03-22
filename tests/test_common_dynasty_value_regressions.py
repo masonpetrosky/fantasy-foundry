@@ -229,6 +229,64 @@ def test_sv_only_rp_league_locks_expected_reliever_values(tmp_path: Path) -> Non
     assert rows.loc["CloserA", "RawDynastyValue"] == pytest.approx(2.857142857142857)
 
 
+def test_sv_only_generic_p_league_keeps_rp_only_closer_value(tmp_path: Path) -> None:
+    bat_rows = [_make_hitter(f"Bat{i}", year=2026, hr=20) for i in range(1, 7)]
+    pit_rows = [
+        _make_pitcher(
+            "CloserA",
+            year=2026,
+            pos="RP",
+            games=65,
+            gs=0,
+            ip=65,
+            wins=4,
+            strikeouts=80,
+            er=20,
+            hits_allowed=45,
+            walks=18,
+            saves=35,
+            qs=0,
+            qa3=0,
+        ),
+        _make_pitcher(
+            "CloserB",
+            year=2026,
+            pos="RP",
+            games=65,
+            gs=0,
+            ip=65,
+            wins=4,
+            strikeouts=80,
+            er=20,
+            hits_allowed=45,
+            walks=18,
+            saves=28,
+            qs=0,
+            qa3=0,
+        ),
+        _make_pitcher("SP3", year=2026, pos="SP", games=30, gs=30, ip=170, wins=10, strikeouts=170, saves=0),
+        _make_pitcher("SP4", year=2026, pos="SP", games=30, gs=30, ip=165, wins=9, strikeouts=160, saves=0),
+        _make_pitcher("SP5", year=2026, pos="SP", games=30, gs=30, ip=160, wins=8, strikeouts=150, saves=0),
+        _make_pitcher("SP6", year=2026, pos="SP", games=30, gs=30, ip=155, wins=7, strikeouts=140, saves=0),
+    ]
+
+    out = _run_common_values(
+        tmp_path,
+        bat_rows=bat_rows,
+        pit_rows=pit_rows,
+        hitter_slots=_hitter_slots(of=1),
+        pitcher_slots=_pitcher_slots(p=1),
+        hitter_categories=("HR",),
+        pitcher_categories=("SV",),
+    )
+    rows = _rows_by_player(out)
+
+    assert rows.loc["CloserA", "DynastyValue"] > 2.5
+    assert rows.loc["CloserB", "DynastyValue"] > 1.5
+    assert rows.loc["SP3", "DynastyValue"] == pytest.approx(0.0)
+    assert rows.loc["SP4", "DynastyValue"] == pytest.approx(0.0)
+
+
 def test_two_way_sum_mode_exceeds_max_mode_for_dual_threat(tmp_path: Path) -> None:
     bat_rows = [
         _make_hitter("Dual Threat", year=2026, hr=40),

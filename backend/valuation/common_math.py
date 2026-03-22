@@ -59,6 +59,9 @@ try:
     from backend.valuation.replacement import (
         compute_year_player_values_vs_replacement as compute_year_player_values_vs_replacement,
     )
+    from backend.valuation.replacement import (
+        _positive_save_guard_exempt_categories as _positive_save_guard_exempt_categories,
+    )
     from backend.valuation.sgp_math import (
         _mean_adjacent_rank_gap as _mean_adjacent_rank_gap,
     )
@@ -158,6 +161,9 @@ except ImportError:
     )
     from valuation.replacement import (
         compute_year_player_values_vs_replacement as compute_year_player_values_vs_replacement,
+    )
+    from valuation.replacement import (
+        _positive_save_guard_exempt_categories as _positive_save_guard_exempt_categories,
     )
     from valuation.sgp_math import (  # type: ignore[no-redef]
         _mean_adjacent_rank_gap as _mean_adjacent_rank_gap,
@@ -742,6 +748,12 @@ def compute_year_player_values(ctx: dict, lg: CommonDynastyRotoSettings) -> tupl
                     pit_categories=pit_categories,
                     pitcher_ip=_coerce_non_negative_float(row.get("IP", 0.0)),
                     slot_ip_reference=_coerce_non_negative_float(b.get("IP", 0.0)),
+                    positive_exempt_categories=_positive_save_guard_exempt_categories(
+                        lg=lg,
+                        pit_categories=pit_categories,
+                        slot=slot,
+                        row=row,
+                    ),
                 )
                 _apply_low_volume_ratio_guard(
                     delta,

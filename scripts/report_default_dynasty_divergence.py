@@ -1059,12 +1059,175 @@ def _points_profile_snapshots() -> tuple[dict[str, dict[str, Any]], dict[str, di
     return profile_snapshots, scenario_snapshots
 
 
+def _keeper_points_imported_params(*, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    params = _points_profile_params("points_weekly_h2h")
+    params.update(
+        {
+            "hit_c": 1,
+            "hit_1b": 1,
+            "hit_2b": 1,
+            "hit_3b": 1,
+            "hit_ss": 1,
+            "hit_ci": 0,
+            "hit_mi": 0,
+            "hit_of": 3,
+            "hit_dh": 1,
+            "hit_ut": 2,
+            "pit_p": 7,
+            "pit_sp": 0,
+            "pit_rp": 0,
+            "bench": 10,
+            "minors": 0,
+            "ir": 4,
+            "keeper_limit": 7,
+            "weekly_starts_cap": 12,
+            "allow_same_day_starts_overflow": True,
+            "weekly_acquisition_cap": 7,
+            # Total bases scoring.
+            "pts_hit_1b": 1.0,
+            "pts_hit_2b": 2.0,
+            "pts_hit_3b": 3.0,
+            "pts_hit_hr": 4.0,
+            "pts_hit_r": 1.0,
+            "pts_hit_rbi": 1.0,
+            "pts_hit_sb": 1.0,
+            "pts_hit_bb": 1.0,
+            "pts_hit_hbp": 1.0,
+            "pts_hit_so": -1.0,
+            "pts_pit_ip": 3.0,
+            "pts_pit_w": 2.0,
+            "pts_pit_l": -2.0,
+            "pts_pit_k": 1.0,
+            "pts_pit_sv": 5.0,
+            "pts_pit_hld": 2.0,
+            "pts_pit_h": -1.0,
+            "pts_pit_er": -2.0,
+            "pts_pit_bb": -1.0,
+            "pts_pit_hbp": -1.0,
+        }
+    )
+    if isinstance(overrides, dict):
+        params.update(overrides)
+    return params
+
+
+def _imported_profile_review(
+    *,
+    profile_id: str,
+    benchmark_path: str | None,
+    delta_threshold: int,
+    top_n_absolute: int,
+    projection_data_version: str | None,
+    projection_delta_details: dict[str, dict[str, Any]],
+    has_previous_projection_snapshot: bool,
+    previous_projection_source: str | None,
+    overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    from backend.core.dynasty_divergence_review import (
+        load_dynasty_benchmark,
+        review_dynasty_divergence,
+    )
+
+    normalized_profile_id = str(profile_id or "").strip()
+    if normalized_profile_id == "shallow_roto_imported":
+        params = _default_roto_params(overrides=overrides)
+        snapshot = _common_roto_snapshot(params=params)
+        raw_start_year_snapshot = _raw_start_year_snapshot(params=params)
+        return review_dynasty_divergence(
+            model_rows=snapshot["rows"],
+            explanations=snapshot["explanations"],
+            benchmark_entries=load_dynasty_benchmark(benchmark_path or None, profile_id=normalized_profile_id),
+            raw_start_year_rows=raw_start_year_snapshot["rows"],
+            start_year_projection_stats_by_entity=raw_start_year_snapshot["start_year_projection_stats_by_entity"],
+            delta_threshold=delta_threshold,
+            top_n_absolute=top_n_absolute,
+            methodology_fingerprint=str(snapshot["methodology_fingerprint"]),
+            projection_data_version=projection_data_version,
+            projection_delta_details=projection_delta_details,
+            has_previous_projection_snapshot=has_previous_projection_snapshot,
+            previous_projection_source=previous_projection_source,
+            profile_id=normalized_profile_id,
+            settings_snapshot=snapshot["settings_snapshot"],
+        )
+    if normalized_profile_id == "deep_roto_imported":
+        params = _deep_roto_params(overrides=overrides)
+        snapshot = _common_roto_snapshot(params=params)
+        raw_start_year_snapshot = _raw_start_year_snapshot(params=params)
+        return review_dynasty_divergence(
+            model_rows=snapshot["rows"],
+            explanations=snapshot["explanations"],
+            benchmark_entries=load_dynasty_benchmark(benchmark_path or None, profile_id=normalized_profile_id),
+            raw_start_year_rows=raw_start_year_snapshot["rows"],
+            start_year_projection_stats_by_entity=raw_start_year_snapshot["start_year_projection_stats_by_entity"],
+            delta_threshold=delta_threshold,
+            top_n_absolute=top_n_absolute,
+            methodology_fingerprint=str(snapshot["methodology_fingerprint"]),
+            projection_data_version=projection_data_version,
+            projection_delta_details=projection_delta_details,
+            has_previous_projection_snapshot=has_previous_projection_snapshot,
+            previous_projection_source=previous_projection_source,
+            profile_id=normalized_profile_id,
+            settings_snapshot=snapshot["settings_snapshot"],
+        )
+    if normalized_profile_id == "keeper_points_imported":
+        params = _keeper_points_imported_params(overrides=overrides)
+        snapshot = _points_snapshot(params=params)
+        return review_dynasty_divergence(
+            model_rows=snapshot["rows"],
+            explanations=snapshot["explanations"],
+            benchmark_entries=load_dynasty_benchmark(benchmark_path or None, profile_id=normalized_profile_id),
+            delta_threshold=delta_threshold,
+            top_n_absolute=top_n_absolute,
+            methodology_fingerprint=str(snapshot["methodology_fingerprint"]),
+            projection_data_version=projection_data_version,
+            projection_delta_details=projection_delta_details,
+            has_previous_projection_snapshot=has_previous_projection_snapshot,
+            previous_projection_source=previous_projection_source,
+            profile_id=normalized_profile_id,
+            settings_snapshot=snapshot["settings_snapshot"],
+        )
+    raise ValueError(f"Unsupported imported benchmark profile: {normalized_profile_id}")
+
+
+def _render_imported_profile_bundle_markdown(reviews: dict[str, dict[str, Any]]) -> str:
+    sections = ["# Imported Benchmark Summary", ""]
+    for profile_id, review in reviews.items():
+        top_entries = [
+            entry
+            for entry in list(review.get("review_candidates") or [])[:5]
+            if isinstance(entry, dict)
+        ]
+        sections.append(f"## {profile_id}")
+        sections.append(
+            f"- weighted_mae: {float(review.get('weighted_mean_absolute_rank_error') or 0.0):.4f}"
+        )
+        sections.append(f"- compared_players: {int(review.get('benchmark_player_count') or 0)}")
+        for entry in top_entries:
+            sections.append(
+                "- "
+                + f"{entry.get('player')}: model {entry.get('model_rank')} vs benchmark {entry.get('benchmark_rank')} "
+                + f"(delta {entry.get('rank_delta')})"
+            )
+        sections.append("")
+    return "\n".join(sections).rstrip() + "\n"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run profile-driven dynasty audit reports.")
     parser.add_argument(
         "--profile",
         default="standard_roto",
-        choices=("standard_roto", "deep_roto", "points_season_total", "points_weekly_h2h", "points_daily_h2h"),
+        choices=(
+            "standard_roto",
+            "deep_roto",
+            "points_season_total",
+            "points_weekly_h2h",
+            "points_daily_h2h",
+            "shallow_roto_imported",
+            "deep_roto_imported",
+            "keeper_points_imported",
+            "all_imported",
+        ),
         help="Audit profile to run.",
     )
     parser.add_argument("--benchmark", default="", help="Optional path to a benchmark JSON fixture.")
@@ -1159,6 +1322,53 @@ def main() -> None:
     projection_data_version, projection_delta_details, has_previous_projection_snapshot, previous_projection_source = (
         _projection_refresh_context()
     )
+
+    if profile_id == "all_imported":
+        imported_profile_ids = (
+            "shallow_roto_imported",
+            "deep_roto_imported",
+            "keeper_points_imported",
+        )
+        reviews = {
+            imported_profile_id: _imported_profile_review(
+                profile_id=imported_profile_id,
+                benchmark_path=args.benchmark or None,
+                delta_threshold=max(int(args.delta_threshold), 1),
+                top_n_absolute=max(int(args.top_n_absolute), 1),
+                projection_data_version=projection_data_version,
+                projection_delta_details=projection_delta_details,
+                has_previous_projection_snapshot=has_previous_projection_snapshot,
+                previous_projection_source=previous_projection_source,
+                overrides=overrides,
+            )
+            for imported_profile_id in imported_profile_ids
+        }
+        markdown = _render_imported_profile_bundle_markdown(reviews)
+        print(markdown, end="")
+        if str(args.out_json or "").strip():
+            _write_optional(args.out_json, json.dumps(reviews, indent=2, sort_keys=True) + "\n")
+        _write_optional(args.out_md, markdown)
+        return
+
+    if profile_id in {"shallow_roto_imported", "deep_roto_imported", "keeper_points_imported"}:
+        review = _imported_profile_review(
+            profile_id=profile_id,
+            benchmark_path=args.benchmark or None,
+            delta_threshold=max(int(args.delta_threshold), 1),
+            top_n_absolute=max(int(args.top_n_absolute), 1),
+            projection_data_version=projection_data_version,
+            projection_delta_details=projection_delta_details,
+            has_previous_projection_snapshot=has_previous_projection_snapshot,
+            previous_projection_source=previous_projection_source,
+            overrides=overrides,
+        )
+        markdown = render_dynasty_divergence_markdown(review)
+        print(markdown, end="")
+        if str(args.out_json or "").strip():
+            _write_optional(args.out_json, json.dumps(review, indent=2, sort_keys=True) + "\n")
+        _write_optional(args.out_md, markdown)
+        _write_optional(args.out_memo, render_dynasty_divergence_memo_markdown(review))
+        return
 
     if profile_id == "standard_roto":
         params = _default_roto_params(overrides=overrides)

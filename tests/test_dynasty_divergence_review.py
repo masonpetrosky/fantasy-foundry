@@ -1003,3 +1003,16 @@ def test_default_benchmark_fixture_covers_top_30_market_snapshot() -> None:
     assert "Tarik Skubal" in players
     assert "Ronald Acuna Jr." in players
     assert "Cal Raleigh" in players
+
+
+def test_imported_benchmark_fixtures_load_expected_profile_sizes() -> None:
+    shallow = load_dynasty_benchmark(profile_id="shallow_roto_imported")
+    deep = load_dynasty_benchmark(profile_id="deep_roto_imported")
+    keeper = load_dynasty_benchmark(profile_id="keeper_points_imported")
+
+    assert len(shallow) == 336
+    assert len(deep) == 696
+    assert len(keeper) == 336
+    assert shallow[0]["player"] == "Shohei Ohtani"
+    assert deep[0]["player"] == "Shohei Ohtani"
+    assert keeper[0]["player"] == "Shohei Ohtani"

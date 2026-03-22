@@ -8,7 +8,7 @@ from typing import Any, Callable, Mapping
 
 import pandas as pd
 
-DEFAULT_DYNASTY_METHODOLOGY_VERSION = "2026-03-21"
+DEFAULT_DYNASTY_METHODOLOGY_VERSION = "2026-03-22"
 
 
 def default_dynasty_methodology_fingerprint(

@@ -15,6 +15,47 @@ class KeepDropResult:
     discounted_contributions: list[float]
 
 
+def apply_dynasty_aggregation_adjustments(
+    values: list[float],
+    years: list[int],
+    *,
+    continuation_horizon_years: int | None = None,
+    continuation_tail_start_year: int | None = None,
+    continuation_tail_decay: float = 1.0,
+    positive_tail_only: bool = True,
+) -> list[float]:
+    if len(values) != len(years):
+        raise ValueError("values and years must have the same length.")
+    if not values:
+        return []
+
+    start_year = int(years[0])
+    horizon_limit = (
+        max(int(continuation_horizon_years), 0)
+        if continuation_horizon_years is not None
+        else None
+    )
+    tail_start = (
+        max(int(continuation_tail_start_year), 0)
+        if continuation_tail_start_year is not None
+        else None
+    )
+    tail_decay = float(continuation_tail_decay)
+    adjusted_values: list[float] = []
+    for raw_value, raw_year in zip(values, years, strict=True):
+        year_offset = max(int(raw_year) - start_year, 0)
+        value = float(raw_value)
+        if horizon_limit is not None and year_offset >= horizon_limit:
+            adjusted_values.append(0.0)
+            continue
+        if tail_start is not None and tail_decay < 1.0 and year_offset >= tail_start:
+            tail_year_index = year_offset - tail_start + 1
+            if not positive_tail_only or value > 0.0:
+                value *= tail_decay ** tail_year_index
+        adjusted_values.append(float(value))
+    return adjusted_values
+
+
 def _prospect_risk_multiplier(
     *,
     year: int,
@@ -79,7 +120,16 @@ def _negative_fallback_value(
     return min(float(best_value), 0.0)
 
 
-def dynasty_keep_or_drop_values(values: list[float], years: list[int], *, discount: float) -> KeepDropResult:
+def dynasty_keep_or_drop_values(
+    values: list[float],
+    years: list[int],
+    *,
+    discount: float,
+    continuation_horizon_years: int | None = None,
+    continuation_tail_start_year: int | None = None,
+    continuation_tail_decay: float = 1.0,
+    positive_tail_only: bool = True,
+) -> KeepDropResult:
     if len(values) != len(years):
         raise ValueError("values and years must have the same length.")
     if not values:
@@ -92,8 +142,16 @@ def dynasty_keep_or_drop_values(values: list[float], years: list[int], *, discou
             discounted_contributions=[],
         )
 
+    adjusted_values = apply_dynasty_aggregation_adjustments(
+        values,
+        years,
+        continuation_horizon_years=continuation_horizon_years,
+        continuation_tail_start_year=continuation_tail_start_year,
+        continuation_tail_decay=continuation_tail_decay,
+        positive_tail_only=positive_tail_only,
+    )
     annual_discount = float(discount)
-    count = len(values)
+    count = len(adjusted_values)
     continuation_values = [0.0] * count
     hold_values = [0.0] * count
     keep_flags = [False] * count
@@ -103,7 +161,7 @@ def dynasty_keep_or_drop_values(values: list[float], years: list[int], *, discou
         if idx < count - 1:
             gap = max(1, int(years[idx + 1]) - int(years[idx]))
             future = (annual_discount ** gap) * continuation_values[idx + 1]
-        candidate = float(values[idx]) + future
+        candidate = float(adjusted_values[idx]) + future
         hold_values[idx] = float(candidate)
         if candidate > 0:
             continuation_values[idx] = float(candidate)
@@ -117,12 +175,12 @@ def dynasty_keep_or_drop_values(values: list[float], years: list[int], *, discou
     discounted_contributions = [0.0] * count
     active = bool(keep_flags[0])
     if active:
-        discounted_contributions[0] = float(values[0]) * discount_factors[0]
+        discounted_contributions[0] = float(adjusted_values[0]) * discount_factors[0]
     for idx in range(1, count):
         if not active:
             break
         if keep_flags[idx]:
-            discounted_contributions[idx] = float(values[idx]) * discount_factors[idx]
+            discounted_contributions[idx] = float(adjusted_values[idx]) * discount_factors[idx]
         else:
             active = False
 

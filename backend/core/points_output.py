@@ -37,6 +37,17 @@ except ImportError:  # pragma: no cover - direct script execution fallback
 
 
 POINTS_DEEP_ROSTER_ZERO_CLUSTER_MIN_SHARE = 0.10
+KEEPER_HITTER_START_YEAR_BLEND_ALPHA = 0.30
+KEEPER_PITCHER_START_YEAR_BLEND_ALPHA = 0.50
+KEEPER_HITTER_FUTURE_CONTINUATION_WEIGHT = 0.15
+KEEPER_PITCHER_FUTURE_CONTINUATION_WEIGHT = 0.0
+KEEPER_ELITE_OFDH_HITTER_RAW_POINTS_BLEND_WEIGHT = 0.45
+KEEPER_ELITE_OFDH_HITTER_RAW_POINTS_THRESHOLD = 330.0
+KEEPER_ACE_STARTER_RAW_POINTS_BLEND_WEIGHT = 0.55
+KEEPER_ACE_STARTER_RAW_POINTS_THRESHOLD = 450.0
+KEEPER_MID_STARTER_RAW_POINTS_BLEND_WEIGHT = 0.35
+KEEPER_MID_STARTER_RAW_POINTS_THRESHOLD = 350.0
+KEEPER_RELIEVER_RAW_POINTS_BLEND_WEIGHT = 0.55
 
 
 def _float_value(value: object, default: float = 0.0) -> float:
@@ -95,6 +106,50 @@ def future_continuation_value(keep_drop: KeepDropResult) -> float:
     if len(keep_drop.continuation_values) <= 1:
         return 0.0
     return float(keep_drop.continuation_values[1])
+
+
+def keeper_pitcher_like_mask(frame: pd.DataFrame) -> pd.Series:
+    hitting_value = pd.to_numeric(frame.get("HittingValue"), errors="coerce").fillna(0.0)
+    pitching_value = pd.to_numeric(frame.get("PitchingValue"), errors="coerce").fillna(0.0)
+    return pitching_value > hitting_value
+
+
+def keeper_reliever_like_mask(frame: pd.DataFrame) -> pd.Series:
+    pos_series = frame.get("Pos", "").astype(str)
+    return keeper_pitcher_like_mask(frame) & pos_series.str.contains("RP") & ~pos_series.str.contains("SP")
+
+
+def keeper_elite_ofdh_hitter_like_mask(frame: pd.DataFrame) -> pd.Series:
+    pos_series = frame.get("Pos", "").astype(str)
+    raw_hitting_points = pd.to_numeric(frame.get("HittingPoints"), errors="coerce").fillna(0.0)
+    return (
+        ~keeper_pitcher_like_mask(frame)
+        & (pos_series.str.contains("OF") | pos_series.str.contains("DH"))
+        & (raw_hitting_points >= float(KEEPER_ELITE_OFDH_HITTER_RAW_POINTS_THRESHOLD))
+    )
+
+
+def keeper_ace_starter_like_mask(frame: pd.DataFrame) -> pd.Series:
+    pos_series = frame.get("Pos", "").astype(str)
+    raw_pitching_points = pd.to_numeric(frame.get("PitchingPoints"), errors="coerce").fillna(0.0)
+    return (
+        keeper_pitcher_like_mask(frame)
+        & pos_series.str.contains("SP")
+        & ~pos_series.str.contains("RP")
+        & (raw_pitching_points >= float(KEEPER_ACE_STARTER_RAW_POINTS_THRESHOLD))
+    )
+
+
+def keeper_mid_starter_like_mask(frame: pd.DataFrame) -> pd.Series:
+    pos_series = frame.get("Pos", "").astype(str)
+    raw_pitching_points = pd.to_numeric(frame.get("PitchingPoints"), errors="coerce").fillna(0.0)
+    return (
+        keeper_pitcher_like_mask(frame)
+        & pos_series.str.contains("SP")
+        & ~pos_series.str.contains("RP")
+        & (raw_pitching_points >= float(KEEPER_MID_STARTER_RAW_POINTS_THRESHOLD))
+        & (raw_pitching_points < float(KEEPER_ACE_STARTER_RAW_POINTS_THRESHOLD))
+    )
 
 
 def _build_points_explain_year(
@@ -183,6 +238,8 @@ def build_points_result_rows(
     start_year: int,
     valuation_year_set: list[int],
     discount: float,
+    continuation_horizon_years: int | None,
+    keeper_start_year_value_by_player: dict[str, float] | None,
     enable_prospect_risk_adjustment: bool,
     minor_stash_players: set[str],
     ir_stash_players: set[str],
@@ -235,7 +292,12 @@ def build_points_result_rows(
             )
             adjusted_values.append(adjusted_value)
 
-        keep_drop = dynasty_keep_or_drop_values(adjusted_values, valuation_year_set, discount=float(discount))
+        keep_drop = dynasty_keep_or_drop_values(
+            adjusted_values,
+            valuation_year_set,
+            discount=float(discount),
+            continuation_horizon_years=continuation_horizon_years,
+        )
 
         for idx, detail in enumerate(year_details):
             typed_detail = cast(dict[str, Any], detail)
@@ -271,8 +333,14 @@ def build_points_result_rows(
             else 0
         )
         start_year_value = float(adjusted_values[0]) if adjusted_values else 0.0
+        keeper_start_year_value = (
+            float(keeper_start_year_value_by_player.get(player_id, start_year_value))
+            if isinstance(keeper_start_year_value_by_player, dict)
+            else float(start_year_value)
+        )
         row_out["RawDynastyValue"] = float(keep_drop.raw_total)
         row_out["StartYearValue"] = start_year_value
+        row_out["KeeperStartYearValue"] = keeper_start_year_value
         row_out["FutureContinuationValue"] = future_continuation_value(keep_drop)
         row_out["FutureContinuationDiscountGap"] = int(first_year_gap)
         result_rows.append(row_out)
@@ -330,6 +398,28 @@ def calculate_points_raw_totals(
     return player_raw_totals
 
 
+def _subset_pitcher_replacement_value(
+    *,
+    points_slot_replacement: Callable[..., dict[str, float]],
+    year_pit_entries: dict[int, list[dict[str, Any]]],
+    start_year: int,
+    year_subset_pitcher_ids: dict[int, set[str]],
+    subset_replacement_rostered_ids: set[str],
+    n_replacement: int,
+) -> float:
+    subset_pitcher_replacement = points_slot_replacement(
+        [
+            entry
+            for entry in year_pit_entries.get(start_year, [])
+            if str(entry.get("player_id") or "") in year_subset_pitcher_ids.get(start_year, set())
+        ],
+        active_slots={"P"},
+        rostered_player_ids=subset_replacement_rostered_ids,
+        n_replacement=n_replacement,
+    )
+    return _float_value(subset_pitcher_replacement.get("P", 0.0))
+
+
 def start_capable_pitcher_replacement_value(
     *,
     points_slot_replacement: Callable[..., dict[str, float]],
@@ -339,17 +429,33 @@ def start_capable_pitcher_replacement_value(
     starter_replacement_rostered_ids: set[str],
     n_replacement: int,
 ) -> float:
-    start_capable_pitcher_replacement = points_slot_replacement(
-        [
-            entry
-            for entry in year_pit_entries.get(start_year, [])
-            if str(entry.get("player_id") or "") in year_start_capable_pitcher_ids.get(start_year, set())
-        ],
-        active_slots={"P"},
-        rostered_player_ids=starter_replacement_rostered_ids,
+    return _subset_pitcher_replacement_value(
+        points_slot_replacement=points_slot_replacement,
+        year_pit_entries=year_pit_entries,
+        start_year=start_year,
+        year_subset_pitcher_ids=year_start_capable_pitcher_ids,
+        subset_replacement_rostered_ids=starter_replacement_rostered_ids,
         n_replacement=n_replacement,
     )
-    return _float_value(start_capable_pitcher_replacement.get("P", 0.0))
+
+
+def relief_pitcher_replacement_value(
+    *,
+    points_slot_replacement: Callable[..., dict[str, float]],
+    year_pit_entries: dict[int, list[dict[str, Any]]],
+    start_year: int,
+    year_relief_pitcher_ids: dict[int, set[str]],
+    reliever_replacement_rostered_ids: set[str],
+    n_replacement: int,
+) -> float:
+    return _subset_pitcher_replacement_value(
+        points_slot_replacement=points_slot_replacement,
+        year_pit_entries=year_pit_entries,
+        start_year=start_year,
+        year_subset_pitcher_ids=year_relief_pitcher_ids,
+        subset_replacement_rostered_ids=reliever_replacement_rostered_ids,
+        n_replacement=n_replacement,
+    )
 
 
 def finalize_points_dynasty_output(
@@ -380,6 +486,7 @@ def finalize_points_dynasty_output(
     modeled_held_relievers_per_team_by_year: dict[int, int],
     starter_slot_capacity: int,
     starter_pitcher_replacement_start_year: float | None,
+    reliever_pitcher_replacement_start_year: float | None,
     hitter_usage_diagnostics_by_year: dict[int, dict[str, object]],
     pitcher_usage_diagnostics_by_year: dict[int, dict[str, object]],
     start_year: int,
@@ -394,6 +501,8 @@ def finalize_points_dynasty_output(
             "DynastyValue",
             "RawDynastyValue",
             "StartYearValue",
+            "KeeperStartYearValue",
+            "KeeperBlendedStartYearValue",
             "FutureContinuationValue",
             "FutureContinuationDiscountGap",
             "KeeperAdjustedFutureContinuationValue",
@@ -448,14 +557,77 @@ def finalize_points_dynasty_output(
             future_continuation_baseline_value
         )
     out["KeeperAdjustedFutureContinuationValue"] = keeper_adjusted_future_continuation.astype(float)
+    h2h_keeper_adjusted_scoring = bool(use_h2h_roster_model and keeper_limit is not None)
+    start_year_series = pd.to_numeric(out["StartYearValue"], errors="coerce").fillna(0.0)
+    keeper_start_year_series = pd.to_numeric(out.get("KeeperStartYearValue"), errors="coerce").fillna(start_year_series)
+    keeper_pitcher_roles = (
+        keeper_pitcher_like_mask(out)
+        if h2h_keeper_adjusted_scoring
+        else pd.Series(False, index=out.index, dtype=bool)
+    )
+    keeper_start_year_blend_alpha = pd.Series(
+        float(KEEPER_HITTER_START_YEAR_BLEND_ALPHA),
+        index=out.index,
+        dtype="float64",
+    )
+    keeper_start_year_blend_alpha = keeper_start_year_blend_alpha.where(
+        ~keeper_pitcher_roles,
+        float(KEEPER_PITCHER_START_YEAR_BLEND_ALPHA),
+    )
+    keeper_blended_start_year_series = (
+        (keeper_start_year_blend_alpha * start_year_series)
+        + ((1.0 - keeper_start_year_blend_alpha) * keeper_start_year_series)
+        if h2h_keeper_adjusted_scoring
+        else start_year_series
+    )
+    if h2h_keeper_adjusted_scoring:
+        raw_hitting_points_series = pd.to_numeric(out.get("HittingPoints"), errors="coerce").fillna(0.0)
+        keeper_elite_ofdh_hitter_roles = keeper_elite_ofdh_hitter_like_mask(out)
+        keeper_blended_start_year_series = keeper_blended_start_year_series.where(
+            ~keeper_elite_ofdh_hitter_roles,
+            ((1.0 - float(KEEPER_ELITE_OFDH_HITTER_RAW_POINTS_BLEND_WEIGHT)) * keeper_blended_start_year_series)
+            + (float(KEEPER_ELITE_OFDH_HITTER_RAW_POINTS_BLEND_WEIGHT) * raw_hitting_points_series),
+        )
+        raw_pitching_points_series = pd.to_numeric(out.get("PitchingPoints"), errors="coerce").fillna(0.0)
+        keeper_ace_starter_roles = keeper_ace_starter_like_mask(out)
+        keeper_blended_start_year_series = keeper_blended_start_year_series.where(
+            ~keeper_ace_starter_roles,
+            ((1.0 - float(KEEPER_ACE_STARTER_RAW_POINTS_BLEND_WEIGHT)) * keeper_blended_start_year_series)
+            + (float(KEEPER_ACE_STARTER_RAW_POINTS_BLEND_WEIGHT) * raw_pitching_points_series),
+        )
+        keeper_mid_starter_roles = keeper_mid_starter_like_mask(out)
+        keeper_blended_start_year_series = keeper_blended_start_year_series.where(
+            ~keeper_mid_starter_roles,
+            ((1.0 - float(KEEPER_MID_STARTER_RAW_POINTS_BLEND_WEIGHT)) * keeper_blended_start_year_series)
+            + (float(KEEPER_MID_STARTER_RAW_POINTS_BLEND_WEIGHT) * raw_pitching_points_series),
+        )
+        keeper_reliever_roles = keeper_reliever_like_mask(out)
+        keeper_blended_start_year_series = keeper_blended_start_year_series.where(
+            ~keeper_reliever_roles,
+            ((1.0 - float(KEEPER_RELIEVER_RAW_POINTS_BLEND_WEIGHT)) * keeper_blended_start_year_series)
+            + (float(KEEPER_RELIEVER_RAW_POINTS_BLEND_WEIGHT) * raw_pitching_points_series),
+        )
+    out["KeeperBlendedStartYearValue"] = keeper_blended_start_year_series.astype(float)
+    future_continuation_weight = (
+        pd.Series(
+            float(KEEPER_HITTER_FUTURE_CONTINUATION_WEIGHT),
+            index=out.index,
+            dtype="float64",
+        ).where(
+            ~keeper_pitcher_roles,
+            float(KEEPER_PITCHER_FUTURE_CONTINUATION_WEIGHT),
+        )
+        if h2h_keeper_adjusted_scoring
+        else pd.Series(1.0, index=out.index, dtype="float64")
+    )
     out["ForcedRosterValue"] = (
-        pd.to_numeric(out["StartYearValue"], errors="coerce").fillna(0.0)
+        keeper_blended_start_year_series
         + pd.to_numeric(out["FutureContinuationDiscountGap"], errors="coerce").fillna(0.0).map(
             lambda gap: float(discount) ** int(max(gap, 0))
         )
+        * future_continuation_weight
         * keeper_adjusted_future_continuation
     )
-    h2h_keeper_adjusted_scoring = bool(use_h2h_roster_model and keeper_limit is not None)
     out["CenteringScore"] = (
         pd.to_numeric(out["ForcedRosterValue"], errors="coerce").fillna(0.0)
         if h2h_keeper_adjusted_scoring
@@ -547,6 +719,42 @@ def finalize_points_dynasty_output(
         "PointsValuationMode": points_valuation_mode,
         "KeeperLimit": int(keeper_limit) if keeper_limit is not None else None,
         "H2HKeeperAdjustedScoringApplied": bool(h2h_keeper_adjusted_scoring),
+        "KeeperStartYearScoringApplied": bool(h2h_keeper_adjusted_scoring),
+        "KeeperStartYearBlendAlpha": None,
+        "KeeperHitterStartYearBlendAlpha": (
+            float(KEEPER_HITTER_START_YEAR_BLEND_ALPHA) if h2h_keeper_adjusted_scoring else None
+        ),
+        "KeeperPitcherStartYearBlendAlpha": (
+            float(KEEPER_PITCHER_START_YEAR_BLEND_ALPHA) if h2h_keeper_adjusted_scoring else None
+        ),
+        "KeeperFutureContinuationWeight": None,
+        "KeeperHitterFutureContinuationWeight": (
+            float(KEEPER_HITTER_FUTURE_CONTINUATION_WEIGHT) if h2h_keeper_adjusted_scoring else None
+        ),
+        "KeeperPitcherFutureContinuationWeight": (
+            float(KEEPER_PITCHER_FUTURE_CONTINUATION_WEIGHT) if h2h_keeper_adjusted_scoring else None
+        ),
+        "KeeperEliteOfDhHitterRawPointsBlendWeight": (
+            float(KEEPER_ELITE_OFDH_HITTER_RAW_POINTS_BLEND_WEIGHT) if h2h_keeper_adjusted_scoring else None
+        ),
+        "KeeperEliteOfDhHitterRawPointsThreshold": (
+            float(KEEPER_ELITE_OFDH_HITTER_RAW_POINTS_THRESHOLD) if h2h_keeper_adjusted_scoring else None
+        ),
+        "KeeperAceStarterRawPointsBlendWeight": (
+            float(KEEPER_ACE_STARTER_RAW_POINTS_BLEND_WEIGHT) if h2h_keeper_adjusted_scoring else None
+        ),
+        "KeeperAceStarterRawPointsThreshold": (
+            float(KEEPER_ACE_STARTER_RAW_POINTS_THRESHOLD) if h2h_keeper_adjusted_scoring else None
+        ),
+        "KeeperMidStarterRawPointsBlendWeight": (
+            float(KEEPER_MID_STARTER_RAW_POINTS_BLEND_WEIGHT) if h2h_keeper_adjusted_scoring else None
+        ),
+        "KeeperMidStarterRawPointsThreshold": (
+            float(KEEPER_MID_STARTER_RAW_POINTS_THRESHOLD) if h2h_keeper_adjusted_scoring else None
+        ),
+        "KeeperRelieverRawPointsBlendWeight": (
+            float(KEEPER_RELIEVER_RAW_POINTS_BLEND_WEIGHT) if h2h_keeper_adjusted_scoring else None
+        ),
         "KeeperContinuationRank": int(keeper_continuation_rank) if keeper_continuation_rank is not None else None,
         "KeeperContinuationBaselineValue": (
             float(future_continuation_baseline_value)
@@ -596,6 +804,11 @@ def finalize_points_dynasty_output(
                 "ModeledStarterPitcherReplacement": (
                     float(starter_pitcher_replacement_start_year)
                     if starter_pitcher_replacement_start_year is not None
+                    else None
+                ),
+                "ModeledRelieverPitcherReplacement": (
+                    float(reliever_pitcher_replacement_start_year)
+                    if reliever_pitcher_replacement_start_year is not None
                     else None
                 ),
                 "ModeledEffectiveWeeklyStartsCap": (
