@@ -543,7 +543,11 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
         default_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
         required_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
         disallowed_columns: list[str] | tuple[str, ...] | set[str] | str | None = None,
+        export_header_label_overrides: dict[str, str] | None = None,
     ) -> StreamingResponse:
+        resolved_export_header_label_overrides = dict(state_module.EXPORT_HEADER_LABEL_OVERRIDES)
+        if export_header_label_overrides:
+            resolved_export_header_label_overrides.update(export_header_label_overrides)
         return state_module.core_tabular_export_response(
             rows,
             filename_base=filename_base,
@@ -554,7 +558,7 @@ def build_runtime_facade_alias_map(*, state_module: Any) -> dict[str, Any]:
             required_columns=required_columns,
             disallowed_columns=disallowed_columns,
             export_date_cols=state_module.EXPORT_DATE_COLS,
-            export_header_label_overrides=state_module.EXPORT_HEADER_LABEL_OVERRIDES,
+            export_header_label_overrides=resolved_export_header_label_overrides,
             export_three_decimal_cols=state_module.EXPORT_THREE_DECIMAL_COLS,
             export_two_decimal_cols=state_module.EXPORT_TWO_DECIMAL_COLS,
             export_whole_number_cols=state_module.EXPORT_WHOLE_NUMBER_COLS,

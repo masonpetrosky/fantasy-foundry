@@ -87,6 +87,11 @@ function resolveStatDynastyCols(settings: CalculatorSettings): string[] {
   return statCols.map(cat => `${ROTO_STAT_DYNASTY_PREFIX}${cat}`);
 }
 
+function resolvePointsSummaryCols(settings: CalculatorSettings): string[] {
+  if (resolveScoringMode(settings) !== "points") return [];
+  return ["SelectedPoints"];
+}
+
 interface ProjectionRow {
   Type?: string;
   [key: string]: unknown;
@@ -260,7 +265,16 @@ export function normalizeHiddenColumnOverridesByTab(raw: unknown): HiddenColumnO
 }
 
 export function projectionTableColumnCatalog(tab: string, seasonCol: string, dynastyYearCols: string[], calculatorSettings: CalculatorSettings = null): string[] {
-  const identityCols = ["Player", "Team", "Pos", "Age", "DynastyValue", "AuctionDollars", "ProjectionDelta"];
+  const identityCols = [
+    "Player",
+    "Team",
+    "Pos",
+    "Age",
+    "DynastyValue",
+    ...resolvePointsSummaryCols(calculatorSettings),
+    "AuctionDollars",
+    "ProjectionDelta",
+  ];
   const statDynCols = resolveStatDynastyCols(calculatorSettings);
 
   if (tab === "bat") {
@@ -345,6 +359,7 @@ export function projectionTableColumnCatalog(tab: string, seasonCol: string, dyn
 }
 
 export function projectionCardColumnCatalog(tab: string, seasonCol: string, dynastyYearCols: string[], calculatorSettings: CalculatorSettings = null): string[] {
+  const pointsSummaryCols = resolvePointsSummaryCols(calculatorSettings);
   if (tab === "bat") {
     const statCandidates = uniqueColumnOrder([
       ...PROJECTION_HITTER_CORE_STATS,
@@ -363,6 +378,7 @@ export function projectionCardColumnCatalog(tab: string, seasonCol: string, dyna
       ...remainingStats,
       "Rank",
       "DynastyValue",
+      ...pointsSummaryCols,
       ...(dynastyYearCols || []),
       seasonCol,
       "OldestProjectionDate",
@@ -388,6 +404,7 @@ export function projectionCardColumnCatalog(tab: string, seasonCol: string, dyna
       ...remainingStats,
       "Rank",
       "DynastyValue",
+      ...pointsSummaryCols,
       ...(dynastyYearCols || []),
       seasonCol,
       "OldestProjectionDate",
@@ -419,6 +436,7 @@ export function projectionCardColumnCatalog(tab: string, seasonCol: string, dyna
     ...remainingStats,
     "Rank",
     "DynastyValue",
+    ...pointsSummaryCols,
     ...(dynastyYearCols || []),
     seasonCol,
     "Type",
@@ -456,6 +474,7 @@ export function projectionCardDefaultVisibleColumns(tab: string, row: Projection
     ...resolveProjectionCardCoreColumnsForRow(tab, row, calculatorSettings),
     "Rank",
     "DynastyValue",
+    ...resolvePointsSummaryCols(calculatorSettings),
   ]);
 }
 

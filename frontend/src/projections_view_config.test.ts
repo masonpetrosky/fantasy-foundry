@@ -28,12 +28,13 @@ describe("projectionTable defaults", () => {
       pts_pit_bb: -1,
     };
     const cols = projectionTableColumnCatalog("all", "Year", ["Value_2026", "Value_2027"], settings);
-    expect(cols.slice(0, 14)).toEqual([
+    expect(cols.slice(0, 15)).toEqual([
       "Player",
       "Team",
       "Pos",
       "Age",
       "DynastyValue",
+      "SelectedPoints",
       "AuctionDollars",
       "ProjectionDelta",
       "AB",
@@ -44,6 +45,11 @@ describe("projectionTable defaults", () => {
       "Value_2026",
       "Value_2027",
     ]);
+  });
+
+  it("omits SelectedPoints from catalogs when setup is not points-focused", () => {
+    const cols = projectionTableColumnCatalog("all", "Year", ["Value_2026"], { scoring_mode: "roto" });
+    expect(cols).not.toContain("SelectedPoints");
   });
 
   it("hides Years and Side by default, but supports explicit user overrides", () => {
@@ -86,6 +92,7 @@ describe("projectionCard defaults", () => {
       "HR",
       "Rank",
       "DynastyValue",
+      "SelectedPoints",
     ]);
     expect(resolveProjectionCardColumns("all", "Year", ["Value_2026"], { Type: "P" }, {}, settings)).toEqual([
       "IP",
@@ -93,6 +100,7 @@ describe("projectionCard defaults", () => {
       "PitBB",
       "Rank",
       "DynastyValue",
+      "SelectedPoints",
     ]);
   });
 
@@ -111,6 +119,7 @@ describe("projectionCard defaults", () => {
       "PitBB",
       "Rank",
       "DynastyValue",
+      "SelectedPoints",
     ]);
   });
 
@@ -127,16 +136,18 @@ describe("projectionCard defaults", () => {
       { AB: true, HR: true, Value_2026: false },
       settings
     );
-    expect(cols).toEqual(["Rank", "DynastyValue", "Value_2026"]);
+    expect(cols).toEqual(["Rank", "DynastyValue", "SelectedPoints", "Value_2026"]);
   });
 
   it("exposes default visible card columns by side", () => {
     const defaultsForHitters = projectionCardDefaultVisibleColumns("all", { Type: "H" });
     const defaultsForPitchers = projectionCardDefaultVisibleColumns("all", { Type: "P" });
+    const pointsDefaults = projectionCardDefaultVisibleColumns("all", { Type: "H" }, { scoring_mode: "points" });
     expect(defaultsForHitters).toContain("AB");
     expect(defaultsForPitchers).toContain("IP");
     expect(defaultsForHitters).toContain("Rank");
     expect(defaultsForPitchers).toContain("DynastyValue");
+    expect(pointsDefaults.slice(-2)).toEqual(["DynastyValue", "SelectedPoints"]);
   });
 });
 

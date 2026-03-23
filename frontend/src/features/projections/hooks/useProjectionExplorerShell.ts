@@ -18,6 +18,7 @@ import {
 } from "../view_state";
 
 interface UseProjectionExplorerShellInput {
+  isPointsFocused: boolean;
   search: string;
   teamFilter: string;
   resolvedYearFilter: string;
@@ -61,6 +62,7 @@ interface UseProjectionExplorerShellReturn {
 }
 
 export function useProjectionExplorerShell({
+  isPointsFocused,
   search,
   teamFilter,
   resolvedYearFilter,
@@ -130,6 +132,7 @@ export function useProjectionExplorerShell({
       OldestProjectionDate: "Oldest Proj Date",
       Rank: "Rank",
       DynastyValue: "Dynasty Value",
+      SelectedPoints: isPointsFocused ? "Points" : "Selected Points",
       AuctionDollars: "Auction $",
       ProjectionDelta: "\u0394 Proj",
       Years: "Years",
@@ -146,7 +149,7 @@ export function useProjectionExplorerShell({
       }
     });
     return labels;
-  }, [selectedDynastyYears, tableColumnCatalog]);
+  }, [isPointsFocused, selectedDynastyYears, tableColumnCatalog]);
 
   const swipeHintModel = useMemo(() => resolveProjectionSwipeHint({
     canScrollLeft,

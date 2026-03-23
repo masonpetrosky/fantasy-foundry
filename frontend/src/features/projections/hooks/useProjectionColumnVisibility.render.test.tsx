@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { act } from "react";
 
 import { useProjectionColumnVisibility } from "./useProjectionColumnVisibility";
-import type { UseProjectionColumnVisibilityResult } from "./useProjectionColumnVisibility";
+import type { CalculatorSettings } from "../../../dynasty_calculator_config";
 
 vi.mock("../../../app_state_storage", async () => {
   const actual = await vi.importActual<Record<string, unknown>>("../../../app_state_storage");
@@ -165,6 +165,34 @@ describe("useProjectionColumnVisibility hook rendering", () => {
     const row = { Player: "Test", Team: "NYY", Pos: "1B", Year: 2026 };
     const cols = result.current!.projectionCardColumnsForRow(row);
     expect(Array.isArray(cols)).toBe(true);
+    cleanup();
+  });
+
+  it("includes SelectedPoints by default when setup is points-focused", () => {
+    const { result, cleanup } = renderHook(() =>
+      useProjectionColumnVisibility({
+        tab: "all",
+        seasonCol: "Year",
+        dynastyYearCols: [],
+        activeCalculatorSettings: { scoring_mode: "points" } as CalculatorSettings,
+      }),
+    );
+    expect(result.current!.cols).toContain("SelectedPoints");
+    expect(result.current!.projectionCardColumnsForRow({ Type: "H" })).toContain("SelectedPoints");
+    cleanup();
+  });
+
+  it("omits SelectedPoints by default when setup is roto-focused", () => {
+    const { result, cleanup } = renderHook(() =>
+      useProjectionColumnVisibility({
+        tab: "all",
+        seasonCol: "Year",
+        dynastyYearCols: [],
+        activeCalculatorSettings: { scoring_mode: "roto" } as CalculatorSettings,
+      }),
+    );
+    expect(result.current!.cols).not.toContain("SelectedPoints");
+    expect(result.current!.projectionCardColumnsForRow({ Type: "H" })).not.toContain("SelectedPoints");
     cleanup();
   });
 });

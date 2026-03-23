@@ -53,6 +53,7 @@ export function ProjectionsExplorer({
   fantraxRosterPlayerKeys,
 }: ProjectionsExplorerProps): React.ReactElement {
   const toastCtx = useToastContext();
+  const isPointsFocused = String(activeCalculatorSettings?.scoring_mode || "").trim().toLowerCase() === "points";
 
   const {
     calculatorOverlayByPlayerKey,
@@ -255,6 +256,7 @@ export function ProjectionsExplorer({
     swipeHintModel,
     showMobileSwipeHint,
   } = useProjectionExplorerShell({
+    isPointsFocused,
     search,
     teamFilter,
     resolvedYearFilter,

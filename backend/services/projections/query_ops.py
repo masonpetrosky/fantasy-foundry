@@ -258,4 +258,5 @@ def export_projections(
             "RawDynastyValue",
             "minor_eligible",
         ],
+        export_header_label_overrides={"SelectedPoints": "Points"},
     )

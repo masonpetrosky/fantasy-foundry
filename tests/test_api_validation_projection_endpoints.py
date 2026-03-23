@@ -921,6 +921,42 @@ class ProjectionEndpointValidationTests(unittest.TestCase):
         self.assertEqual(first_row[0], "Alpha")
         self.assertEqual(float(first_row[1]), 20.0)
 
+    def test_projection_export_csv_uses_points_label_for_selected_points(self) -> None:
+        bat_rows = [
+            {
+                "Player": "Alpha",
+                "Team": "SEA",
+                "Year": 2026,
+                "Pos": "OF",
+                "DynastyValue": 9.0,
+                "SelectedPoints": 18.5,
+                "PlayerKey": "alpha",
+                "PlayerEntityKey": "alpha",
+            },
+        ]
+
+        with patch.object(app_module, "BAT_DATA", bat_rows), patch.object(
+            app_module, "PIT_DATA", []
+        ), patch.object(
+            app_module,
+            "_refresh_data_if_needed",
+            return_value=None,
+        ):
+            response = self.client.get(
+                "/api/projections/export/bat",
+                params={
+                    "format": "csv",
+                    "include_dynasty": "false",
+                    "columns": "Player,DynastyValue,SelectedPoints",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        lines = response.text.splitlines()
+        self.assertGreaterEqual(len(lines), 2)
+        self.assertEqual(lines[0], "Player,Dynasty Value,Points")
+        self.assertIn("18.5", lines[1])
+
     def test_attach_dynasty_values_uses_entity_key_for_ambiguous_name(self) -> None:
         rows = [
             {"Player": "John Doe", "Team": "BOS", "Year": 2026, "PlayerKey": "john-doe", "PlayerEntityKey": "john-doe__bos"},
