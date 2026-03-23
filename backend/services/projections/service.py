@@ -52,6 +52,7 @@ from backend.services.projections.runtime_boundaries import (
     ProjectionDynastyHelpers,
     ProjectionRateLimits,
 )
+from backend.domain.constants import CALCULATOR_RESULT_POINTS_EXPORT_ORDER
 
 ProjectionDataset = Literal["all", "bat", "pitch"]
 PROJECTION_HITTER_CORE_EXPORT_COLS: tuple[str, ...] = ("AB", "R", "HR", "RBI", "SB", "AVG", "OPS")
@@ -232,6 +233,7 @@ class ProjectionService:
 
             for year in ctx.coerce_meta_years(ctx.get_meta()):
                 cols.add(f"Value_{year}")
+            cols.update(CALCULATOR_RESULT_POINTS_EXPORT_ORDER)
 
             # StatDynasty_* columns are attached by the dynasty lookup
             try:

@@ -70,7 +70,7 @@ describe("useCalculatorOverlay", () => {
     cleanup();
   });
 
-  it("applyCalculatorOverlay extracts DynastyValue and Value_*/StatDynasty_* columns", () => {
+  it("applyCalculatorOverlay extracts dynasty, stat, and points overlay columns", () => {
     const { result, cleanup } = renderHook(() => useCalculatorOverlay("v1"));
     const mockResult = {
       data: [
@@ -79,6 +79,9 @@ describe("useCalculatorOverlay", () => {
           DynastyValue: 100,
           Value_HR: 10,
           StatDynasty_AVG: 0.3,
+          SelectedPoints: 18.5,
+          HittingPoints: 20,
+          KeepDropKeep: false,
           Name: "Player A",
           Team: "NYY",
         },
@@ -92,6 +95,9 @@ describe("useCalculatorOverlay", () => {
     expect(overlay.DynastyValue).toBe(100);
     expect(overlay.Value_HR).toBe(10);
     expect(overlay.StatDynasty_AVG).toBe(0.3);
+    expect(overlay.SelectedPoints).toBe(18.5);
+    expect(overlay.HittingPoints).toBe(20);
+    expect(overlay.KeepDropKeep).toBe(false);
     // Non-overlay columns should not be present
     expect(overlay.Name).toBeUndefined();
     expect(overlay.Team).toBeUndefined();

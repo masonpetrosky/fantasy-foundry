@@ -8,6 +8,10 @@ import pandas as pd
 
 from backend.core.calculator_helpers import with_resolved_hidden_dynasty_modeling_settings
 from backend.core.runtime_state_protocols import RuntimeStateHelpersState
+from backend.domain.constants import CALCULATOR_RESULT_POINTS_EXPORT_ORDER
+
+
+_PROJECTION_OVERLAY_POINTS_COLS = frozenset(CALCULATOR_RESULT_POINTS_EXPORT_ORDER)
 
 
 def validate_runtime_configuration(*, state: RuntimeStateHelpersState) -> None:
@@ -490,11 +494,16 @@ def calculator_overlay_values_for_job(
         if dynasty_value is not None and dynasty_value != "":
             overlay["DynastyValue"] = dynasty_value
         for col, value in row.items():
-            if not str(col).startswith("Value_"):
+            column = str(col)
+            if not (
+                column.startswith("Value_")
+                or column.startswith("StatDynasty_")
+                or column in _PROJECTION_OVERLAY_POINTS_COLS
+            ):
                 continue
             if value is None or value == "":
                 continue
-            overlay[str(col)] = value
+            overlay[column] = value
         if not overlay:
             continue
 

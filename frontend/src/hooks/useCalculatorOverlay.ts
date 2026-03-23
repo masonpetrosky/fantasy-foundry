@@ -5,6 +5,23 @@ interface OverlayRow {
   [col: string]: unknown;
 }
 
+const POINTS_OVERLAY_COLS = new Set([
+  "HittingPoints",
+  "PitchingPoints",
+  "SelectedPoints",
+  "HittingBestSlot",
+  "PitchingBestSlot",
+  "HittingValue",
+  "PitchingValue",
+  "HittingAssignmentSlot",
+  "PitchingAssignmentSlot",
+  "HittingAssignmentValue",
+  "PitchingAssignmentValue",
+  "KeepDropValue",
+  "KeepDropHoldValue",
+  "KeepDropKeep",
+]);
+
 interface OverlaySummary {
   scoringMode: "roto" | "points";
   startYear: number;
@@ -27,7 +44,7 @@ function buildCalculatorOverlayMap(result: unknown): Record<string, OverlayRow> 
       overlayRow.DynastyValue = row.DynastyValue;
     }
     Object.keys(row || {}).forEach(col => {
-      if (!col.startsWith("Value_") && !col.startsWith("StatDynasty_")) return;
+      if (!col.startsWith("Value_") && !col.startsWith("StatDynasty_") && !POINTS_OVERLAY_COLS.has(col)) return;
       const value = row[col];
       if (value == null || value === "") return;
       overlayRow[col] = value;
